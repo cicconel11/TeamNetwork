@@ -44,8 +44,39 @@ describe("createPostSchema", () => {
 
   test("rejects whitespace-only body", () => {
     const result = createPostSchema.safeParse({ body: "   " });
-    // safeString trims, so whitespace-only becomes empty
+    // trim makes whitespace-only become empty, refine rejects without poll
     assert.strictEqual(result.success, false);
+  });
+
+  test("accepts empty body when poll is present", () => {
+    const result = createPostSchema.safeParse({
+      body: "",
+      poll: { options: ["Yes", "No"] },
+    });
+    assert.strictEqual(result.success, true);
+  });
+
+  test("accepts omitted body when poll is present", () => {
+    const result = createPostSchema.safeParse({
+      poll: { options: ["Yes", "No"] },
+    });
+    assert.strictEqual(result.success, true);
+  });
+
+  test("accepts poll with body text", () => {
+    const result = createPostSchema.safeParse({
+      body: "What do you think?",
+      poll: { options: ["Agree", "Disagree"] },
+    });
+    assert.strictEqual(result.success, true);
+  });
+
+  test("accepts poll with optional question", () => {
+    const result = createPostSchema.safeParse({
+      body: "",
+      poll: { question: "Pick one", options: ["A", "B"] },
+    });
+    assert.strictEqual(result.success, true);
   });
 });
 

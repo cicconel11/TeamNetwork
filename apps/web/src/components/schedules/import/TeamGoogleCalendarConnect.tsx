@@ -50,6 +50,7 @@ export function TeamGoogleCalendarConnect({
           .from("user_calendar_connections")
           .select("id, status")
           .eq("user_id", user.id)
+          .eq("provider", "google")
           .maybeSingle();
 
         if (data && data.status === "connected") {

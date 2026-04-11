@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { MessageTopBar } from "@/components/messages/MessageTopBar";
-import { MessageLikeButton } from "@/components/messages/MessageLikeButton";
 import type { Database } from "@/types/database";
 
 type ThreadType = Database["public"]["Tables"]["discussion_threads"]["Row"] & {
@@ -14,7 +14,6 @@ type ThreadType = Database["public"]["Tables"]["discussion_threads"]["Row"] & {
 
 type ReplyType = Database["public"]["Tables"]["discussion_replies"]["Row"] & {
   author: { name: string } | null;
-  liked_by_user?: boolean;
 };
 
 interface ThreadMessagePaneProps {
@@ -40,13 +39,13 @@ function formatRelativeTime(dateString: string): string {
 }
 
 function formatDateTime(dateString: string): string {
-  return new Date(dateString).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const d = new Date(dateString);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+  return `${get("month")} ${get("day")}, ${get("year")}, ${get("hour")}:${get("minute")} ${get("dayPeriod")}`;
 }
 
 export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadMessagePaneProps) {
@@ -55,23 +54,6 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
   const [replyBody, setReplyBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
-  const [replyLikes, setReplyLikes] = useState<Record<string, { count: number; liked: boolean }>>(() =>
-    Object.fromEntries(
-      replies.map((reply) => [
-        reply.id,
-        {
-          count: reply.like_count ?? 0,
-          liked: !!reply.liked_by_user,
-        },
-      ]),
-    ),
-  );
-
-  const replyLikeState = useMemo(
-    () => (replyId: string, fallbackCount: number, fallbackLiked: boolean) =>
-      replyLikes[replyId] ?? { count: fallbackCount, liked: fallbackLiked },
-    [replyLikes],
-  );
 
   const togglePin = async () => {
     setIsUpdating(true);
@@ -153,44 +135,11 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
     }
   };
 
-  const handleToggleReplyLike = async (replyId: string, currentCount: number, currentLiked: boolean) => {
-    setReplyLikes((prev) => ({
-      ...prev,
-      [replyId]: {
-        count: currentLiked ? Math.max(currentCount - 1, 0) : currentCount + 1,
-        liked: !currentLiked,
-      },
-    }));
-
-    try {
-      const response = await fetch(`/api/discussions/${thread.id}/replies/${replyId}/like`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        setReplyLikes((prev) => ({
-          ...prev,
-          [replyId]: {
-            count: currentCount,
-            liked: currentLiked,
-          },
-        }));
-      }
-    } catch {
-      setReplyLikes((prev) => ({
-        ...prev,
-        [replyId]: {
-          count: currentCount,
-          liked: currentLiked,
-        },
-      }));
-    }
-  };
-
   return (
     <div className="flex flex-col h-full">
       <MessageTopBar
         title={thread.title}
+        translateTitle
         actions={
           isAdmin ? (
             <div className="flex items-center gap-1">
@@ -213,10 +162,12 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
         {/* Thread header card */}
         <div className="bg-muted/50 rounded-lg p-4 border border-border">
           <div className="text-sm text-muted-foreground mb-2">
-            Posted by {thread.author?.name || "Unknown"} &middot; {formatDateTime(thread.created_at)}
+            Posted by <UserContent>{thread.author?.name || "Unknown"}</UserContent> &middot; {formatDateTime(thread.created_at)}
           </div>
           <div className="prose max-w-none">
-            <p className="whitespace-pre-wrap text-foreground text-sm leading-relaxed">{thread.body}</p>
+            <UserContent as="p" className="whitespace-pre-wrap text-foreground text-sm leading-relaxed">
+              {thread.body}
+            </UserContent>
           </div>
         </div>
 
@@ -232,7 +183,6 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
                 prevReply &&
                 prevReply.author_id === reply.author_id &&
                 new Date(reply.created_at).getTime() - new Date(prevReply.created_at).getTime() < 5 * 60 * 1000;
-              const likeState = replyLikeState(reply.id, reply.like_count ?? 0, !!reply.liked_by_user);
 
               return (
                 <div key={reply.id} className={`flex gap-3 ${isGrouped ? "mt-0.5" : "mt-3"}`}>
@@ -248,7 +198,7 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
                     {!isGrouped && (
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="text-sm font-semibold text-foreground">
-                          {reply.author?.name || "Unknown"}
+                          <UserContent>{reply.author?.name || "Unknown"}</UserContent>
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {formatRelativeTime(reply.created_at)}
@@ -256,14 +206,10 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
                       </div>
                     )}
                     <div className="bg-muted rounded-lg px-3 py-2 inline-block max-w-[85%]">
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{reply.body}</p>
+                      <UserContent as="p" className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                        {reply.body}
+                      </UserContent>
                     </div>
-                    <MessageLikeButton
-                      count={likeState.count}
-                      liked={likeState.liked}
-                      label="reply"
-                      onToggle={() => handleToggleReplyLike(reply.id, likeState.count, likeState.liked)}
-                    />
                   </div>
                 </div>
               );

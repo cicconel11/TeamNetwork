@@ -1,273 +1,252 @@
-import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
 import { Users, GraduationCap, CalendarClock, HandHeart, Heart } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge } from "@/components/ui";
-import { PageHeader } from "@/components/layout";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getOrgContext, getCurrentUser } from "@/lib/auth/roles";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
-import { filterAnnouncementsForUser } from "@/lib/announcements";
-import { SuggestedFeatures } from "@/components/analytics/SuggestedFeatures";
+import { fetchMediaForEntities } from "@/lib/media/fetch";
 
-interface DashboardPageProps {
+import { getCachedDonationStats } from "@/lib/cached-queries";
+import { loadFeedSidebarData } from "@/lib/feed/load-feed-sidebar-data";
+
+import { FeedComposer } from "@/components/feed/FeedComposer";
+import { FeedList } from "@/components/feed/FeedList";
+import { FeedSidebar } from "@/components/feed/FeedSidebar";
+import { FeedSidebarWidgets } from "@/components/feed/FeedSidebarWidgets";
+import { OrgHomeMobileOverview } from "@/components/feed/OrgHomeMobileOverview";
+import { CompactStatsWidget } from "@/components/feed/CompactStatsWidget";
+import type { StatItem } from "@/components/feed/CompactStatsWidget";
+import type { MobileStatChip } from "@/components/feed/feed-mobile-stat-types";
+import type { PollMetadata } from "@/components/feed/types";
+
+export const dynamic = "force-dynamic";
+
+interface HomePageProps {
   params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<{ page?: string }>;
 }
 
-export default async function OrgDashboardPage({ params }: DashboardPageProps) {
+export default async function OrgHomePage({ params, searchParams }: HomePageProps) {
   const { orgSlug } = await params;
+  const { page: pageParam } = await searchParams;
 
-  // Single cached call — layout already called getOrgContext(orgSlug),
-  // so this returns the cached result (0 extra DB round-trips)
   const orgCtx = await getOrgContext(orgSlug);
   if (!orgCtx.organization) return null;
   const org = orgCtx.organization;
 
   const supabase = await createClient();
-  const user = await getCurrentUser(); // cached — no extra DB call
+  const user = await getCurrentUser();
   const queryClient = resolveDataClient(user, supabase, "view_org");
 
-  // Fetch counts and recent data in parallel — subscription + role already in orgCtx
+  // Parse pagination
+  const page = parseInt(pageParam || "1", 10);
+  const limit = 25;
+  const offset = (page - 1) * limit;
+
+  // Fetch stats + feed posts + sidebar widget data in parallel
   const [
     { count: membersCount },
     { count: alumniCount },
     { count: parentsCount },
     { count: eventsCount },
-    { data: recentAnnouncements },
-    { data: upcomingEvents },
-    { data: recentDonations },
-    { data: donationStat },
+    { data: posts, error: postsError, count: postsCount },
+    userName,
+    feedSidebarData,
   ] = await Promise.all([
-    queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).eq("status", "active"),
+    queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).is("graduated_at", null).eq("status", "active"),
     queryClient.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("parents").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()),
-    queryClient.from("announcements").select("*").eq("organization_id", org.id).is("deleted_at", null).order("published_at", { ascending: false }).limit(3),
-    queryClient.from("events").select("*").eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
-    queryClient.from("organization_donations").select("*").eq("organization_id", org.id).eq("status", "succeeded").order("created_at", { ascending: false }).limit(5),
-    queryClient.from("organization_donation_stats").select("*").eq("organization_id", org.id).maybeSingle(),
+    supabase
+      .from("feed_posts")
+      .select(`*, author:users!feed_posts_author_id_fkey(name)`, { count: "exact", head: false })
+      .eq("organization_id", org.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1),
+    orgCtx.userId
+      ? supabase.from("users").select("name").eq("id", orgCtx.userId).maybeSingle().then((r) => r.data)
+      : Promise.resolve(null),
+    loadFeedSidebarData({
+      orgId: org.id,
+      role: orgCtx.role,
+      status: orgCtx.status,
+      userId: orgCtx.userId,
+    }),
   ]);
 
-  const visibleAnnouncements = filterAnnouncementsForUser(recentAnnouncements, {
-    role: orgCtx.role,
-    status: orgCtx.status,
-    userId: orgCtx.userId,
-  });
+  const [donationStat, tDash] = await Promise.all([
+    getCachedDonationStats(org.id),
+    getTranslations("pages.dashboard"),
+  ]);
 
-  const totalDonations = ((donationStat as { total_amount_cents?: number } | null)?.total_amount_cents ?? 0) / 100;
+  if (postsError) {
+    throw new Error("Failed to load feed");
+  }
 
-  type StatCard = {
-    label: string;
-    value: number | string;
-    href: string;
-    icon: LucideIcon;
-    accentFrom: string;
-    accentTo: string;
-  };
+  // Fetch user likes + media for posts
+  const postIds = (posts || []).map((p) => p.id);
+  let userLikedPostIds: Set<string> = new Set();
 
-  const stats: StatCard[] = [
-    {
-      label: "Active Members",
-      value: membersCount || 0,
-      href: `/${orgSlug}/members`,
-      icon: Users,
-      accentFrom: "var(--color-org-secondary)",
-      accentTo: "var(--color-org-secondary-dark)",
-    },
-    {
-      label: "Alumni",
-      value: alumniCount || 0,
-      href: `/${orgSlug}/alumni`,
-      icon: GraduationCap,
-      accentFrom: "var(--color-org-secondary-light)",
-      accentTo: "var(--color-org-secondary)",
-    },
+  if (postIds.length > 0 && orgCtx.userId) {
+    const { data: likes, error: likesError } = await supabase
+      .from("feed_likes")
+      .select("post_id")
+      .eq("user_id", orgCtx.userId)
+      .in("post_id", postIds);
+
+    if (likesError) {
+      console.error("Failed to fetch user likes:", likesError);
+    }
+
+    userLikedPostIds = new Set((likes || []).map((l) => l.post_id));
+  }
+
+  const mediaMap = postIds.length > 0
+    ? await fetchMediaForEntities(createServiceClient(), "feed_post", postIds, org.id)
+    : new Map();
+
+  // Augment poll data for poll-type posts
+  const pollPostIds = (posts || []).filter((p) => (p as Record<string, unknown>).post_type === "poll").map((p) => p.id);
+  const userVoteMap = new Map<string, number>();
+  const voteCountsMap = new Map<string, number[]>();
+  const totalVotesMap = new Map<string, number>();
+
+  if (pollPostIds.length > 0 && orgCtx.userId) {
+    const [{ data: userVotes }, { data: allVotes }] = await Promise.all([
+      supabase
+        .from("feed_poll_votes")
+        .select("post_id, option_index")
+        .eq("user_id", orgCtx.userId)
+        .in("post_id", pollPostIds),
+      supabase
+        .from("feed_poll_votes")
+        .select("post_id, option_index")
+        .in("post_id", pollPostIds)
+        .limit(5000),
+    ]);
+
+    for (const v of userVotes || []) {
+      userVoteMap.set(v.post_id, v.option_index);
+    }
+
+    for (const v of allVotes || []) {
+      if (!voteCountsMap.has(v.post_id)) {
+        const postForMeta = (posts || []).find((p) => p.id === v.post_id);
+        const meta = (postForMeta as Record<string, unknown>)?.metadata as PollMetadata | null;
+        voteCountsMap.set(v.post_id, new Array(meta?.options.length || 0).fill(0));
+        totalVotesMap.set(v.post_id, 0);
+      }
+      const counts = voteCountsMap.get(v.post_id)!;
+      if (v.option_index < counts.length) {
+        counts[v.option_index]++;
+      }
+      totalVotesMap.set(v.post_id, (totalVotesMap.get(v.post_id) || 0) + 1);
+    }
+  }
+
+  const augmentedPosts = (posts || []).map((post) => ({
+    ...post,
+    liked_by_user: userLikedPostIds.has(post.id),
+    media: mediaMap.get(post.id) ?? [],
+    ...((post as Record<string, unknown>).post_type === "poll"
+      ? {
+          poll_meta: (post as Record<string, unknown>).metadata as PollMetadata | null,
+          user_vote: userVoteMap.get(post.id) ?? null,
+          vote_counts: voteCountsMap.get(post.id) ?? [],
+          total_votes: totalVotesMap.get(post.id) ?? 0,
+        }
+      : {}),
+  }));
+
+  const total = postsCount || 0;
+  const totalPages = Math.ceil(total / limit);
+
+  // Determine if user can create posts
+  const feedPostRoles: string[] =
+    (org as Record<string, unknown>).feed_post_roles as string[] ||
+    ["admin", "active_member", "alumni"];
+  const canPost = orgCtx.role ? feedPostRoles.includes(orgCtx.role) : false;
+
+  // Build stats for sidebar widget
+  const totalDonations = (donationStat?.total_amount_cents ?? 0) / 100;
+
+  const stats: StatItem[] = [
+    { label: tDash("activeMembers"), value: membersCount || 0, href: `/${orgSlug}/members`, icon: Users },
+    { label: tDash("alumni"), value: alumniCount || 0, href: `/${orgSlug}/alumni`, icon: GraduationCap },
     ...(orgCtx.hasParentsAccess && (parentsCount ?? 0) > 0 && (orgCtx.role === "admin" || orgCtx.role === "active_member" || orgCtx.role === "parent") ? [{
-      label: "Parents",
-      value: parentsCount || 0,
-      href: `/${orgSlug}/parents`,
-      icon: Heart,
-      accentFrom: "var(--color-org-secondary)",
-      accentTo: "var(--color-org-secondary-dark)",
+      label: tDash("parents"), value: parentsCount || 0, href: `/${orgSlug}/parents`, icon: Heart,
     }] : []),
+    { label: tDash("upcomingEvents"), value: eventsCount || 0, href: `/${orgSlug}/calendar`, icon: CalendarClock },
     {
-      label: "Upcoming Events",
-      value: eventsCount || 0,
-      href: `/${orgSlug}/events`,
-      icon: CalendarClock,
-      accentFrom: "var(--color-org-secondary)",
-      accentTo: "var(--color-org-secondary-dark)",
-    },
-    {
-      label: "Total Donations",
-      value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      label: tDash("totalDonations"),
+      value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
       href: `/${orgSlug}/donations`,
       icon: HandHeart,
-      accentFrom: "var(--color-org-secondary)",
-      accentTo: "var(--color-org-secondary-dark)",
+    },
+  ];
+
+  const mobileStatChips: MobileStatChip[] = [
+    { label: tDash("activeMembers"), value: String(membersCount || 0), href: `/${orgSlug}/members`, iconKey: "users" },
+    { label: tDash("alumni"), value: String(alumniCount || 0), href: `/${orgSlug}/alumni`, iconKey: "graduation-cap" },
+    ...(orgCtx.hasParentsAccess && (parentsCount ?? 0) > 0 && (orgCtx.role === "admin" || orgCtx.role === "active_member" || orgCtx.role === "parent")
+      ? [{ label: tDash("parents"), value: String(parentsCount || 0), href: `/${orgSlug}/parents`, iconKey: "heart" as const }]
+      : []),
+    { label: tDash("upcomingEvents"), value: String(eventsCount || 0), href: `/${orgSlug}/calendar`, iconKey: "calendar-clock" },
+    {
+      label: tDash("totalDonations"),
+      value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      href: `/${orgSlug}/donations`,
+      iconKey: "hand-heart",
     },
   ];
 
   return (
     <div className="animate-fade-in">
-      <PageHeader
-        title={`Welcome to ${org.name}`}
-        description={org.description || "Your organization dashboard"}
-      />
-
-      {/* Personalized Suggestions (client component — renders only with consent + data) */}
-      <SuggestedFeatures orgSlug={orgSlug} />
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map((stat) => (
-          <Link key={stat.label} href={stat.href}>
-            <Card interactive className="p-5 bg-card/90 backdrop-blur">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl flex items-center justify-center shadow-soft"
-                  style={{
-                    backgroundColor: stat.accentFrom,
-                    boxShadow: "0 12px 30px -10px rgba(0,0,0,0.35)",
-                    color: "var(--color-org-secondary-foreground)",
-                  }}>
-                    <stat.icon className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground font-mono">{stat.value}</p>
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Announcements */}
-        <Card>
-          <div className="p-6 border-b border-border">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-foreground">Recent Announcements</h2>
-              <Link href={`/${orgSlug}/announcements`} className="text-sm text-muted-foreground hover:text-foreground">
-                View all →
-              </Link>
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
+        {/* Main feed column */}
+        <div>
+          {canPost && (
+            <div className="mb-5">
+              <FeedComposer orgId={org.id} userName={userName?.name || undefined} />
             </div>
-          </div>
-          <div className="divide-y divide-border">
-            {visibleAnnouncements && visibleAnnouncements.length > 0 ? (
-              visibleAnnouncements.map((announcement) => (
-                <div key={announcement.id} className="p-4">
-                  <div className="flex items-start gap-3">
-                    {announcement.is_pinned && (
-                      <Badge variant="primary" className="mt-0.5">Pinned</Badge>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-foreground truncate">{announcement.title}</h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{announcement.body}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {announcement.published_at
-                          ? new Date(announcement.published_at).toLocaleDateString()
-                          : "Scheduled"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-8 text-center text-muted-foreground">
-                No announcements yet
-              </div>
-            )}
-          </div>
-        </Card>
+          )}
 
-        {/* Upcoming Events */}
-        <Card>
-          <div className="p-6 border-b border-border">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-foreground">Upcoming Events</h2>
-              <Link href={`/${orgSlug}/events`} className="text-sm text-muted-foreground hover:text-foreground">
-                View all →
-              </Link>
-            </div>
-          </div>
-          <div className="divide-y divide-border">
-            {upcomingEvents && upcomingEvents.length > 0 ? (
-              upcomingEvents.map((event) => (
-                <Link key={event.id} href={`/${orgSlug}/events/${event.id}`} className="block p-4 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-xl bg-muted flex flex-col items-center justify-center text-center">
-                      <span className="text-xs font-medium text-muted-foreground uppercase">
-                        {new Date(event.start_date).toLocaleDateString("en-US", { month: "short" })}
-                      </span>
-                      <span className="text-lg font-bold text-foreground leading-none">
-                        {new Date(event.start_date).getDate()}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-foreground truncate">{event.title}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {event.location || "Location TBD"}
-                      </p>
-                    </div>
-                    {event.is_philanthropy && (
-                      <Badge variant="success">Philanthropy</Badge>
-                    )}
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <div className="p-8 text-center text-muted-foreground">
-                No upcoming events
-              </div>
-            )}
-          </div>
-        </Card>
+          <OrgHomeMobileOverview statChips={mobileStatChips}>
+            <FeedSidebarWidgets orgSlug={orgSlug} data={feedSidebarData} />
+          </OrgHomeMobileOverview>
 
-        {/* Recent Donations */}
-        <Card className="lg:col-span-2">
-          <div className="p-6 border-b border-border">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-foreground">Recent Donations</h2>
-              <Link href={`/${orgSlug}/donations`} className="text-sm text-muted-foreground hover:text-foreground">
-                View all →
-              </Link>
-            </div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-px flex-1 bg-border/50" />
+            <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/50">
+              {tDash("recent")}
+            </span>
+            <div className="h-px flex-1 bg-border/50" />
           </div>
-          <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Donor</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Purpose</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
-                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {recentDonations && recentDonations.length > 0 ? (
-                    recentDonations.map((donation) => (
-                      <tr key={donation.id}>
-                        <td className="p-4 text-foreground">{(donation as Record<string, unknown>).anonymous === true ? "Anonymous" : donation.donor_name}</td>
-                        <td className="p-4 text-muted-foreground">{donation.purpose || "General support"}</td>
-                        <td className="p-4 text-muted-foreground">
-                        {donation.created_at ? new Date(donation.created_at).toLocaleDateString() : "—"}
-                        </td>
-                        <td className="p-4 text-right font-mono font-medium text-foreground">
-                        ${(donation.amount_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-muted-foreground">
-                      No donations recorded yet
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <FeedList
+            posts={augmentedPosts}
+            orgSlug={orgSlug}
+            currentUserId={orgCtx.userId || ""}
+            isAdmin={orgCtx.isAdmin}
+            basePath={`/${orgSlug}`}
+            pagination={{ page, total, totalPages }}
+          />
+        </div>
+
+        {/* Right sidebar */}
+        <aside className="hidden xl:block">
+          <div className="sticky top-8 space-y-4">
+            <CompactStatsWidget stats={stats} />
+            <FeedSidebar
+              orgSlug={orgSlug}
+              orgId={org.id}
+              role={orgCtx.role}
+              status={orgCtx.status}
+              userId={orgCtx.userId}
+              data={feedSidebarData}
+            />
           </div>
-        </Card>
+        </aside>
       </div>
     </div>
   );

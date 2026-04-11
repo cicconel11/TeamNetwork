@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getMentorshipSectionOrder,
+  getMentorshipStatusTranslationKey,
   getVisibleMentorshipPairs,
   isUserInMentorshipPair,
-  normalizeMentorshipStatus,
-} from "@teammeet/core";
+} from "../src/lib/mentorship/presentation.ts";
 
 test("getMentorshipSectionOrder shows pairs first only for non-admins with pairs", () => {
   assert.equal(
@@ -22,7 +22,7 @@ test("getMentorshipSectionOrder shows pairs first only for non-admins with pairs
   );
 });
 
-test("getVisibleMentorshipPairs hides locally archived pairs without dropping new server state", () => {
+test("getVisibleMentorshipPairs preserves new server pairs while hiding locally deleted ones", () => {
   const pairs = [
     { id: "pair-1", mentor_user_id: "mentor-1", mentee_user_id: "mentee-1" },
     { id: "pair-2", mentor_user_id: "mentor-2", mentee_user_id: "mentee-2" },
@@ -46,10 +46,12 @@ test("isUserInMentorshipPair highlights both mentor and mentee identities", () =
   assert.equal(isUserInMentorshipPair(pair), false);
 });
 
-test("normalizeMentorshipStatus fails closed to active", () => {
-  assert.equal(normalizeMentorshipStatus("active"), "active");
-  assert.equal(normalizeMentorshipStatus("paused"), "paused");
-  assert.equal(normalizeMentorshipStatus("completed"), "completed");
-  assert.equal(normalizeMentorshipStatus("unexpected"), "active");
-  assert.equal(normalizeMentorshipStatus(undefined), "active");
+test("getMentorshipStatusTranslationKey normalizes mentorship status labels", () => {
+  assert.equal(getMentorshipStatusTranslationKey("active"), "statusActive");
+  assert.equal(getMentorshipStatusTranslationKey("paused"), "statusPaused");
+  assert.equal(
+    getMentorshipStatusTranslationKey("completed"),
+    "statusCompleted"
+  );
+  assert.equal(getMentorshipStatusTranslationKey("unexpected"), "statusActive");
 });

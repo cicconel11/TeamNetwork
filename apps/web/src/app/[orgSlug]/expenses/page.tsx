@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { ExpensesFilters } from "@/components/expenses";
-import { isOrgAdmin } from "@/lib/auth";
+import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 export const dynamic = "force-dynamic";
@@ -17,21 +18,16 @@ interface ExpensesPageProps {
 export default async function ExpensesPage({ params, searchParams }: ExpensesPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
-  const supabase = await createClient();
 
-  // Fetch organization
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .single();
-
+  const { organization: org, isAdmin } = await getOrgContext(orgSlug);
   if (!org) return null;
 
-  const isAdmin = await isOrgAdmin(org.id);
+  const supabase = await createClient();
   const navConfig = org.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/expenses", navConfig);
-  const actionLabel = resolveActionLabel("/expenses", navConfig, "Submit");
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/expenses", navConfig, t, locale);
+  const actionLabel = resolveActionLabel("/expenses", navConfig, "Submit", t, locale);
 
   // Get current user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -241,7 +237,7 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
                           organizationField="organization_id"
                           organizationId={org.id}
                           label="Delete"
-                          confirmMessage={`Are you sure you want to delete this ${resolveActionLabel("/expenses", navConfig, "").toLowerCase().trim()}?`}
+                          confirmMessage={`Are you sure you want to delete this ${resolveActionLabel("/expenses", navConfig, "", t, locale).toLowerCase().trim()}?`}
                         />
                       </div>
                     )}
@@ -260,10 +256,10 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
               </svg>
             }
             title={`No ${pageLabel.toLowerCase()} yet`}
-            description={`Submit an ${resolveActionLabel("/expenses", navConfig, "").toLowerCase().trim()} to request reimbursement`}
+            description={`Submit an ${resolveActionLabel("/expenses", navConfig, "", t, locale).toLowerCase().trim()} to request reimbursement`}
             action={
               <Link href={`/${orgSlug}/expenses/new`}>
-                <Button>{resolveActionLabel("/expenses", navConfig, "Submit First")}</Button>
+                <Button>{resolveActionLabel("/expenses", navConfig, "Submit First", t, locale)}</Button>
               </Link>
             }
           />

@@ -1,77 +1,76 @@
-import { SkeletonStatCard } from "@/components/skeletons/SkeletonStatCard";
 import { Skeleton } from "@/components/ui";
 import { Card } from "@/components/ui";
 
 export default function Loading() {
   return (
-    <div>
-      {/* Page Header */}
-      <div className="mb-8">
-        <Skeleton className="h-8 w-64 mb-2" />
-        <Skeleton className="h-4 w-48" />
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <SkeletonStatCard />
-        <SkeletonStatCard />
-        <SkeletonStatCard />
-        <SkeletonStatCard />
-      </div>
-
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Announcements skeleton */}
-        <Card>
-          <div className="p-6 border-b border-border">
-            <Skeleton className="h-5 w-48" />
-          </div>
-          <div className="divide-y divide-border">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="p-4">
-                <Skeleton className="h-4 w-3/4 mb-2" />
-                <Skeleton className="h-3 w-full mb-1" />
-                <Skeleton className="h-3 w-1/2" />
-              </div>
-            ))}
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
+      {/* Main column */}
+      <div>
+        {/* Composer skeleton */}
+        <Card className="px-4 py-3 mb-5">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            <Skeleton className="h-10 flex-1 rounded-full" />
           </div>
         </Card>
 
-        {/* Events skeleton */}
-        <Card>
-          <div className="p-6 border-b border-border">
-            <Skeleton className="h-5 w-40" />
-          </div>
-          <div className="divide-y divide-border">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="p-4 flex items-center gap-4">
-                <Skeleton className="h-12 w-12 rounded-xl" />
+        {/* Divider */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-px flex-1 bg-border/50" />
+          <Skeleton className="h-3 w-12" />
+          <div className="h-px flex-1 bg-border/50" />
+        </div>
+
+        {/* Post skeletons */}
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="px-4 pt-4 pb-3">
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-8 w-8 rounded-full shrink-0" />
                 <div className="flex-1">
-                  <Skeleton className="h-4 w-3/4 mb-2" />
-                  <Skeleton className="h-3 w-1/2" />
+                  <div className="flex items-center gap-2 mb-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-12" />
+                  </div>
+                  <Skeleton className="h-4 w-full mb-1" />
+                  <Skeleton className="h-4 w-3/4" />
                 </div>
               </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Donations skeleton */}
-        <Card className="lg:col-span-2">
-          <div className="p-6 border-b border-border">
-            <Skeleton className="h-5 w-40" />
-          </div>
-          <div className="p-4 space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-4">
-                <Skeleton className="h-4 w-1/4" />
-                <Skeleton className="h-4 w-1/4" />
-                <Skeleton className="h-4 w-1/6" />
-                <Skeleton className="h-4 w-1/6 ml-auto" />
+              <div className="flex mt-3 pt-2.5 border-t border-border/40">
+                <Skeleton className="h-8 flex-1 rounded-lg" />
+                <Skeleton className="h-8 flex-1 rounded-lg ml-2" />
               </div>
-            ))}
-          </div>
-        </Card>
+            </Card>
+          ))}
+        </div>
       </div>
+
+      {/* Sidebar skeleton — hidden on mobile */}
+      <aside className="hidden xl:block">
+        <div className="sticky top-8 space-y-4">
+          <Card className="p-4">
+            <Skeleton className="h-3 w-16 mb-3" />
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-4 rounded" />
+                  <Skeleton className="h-4 flex-1" />
+                  <Skeleton className="h-4 w-8" />
+                </div>
+              ))}
+            </div>
+          </Card>
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="p-4">
+              <Skeleton className="h-4 w-32 mb-3" />
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 }

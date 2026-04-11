@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import { getOrgMemberRole } from "@/lib/parents/auth";
-import { getUserFromRequest } from "@/lib/supabase/get-user-from-request";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,7 +42,8 @@ async function authorizeInviteMutation(
     };
   }
 
-  const { user, supabase } = await getUserFromRequest(req as any);
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const rateLimit = checkRateLimit(req, {
     userId: user?.id ?? null,

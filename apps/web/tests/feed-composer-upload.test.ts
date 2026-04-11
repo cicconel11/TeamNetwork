@@ -24,12 +24,23 @@ describe("FeedComposer image upload", () => {
     assert.ok(code.includes("mediaIds"), "should pass mediaIds to post creation");
   });
 
-  it("FeedComposer validates file size client-side", async () => {
+  it("FeedComposer validates file size client-side via prepareFeedImageEntries", async () => {
     const fs = await import("fs");
-    const code = fs.readFileSync("src/components/feed/FeedComposer.tsx", "utf-8");
+    const composer = fs.readFileSync("src/components/feed/FeedComposer.tsx", "utf-8");
     assert.ok(
-      code.includes("10 * 1024 * 1024") || code.includes("MAX_FILE_SIZE"),
-      "should have 10MB max file size check",
+      composer.includes("prepareFeedImageEntries"),
+      "FeedComposer should delegate file validation to prepareFeedImageEntries",
+    );
+
+    // The helper owns the post-prep 10 MB gate.
+    const helper = fs.readFileSync("src/lib/media/feed-composer-prep.ts", "utf-8");
+    assert.ok(
+      helper.includes("FEED_POST_MAX_FILE_SIZE"),
+      "feed-composer-prep should expose the feed post size constant",
+    );
+    assert.ok(
+      helper.includes("MEDIA_CONSTRAINTS.feed_post.maxFileSize"),
+      "feed-composer-prep should derive the cap from MEDIA_CONSTRAINTS",
     );
   });
 });

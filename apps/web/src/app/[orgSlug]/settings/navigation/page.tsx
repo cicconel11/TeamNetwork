@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Card, Input, Badge } from "@/components/ui";
@@ -31,6 +32,9 @@ function NavigationSettingsContent() {
   const params = useParams();
   const orgSlug = params.orgSlug as string;
   const router = useRouter();
+  const tNav = useTranslations("settings.navigation");
+  const tCommon = useTranslations("common");
+  const tAuth = useTranslations("auth");
 
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgType, setOrgType] = useState<string>("general");
@@ -137,7 +141,7 @@ function NavigationSettingsContent() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setConsentSaving(false);
-      setConsentMessage("You must be signed in.");
+      setConsentMessage(tAuth("mustBeSignedIn"));
       return;
     }
     const nextAgeBracket = getAgeBracketFromUserMetadata(user.user_metadata);
@@ -150,7 +154,7 @@ function NavigationSettingsContent() {
         { onConflict: "org_id,user_id" },
       );
     if (updateError) {
-      setConsentMessage(updateError.message || "Failed to update preference");
+      setConsentMessage(updateError.message || tNav("failedPref"));
       setConsentSaving(false);
       return;
     }
@@ -302,12 +306,12 @@ function NavigationSettingsContent() {
         body: JSON.stringify({ navConfig: payload }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || "Unable to save navigation");
+      if (!res.ok) throw new Error(data?.error || tNav("unableToSave"));
       setNavConfig((data?.navConfig as NavConfig) || payload);
       setSaved(true);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save navigation");
+      setError(err instanceof Error ? err.message : tNav("unableToSave"));
     } finally {
       setIsSaving(false);
     }
@@ -324,35 +328,35 @@ function NavigationSettingsContent() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Navigation"
-        description="Items are organized in sidebar sections. Rename items, adjust visibility, or reorder within each section."
+        title={tNav("title")}
+        description={tNav("description")}
         backHref={`/${orgSlug}`}
         actions={
           <Button onClick={handleSave} isLoading={isSaving} disabled={!orgId}>
-            Save changes
+            {tNav("saveChanges")}
           </Button>
         }
       />
       <Card className="p-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h3 className="font-semibold text-foreground">Usage Analytics (Admin)</h3>
+            <h3 className="font-semibold text-foreground">{tNav("analytics.title")}</h3>
             <p className="text-sm text-muted-foreground">
               {maxTrackingLevel === "page_view_only"
-                ? "Control your personal analytics consent for this organization. Your account or organization is limited to page-level analytics even when you opt in."
+                ? tNav("analytics.descPageViews")
                 : maxTrackingLevel === "none"
-                  ? "Usage analytics are unavailable for this account under the current compliance rules."
-                  : "Control your personal analytics consent for this organization. Behavioral analytics are disabled by default until you opt in."}
+                  ? tNav("analytics.descOff")
+                  : tNav("analytics.descDefault")}
             </p>
           </div>
           <Badge variant="muted" className="uppercase tracking-wide">
             {maxTrackingLevel === "page_view_only"
-              ? "Page Views Only"
+              ? tNav("analytics.badgePageViews")
               : consentState === "opted_in"
-                ? "Opted In"
+                ? tNav("analytics.badgeOptedIn")
                 : consentState === "opted_out"
-                  ? "Opted Out"
-                  : "Not Set"}
+                  ? tNav("analytics.badgeOptedOut")
+                  : tNav("analytics.badgeNotSet")}
           </Badge>
         </div>
         <div className="mt-4 flex items-center gap-3">
@@ -367,12 +371,12 @@ function NavigationSettingsContent() {
             />
             <span className="text-sm text-foreground">
               {maxTrackingLevel === "page_view_only"
-                ? "Enable limited opt-in usage analytics"
-                : "Enable opt-in usage analytics"}
+                ? tNav("analytics.consentOn")
+                : tNav("analytics.consentOff")}
             </span>
           </label>
-          {consentLoading && <span className="text-xs text-muted-foreground">Loading...</span>}
-          {consentSaving && <span className="text-xs text-muted-foreground">Saving...</span>}
+          {consentLoading && <span className="text-xs text-muted-foreground">{tCommon("loading")}</span>}
+          {consentSaving && <span className="text-xs text-muted-foreground">{tCommon("saving")}</span>}
         </div>
         {consentMessage && (
           <div className="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -387,7 +391,7 @@ function NavigationSettingsContent() {
       )}
       {saved && (
         <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm">
-          Navigation updated. Refresh the sidebar to see your changes.
+          {tNav("updated")}
         </div>
       )}
       <div className="space-y-2">
@@ -396,8 +400,8 @@ function NavigationSettingsContent() {
             const items = groupedItems.get(groupKey);
             if (!items || items.length === 0) return null;
             const groupLabel =
-              groupKey === "dashboard" ? "Dashboard" :
-              groupKey === "standalone" ? "Other" :
+              groupKey === "dashboard" ? tNav("groupDashboard") :
+              groupKey === "standalone" ? tNav("groupOther") :
               ORG_NAV_GROUPS.find(g => g.id === groupKey)?.label ?? groupKey;
             return (
               <div key={groupKey}>
@@ -427,8 +431,8 @@ function NavigationSettingsContent() {
                             onClick={() => moveItem(item.href, "up")}
                             disabled={isFirst}
                             className={`p-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isFirst ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-                            title="Move up"
-                            aria-label="Move item up"
+                            title={tNav("moveUp")}
+                            aria-label={tNav("moveItemUp")}
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
@@ -438,8 +442,8 @@ function NavigationSettingsContent() {
                             onClick={() => moveItem(item.href, "down")}
                             disabled={isLast}
                             className={`p-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isLast ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-                            title="Move down"
-                            aria-label="Move item down"
+                            title={tNav("moveDown")}
+                            aria-label={tNav("moveItemDown")}
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
@@ -452,10 +456,10 @@ function NavigationSettingsContent() {
                           {labelValue && labelValue !== item.label && <span className="text-xs text-muted-foreground ml-2">({item.label})</span>}
                         </div>
                         <div className="flex items-center gap-2">
-                          {isHiddenEverywhere && <Badge variant="error">Disabled</Badge>}
-                          {hiddenForRoles.length > 0 && !isHiddenEverywhere && <Badge variant="warning">Partial</Badge>}
+                          {isHiddenEverywhere && <Badge variant="error">{tNav("disabled")}</Badge>}
+                          {hiddenForRoles.length > 0 && !isHiddenEverywhere && <Badge variant="warning">{tNav("partial")}</Badge>}
                         </div>
-                        <button onClick={() => setExpandedItem(isExpanded ? null : item.href)} className="p-1 hover:bg-muted rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1" aria-label={isExpanded ? "Collapse settings" : "Expand settings"}>
+                        <button onClick={() => setExpandedItem(isExpanded ? null : item.href)} className="p-1 hover:bg-muted rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1" aria-label={isExpanded ? tNav("collapseSettings") : tNav("expandSettings")}>
                           <svg className={`h-5 w-5 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                           </svg>
@@ -464,45 +468,45 @@ function NavigationSettingsContent() {
                       {isExpanded && (
                         <div className="mt-4 pt-4 border-t border-border space-y-4 animate-in slide-in-from-top-2 duration-200">
                           <div className="grid gap-4 md:grid-cols-2">
-                            <Input id={`${item.href || "root"}-label`} label="Display name" value={labelValue} onChange={(e) => handleLabelChange(item.href, e.target.value)} placeholder={item.label} />
+                            <Input id={`${item.href || "root"}-label`} label={tNav("displayName")} value={labelValue} onChange={(e) => handleLabelChange(item.href, e.target.value)} placeholder={item.label} />
                             <div className="space-y-2">
-                              <p className="text-sm font-medium text-foreground">Visibility</p>
+                              <p className="text-sm font-medium text-foreground">{tNav("visibility")}</p>
                               <label className="flex items-center gap-2 text-sm text-foreground">
                                 <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("active_member")} onChange={() => toggleRoleHidden(item.href, "active_member")} />
-                                Hide from members
+                                {tNav("hideMembers")}
                               </label>
                               <label className="flex items-center gap-2 text-sm text-foreground">
                                 <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("alumni")} onChange={() => toggleRoleHidden(item.href, "alumni")} />
-                                Hide from alumni
+                                {tNav("hideAlumni")}
                               </label>
                               <label className="flex items-center gap-2 text-sm text-foreground">
                                 <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("parent")} onChange={() => toggleRoleHidden(item.href, "parent")} />
-                                Hide from parents
+                                {tNav("hideParents")}
                               </label>
                               <label className="flex items-center gap-2 text-sm text-foreground">
                                 <input type="checkbox" className="h-4 w-4 rounded border-border" checked={isHiddenEverywhere} onChange={() => toggleHiddenEverywhere(item.href)} />
-                                Disable for everyone
+                                {tNav("disableAll")}
                               </label>
                             </div>
                           </div>
                           <div className="space-y-2">
-                            <p className="text-sm font-medium text-foreground">Who can edit?</p>
+                            <p className="text-sm font-medium text-foreground">{tNav("whoCanEdit")}</p>
                             <div className="flex flex-wrap gap-4">
                               <label className="flex items-center gap-2 text-sm text-foreground">
                                 <input type="checkbox" className="h-4 w-4 rounded border-border" checked disabled />
-                                Admins
+                                {tNav("admins")}
                               </label>
                               <label className="flex items-center gap-2 text-sm text-foreground">
                                 <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("active_member")} onChange={() => toggleEditRole(item.href, "active_member")} />
-                                Members
+                                {tNav("members")}
                               </label>
                               <label className="flex items-center gap-2 text-sm text-foreground">
                                 <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("alumni")} onChange={() => toggleEditRole(item.href, "alumni")} />
-                                Alumni
+                                {tNav("alumni")}
                               </label>
                               <label className="flex items-center gap-2 text-sm text-foreground">
                                 <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("parent")} onChange={() => toggleEditRole(item.href, "parent")} />
-                                Parents
+                                {tNav("parents")}
                               </label>
                             </div>
                           </div>
@@ -517,8 +521,8 @@ function NavigationSettingsContent() {
         })()}
       </div>
       <div className="flex items-center justify-end gap-3 pt-4">
-        {saved && <p className="text-sm text-muted-foreground">Saved</p>}
-        <Button onClick={handleSave} isLoading={isSaving} disabled={!orgId}>Save changes</Button>
+        {saved && <p className="text-sm text-muted-foreground">{tNav("saved")}</p>}
+        <Button onClick={handleSave} isLoading={isSaving} disabled={!orgId}>{tNav("saveChanges")}</Button>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import type { RsvpStatus } from "@teammeet/types";
+import type { RsvpStatus } from "@/types/database";
 
 interface Attendee {
   userId: string;

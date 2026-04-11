@@ -27,6 +27,7 @@ export async function POST(request: Request) {
   const response = NextResponse.redirect(`${siteUrl}/`, {
     status: 303, // Use 303 to convert POST to GET redirect
   });
+  response.headers.set("Clear-Site-Data", "\"cache\", \"cookies\"");
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

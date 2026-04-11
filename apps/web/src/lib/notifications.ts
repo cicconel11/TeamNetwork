@@ -170,7 +170,7 @@ const getChannelsForContact = ({
 }) => {
   const channels: DeliveryChannel[] = [];
 
-  const emailEnabled = pref ? pref.email_enabled && !!pref.email_address : !!email;
+  const emailEnabled = pref ? pref.email_enabled && !!(pref.email_address || email) : !!email;
   const smsEnabled = pref ? pref.sms_enabled && !!pref.phone_number : false;
 
   if (desired.includes("email") && emailEnabled) channels.push("email");

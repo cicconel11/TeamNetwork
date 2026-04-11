@@ -42,7 +42,7 @@ export function PhilanthropyFilter({ orgSlug, currentView }: PhilanthropyFilterP
                   key={item.label}
                   href={item.href}
                   className={`block px-4 py-2 text-sm transition-colors ${
-                    active ? "text-white bg-org-primary" : "text-foreground hover:bg-muted"
+                    active ? "text-org-primary-foreground bg-org-primary" : "text-foreground hover:bg-muted"
                   }`}
                   onClick={() => setOpen(false)}
                 >

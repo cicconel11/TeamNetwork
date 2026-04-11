@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui";
 import { MyCalendarTab } from "@/components/schedules/tabs";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface MySettingsPageProps {
@@ -29,20 +30,22 @@ export default async function CalendarMySettingsPage({ params }: MySettingsPageP
     .order("start_time", { ascending: true });
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/calendar", navConfig);
+  const [tNav, locale, tCalendar] = await Promise.all([getTranslations("nav.items"), getLocale(), getTranslations("calendar")]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/calendar", navConfig, t, locale);
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Sync Settings"
-        description="Manage your personal calendar connections and schedules"
+        title={tCalendar("syncSettings")}
+        description={tCalendar("syncSettingsDesc")}
         actions={
           <Link href={`/${orgSlug}/calendar`}>
             <Button variant="secondary">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
               </svg>
-              <span className="sr-only">Back to </span>Calendar
+              <span className="sr-only">{tCalendar("backToCalendar")}</span>
             </Button>
           </Link>
         }

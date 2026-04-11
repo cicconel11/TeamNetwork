@@ -15,6 +15,7 @@ import {
 import {
   setAnalyticsPolicy,
   trackBehavioralEvent,
+  trackOpsEvent,
   getAnalyticsSessionMetadata,
   getConsentState,
   type AnalyticsPolicyChangeDetail,
@@ -155,11 +156,17 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
 
         const supabase = createClient();
 
-        const { data } = await supabase
+        const { data, error: consentError } = await supabase
           .from("analytics_consent")
           .select("consent_state")
           .eq("org_id", orgId)
           .maybeSingle();
+
+        if (consentError) {
+          trackOpsEvent("client_error", {
+            error_code: "consent_query_failed",
+          });
+        }
 
         consentState = data?.consent_state ?? "unknown";
       }

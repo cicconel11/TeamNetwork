@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface LikeButtonProps {
   postId: string;
@@ -12,6 +12,20 @@ export function LikeButton({ postId, likeCount: initialCount, likedByUser: initi
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Re-sync from server props when they change (e.g., after client-side navigation).
+  // Guarded by isLoading so an in-flight optimistic update isn't clobbered by a stale RSC payload.
+  useEffect(() => {
+    if (!isLoading) {
+      setLiked(initialLiked);
+    }
+  }, [initialLiked]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isLoading) {
+      setCount(initialCount);
+    }
+  }, [initialCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = async () => {
     if (isLoading) return;
@@ -27,7 +41,10 @@ export function LikeButton({ postId, likeCount: initialCount, likedByUser: initi
         method: "POST",
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        const { data } = await response.json();
+        setLiked(data.liked);
+      } else {
         setLiked(wasLiked);
         setCount((c) => (wasLiked ? c + 1 : c - 1));
       }
@@ -43,21 +60,25 @@ export function LikeButton({ postId, likeCount: initialCount, likedByUser: initi
     <button
       onClick={toggle}
       disabled={isLoading}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-95"
+      className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98] ${
+        liked
+          ? "text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+          : "text-muted-foreground hover:bg-muted/50"
+      }`}
       type="button"
       aria-label={liked ? "Unlike post" : "Like post"}
       aria-pressed={liked}
     >
       {liked ? (
-        <svg className="h-3.5 w-3.5 text-rose-500 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+        <svg className="h-[18px] w-[18px] fill-current" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
         </svg>
       ) : (
-        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+        <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
         </svg>
       )}
-      <span className="font-mono">{count}</span>
+      <span>Like{count > 0 ? ` (${count})` : ""}</span>
     </button>
   );
 }

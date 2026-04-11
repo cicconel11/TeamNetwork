@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getUserFromRequest } from "@/lib/supabase/get-user-from-request";
 import { ORG_NAV_ITEMS } from "@/lib/navigation/nav-items";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
@@ -49,6 +49,13 @@ const patchSchema = z
     job_post_roles: z.array(z.enum(ALLOWED_ROLES)).min(1).optional(),
     discussion_post_roles: z.array(z.enum(ALLOWED_ROLES)).min(1).optional(),
     media_upload_roles: z.array(z.enum(ALLOWED_ROLES)).min(1).optional(),
+    linkedin_resync_enabled: z.boolean().optional(),
+    require_invite_approval: z.boolean().optional(),
+    timezone: z.string().max(100).refine(
+      (tz) => { try { Intl.DateTimeFormat(undefined, { timeZone: tz }); return true; } catch { return false; } },
+      { message: "Invalid IANA timezone" },
+    ).optional(),
+    default_language: z.enum(["en", "es", "fr", "ar", "zh", "pt", "it"]).optional(),
   })
   .strict();
 const ALLOWED_NAV_PATHS = new Set([...ORG_NAV_ITEMS.map((item) => item.href), "dashboard"]);
@@ -96,7 +103,7 @@ function sanitizeNavConfig(payload: unknown): NavConfig {
   return config;
 }
 
-export async function PATCH(req: NextRequest, { params }: RouteParams) {
+export async function PATCH(req: Request, { params }: RouteParams) {
   try {
     const { organizationId } = await params;
     const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
@@ -122,7 +129,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       sanitizedName = trimmedName;
     }
 
-    const { user, supabase } = await getUserFromRequest(req);
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
     const rateLimit = checkRateLimit(req, {
       userId: user?.id ?? null,
@@ -142,15 +150,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       return respond({ error: "Unauthorized" }, 401);
     }
 
-    // Require admin role in the organization
+    // Require admin role with active status in the organization
     const { data: role } = await supabase
       .from("user_organization_roles")
-      .select("role")
+      .select("role, status")
       .eq("user_id", user.id)
       .eq("organization_id", organizationId)
       .maybeSingle();
 
-    if (role?.role !== "admin") {
+    if (role?.role !== "admin" || role?.status !== "active") {
       return respond({ error: "Forbidden" }, 403);
     }
 
@@ -163,7 +171,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     const serviceSupabase = createServiceClient();
 
     // Build update payload - only include fields that were provided
-    const updatePayload: { nav_config?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[] } = {};
+    const updatePayload: { nav_config?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[]; linkedin_resync_enabled?: boolean; require_invite_approval?: boolean; timezone?: string; default_language?: string } = {};
 
     // Only update nav_config if navConfig or nav_config was provided in the request
     if (parsedBody.navConfig !== undefined || parsedBody.nav_config !== undefined) {
@@ -199,16 +207,33 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       updatePayload.media_upload_roles = roles;
     }
 
+    if (parsedBody.linkedin_resync_enabled !== undefined) {
+      updatePayload.linkedin_resync_enabled = parsedBody.linkedin_resync_enabled;
+    }
+
+    if (parsedBody.require_invite_approval !== undefined) {
+      updatePayload.require_invite_approval = parsedBody.require_invite_approval;
+    }
+
+    if (parsedBody.timezone !== undefined) {
+      updatePayload.timezone = parsedBody.timezone;
+    }
+    if (parsedBody.default_language !== undefined) {
+      updatePayload.default_language = parsedBody.default_language;
+    }
+
     // If nothing to update, return early
     if (Object.keys(updatePayload).length === 0) {
       return respond({ error: "No valid fields to update" }, 400);
     }
 
-    const { data: updatedOrg, error: updateError } = await serviceSupabase
+    // Cast needed: linkedin_resync_enabled exists in DB but not yet in generated types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updatedOrg, error: updateError } = await (serviceSupabase as any)
       .from("organizations")
       .update(updatePayload)
       .eq("id", organizationId)
-      .select("id, name, nav_config, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles")
+      .select("id, name, nav_config, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, linkedin_resync_enabled, require_invite_approval, timezone, default_language")
       .maybeSingle();
 
     if (updateError) {
@@ -220,7 +245,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
 
     // Return response with updated fields
-    const response: { navConfig?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[] } = {};
+    const response: { navConfig?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[]; linkedin_resync_enabled?: boolean; require_invite_approval?: boolean; timezone?: string; default_language?: string } = {};
     if (updatePayload.nav_config !== undefined) {
       response.navConfig = navConfig;
     }
@@ -239,6 +264,18 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if (updatePayload.media_upload_roles !== undefined) {
       response.media_upload_roles = updatedOrg.media_upload_roles as string[];
     }
+    if (updatePayload.linkedin_resync_enabled !== undefined) {
+      response.linkedin_resync_enabled = updatedOrg.linkedin_resync_enabled as boolean;
+    }
+    if (updatePayload.require_invite_approval !== undefined) {
+      response.require_invite_approval = updatedOrg.require_invite_approval as boolean;
+    }
+    if (updatePayload.timezone !== undefined) {
+      response.timezone = updatedOrg.timezone as string;
+    }
+    if (updatePayload.default_language !== undefined) {
+      response.default_language = updatedOrg.default_language as string;
+    }
 
     return respond(response);
   } catch (error) {
@@ -249,14 +286,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: RouteParams) {
+export async function DELETE(_req: Request, { params }: RouteParams) {
   const { organizationId } = await params;
   const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
   if (!orgIdParsed.success) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
-  const { user, supabase } = await getUserFromRequest(_req);
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const rateLimit = checkRateLimit(_req, {
     userId: user?.id ?? null,

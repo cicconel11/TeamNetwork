@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { Button, Textarea } from "@/components/ui";
 
 type FeedbackStatus = "idle" | "submitting" | "success" | "error";
@@ -33,6 +34,8 @@ export function FeedbackModal({
   context,
   onSubmit,
 }: FeedbackModalProps) {
+  const t = useTranslations("feedback");
+  const tCommon = useTranslations("common");
   const [message, setMessage] = useState("");
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
@@ -105,7 +108,7 @@ export function FeedbackModal({
     }
 
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      setFileError("Please upload a PNG, JPEG, or WebP image");
+      setFileError(t("imageTypeError"));
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -113,7 +116,7 @@ export function FeedbackModal({
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      setFileError("File size must be under 5MB");
+      setFileError(t("imageSizeError"));
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -142,7 +145,7 @@ export function FeedbackModal({
     e.preventDefault();
 
     if (!message.trim()) {
-      setError("Please describe what blocked you");
+      setError(t("pleaseDescribe"));
       return;
     }
 
@@ -183,7 +186,7 @@ export function FeedbackModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 id="feedback-modal-title" className="text-lg font-semibold text-foreground">
-            Share Feedback
+            {t("shareFeedback")}
           </h2>
           <button
             type="button"
@@ -227,20 +230,20 @@ export function FeedbackModal({
                 </svg>
               </div>
               <h3 className="text-lg font-medium text-foreground mb-2">
-                Thank you for your feedback
+                {t("thankYou")}
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                We appreciate you taking the time to help us improve.
+                {t("thankYouDesc")}
               </p>
               <Button variant="secondary" onClick={handleClose}>
-                Close
+                {tCommon("close")}
               </Button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <Textarea
-                label="What blocked you today?"
-                placeholder="Tell us what got in your way, confused you, or didn't work as expected..."
+                label={t("whatBlocked")}
+                placeholder={t("whatBlockedPlaceholder")}
                 value={message}
                 onChange={(e) => {
                   setMessage(e.target.value);
@@ -254,7 +257,7 @@ export function FeedbackModal({
               {/* Screenshot Upload */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-foreground">
-                  Screenshot (optional)
+                  {t("screenshotOptional")}
                 </label>
 
                 {screenshotPreview ? (
@@ -317,7 +320,7 @@ export function FeedbackModal({
                           d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
                         />
                       </svg>
-                      <span className="text-sm">Click to upload a screenshot</span>
+                      <span className="text-sm">{t("clickToUpload")}</span>
                     </button>
                   </>
                 )}
@@ -330,12 +333,12 @@ export function FeedbackModal({
               {/* Context Info (collapsed) */}
               <details className="text-xs text-muted-foreground">
                 <summary className="cursor-pointer hover:text-foreground transition-colors">
-                  Additional context included
+                  {t("additionalContext")}
                 </summary>
                 <div className="mt-2 p-2 bg-muted rounded-lg space-y-1 font-mono">
-                  <div>Page: {context.pageUrl}</div>
-                  <div>Trigger: {context.triggerType}</div>
-                  <div>Time: {context.timestamp}</div>
+                  <div>{t("page")}: {context.pageUrl}</div>
+                  <div>{t("trigger")}: {context.triggerType}</div>
+                  <div>{t("time")}: {context.timestamp}</div>
                 </div>
               </details>
 
@@ -355,7 +358,7 @@ export function FeedbackModal({
                   disabled={status === "submitting"}
                   className="flex-1"
                 >
-                  Cancel
+                  {tCommon("cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -364,7 +367,7 @@ export function FeedbackModal({
                   disabled={status === "submitting"}
                   className="flex-1"
                 >
-                  Submit Feedback
+                  {t("submitFeedback")}
                 </Button>
               </div>
             </form>

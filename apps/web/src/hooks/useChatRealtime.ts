@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import type { SupabaseClient, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import type { ChatMessage, ChatMessageLike, ChatPollVote, ChatFormResponse, User } from "@/types/database";
+import type { ChatMessage, ChatPollVote, ChatFormResponse, User } from "@/types/database";
 
 interface UseChatRealtimeOptions {
   supabase: SupabaseClient;
@@ -12,7 +12,6 @@ interface UseChatRealtimeOptions {
   userMap: Map<string, User>;
   fetchUnknownUsers: (ids: string[]) => Promise<Map<string, User>>;
   setMessages: React.Dispatch<React.SetStateAction<(ChatMessage & { author?: User })[]>>;
-  setMessageLikesMap?: React.Dispatch<React.SetStateAction<Map<string, { count: number; likedByUser: boolean }>>>;
   setPollVotesMap: React.Dispatch<React.SetStateAction<Map<string, ChatPollVote[]>>>;
   setFormResponsesMap: React.Dispatch<React.SetStateAction<Map<string, ChatFormResponse[]>>>;
   scrollToBottom: () => void;
@@ -27,7 +26,6 @@ export function useChatRealtime({
   userMap,
   fetchUnknownUsers,
   setMessages,
-  setMessageLikesMap,
   setPollVotesMap,
   setFormResponsesMap,
   scrollToBottom,
@@ -73,7 +71,7 @@ export function useChatRealtime({
               { ...newMsg, author: resolvedMap.get(newMsg.author_id) },
             ];
           });
-          setTimeout(scrollToBottom, 100);
+          scrollToBottom();
         }
       } else if (payload.eventType === "UPDATE") {
         const updated = payload.new as ChatMessage;
@@ -99,182 +97,100 @@ export function useChatRealtime({
               : m
           );
         });
-        setMessageLikesMap?.((prev) => {
-          const next = new Map(prev);
-          const existing = next.get(updated.id);
-          next.set(updated.id, {
-            count: updated.like_count ?? existing?.count ?? 0,
-            likedByUser: existing?.likedByUser ?? false,
-          });
-          return next;
-        });
       } else if (payload.eventType === "DELETE") {
         const deleted = payload.old as { id: string };
         setMessages((prev) => prev.filter((m) => m.id !== deleted.id));
-        setMessageLikesMap?.((prev) => {
-          const next = new Map(prev);
-          next.delete(deleted.id);
-          return next;
+      }
+    },
+    [currentUserId, canModerate, scrollToBottom, fetchUnknownUsers, setMessages]
+  );
+
+  // Handle incoming realtime poll vote changes
+  const handleVoteChange = useCallback(
+    (payload: RealtimePostgresChangesPayload<ChatPollVote>) => {
+      if (payload.eventType === "INSERT") {
+        const newVote = payload.new as ChatPollVote;
+        setPollVotesMap((prev) => {
+          const existing = prev.get(newVote.message_id) ?? [];
+          // Replace existing vote from same user (vote change)
+          const filtered = existing.filter((v) => v.user_id !== newVote.user_id);
+          const updated = new Map(prev);
+          updated.set(newVote.message_id, [...filtered, newVote]);
+          return updated;
+        });
+      } else if (payload.eventType === "UPDATE") {
+        const updatedVote = payload.new as ChatPollVote;
+        setPollVotesMap((prev) => {
+          const existing = prev.get(updatedVote.message_id) ?? [];
+          const updated = new Map(prev);
+          updated.set(
+            updatedVote.message_id,
+            existing.map((v) => (v.user_id === updatedVote.user_id ? updatedVote : v))
+          );
+          return updated;
+        });
+      } else if (payload.eventType === "DELETE") {
+        const deleted = payload.old as ChatPollVote;
+        if (deleted.message_id) {
+          setPollVotesMap((prev) => {
+            const existing = prev.get(deleted.message_id) ?? [];
+            const updated = new Map(prev);
+            updated.set(
+              deleted.message_id,
+              existing.filter((v) => v.id !== deleted.id)
+            );
+            return updated;
+          });
+        }
+      }
+    },
+    [setPollVotesMap]
+  );
+
+  // Handle incoming realtime form response changes
+  const handleResponseChange = useCallback(
+    (payload: RealtimePostgresChangesPayload<ChatFormResponse>) => {
+      if (payload.eventType === "INSERT") {
+        const newResponse = payload.new as ChatFormResponse;
+        setFormResponsesMap((prev) => {
+          const existing = prev.get(newResponse.message_id) ?? [];
+          const updated = new Map(prev);
+          updated.set(newResponse.message_id, [...existing, newResponse]);
+          return updated;
         });
       }
     },
-    [currentUserId, canModerate, scrollToBottom, fetchUnknownUsers, setMessages, setMessageLikesMap]
+    [setFormResponsesMap]
   );
 
-  // Subscribe to messages, poll votes, form responses, and member changes
+  // Subscribe to messages, poll votes, form responses, and member changes on a single channel
   useEffect(() => {
-    // Channel for chat messages
-    const messagesChannel = supabase
-      .channel(`chat_messages:${groupId}`)
+    const channel = supabase
+      .channel(`chat:${groupId}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_messages",
-          filter: `chat_group_id=eq.${groupId}`,
-        },
+        { event: "*", schema: "public", table: "chat_messages", filter: `chat_group_id=eq.${groupId}` },
         handleMessageChange
       )
-      .subscribe();
-
-    // Channel for poll votes
-    const votesChannel = supabase
-      .channel(`chat_poll_votes:${groupId}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_poll_votes",
-          filter: `chat_group_id=eq.${groupId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<ChatPollVote>) => {
-          if (payload.eventType === "INSERT") {
-            const newVote = payload.new as ChatPollVote;
-            setPollVotesMap((prev) => {
-              const existing = prev.get(newVote.message_id) ?? [];
-              // Replace existing vote from same user (vote change)
-              const filtered = existing.filter((v) => v.user_id !== newVote.user_id);
-              const updated = new Map(prev);
-              updated.set(newVote.message_id, [...filtered, newVote]);
-              return updated;
-            });
-          } else if (payload.eventType === "UPDATE") {
-            const updatedVote = payload.new as ChatPollVote;
-            setPollVotesMap((prev) => {
-              const existing = prev.get(updatedVote.message_id) ?? [];
-              const updated = new Map(prev);
-              updated.set(
-                updatedVote.message_id,
-                existing.map((v) => (v.user_id === updatedVote.user_id ? updatedVote : v))
-              );
-              return updated;
-            });
-          } else if (payload.eventType === "DELETE") {
-            const deleted = payload.old as ChatPollVote;
-            if (deleted.message_id) {
-              setPollVotesMap((prev) => {
-                const existing = prev.get(deleted.message_id) ?? [];
-                const updated = new Map(prev);
-                updated.set(
-                  deleted.message_id,
-                  existing.filter((v) => v.id !== deleted.id)
-                );
-                return updated;
-              });
-            }
-          }
-        }
+        { event: "*", schema: "public", table: "chat_poll_votes", filter: `chat_group_id=eq.${groupId}` },
+        handleVoteChange
       )
-      .subscribe();
-
-    const likesChannel = supabase
-      .channel(`chat_message_likes:${groupId}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_message_likes",
-          filter: `chat_group_id=eq.${groupId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<ChatMessageLike>) => {
-          if (payload.eventType === "INSERT") {
-            const like = payload.new as ChatMessageLike;
-            if (like.user_id !== currentUserId) return;
-            setMessageLikesMap?.((prev) => {
-              const next = new Map(prev);
-              const existing = next.get(like.message_id);
-              next.set(like.message_id, {
-                count: existing?.count ?? 0,
-                likedByUser: true,
-              });
-              return next;
-            });
-          } else if (payload.eventType === "DELETE") {
-            const like = payload.old as ChatMessageLike;
-            if (like.user_id !== currentUserId) return;
-            setMessageLikesMap?.((prev) => {
-              const next = new Map(prev);
-              const existing = next.get(like.message_id);
-              next.set(like.message_id, {
-                count: existing?.count ?? 0,
-                likedByUser: false,
-              });
-              return next;
-            });
-          }
-        }
+        { event: "*", schema: "public", table: "chat_form_responses", filter: `chat_group_id=eq.${groupId}` },
+        handleResponseChange
       )
-      .subscribe();
-
-    // Channel for form responses
-    const responsesChannel = supabase
-      .channel(`chat_form_responses:${groupId}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_form_responses",
-          filter: `chat_group_id=eq.${groupId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<ChatFormResponse>) => {
-          if (payload.eventType === "INSERT") {
-            const newResponse = payload.new as ChatFormResponse;
-            setFormResponsesMap((prev) => {
-              const existing = prev.get(newResponse.message_id) ?? [];
-              const updated = new Map(prev);
-              updated.set(newResponse.message_id, [...existing, newResponse]);
-              return updated;
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    // Channel for member changes (existing logic)
-    const membersChannel = supabase
-      .channel(`chat_group_members:${groupId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_group_members",
-          filter: `chat_group_id=eq.${groupId}`,
-        },
+        { event: "*", schema: "public", table: "chat_group_members", filter: `chat_group_id=eq.${groupId}` },
         onMemberChange
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(messagesChannel);
-      supabase.removeChannel(likesChannel);
-      supabase.removeChannel(votesChannel);
-      supabase.removeChannel(responsesChannel);
-      supabase.removeChannel(membersChannel);
+      supabase.removeChannel(channel);
     };
-  }, [groupId, supabase, handleMessageChange, currentUserId, setMessageLikesMap, setPollVotesMap, setFormResponsesMap, onMemberChange]);
+  }, [groupId, supabase, handleMessageChange, handleVoteChange, handleResponseChange, onMemberChange]);
 }

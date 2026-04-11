@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@teammeet/types";
+import type { Database } from "@/types/database";
 import { getSupabaseServiceEnv } from "./config";
 
 export function createServiceClient() {

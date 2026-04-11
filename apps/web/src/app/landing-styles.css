@@ -1,0 +1,857 @@
+/* Landing Page - Athletic Heritage Theme */
+.landing-page {
+  --landing-navy: #0a0a0a;
+  --landing-navy-light: #1a1a1a;
+  --landing-cream: #ffffff;
+  --landing-cream-muted: #e5e5e5;
+  --landing-green: #22c55e;
+  --landing-green-dark: #16a34a;
+  /* RGB versions for Tailwind opacity support */
+  --landing-navy-rgb: 10 10 10;
+  --landing-navy-light-rgb: 26 26 26;
+  --landing-cream-rgb: 255 255 255;
+  --landing-cream-muted-rgb: 229 229 229;
+  --landing-green-rgb: 34 197 94;
+  --landing-green-dark-rgb: 22 163 74;
+  background: var(--landing-navy);
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+/* Gradient Orbs */
+@keyframes orbFloat {
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+.gradient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  animation: orbFloat 25s ease-in-out infinite;
+  z-index: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+/* Pulsing Glow */
+@keyframes pulseGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 40px rgba(34, 197, 94, 0.4);
+  }
+}
+
+.pulse-glow {
+  animation: pulseGlow 4s ease-in-out infinite;
+}
+
+/* Animated Stripe Scroll */
+@keyframes stripeScroll {
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 100px 100px;
+  }
+}
+
+/* Diagonal stripe pattern */
+.stripe-pattern {
+  background-image: repeating-linear-gradient(-45deg,
+      transparent,
+      transparent 10px,
+      rgba(250, 246, 240, 0.03) 10px,
+      rgba(250, 246, 240, 0.03) 20px);
+  animation: stripeScroll 60s linear infinite;
+}
+
+/* Text Shimmer */
+@keyframes shimmer {
+
+  0%,
+  100% {
+    background-position: -200% center;
+  }
+
+  20%,
+  80% {
+    background-position: 200% center;
+  }
+}
+
+.text-shimmer {
+  background: linear-gradient(90deg,
+      var(--landing-green) 0%,
+      #86efac 50%,
+      var(--landing-green) 100%);
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+/* Noise texture overlay */
+.noise-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* Trading card effect */
+.trading-card {
+  background: linear-gradient(145deg, #111111 0%, #0a0a0a 100%);
+  border: 2px solid rgba(250, 246, 240, 0.1);
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(250, 246, 240, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.trading-card::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(250, 246, 240, 0.08);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* Green accent glow */
+.green-glow {
+  box-shadow:
+    0 0 30px rgba(34, 197, 94, 0.3),
+    0 0 60px rgba(34, 197, 94, 0.1);
+}
+
+/* Gold shimmer animation */
+@keyframes goldShimmer {
+
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.gold-shimmer {
+  animation: goldShimmer 3s ease-in-out infinite;
+}
+
+/* Athletic number styling */
+.athletic-number {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(180deg, var(--landing-cream) 0%, var(--landing-cream-muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Banner ribbon effect */
+.banner-ribbon {
+  position: relative;
+  background: var(--landing-green-dark);
+  padding: 0.5rem 2rem;
+  clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+}
+
+/* Varsity letter style */
+.varsity-text {
+  text-shadow:
+    2px 2px 0 var(--landing-navy),
+    -1px -1px 0 var(--landing-navy),
+    1px -1px 0 var(--landing-navy),
+    -1px 1px 0 var(--landing-navy);
+}
+
+/* Feature card hover */
+.feature-card {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(241, 245, 249, 0.08);
+}
+
+.feature-card:hover {
+  border-color: rgba(34, 197, 94, 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+}
+
+/* Pricing card */
+.pricing-card {
+  background: linear-gradient(180deg, rgba(17, 17, 17, 0.8) 0%, rgba(10, 10, 10, 0.9) 100%);
+  border: 1px solid rgba(250, 246, 240, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.pricing-card-featured {
+  border-color: var(--landing-green);
+  box-shadow:
+    0 0 0 1px var(--landing-green),
+    0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* Scroll indicator bounce */
+@keyframes scrollBounce {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+.scroll-indicator {
+  animation: scrollBounce 2s ease-in-out infinite;
+}
+
+
+/* Terms card hover effect */
+.terms-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.terms-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
+}
+
+/* Enhanced pricing card pop effect */
+.pricing-card {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pricing-card:hover {
+  transform: translateY(-6px) scale(1.01);
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(34, 197, 94, 0.1);
+}
+
+/* Glow effect for animated elements */
+@keyframes subtleGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.1);
+  }
+
+  50% {
+    box-shadow: 0 0 40px rgba(34, 197, 94, 0.2);
+  }
+}
+
+.pricing-card-featured::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), transparent, rgba(34, 197, 94, 0.1));
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.pricing-card-featured:hover::after {
+  opacity: 1;
+}
+
+/* Noscript fallback - ensure content is visible without JS */
+noscript+.scroll-reveal,
+noscript~.scroll-reveal {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* Fallback visibility after page load - scroll-reveal elements need
+   compositor promotion only during animation (handled by LandingAnimations.tsx),
+   not permanently via will-change. */
+
+/* ========================================
+   Stadium Theme - Landing Page Enhancements
+   ======================================== */
+
+/* Stadium Light Beams */
+.light-beam {
+  position: absolute;
+  width: 3px;
+  height: 150vh;
+  background: linear-gradient(180deg,
+      transparent 0%,
+      rgba(241, 245, 249, 0.05) 30%,
+      rgba(241, 245, 249, 0.2) 50%,
+      rgba(241, 245, 249, 0.05) 70%,
+      transparent 100%);
+  filter: blur(2px);
+  transform-origin: top center;
+  pointer-events: none;
+}
+
+@keyframes beamSweep {
+  0% {
+    transform: rotate(-30deg) translateY(-50%);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: rotate(15deg) translateY(0);
+    opacity: 0.3;
+  }
+}
+
+.light-beam-animate {
+  animation: beamSweep 2s ease-out forwards;
+}
+
+/* Jersey Text Shadow */
+.jersey-text {
+  text-shadow:
+    3px 3px 0 var(--landing-navy-light),
+    -1px -1px 0 var(--landing-navy-light),
+    1px -1px 0 var(--landing-navy-light),
+    -1px 1px 0 var(--landing-navy-light),
+    0 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Championship Banner */
+.banner {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 15px), 50% 100%, 0 calc(100% - 15px));
+  background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+  border: 2px solid rgba(241, 245, 249, 0.1);
+  border-bottom: none;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.banner:hover {
+  transform: translateY(-4px);
+  border-color: rgba(34, 197, 94, 0.3);
+  box-shadow: 0 15px 30px -10px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes bannerDrop {
+  0% {
+    transform: translateY(-100%) rotate(-2deg);
+    opacity: 0;
+  }
+
+  60% {
+    transform: translateY(5px) rotate(1deg);
+    opacity: 1;
+  }
+
+  80% {
+    transform: translateY(-2px) rotate(-0.5deg);
+  }
+
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+}
+
+.banner-animate {
+  animation: bannerDrop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Trophy Card Spotlight */
+.trophy-card {
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(241, 245, 249, 0.08);
+}
+
+.trophy-card::before {
+  content: '';
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 100px;
+  background: linear-gradient(180deg,
+      rgba(34, 197, 94, 0.15) 0%,
+      transparent 100%);
+  clip-path: polygon(40% 0%, 60% 0%, 100% 100%, 0% 100%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.trophy-card:hover {
+  border-color: rgba(34, 197, 94, 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+}
+
+.trophy-card:hover::before {
+  opacity: 1;
+}
+
+/* Trophy watermark */
+.trophy-watermark {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 60px;
+  height: 60px;
+  opacity: 0.03;
+  pointer-events: none;
+}
+
+/* Holographic Border */
+@keyframes holoShift {
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.holo-border {
+  position: relative;
+}
+
+.holo-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(90deg,
+      var(--landing-green),
+      var(--landing-cream),
+      var(--landing-green-dark),
+      var(--landing-cream),
+      var(--landing-green));
+  background-size: 300% 100%;
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.holo-border:hover::before {
+  opacity: 1;
+  animation: holoShift 3s ease infinite;
+}
+
+/* Chalkboard texture */
+.chalkboard {
+  background-color: #111111;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+  position: relative;
+}
+
+.chalkboard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(241, 245, 249, 0.1);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Play marker circle */
+.play-marker {
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 3px solid var(--landing-cream);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: var(--landing-navy);
+}
+
+.play-marker::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 1px dashed rgba(241, 245, 249, 0.2);
+  border-radius: 50%;
+}
+
+/* Dotted play route line */
+.play-route {
+  height: 2px;
+  background: repeating-linear-gradient(90deg,
+      rgba(241, 245, 249, 0.4) 0px,
+      rgba(241, 245, 249, 0.4) 8px,
+      transparent 8px,
+      transparent 16px);
+  position: relative;
+}
+
+.play-route::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid rgba(241, 245, 249, 0.4);
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+/* Confetti particles */
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-100%) rotate(0deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.confetti-particle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  animation: confettiFall 3s ease-out forwards;
+  pointer-events: none;
+}
+
+/* CTA Glow Animation */
+@keyframes ctaGlow {
+
+  0%,
+  100% {
+    box-shadow:
+      0 0 20px rgba(34, 197, 94, 0.3),
+      0 0 40px rgba(34, 197, 94, 0.1);
+  }
+
+  50% {
+    box-shadow:
+      0 0 30px rgba(34, 197, 94, 0.5),
+      0 0 60px rgba(34, 197, 94, 0.2);
+  }
+}
+
+.cta-glow {
+  animation: ctaGlow 2s ease-in-out infinite;
+}
+
+/* Pick badge styling */
+.pick-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.375rem 1rem;
+  background: linear-gradient(135deg, var(--landing-green-dark) 0%, var(--landing-green) 100%);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-radius: 9999px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+/* Modal panel — solid opaque background so page content doesn't bleed through on scroll */
+.modal-panel {
+  background: #111111;
+  border: 1px solid rgba(250, 246, 240, 0.12);
+  box-shadow:
+    0 25px 60px -12px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(250, 246, 240, 0.06);
+  overscroll-behavior: contain;
+}
+
+/* Enterprise badge — green accent */
+.enterprise-badge {
+  background: linear-gradient(135deg, #15803d 0%, #22c55e 100%);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+/* Enterprise teaser card hover — green accent */
+.enterprise-card:hover {
+  border-color: rgba(34, 197, 94, 0.3);
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(34, 197, 94, 0.08);
+}
+
+/* Bucket row selected state */
+.bucket-row-selected {
+  border-color: var(--landing-green);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+/* Modal entrance animation */
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-enter {
+  animation: modalSlideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Microphone icon for FAQ */
+.mic-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+/* Infinite scrolling marquee */
+@keyframes marqueeScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marqueeScroll 30s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Bento feature grid */
+.bento-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+}
+
+.bento-grid > :nth-child(3) {
+  grid-column: 1 / 2;
+}
+
+.bento-grid > :nth-child(4) {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+}
+
+@media (max-width: 639px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bento-grid > :nth-child(n) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .bento-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bento-grid > :nth-child(1) {
+    grid-column: 1 / 3;
+  }
+
+  .bento-grid > :nth-child(n+2) {
+    grid-column: auto;
+  }
+}
+
+/* FAQ accordion smooth height */
+.faq-content-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Breathing glow on stat numbers */
+@keyframes statGlow {
+  0%, 100% {
+    text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    text-shadow: 0 0 20px rgba(34, 197, 94, 0.8), 0 0 40px rgba(34, 197, 94, 0.3);
+  }
+}
+
+.stat-glow {
+  animation: statGlow 4s ease-in-out infinite;
+}
+
+/* Active nav indicator */
+.nav-link-active {
+  color: var(--landing-cream) !important;
+  position: relative;
+}
+
+.nav-link-active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--landing-green);
+}
+
+/* Marquee fade edges */
+.marquee-container {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+
+/* Mobile timeline for How It Works — marker is 3.5rem; need gutter ≥ marker + gap or text overlaps */
+@media (max-width: 767px) {
+  .mobile-timeline {
+    position: relative;
+    /* text starts here; marker sits wholly to the left in the padding gutter */
+    padding-left: 5.25rem;
+  }
+
+  .mobile-timeline::before {
+    content: '';
+    position: absolute;
+    /* vertical dash through center of play-marker column (marker center = 1.75rem) */
+    left: 1.75rem;
+    top: 1.75rem;
+    bottom: 1.75rem;
+    width: 2px;
+    background: repeating-linear-gradient(
+      180deg,
+      rgba(241, 245, 249, 0.3) 0px,
+      rgba(241, 245, 249, 0.3) 6px,
+      transparent 6px,
+      transparent 12px
+    );
+  }
+
+  .mobile-timeline > * {
+    position: relative;
+    /* keep titles/copy clear of the absolutely positioned circle */
+    padding-top: 0.125rem;
+  }
+
+  .mobile-timeline .play-marker {
+    position: absolute;
+    /* 5.25rem gutter − 3.5rem marker = left edge aligns past timeline line */
+    left: -5.25rem;
+    top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .gold-shimmer,
+  .scroll-indicator,
+  .gradient-orb,
+  .stripe-pattern,
+  .text-shimmer,
+  .pulse-glow {
+    animation: none;
+  }
+
+  .feature-card:hover {
+    transform: none;
+  }
+
+  /* Ensure visibility with reduced motion */
+  .scroll-reveal,
+  .pricing-card,
+  .feature-card,
+  .terms-card {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .modal-enter {
+    animation: none;
+  }
+
+  .light-beam-animate,
+  .banner-animate,
+  .cta-glow,
+  .confetti-particle {
+    animation: none;
+  }
+
+  .light-beam-animate {
+    opacity: 0.2;
+    transform: rotate(5deg);
+  }
+
+  .banner-animate {
+    opacity: 1;
+    transform: none;
+  }
+
+  .holo-border:hover::before {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .marquee-track {
+    animation: none;
+  }
+
+  .stat-glow {
+    animation: none;
+    text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  }
+
+  .faq-content-wrapper {
+    transition: none;
+  }
+}

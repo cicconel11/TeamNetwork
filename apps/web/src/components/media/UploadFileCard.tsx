@@ -25,6 +25,7 @@ const statusConfig: Record<FileUploadStatus, { dot: string; label: string }> = {
   requesting: { dot: "bg-blue-500 animate-pulse", label: "Preparing..." },
   uploading: { dot: "bg-[var(--color-org-secondary)] animate-pulse", label: "Uploading" },
   finalizing: { dot: "bg-[var(--color-org-secondary)] animate-pulse", label: "Finalizing..." },
+  associating: { dot: "bg-[var(--color-org-secondary)] animate-pulse", label: "Adding to album..." },
   done: { dot: "bg-emerald-500", label: "Done" },
   error: { dot: "bg-red-500", label: "Failed" },
 };
@@ -83,6 +84,9 @@ export function UploadFileCard({
               {entry.fileName}{" "}
               <span className="font-mono text-[10px]">{formatFileSize(entry.fileSize)}</span>
             </p>
+            {entry.status !== "done" && entry.status !== "error" && (
+              <p className="text-[11px] text-[var(--muted-foreground)]">{config.label}</p>
+            )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {entry.status === "error" && entry.retryCount < 3 && (

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  createAlbumSchema,
   galleryUploadIntentSchema,
   galleryUpdateMediaSchema,
   moderateMediaSchema,
@@ -26,6 +27,7 @@ describe("galleryUploadIntentSchema", () => {
   it("accepts valid payload with optional fields", () => {
     const result = galleryUploadIntentSchema.safeParse({
       ...validPayload,
+      previewMimeType: "image/jpeg",
       title: "Summer BBQ",
       description: "Photos from the summer BBQ event",
       tags: ["summer", "BBQ", "2026"],
@@ -63,6 +65,23 @@ describe("galleryUploadIntentSchema", () => {
     const result = galleryUploadIntentSchema.safeParse({
       ...validPayload,
       mimeType: "application/pdf",
+    });
+    assert.ok(!result.success);
+  });
+
+  it("rejects unsupported preview MIME type", () => {
+    const result = galleryUploadIntentSchema.safeParse({
+      ...validPayload,
+      previewMimeType: "image/gif",
+    });
+    assert.ok(!result.success);
+  });
+
+  it("rejects preview MIME type for video uploads", () => {
+    const result = galleryUploadIntentSchema.safeParse({
+      ...validPayload,
+      mimeType: "video/mp4",
+      previewMimeType: "image/jpeg",
     });
     assert.ok(!result.success);
   });
@@ -163,6 +182,17 @@ describe("galleryUpdateMediaSchema", () => {
   it("accepts empty object (no fields)", () => {
     const result = galleryUpdateMediaSchema.safeParse({});
     assert.ok(result.success);
+  });
+});
+
+describe("createAlbumSchema", () => {
+  it("accepts upload draft albums in the internal create payload", () => {
+    const result = createAlbumSchema.safeParse({
+      name: "Spring Photos",
+      isUploadDraft: true,
+    });
+    assert.ok(result.success);
+    assert.equal(result.data.isUploadDraft, true);
   });
 });
 

@@ -28,7 +28,8 @@ describe("getCalendarConnection – decryption failures", () => {
     stub.seed("user_calendar_connections", [
       {
         user_id: USER_ID,
-        google_email: "user@gmail.com",
+        provider: "google",
+        provider_email: "user@gmail.com",
         access_token_encrypted: "not-a-valid-encrypted-token",
         refresh_token_encrypted: "also-garbage",
         token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
@@ -52,7 +53,8 @@ describe("getCalendarConnection – decryption failures", () => {
     stub.seed("user_calendar_connections", [
       {
         user_id: USER_ID,
-        google_email: "user@gmail.com",
+        provider: "google",
+        provider_email: "user@gmail.com",
         access_token_encrypted: corruptedToken,
         refresh_token_encrypted: corruptedToken,
         token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
@@ -73,7 +75,8 @@ describe("getCalendarConnection – decryption failures", () => {
     stub.seed("user_calendar_connections", [
       {
         user_id: USER_ID,
-        google_email: "user@gmail.com",
+        provider: "google",
+        provider_email: "user@gmail.com",
         access_token_encrypted: validAccess,
         refresh_token_encrypted: validRefresh,
         token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
@@ -87,7 +90,7 @@ describe("getCalendarConnection – decryption failures", () => {
     assert.notEqual(result, null, "should return connection object");
     assert.equal(result!.accessToken, "ya29.valid-access-token");
     assert.equal(result!.refreshToken, "1//valid-refresh-token");
-    assert.equal(result!.googleEmail, "user@gmail.com");
+    assert.equal(result!.providerEmail, "user@gmail.com");
   });
 });
 
@@ -102,7 +105,8 @@ describe("getValidAccessToken – decryption failures", () => {
     stub.seed("user_calendar_connections", [
       {
         user_id: USER_ID,
-        google_email: "user@gmail.com",
+        provider: "google",
+        provider_email: "user@gmail.com",
         access_token_encrypted: "garbage-data",
         refresh_token_encrypted: "garbage-data",
         token_expires_at: new Date(Date.now() + 3600_000).toISOString(),

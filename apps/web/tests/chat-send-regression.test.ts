@@ -30,7 +30,7 @@ function getLatestChatMessagesInsertPolicySql(): string {
 }
 
 test("chat room sends text messages through API (not direct client insert)", () => {
-  const source = readFile("src/app/[orgSlug]/chat/[groupId]/ChatRoom.tsx");
+  const source = readFile("src/components/messages/ChatMessagePane.tsx");
 
   assert.match(
     source,

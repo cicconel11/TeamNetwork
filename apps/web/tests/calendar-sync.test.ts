@@ -8,53 +8,7 @@ process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";
 process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
 process.env.GOOGLE_TOKEN_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-// Types for calendar events (mirrored from calendar-sync.ts for testing)
-interface CalendarEvent {
-    summary: string;
-    description?: string;
-    location?: string;
-    start: { dateTime: string; timeZone: string };
-    end: { dateTime: string; timeZone: string };
-}
-
-/**
- * Maps an organization event to a Google Calendar event format
- * This is a pure function extracted for testing without external dependencies
- */
-function mapEventToCalendarEvent(event: {
-    title: string;
-    description?: string | null;
-    location?: string | null;
-    start_date: string;
-    end_date?: string | null;
-}): CalendarEvent {
-    const startDate = new Date(event.start_date);
-
-    // If no end_date, default to start_date + 1 hour
-    let endDate: Date;
-    if (event.end_date) {
-        endDate = new Date(event.end_date);
-    } else {
-        endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // +1 hour
-    }
-
-    // Determine timezone - use UTC if not determinable from the date string
-    const timeZone = "UTC";
-
-    return {
-        summary: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start: {
-            dateTime: startDate.toISOString(),
-            timeZone,
-        },
-        end: {
-            dateTime: endDate.toISOString(),
-            timeZone,
-        },
-    };
-}
+import { mapEventToCalendarEvent } from "@/lib/google/calendar-event-mapper";
 
 /**
  * Feature: google-calendar-sync, Property 6: Event Data Mapping Completeness
@@ -605,7 +559,7 @@ test("Property 11: Deletion Failure Graceful Handling", async () => {
 /**
  * Feature: google-calendar-sync, Property 12: Preference Storage Round-Trip
  * 
- * *For any* valid combination of sync preferences (6 boolean values for event types),
+ * *For any* valid combination of sync preferences (8 boolean values for event types),
  * storing and then retrieving the preferences SHALL return the same values.
  * 
  * **Validates: Requirements 5.2**
@@ -619,6 +573,8 @@ interface SyncPreferences {
     sync_social: boolean;
     sync_fundraiser: boolean;
     sync_philanthropy: boolean;
+    sync_practice: boolean;
+    sync_workout: boolean;
 }
 
 // Simulated preference store for testing round-trip logic
@@ -644,6 +600,8 @@ class MockPreferenceStore {
             sync_social: true,
             sync_fundraiser: true,
             sync_philanthropy: true,
+            sync_practice: true,
+            sync_workout: true,
         };
 
         const merged: SyncPreferences = {
@@ -678,6 +636,8 @@ class MockPreferenceStore {
             sync_social: true,
             sync_fundraiser: true,
             sync_philanthropy: true,
+            sync_practice: true,
+            sync_workout: true,
         };
     }
 }
@@ -688,7 +648,7 @@ test("Property 12: Preference Storage Round-Trip", async () => {
             // Generate user and organization IDs
             fc.uuid(),
             fc.uuid(),
-            // Generate all 6 boolean preferences
+            // Generate all 8 boolean preferences
             fc.record({
                 sync_general: fc.boolean(),
                 sync_game: fc.boolean(),
@@ -696,6 +656,8 @@ test("Property 12: Preference Storage Round-Trip", async () => {
                 sync_social: fc.boolean(),
                 sync_fundraiser: fc.boolean(),
                 sync_philanthropy: fc.boolean(),
+                sync_practice: fc.boolean(),
+                sync_workout: fc.boolean(),
             }),
             async (userId, organizationId, preferences) => {
                 const store = new MockPreferenceStore();
@@ -710,7 +672,7 @@ test("Property 12: Preference Storage Round-Trip", async () => {
                 assert.ok(retrieved !== null,
                     "Retrieved preferences should not be null after storing");
 
-                // All 6 values should match exactly
+                // All 8 values should match exactly
                 assert.strictEqual(retrieved!.sync_general, preferences.sync_general,
                     "sync_general should match after round-trip");
                 assert.strictEqual(retrieved!.sync_game, preferences.sync_game,
@@ -723,6 +685,10 @@ test("Property 12: Preference Storage Round-Trip", async () => {
                     "sync_fundraiser should match after round-trip");
                 assert.strictEqual(retrieved!.sync_philanthropy, preferences.sync_philanthropy,
                     "sync_philanthropy should match after round-trip");
+                assert.strictEqual(retrieved!.sync_practice, preferences.sync_practice,
+                    "sync_practice should match after round-trip");
+                assert.strictEqual(retrieved!.sync_workout, preferences.sync_workout,
+                    "sync_workout should match after round-trip");
 
                 // Stored result should also match
                 assert.deepStrictEqual(storedResult, retrieved,
@@ -751,12 +717,16 @@ test("Property 12 (additional): Partial updates preserve other values", async ()
                 sync_social: fc.boolean(),
                 sync_fundraiser: fc.boolean(),
                 sync_philanthropy: fc.boolean(),
+                sync_practice: fc.boolean(),
+                sync_workout: fc.boolean(),
             }),
             // Partial update (only some fields)
             fc.record({
                 sync_general: fc.option(fc.boolean(), { nil: undefined }),
                 sync_game: fc.option(fc.boolean(), { nil: undefined }),
                 sync_meeting: fc.option(fc.boolean(), { nil: undefined }),
+                sync_practice: fc.option(fc.boolean(), { nil: undefined }),
+                sync_workout: fc.option(fc.boolean(), { nil: undefined }),
             }),
             async (userId, organizationId, initialPrefs, partialUpdate) => {
                 const store = new MockPreferenceStore();
@@ -774,6 +744,12 @@ test("Property 12 (additional): Partial updates preserve other values", async ()
                 }
                 if (partialUpdate.sync_meeting !== undefined) {
                     updatePayload.sync_meeting = partialUpdate.sync_meeting;
+                }
+                if (partialUpdate.sync_practice !== undefined) {
+                    updatePayload.sync_practice = partialUpdate.sync_practice;
+                }
+                if (partialUpdate.sync_workout !== undefined) {
+                    updatePayload.sync_workout = partialUpdate.sync_workout;
                 }
 
                 store.store(userId, organizationId, updatePayload);
@@ -797,6 +773,20 @@ test("Property 12 (additional): Partial updates preserve other values", async ()
                     "sync_fundraiser should preserve original value");
                 assert.strictEqual(retrieved.sync_philanthropy, initialPrefs.sync_philanthropy,
                     "sync_philanthropy should preserve original value");
+                if (partialUpdate.sync_practice !== undefined) {
+                    assert.strictEqual(retrieved.sync_practice, partialUpdate.sync_practice,
+                        "Updated sync_practice should have new value");
+                } else {
+                    assert.strictEqual(retrieved.sync_practice, initialPrefs.sync_practice,
+                        "Non-updated sync_practice should preserve original value");
+                }
+                if (partialUpdate.sync_workout !== undefined) {
+                    assert.strictEqual(retrieved.sync_workout, partialUpdate.sync_workout,
+                        "Updated sync_workout should have new value");
+                } else {
+                    assert.strictEqual(retrieved.sync_workout, initialPrefs.sync_workout,
+                        "Non-updated sync_workout should preserve original value");
+                }
 
                 return true;
             }
@@ -832,6 +822,10 @@ test("Property 12 (additional): Default values when no preferences exist", async
                     "Default sync_fundraiser should be true");
                 assert.strictEqual(retrieved.sync_philanthropy, true,
                     "Default sync_philanthropy should be true");
+                assert.strictEqual(retrieved.sync_practice, true,
+                    "Default sync_practice should be true");
+                assert.strictEqual(retrieved.sync_workout, true,
+                    "Default sync_workout should be true");
 
                 return true;
             }

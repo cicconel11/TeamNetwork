@@ -2,20 +2,22 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCallback } from "react";
+import { parseCalendarView } from "@/lib/calendar/view-state";
 
-type ViewMode = "list" | "availability";
+type ViewMode = "calendar" | "availability";
 
-function ListIcon({ className }: { className?: string }) {
+function MonthGridIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 20 20" fill="currentColor">
       <path
         fillRule="evenodd"
-        d="M2 3.75A.75.75 0 012.75 3h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 3.75zm0 4.167a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zm0 4.166a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zm0 4.167a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75z"
+        d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.75A2.25 2.25 0 0118 6.25v9.5A2.25 2.25 0 0115.75 18H4.25A2.25 2.25 0 012 15.75v-9.5A2.25 2.25 0 014.25 4H5V2.75A.75.75 0 015.75 2zm-1.5 5.5a.75.75 0 000 1.5h.5a.75.75 0 000-1.5h-.5zm2.75.75a.75.75 0 01.75-.75h.5a.75.75 0 010 1.5h-.5a.75.75 0 01-.75-.75zm3.5-.75a.75.75 0 000 1.5h.5a.75.75 0 000-1.5h-.5zm2.75.75a.75.75 0 01.75-.75h.5a.75.75 0 010 1.5h-.5a.75.75 0 01-.75-.75zM4.25 11a.75.75 0 000 1.5h.5a.75.75 0 000-1.5h-.5zm2.75.75a.75.75 0 01.75-.75h.5a.75.75 0 010 1.5h-.5a.75.75 0 01-.75-.75zm3.5-.75a.75.75 0 000 1.5h.5a.75.75 0 000-1.5h-.5zm2.75.75a.75.75 0 01.75-.75h.5a.75.75 0 010 1.5h-.5a.75.75 0 01-.75-.75zM4.25 14.5a.75.75 0 000 1.5h.5a.75.75 0 000-1.5h-.5zm2.75.75a.75.75 0 01.75-.75h.5a.75.75 0 010 1.5h-.5a.75.75 0 01-.75-.75zm3.5-.75a.75.75 0 000 1.5h.5a.75.75 0 000-1.5h-.5z"
         clipRule="evenodd"
       />
     </svg>
   );
 }
+
 
 function GridIcon({ className }: { className?: string }) {
   return (
@@ -34,16 +36,19 @@ export function CalendarViewToggle() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const currentView: ViewMode =
-    searchParams.get("view") === "availability" ? "availability" : "list";
+  const currentView: ViewMode = parseCalendarView(searchParams.get("view") || undefined);
 
   const setView = useCallback(
     (view: ViewMode) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (view === "list") {
+      if (view === "calendar") {
         params.delete("view");
+        params.delete("subview");
+        params.delete("timeframe");
       } else {
         params.set("view", view);
+        params.delete("subview");
+        params.delete("timeframe");
       }
       const query = params.toString();
       router.replace(`${pathname}${query ? `?${query}` : ""}`, {
@@ -53,52 +58,38 @@ export function CalendarViewToggle() {
     [searchParams, router, pathname]
   );
 
+  const tabs: { view: ViewMode; label: string; shortLabel: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+    { view: "calendar", label: "Calendar", shortLabel: "Calendar", Icon: MonthGridIcon },
+    { view: "availability", label: "Availability", shortLabel: "Avail.", Icon: GridIcon },
+  ];
+
   return (
     <div className="bg-muted/50 rounded-xl p-1 inline-flex">
       <nav className="flex gap-1" aria-label="Calendar views">
-        <button
-          onClick={() => setView("list")}
-          className={`
-            flex items-center gap-2 whitespace-nowrap py-2.5 px-4 text-sm font-medium rounded-lg
-            transition-colors duration-200 touch-manipulation
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring
-            ${
-              currentView === "list"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-card/50"
-            }
-          `}
-          aria-current={currentView === "list" ? "page" : undefined}
-        >
-          <ListIcon
-            className={`w-4 h-4 ${currentView === "list" ? "text-org-secondary" : ""}`}
-            aria-hidden="true"
-          />
-          <span className="hidden sm:inline">List</span>
-          <span className="sm:hidden sr-only">List view</span>
-        </button>
-
-        <button
-          onClick={() => setView("availability")}
-          className={`
-            flex items-center gap-2 whitespace-nowrap py-2.5 px-4 text-sm font-medium rounded-lg
-            transition-colors duration-200 touch-manipulation
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring
-            ${
-              currentView === "availability"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-card/50"
-            }
-          `}
-          aria-current={currentView === "availability" ? "page" : undefined}
-        >
-          <GridIcon
-            className={`w-4 h-4 ${currentView === "availability" ? "text-org-secondary" : ""}`}
-            aria-hidden="true"
-          />
-          <span className="hidden sm:inline">Availability</span>
-          <span className="sm:hidden sr-only">Availability view</span>
-        </button>
+        {tabs.map(({ view, label, shortLabel, Icon }) => {
+          const isActive = currentView === view;
+          return (
+            <button
+              key={view}
+              onClick={() => setView(view)}
+              className={`
+                flex items-center gap-2 whitespace-nowrap py-2 px-3 sm:px-4 text-sm font-medium rounded-lg
+                transition-colors duration-200 touch-manipulation
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring
+                ${
+                  isActive
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+                }
+              `}
+              aria-current={isActive ? "page" : undefined}
+            >
+              <Icon className={`w-4 h-4 ${isActive ? "text-org-secondary" : ""}`} aria-hidden="true" />
+              <span className="hidden sm:inline">{label}</span>
+              <span className="sm:hidden text-xs">{shortLabel}</span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );

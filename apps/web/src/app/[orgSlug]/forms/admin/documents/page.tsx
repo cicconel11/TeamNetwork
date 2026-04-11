@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
-import type { FormDocument } from "@teammeet/types";
+import type { FormDocument } from "@/types/database";
 
 interface AdminDocumentsPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -32,7 +32,8 @@ export default async function AdminDocumentsPage({ params }: AdminDocumentsPageP
   const { data: submissionCounts } = await supabase
     .from("form_document_submissions")
     .select("document_id")
-    .eq("organization_id", orgId);
+    .eq("organization_id", orgId)
+    .is("deleted_at", null);
 
   const countByDoc = new Map<string, number>();
   submissionCounts?.forEach((s) => {

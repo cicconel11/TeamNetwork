@@ -8,6 +8,7 @@ interface FeedListProps {
   orgSlug: string;
   currentUserId: string;
   isAdmin: boolean;
+  basePath?: string;
   pagination?: {
     page: number;
     total: number;
@@ -15,7 +16,7 @@ interface FeedListProps {
   };
 }
 
-export function FeedList({ posts, orgSlug, currentUserId, isAdmin, pagination }: FeedListProps) {
+export function FeedList({ posts, orgSlug, currentUserId, isAdmin, basePath, pagination }: FeedListProps) {
   if (posts.length === 0) {
     return (
       <div className="text-center py-12">
@@ -35,27 +36,30 @@ export function FeedList({ posts, orgSlug, currentUserId, isAdmin, pagination }:
           isAdmin={isAdmin}
         />
       ))}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex justify-center gap-2 pt-4">
-          {pagination.page > 1 && (
-            <Link href={`/${orgSlug}/feed?page=${pagination.page - 1}`}>
-              <Button variant="ghost" size="sm">
-                Previous
-              </Button>
-            </Link>
-          )}
-          <span className="text-sm text-muted-foreground self-center">
-            Page {pagination.page} of {pagination.totalPages}
-          </span>
-          {pagination.page < pagination.totalPages && (
-            <Link href={`/${orgSlug}/feed?page=${pagination.page + 1}`}>
-              <Button variant="ghost" size="sm">
-                Next
-              </Button>
-            </Link>
-          )}
-        </div>
-      )}
+      {pagination && pagination.totalPages > 1 && (() => {
+        const base = basePath || `/${orgSlug}/feed`;
+        return (
+          <div className="flex justify-center gap-2 pt-4">
+            {pagination.page > 1 && (
+              <Link href={`${base}?page=${pagination.page - 1}`}>
+                <Button variant="ghost" size="sm">
+                  Previous
+                </Button>
+              </Link>
+            )}
+            <span className="text-sm text-muted-foreground self-center">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            {pagination.page < pagination.totalPages && (
+              <Link href={`${base}?page=${pagination.page + 1}`}>
+                <Button variant="ghost" size="sm">
+                  Next
+                </Button>
+              </Link>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

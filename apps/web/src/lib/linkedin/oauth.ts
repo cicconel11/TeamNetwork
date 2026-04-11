@@ -2,9 +2,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { getAppUrl } from "@/lib/url";
 import {
+  getLinkedInConnectionSource,
+  LINKEDIN_OAUTH_SOURCE,
+  type LinkedInConnectionSource,
+} from "@/lib/linkedin/connection-source";
+import {
   encryptToken as sharedEncrypt,
   decryptToken as sharedDecrypt,
 } from "@/lib/crypto/token-encryption";
+import {
+  fetchBrightDataProfile,
+  mapBrightDataToFields,
+  isBrightDataConfigured,
+} from "@/lib/linkedin/bright-data";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +31,7 @@ export interface LinkedInProfile {
 
 export interface LinkedInConnection {
   id: string;
+  source: LinkedInConnectionSource;
   linkedinMemberId: string;
   linkedinEmail: string | null;
   linkedinGivenName: string | null;
@@ -49,7 +60,7 @@ function getLinkedInClientId(): string {
   if (!v || v.trim() === "") {
     throw new Error("Missing required environment variable: LINKEDIN_CLIENT_ID");
   }
-  return v;
+  return v.trim();
 }
 
 function getLinkedInClientSecret(): string {
@@ -57,7 +68,7 @@ function getLinkedInClientSecret(): string {
   if (!v || v.trim() === "") {
     throw new Error("Missing required environment variable: LINKEDIN_CLIENT_SECRET");
   }
-  return v;
+  return v.trim();
 }
 
 function getLinkedInEncryptionKey(): string {
@@ -103,7 +114,7 @@ export function getLinkedInAuthUrl(state: string): string {
     client_id: getLinkedInClientId(),
     redirect_uri: getLinkedInRedirectUri(),
     state,
-    scope: "openid profile email offline_access",
+    scope: "openid profile email",
   });
   return `${LINKEDIN_AUTH_URL}?${params.toString()}`;
 }
@@ -249,8 +260,9 @@ export async function storeLinkedInConnection(
         last_synced_at: new Date().toISOString(),
         sync_error: null,
         // linkedin_profile_url: not populated — LinkedIn OIDC userinfo doesn't
-      // expose the profile URL. Users can set it manually via the URL field.
-      linkedin_data: {
+        // expose the profile URL. Users can set it manually via the URL field.
+        linkedin_data: {
+          source: LINKEDIN_OAUTH_SOURCE,
           email_verified: tokens.profile.emailVerified,
         },
       },
@@ -283,15 +295,23 @@ export async function getLinkedInConnection(
   if (error || !data) return null;
 
   try {
+    const source = getLinkedInConnectionSource(data);
     return {
       id: data.id,
+      source,
       linkedinMemberId: data.linkedin_sub,
       linkedinEmail: data.linkedin_email,
       linkedinGivenName: data.linkedin_given_name,
       linkedinFamilyName: data.linkedin_family_name,
       linkedinPictureUrl: data.linkedin_picture_url,
-      accessToken: data.access_token_encrypted ? decryptToken(data.access_token_encrypted) : "",
-      refreshToken: data.refresh_token_encrypted ? decryptToken(data.refresh_token_encrypted) : "",
+      accessToken:
+        source === LINKEDIN_OAUTH_SOURCE && data.access_token_encrypted
+          ? decryptToken(data.access_token_encrypted)
+          : "",
+      refreshToken:
+        source === LINKEDIN_OAUTH_SOURCE && data.refresh_token_encrypted
+          ? decryptToken(data.refresh_token_encrypted)
+          : "",
       expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : new Date(0),
       status: data.status as "connected" | "disconnected" | "error",
       lastSyncAt: data.last_synced_at ? new Date(data.last_synced_at) : null,
@@ -403,7 +423,14 @@ export async function getValidLinkedInToken(
   userId: string,
 ): Promise<string | null> {
   const conn = await getLinkedInConnection(supabase, userId);
-  if (!conn || conn.status === "disconnected" || !conn.accessToken) return null;
+  if (
+    !conn ||
+    conn.source !== LINKEDIN_OAUTH_SOURCE ||
+    conn.status === "disconnected" ||
+    !conn.accessToken
+  ) {
+    return null;
+  }
 
   if (!isTokenExpired(conn.expiresAt)) {
     return conn.accessToken;
@@ -413,7 +440,7 @@ export async function getValidLinkedInToken(
     await updateLinkedInConnection(
       supabase,
       userId,
-      { status: "error", sync_error: "No refresh token available" },
+      { status: "error", sync_error: "LinkedIn session expired. Please reconnect." },
       "mark connection as error after missing refresh token",
     );
     return null;
@@ -520,6 +547,137 @@ export async function syncLinkedInProfile(
   return { success: true, profile };
 }
 
+// ---------------------------------------------------------------------------
+// Bright Data enrichment
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs Bright Data enrichment for a user and writes the results to
+ * members/alumni records via the sync_user_linkedin_enrichment RPC.
+ *
+ * Best-effort enrichment — never throws.
+ */
+export async function runBrightDataEnrichment(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  linkedinUrl: string | null | undefined,
+): Promise<{
+  enriched: boolean;
+  error?: string;
+  failureKind?:
+    | "not_configured"
+    | "invalid_url"
+    | "unauthorized"
+    | "provider_unavailable"
+    | "upstream_error"
+    | "malformed_payload"
+    | "network_error"
+    | "rpc_error";
+  upstreamStatus?: number;
+}> {
+  if (!linkedinUrl) {
+    return { enriched: false };
+  }
+
+  if (!isBrightDataConfigured()) {
+    return { enriched: false, failureKind: "not_configured", error: "Bright Data sync is not configured in this environment." };
+  }
+
+  try {
+    const fetchResult = await fetchBrightDataProfile(linkedinUrl);
+    if (!fetchResult.ok) {
+      return {
+        enriched: false,
+        error: fetchResult.error,
+        failureKind: fetchResult.kind,
+        upstreamStatus: fetchResult.upstreamStatus,
+      };
+    }
+
+    const profile = fetchResult.profile;
+    const fields = mapBrightDataToFields(profile);
+
+    console.log("[bright-data-enrichment] Profile fetched:", {
+      experienceCount: profile.experience?.length ?? 0,
+      educationCount: profile.education?.length ?? 0,
+      hasAbout: !!profile.about,
+      hasPosition: !!profile.position,
+      currentCompany: profile.current_company || profile.current_company_name || null,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("sync_user_linkedin_enrichment", {
+      p_user_id: userId,
+      p_job_title: fields.job_title,
+      p_current_company: fields.current_company,
+      p_current_city: fields.current_city,
+      p_school: fields.school,
+      p_major: fields.major,
+      p_position_title: fields.position_title,
+      p_enrichment_json: profile as unknown,
+      p_headline: profile.position || null,
+      p_summary: profile.about || null,
+      p_work_history: profile.experience ?? null,
+      p_education_history: profile.education ?? null,
+      p_overwrite: true, // Manual sync: user expects fresh data to replace stale values
+    });
+
+    if (error) {
+      console.error("[bright-data-enrichment] RPC error:", error);
+      return { enriched: false, error: error.message, failureKind: "rpc_error" };
+    }
+
+    return { enriched: true };
+  } catch (err) {
+    console.error("[bright-data-enrichment] Unexpected error:", err);
+    return {
+      enriched: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+      failureKind: "network_error",
+    };
+  }
+}
+
+async function getLatestLinkedInUrl(
+  supabase: SupabaseClient<Database>,
+  table: "members" | "alumni" | "parents",
+  userId: string,
+): Promise<string | null> {
+  // parents is not fully covered by generated types in this codepath.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from(table)
+    .select("linkedin_url, updated_at, created_at")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .not("linkedin_url", "is", null)
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Failed to fetch LinkedIn URL from ${table}: ${error.message}`);
+  }
+
+  return data?.[0]?.linkedin_url ?? null;
+}
+
+/**
+ * Backward-compatible wrapper for the LinkedIn profile URL lookup.
+ */
+export async function getLinkedInUrlForUser(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<string | null> {
+  const membersUrl = await getLatestLinkedInUrl(supabase, "members", userId);
+  if (membersUrl) return membersUrl;
+
+  const alumniUrl = await getLatestLinkedInUrl(supabase, "alumni", userId);
+  if (alumniUrl) return alumniUrl;
+
+  return getLatestLinkedInUrl(supabase, "parents", userId);
+}
+
 /**
  * Creates a user-friendly error message from LinkedIn OAuth errors.
  */
@@ -532,6 +690,10 @@ export function getLinkedInOAuthErrorMessage(error: string): string {
     invalid_request: "The authorization request was invalid. Please try again.",
     server_error: "LinkedIn's servers encountered an error. Please try again later.",
     temporarily_unavailable: "LinkedIn's servers are temporarily unavailable. Please try again later.",
+    redirect_uri_mismatch: "The LinkedIn app configuration is incorrect. Please contact support.",
+    unauthorized_client: "The LinkedIn app is not authorized. Please contact support.",
+    invalid_scope: "The requested LinkedIn permissions are not valid. Please contact support.",
+    invalid_scope_error: "The requested LinkedIn permissions are not valid. Please contact support.",
   };
   return messages[error] || "An unexpected error occurred. Please try again.";
 }

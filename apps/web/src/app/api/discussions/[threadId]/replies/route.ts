@@ -16,6 +16,7 @@ export async function POST(request: NextRequest, { params }: { params: { threadI
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Rate limit check AFTER auth for mutations
     const rateLimit = checkRateLimit(request, {
       userId: user.id,
       feature: "create reply",
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { threadI
     const { threadId } = params;
     const { body } = await validateJson(request, createReplySchema);
 
+    // Fetch thread to check if locked and get org_id
     const { data: thread } = await supabase
       .from("discussion_threads")
       .select("organization_id, is_locked")
@@ -44,11 +46,13 @@ export async function POST(request: NextRequest, { params }: { params: { threadI
       return NextResponse.json({ error: "Thread is locked" }, { status: 403 });
     }
 
+    // Check org membership
     const membership = await getOrgMembership(supabase, user.id, thread.organization_id);
     if (!membership) {
       return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
     }
 
+    // Create reply
     const { data: reply, error } = await supabase
       .from("discussion_replies")
       .insert({

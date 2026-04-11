@@ -7,12 +7,27 @@ function readSource(relPath: string): string {
   return fs.readFileSync(path.join(process.cwd(), relPath), "utf8");
 }
 
+function readLatestAnalyticsRpcMigration(): string {
+  const migrationsDir = path.join(process.cwd(), "supabase/migrations");
+  const candidate = fs.readdirSync(migrationsDir)
+    .filter((fileName) => fileName.endsWith(".sql"))
+    .sort()
+    .reverse()
+    .find((fileName) => {
+      const source = fs.readFileSync(path.join(migrationsDir, fileName), "utf8");
+      return source.includes("CREATE OR REPLACE FUNCTION public.log_analytics_event(");
+    });
+
+  assert.ok(candidate, "expected an analytics migration that defines public.log_analytics_event");
+  return fs.readFileSync(path.join(migrationsDir, candidate), "utf8");
+}
+
 function squishWhitespace(value: string): string {
   return value.replace(/\s+/g, " ");
 }
 
 test("latest analytics migration enforces tracking-level policy and coarse enum payloads", () => {
-  const source = readSource("supabase/migrations/20260701000007_enforce_behavioral_tracking_policy.sql");
+  const source = readLatestAnalyticsRpcMigration();
   const normalized = squishWhitespace(source);
 
   assert.ok(
@@ -32,12 +47,33 @@ test("latest analytics migration enforces tracking-level policy and coarse enum 
     "page_view_only users and FERPA-scoped orgs must be limited to app_open/route_view"
   );
   assert.ok(
-    normalized.includes("WHEN 'file_upload_attempt' THEN ARRAY['file_type','file_size_bucket','result','error_code']"),
-    "file upload analytics should keep the coarse file allowlist"
-  );
-  assert.ok(
     normalized.includes("WHEN 'chat_message_send' THEN ARRAY['thread_id','message_type','result','error_code']"),
     "chat analytics should keep the coarse message allowlist"
+  );
+  assert.strictEqual(
+    normalized.includes("WHEN 'cta_click' THEN ARRAY['cta','feature','surface','position']"),
+    false,
+    "unwired CTA analytics should no longer remain in the analytics RPC allowlist"
+  );
+  assert.strictEqual(
+    normalized.includes("WHEN 'directory_sort_change' THEN ARRAY['directory_type','sort_key']"),
+    false,
+    "unwired directory sort analytics should no longer remain in the analytics RPC allowlist"
+  );
+  assert.strictEqual(
+    normalized.includes("WHEN 'form_open' THEN ARRAY['form_id','open_source']"),
+    false,
+    "unwired form analytics should no longer remain in the analytics RPC allowlist"
+  );
+  assert.strictEqual(
+    normalized.includes("WHEN 'form_submit' THEN ARRAY['form_id','result','duration_bucket','error_code']"),
+    false,
+    "unwired form submission analytics should no longer remain in the analytics RPC allowlist"
+  );
+  assert.strictEqual(
+    normalized.includes("WHEN 'file_upload_attempt' THEN ARRAY['file_type','file_size_bucket','result','error_code']"),
+    false,
+    "unwired file upload analytics should no longer remain in the analytics RPC allowlist"
   );
   assert.ok(
     normalized.includes("IF NOT (v_key = ANY (allowed_keys)) THEN CONTINUE; END IF;"),
@@ -48,24 +84,12 @@ test("latest analytics migration enforces tracking-level policy and coarse enum 
     "message_type must remain allowed while other message-like keys stay blocked"
   );
   assert.ok(
-    normalized.includes("(v_key ILIKE '%file%' AND v_key NOT IN ('file_type', 'file_size_bucket'))"),
-    "file_type and file_size_bucket must remain allowed while other file-like keys stay blocked"
-  );
-  assert.ok(
-    normalized.includes("IF v_key IN ('message_type', 'file_type', 'file_size_bucket') AND jsonb_typeof(v_val) <> 'string' THEN RETURN FALSE; END IF;"),
-    "hardened enum props must reject non-string JSON values before primitive fallthrough"
+    normalized.includes("IF v_key IN ('message_type') AND jsonb_typeof(v_val) <> 'string' THEN RETURN FALSE; END IF;"),
+    "hardened enum props must reject non-string JSON values for live coarse enums before primitive fallthrough"
   );
   assert.ok(
     normalized.includes("IF v_key = 'message_type' AND v_str NOT IN ('text', 'poll', 'form') THEN RETURN FALSE; END IF;"),
     "message_type must be constrained to the coarse chat analytics enum"
-  );
-  assert.ok(
-    normalized.includes("IF v_key = 'file_type' AND v_str NOT IN ('image', 'pdf', 'doc', 'other') THEN RETURN FALSE; END IF;"),
-    "file_type must be constrained to the coarse file analytics enum"
-  );
-  assert.ok(
-    normalized.includes("IF v_key = 'file_size_bucket' AND v_str NOT IN ('<1MB', '1-5MB', '5-25MB', '25MB+') THEN RETURN FALSE; END IF;"),
-    "file_size_bucket must be constrained to the coarse upload size buckets"
   );
 });
 

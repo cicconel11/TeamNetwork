@@ -9,6 +9,8 @@ interface AddAlumniMenuProps {
   onSingleLinkedInClick: () => void;
   onImportClick: () => void;
   onCsvImportClick: () => void;
+  selectMode?: boolean;
+  onToggleSelectMode?: () => void;
 }
 
 const SHARED_BUTTON =
@@ -20,6 +22,8 @@ export function AddAlumniMenu({
   onSingleLinkedInClick,
   onImportClick,
   onCsvImportClick,
+  selectMode,
+  onToggleSelectMode,
 }: AddAlumniMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -51,6 +55,7 @@ export function AddAlumniMenu({
       <div className="flex items-stretch rounded-xl overflow-hidden">
         <button
           className={`${SHARED_BUTTON} gap-2 px-4 py-2.5`}
+          data-testid="alumni-new-link"
           onClick={() => router.push(`/${orgSlug}/alumni/new`)}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
@@ -142,6 +147,28 @@ export function AddAlumniMenu({
             </svg>
             Import CSV / Spreadsheet
           </button>
+          {onToggleSelectMode && (
+            <>
+              <div className="border-t border-border" />
+              <button
+                role="menuitem"
+                className="w-full text-left px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors duration-150 flex items-center gap-3"
+                onClick={() => {
+                  setIsOpen(false);
+                  onToggleSelectMode();
+                }}
+              >
+                <svg className="h-4 w-4 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  {selectMode ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  )}
+                </svg>
+                {selectMode ? "Exit Selection Mode" : "Select for Bulk Delete"}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

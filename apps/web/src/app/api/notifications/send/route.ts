@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getUserFromRequest } from "@/lib/supabase/get-user-from-request";
 import { sendNotificationBlast, sendEmail as sendEmailStub } from "@/lib/notifications";
 import type { EmailParams, NotificationResult, NotificationCategory } from "@/lib/notifications";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
@@ -15,7 +15,7 @@ import {
   validationErrorResponse,
 } from "@/lib/security/validation";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
-import type { NotificationAudience, NotificationChannel } from "@teammeet/types";
+import type { NotificationAudience, NotificationChannel } from "@/types/database";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -90,11 +90,15 @@ async function sendEmailWithFallback(to: string, subject: string, bodyText: stri
   return sendEmailStub({ to, subject, body: bodyText });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   let respond: ((payload: unknown, status?: number) => ReturnType<typeof NextResponse.json>) | null = null;
   try {
-    const { user, supabase } = await getUserFromRequest(request);
+    const supabase = await createClient();
     const service = createServiceClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     const rateLimit = checkRateLimit(request, {
       userId: user?.id ?? null,
@@ -326,3 +330,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

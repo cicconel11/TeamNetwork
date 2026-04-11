@@ -79,6 +79,77 @@ export async function GET(request: NextRequest) {
     if (data.session) {
       debugLog("auth-callback", "Success! User:", maskPII(data.session.user.id));
 
+      // --- Defensive OAuth identity merge ---
+      // Guard: if Supabase created a fresh UUID for this sign-in but another UUID
+      // with the same email already has org memberships, copy those memberships here.
+      // This ensures continuity even if the Dashboard auto-link setting hasn't
+      // yet prevented duplicate account creation.
+      try {
+        const currentUser = data.session.user;
+        const currentEmail = currentUser.email;
+        const isNewAccount =
+          currentUser.created_at != null &&
+          Date.now() - new Date(currentUser.created_at).getTime() < 60_000;
+
+        if (currentEmail && isNewAccount) {
+          const serviceClient = createServiceClient();
+
+          const { data: duplicateUsers } = await serviceClient
+            .from("users")
+            .select("id")
+            .eq("email", currentEmail)
+            .neq("id", currentUser.id);
+
+          if (duplicateUsers && duplicateUsers.length > 0) {
+            debugLog("auth-callback", "Duplicate accounts detected for email, copying memberships", {
+              currentUserId: maskPII(currentUser.id),
+              duplicateCount: duplicateUsers.length,
+            });
+
+            for (const dupUser of duplicateUsers) {
+              const { data: sourceRoles } = await serviceClient
+                .from("user_organization_roles")
+                .select("organization_id, role, status, created_at")
+                .eq("user_id", dupUser.id);
+
+              if (!sourceRoles || sourceRoles.length === 0) continue;
+
+              const rowsToInsert = sourceRoles.map((r) => ({
+                user_id: currentUser.id,
+                organization_id: r.organization_id,
+                role: r.role,
+                status: r.status,
+                created_at: r.created_at,
+              }));
+
+              const { error: insertError } = await serviceClient
+                .from("user_organization_roles")
+                .upsert(rowsToInsert, {
+                  onConflict: "user_id,organization_id",
+                  ignoreDuplicates: true,
+                });
+
+              if (insertError) {
+                console.error(
+                  "[auth/callback] Failed to copy org memberships from duplicate:",
+                  maskPII(dupUser.id),
+                  insertError.message
+                );
+              } else {
+                debugLog("auth-callback", "Copied memberships from duplicate", {
+                  from: maskPII(dupUser.id),
+                  count: sourceRoles.length,
+                });
+              }
+            }
+          }
+        }
+      } catch (mergeError) {
+        // Never block sign-in due to merge failure — log and continue.
+        console.error("[auth/callback] Defensive merge failed (non-fatal):", mergeError);
+      }
+      // --- End defensive OAuth identity merge ---
+
       const ageGateResult = await runAgeValidationGate({
         requestUrl,
         siteUrl,

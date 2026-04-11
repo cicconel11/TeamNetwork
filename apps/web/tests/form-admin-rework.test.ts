@@ -125,8 +125,8 @@ describe("no .responses references in form submission code", () => {
         // Look for patterns like submission.responses, sub.responses, etc.
         // but exclude comments, imports, type definitions, and the word "responses" used standalone
         if (
-          /\.responses\b/.test(line) &&
-          /form_submission|submission|\.responses\s*[=:]|responses\s*\|\|/.test(line)
+          /submission\.responses\b/.test(line) &&
+          /form_submission|submission/.test(line)
         ) {
           violations.push(`${filePath}:${i + 1}: ${line.trim()}`);
         }

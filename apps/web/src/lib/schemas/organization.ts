@@ -25,6 +25,7 @@ export const createOrgSchema = z.object({
   primaryColor: hexColorSchema,
   billingInterval: subscriptionIntervalSchema,
   alumniBucket: alumniBucketSchema,
+  withTrial: z.boolean(),
 });
 export type CreateOrgForm = z.infer<typeof createOrgSchema>;
 
@@ -52,3 +53,10 @@ export const orgSettingsSchema = z.object({
     .optional(),
 });
 export type OrgSettingsForm = z.infer<typeof orgSettingsSchema>;
+
+// Supported locales for i18n
+export const supportedLocaleSchema = z.enum(["en", "es", "fr", "ar", "zh", "pt", "it"]);
+export type SupportedLocaleValue = z.infer<typeof supportedLocaleSchema>;
+
+// Optional locale (for user override — null means "use org default")
+export const optionalLocaleSchema = supportedLocaleSchema.nullable().optional();

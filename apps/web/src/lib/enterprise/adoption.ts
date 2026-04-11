@@ -150,17 +150,29 @@ export async function createAdoptionRequest(
 
 export async function acceptAdoptionRequest(
   requestId: string,
-  respondedBy: string
+  respondedBy: string,
+  deps?: {
+    supabase?: ReturnType<typeof createServiceClient>;
+    checkAdoptionQuotaFn?: typeof checkAdoptionQuota;
+    canEnterpriseAddSubOrgFn?: typeof canEnterpriseAddSubOrg;
+  }
 ): Promise<{ success: boolean; error?: string; status?: number }> {
-  const supabase = createServiceClient();
+  const supabase = deps?.supabase ?? createServiceClient();
+  const checkAdoptionQuotaFn = deps?.checkAdoptionQuotaFn ?? checkAdoptionQuota;
+  const canEnterpriseAddSubOrgFn = deps?.canEnterpriseAddSubOrgFn ?? canEnterpriseAddSubOrg;
 
   // Get request with org and enterprise info
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: request } = await (supabase as any)
+  const { data: request, error: requestError } = await (supabase as any)
     .from("enterprise_adoption_requests")
     .select("*, enterprise:enterprises(*)")
     .eq("id", requestId)
-    .single() as { data: AdoptionRequestRow | null };
+    .single() as { data: AdoptionRequestRow | null; error: unknown };
+
+  if (requestError) {
+    console.error("[acceptAdoptionRequest] Failed to fetch request:", requestError);
+    return { success: false, error: "Internal error", status: 503 };
+  }
 
   if (!request) {
     return { success: false, error: "Request not found" };
@@ -182,29 +194,46 @@ export async function acceptAdoptionRequest(
 
   // Re-verify org is standalone
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org } = await (supabase as any)
+  const { data: org, error: orgVerifyError } = await (supabase as any)
     .from("organizations")
     .select("enterprise_id")
     .eq("id", request.organization_id)
-    .single() as { data: { enterprise_id: string | null } | null };
+    .single() as { data: { enterprise_id: string | null } | null; error: unknown };
+
+  if (orgVerifyError) {
+    console.error("[acceptAdoptionRequest] Failed to re-verify org:", orgVerifyError);
+    return { success: false, error: "Internal error", status: 503 };
+  }
+
+  const isRetryingAcceptedAdoption = org?.enterprise_id === request.enterprise_id;
 
   if (org?.enterprise_id) {
-    return { success: false, error: "Organization already belongs to an enterprise" };
-  }
-
-  // Check alumni quota again
-  const quotaCheck = await checkAdoptionQuota(request.enterprise_id, request.organization_id);
-  if (!quotaCheck.allowed) {
-    if (quotaCheck.status) {
-      return { success: false, error: quotaCheck.error, status: quotaCheck.status };
+    if (isRetryingAcceptedAdoption) {
+      console.warn("[acceptAdoptionRequest] Retrying partially completed adoption:", {
+        requestId,
+        organizationId: request.organization_id,
+        enterpriseId: request.enterprise_id,
+      });
+    } else {
+      return { success: false, error: "Organization already belongs to an enterprise" };
     }
-    return { success: false, error: quotaCheck.error };
   }
 
-  // Check seat limit for enterprise-managed orgs
-  const seatQuota = await canEnterpriseAddSubOrg(request.enterprise_id);
-  if (seatQuota.error) {
-    return { success: false, error: "Unable to verify seat limit. Please try again.", status: 503 };
+  if (!isRetryingAcceptedAdoption) {
+    // Check alumni quota again
+    const quotaCheck = await checkAdoptionQuotaFn(request.enterprise_id, request.organization_id);
+    if (!quotaCheck.allowed) {
+      if (quotaCheck.status) {
+        return { success: false, error: quotaCheck.error, status: quotaCheck.status };
+      }
+      return { success: false, error: quotaCheck.error };
+    }
+
+    // Check seat limit for enterprise-managed orgs
+    const seatQuota = await canEnterpriseAddSubOrgFn(request.enterprise_id);
+    if (seatQuota.error) {
+      return { success: false, error: "Unable to verify seat limit. Please try again.", status: 503 };
+    }
   }
 
   // Get org's current subscription for preservation
@@ -214,22 +243,24 @@ export async function acceptAdoptionRequest(
     .eq("organization_id", request.organization_id)
     .maybeSingle() as { data: OrgSubscriptionRow | null };
 
-  // Execute adoption
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateError } = await (supabase as any)
-    .from("organizations")
-    .update({
-      enterprise_id: request.enterprise_id,
-      enterprise_relationship_type: "adopted",
-      enterprise_adopted_at: new Date().toISOString(),
-      original_subscription_id: orgSub?.id ?? null,
-      original_subscription_status: orgSub?.status ?? null,
-    })
-    .eq("id", request.organization_id);
+  if (!isRetryingAcceptedAdoption) {
+    // Execute adoption
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase as any)
+      .from("organizations")
+      .update({
+        enterprise_id: request.enterprise_id,
+        enterprise_relationship_type: "adopted",
+        enterprise_adopted_at: new Date().toISOString(),
+        original_subscription_id: orgSub?.id ?? null,
+        original_subscription_status: orgSub?.status ?? null,
+      })
+      .eq("id", request.organization_id);
 
-  if (updateError) {
-    console.error("[acceptAdoptionRequest] Org update failed:", updateError);
-    return { success: false, error: "Failed to update organization", status: 500 };
+    if (updateError) {
+      console.error("[acceptAdoptionRequest] Org update failed:", updateError);
+      return { success: false, error: "Failed to update organization", status: 500 };
+    }
   }
 
   // Ensure org has a subscription row so the enterprise_alumni_counts view can
@@ -242,8 +273,10 @@ export async function acceptAdoptionRequest(
 
     if (updateSubError) {
       console.error("[acceptAdoptionRequest] Failed to update organization subscription:", updateSubError);
-      // Compensating rollback: revert enterprise_id on subscription failure (with retry)
-      await rollbackOrgEnterprise(supabase, request.organization_id);
+      if (!isRetryingAcceptedAdoption) {
+        // Compensating rollback: revert enterprise_id on subscription failure (with retry)
+        await rollbackOrgEnterprise(supabase, request.organization_id);
+      }
       return { success: false, error: "Failed to update organization subscription" };
     }
   } else {
@@ -258,13 +291,46 @@ export async function acceptAdoptionRequest(
 
     if (createSubError) {
       console.error("[acceptAdoptionRequest] Failed to create organization subscription:", createSubError);
-      // Compensating rollback: revert enterprise_id on subscription failure (with retry)
-      await rollbackOrgEnterprise(supabase, request.organization_id);
+      if (!isRetryingAcceptedAdoption) {
+        // Compensating rollback: revert enterprise_id on subscription failure (with retry)
+        await rollbackOrgEnterprise(supabase, request.organization_id);
+      }
       return { success: false, error: "Failed to create organization subscription" };
     }
   }
 
-  // Step 3: Mark request as accepted
+  // Step 3: Grant enterprise org_admin role to all active org admins
+  // so they can access the enterprise dashboard after adoption.
+  const { data: orgAdmins, error: orgAdminsError } = await supabase
+    .from("user_organization_roles")
+    .select("user_id")
+    .eq("organization_id", request.organization_id)
+    .eq("role", "admin")
+    .eq("status", "active");
+
+  if (orgAdminsError) {
+    console.error("[acceptAdoptionRequest] Failed to fetch org admins for enterprise role grant:", orgAdminsError);
+    // Non-fatal: proceed with adoption even if enterprise role grant fails.
+    // Admins can be manually added to the enterprise later.
+  } else if (orgAdmins && orgAdmins.length > 0) {
+    const enterpriseRoleRows = orgAdmins.map((admin) => ({
+      user_id: admin.user_id,
+      enterprise_id: request.enterprise_id,
+      role: "org_admin",
+    }));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: roleGrantError } = await (supabase as any)
+      .from("user_enterprise_roles")
+      .upsert(enterpriseRoleRows, { onConflict: "user_id,enterprise_id" });
+
+    if (roleGrantError) {
+      console.error("[acceptAdoptionRequest] Failed to grant enterprise roles to org admins:", roleGrantError);
+      // Non-fatal: adoption still succeeds, admins can be added manually
+    }
+  }
+
+  // Step 4: Mark request as accepted
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: markAcceptedError } = await (supabase as any)
     .from("enterprise_adoption_requests")
@@ -278,21 +344,23 @@ export async function acceptAdoptionRequest(
   if (markAcceptedError) {
     console.error("[acceptAdoptionRequest] Step 3 (mark accepted) failed:", markAcceptedError);
 
-    // Rollback step 1: revert org enterprise_id
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: rollbackOrgError } = await (supabase as any)
-      .from("organizations")
-      .update({
-        enterprise_id: null,
-        enterprise_relationship_type: null,
-        enterprise_adopted_at: null,
-        original_subscription_id: null,
-        original_subscription_status: null,
-      })
-      .eq("id", request.organization_id);
+    if (!isRetryingAcceptedAdoption) {
+      // Rollback step 1: revert org enterprise_id
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: rollbackOrgError } = await (supabase as any)
+        .from("organizations")
+        .update({
+          enterprise_id: null,
+          enterprise_relationship_type: null,
+          enterprise_adopted_at: null,
+          original_subscription_id: null,
+          original_subscription_status: null,
+        })
+        .eq("id", request.organization_id);
 
-    if (rollbackOrgError) {
-      console.error("[acceptAdoptionRequest] CRITICAL: step-3 rollback of org failed:", rollbackOrgError);
+      if (rollbackOrgError) {
+        console.error("[acceptAdoptionRequest] CRITICAL: step-3 rollback of org failed:", rollbackOrgError);
+      }
     }
 
     // Rollback step 2: revert subscription
@@ -329,15 +397,20 @@ export async function acceptAdoptionRequest(
 export async function rejectAdoptionRequest(
   requestId: string,
   respondedBy: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; status?: number }> {
   const supabase = createServiceClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: request } = await (supabase as any)
+  const { data: request, error: requestError } = await (supabase as any)
     .from("enterprise_adoption_requests")
     .select("status")
     .eq("id", requestId)
-    .single() as { data: { status: string } | null };
+    .single() as { data: { status: string } | null; error: unknown };
+
+  if (requestError) {
+    console.error("[rejectAdoptionRequest] Failed to fetch request:", requestError);
+    return { success: false, error: "Internal error", status: 503 };
+  }
 
   if (!request) {
     return { success: false, error: "Request not found" };
@@ -348,7 +421,7 @@ export async function rejectAdoptionRequest(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: updateError } = await (supabase as any)
     .from("enterprise_adoption_requests")
     .update({
       status: "rejected",
@@ -356,6 +429,11 @@ export async function rejectAdoptionRequest(
       responded_at: new Date().toISOString(),
     })
     .eq("id", requestId);
+
+  if (updateError) {
+    console.error("[rejectAdoptionRequest] Failed to update request:", updateError);
+    return { success: false, error: "Internal error", status: 503 };
+  }
 
   return { success: true };
 }

@@ -10,12 +10,14 @@ import { Button, Input, Card, HCaptcha, HCaptchaRef, InlineBanner } from "@/comp
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { sanitizeRedirectPath, buildRecoveryRedirectTo } from "@/lib/auth/redirect";
 import { forgotPasswordSchema, type ForgotPasswordForm } from "@/lib/schemas/auth";
+import { useTranslations } from "next-intl";
 
 interface ForgotPasswordFormProps {
   hcaptchaSiteKey: string;
 }
 
 function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
+  const t = useTranslations("auth");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -38,7 +40,7 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
 
   const onSubmit = async (data: ForgotPasswordForm) => {
     if (!isVerified || !captchaToken) {
-      setError("Please complete the captcha verification");
+      setError(t("completeCaptcha"));
       return;
     }
 
@@ -58,7 +60,7 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
       return;
     }
 
-    setMessage("Check your email for a password reset link!");
+    setMessage(t("checkEmailReset"));
     setIsLoading(false);
     captchaRef.current?.reset();
   };
@@ -80,9 +82,9 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
       <form data-testid="forgot-password-form" onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-4">
           <Input
-            label="Email"
+            label={t("emailLabel")}
             type="email"
-            placeholder="you@example.com"
+            placeholder={t("emailPlaceholder")}
             error={errors.email?.message}
             data-testid="forgot-password-email"
             {...register("email")}
@@ -106,15 +108,15 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
             disabled={!isVerified}
             data-testid="forgot-password-submit"
           >
-            Send Reset Link
+            {t("sendResetLink")}
           </Button>
         </div>
       </form>
 
       <div className="mt-6 text-center text-sm text-white/50">
-        Remember your password?{" "}
+        {t("rememberPassword")}{" "}
         <Link href="/auth/login" className="text-white font-medium hover:underline">
-          Sign in
+          {t("signIn")}
         </Link>
       </div>
     </Card>

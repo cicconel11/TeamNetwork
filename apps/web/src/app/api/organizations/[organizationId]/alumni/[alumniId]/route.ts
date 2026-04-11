@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas, validateJson, ValidationError } from "@/lib/security/validation";
 import { editAlumniSchema, type EditAlumniForm } from "@/lib/schemas/member";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { buildAlumniWritePayload, canMutateAlumni } from "@/lib/alumni/mutations";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,6 +61,14 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const rateLimit = checkRateLimit(req, {
+    limitPerIp: 60,
+    limitPerUser: 40,
+    userId: user.id,
+    feature: "alumni record",
+  });
+  if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
+
   let access;
   try {
     access = await resolveAlumniAccess({ organizationId, alumniId, userId: user.id });
@@ -104,16 +113,28 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", alumniId)
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null);
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 400 });
   }
 
+  const svc = createServiceClient();
+  const { data: orgEnterprise } = await svc
+    .from("organizations")
+    .select("enterprise_id")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  if (orgEnterprise?.enterprise_id) {
+    revalidateTag(`enterprise-alumni-stats-${orgEnterprise.enterprise_id}`);
+  }
+
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(_req: Request, { params }: RouteParams) {
+export async function DELETE(req: Request, { params }: RouteParams) {
   const { organizationId, alumniId } = await params;
   if (!baseSchemas.uuid.safeParse(organizationId).success || !baseSchemas.uuid.safeParse(alumniId).success) {
     return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
@@ -124,6 +145,14 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimit = checkRateLimit(req, {
+    limitPerIp: 60,
+    limitPerUser: 40,
+    userId: user.id,
+    feature: "alumni record",
+  });
+  if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
   let access;
   try {
@@ -162,17 +191,21 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: deleteError.message }, { status: 400 });
   }
 
-  // Invalidate cached pages that display alumni data
+  // Invalidate cached pages and tags that display alumni data
   const serviceSupabase = createServiceClient();
   const { data: org } = await serviceSupabase
     .from("organizations")
-    .select("slug")
+    .select("slug, enterprise_id")
     .eq("id", organizationId)
     .single();
 
   if (org?.slug) {
     revalidatePath(`/${org.slug}`);
     revalidatePath(`/${org.slug}/alumni`);
+  }
+
+  if (org?.enterprise_id) {
+    revalidateTag(`enterprise-alumni-stats-${org.enterprise_id}`);
   }
 
   return NextResponse.json({ success: true });

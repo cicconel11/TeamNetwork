@@ -1,13 +1,13 @@
 import { randomUUID } from "crypto";
 import { extname } from "path";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getUserFromRequest } from "@/lib/supabase/get-user-from-request";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import { normalizeRole } from "@/lib/auth/role-utils";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
-import type { UserRole } from "@teammeet/types";
+import type { UserRole } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,14 +64,15 @@ function normalizeHexColor(value: FormDataEntryValue | null): { color: string | 
   return { color: `#${match[1].toLowerCase()}`, invalid: false };
 }
 
-export async function POST(req: NextRequest, { params }: RouteParams) {
+export async function POST(req: Request, { params }: RouteParams) {
   const { organizationId } = await params;
   const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
   if (!orgIdParsed.success) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
-  const { user, supabase } = await getUserFromRequest(req);
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const rateLimit = checkRateLimit(req, {
     userId: user?.id ?? null,

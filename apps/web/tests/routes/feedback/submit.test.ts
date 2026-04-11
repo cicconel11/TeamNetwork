@@ -5,12 +5,13 @@ import {
   isAuthenticated,
   AuthPresets,
 } from "../../utils/authMock.ts";
+import { isAnonymousFrictionAllowed } from "@/lib/feedback/anonymous-friction";
 
 /**
  * Tests for POST /api/feedback/submit
  *
  * This route:
- * 1. Requires authentication
+ * 1. Allows anonymous submissions only for allowlisted pre-auth friction flows
  * 2. Validates required fields (message, page_url, user_agent, context, trigger)
  * 3. Stores feedback in form_submissions
  * 4. Sends admin notification email
@@ -41,7 +42,12 @@ const MAX_MESSAGE_LENGTH = 2000;
 function simulateFeedbackSubmit(
   request: FeedbackRequest
 ): FeedbackResult {
-  if (!isAuthenticated(request.auth)) {
+  const authenticated = isAuthenticated(request.auth);
+  const anonymousAllowed =
+    !authenticated &&
+    isAnonymousFrictionAllowed(request.context ?? "", request.trigger ?? "");
+
+  if (!authenticated && !anonymousAllowed) {
     return { status: 401, error: "Unauthorized" };
   }
 
@@ -89,7 +95,7 @@ function simulateFeedbackSubmit(
 
 // Tests
 
-test("feedback submit requires authentication", () => {
+test("feedback submit rejects unauthenticated non-allowlisted flows", () => {
   const result = simulateFeedbackSubmit(
     {
       auth: AuthPresets.unauthenticated,
@@ -101,6 +107,21 @@ test("feedback submit requires authentication", () => {
     }
   );
   assert.strictEqual(result.status, 401);
+});
+
+test("feedback submit allows unauthenticated login friction", () => {
+  const result = simulateFeedbackSubmit(
+    {
+      auth: AuthPresets.unauthenticated,
+      message: "Login button failed",
+      page_url: "https://app.example.com/auth/login",
+      user_agent: "Mozilla/5.0",
+      context: "login",
+      trigger: "login_error",
+    }
+  );
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.success, true);
 });
 
 test("feedback submit requires message", () => {

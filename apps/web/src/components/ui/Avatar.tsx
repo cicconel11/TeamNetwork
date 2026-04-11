@@ -2,6 +2,7 @@
 
 import { HTMLAttributes, useState } from "react";
 import Image from "next/image";
+import { shouldUseNativeImage } from "./avatar-utils";
 
 interface AvatarProps extends HTMLAttributes<HTMLDivElement> {
   src?: string | null;
@@ -28,6 +29,7 @@ export function Avatar({ src, alt, name, size = "md", className = "", ...props }
   };
 
   const [hasError, setHasError] = useState(false);
+  const useNativeImage = shouldUseNativeImage(src);
 
   if (src && !hasError) {
     return (
@@ -35,30 +37,39 @@ export function Avatar({ src, alt, name, size = "md", className = "", ...props }
         className={`${sizes[size]} rounded-full overflow-hidden bg-muted flex-shrink-0 relative ${className}`}
         {...props}
       >
-        <Image
-          src={src}
-          alt={alt || name || "Avatar"}
-          fill
-          className="object-cover"
-          sizes="64px"
-          onError={() => setHasError(true)}
-        />
+        {useNativeImage ? (
+          // User-supplied remote avatars should be fetched by the browser, not
+          // by Next's server-side optimizer.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={src}
+            alt={alt || name || "Avatar"}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => setHasError(true)}
+          />
+        ) : (
+          <Image
+            src={src}
+            alt={alt || name || "Avatar"}
+            fill
+            className="object-cover"
+            sizes="64px"
+            onError={() => setHasError(true)}
+          />
+        )}
       </div>
     );
   }
 
-  const initials = name ? getInitials(name) : "?";
-  const ariaLabel = name ? `${name} (${initials})` : "Unknown user";
-
   return (
     <div
-      className={`${sizes[size]} rounded-full bg-org-primary text-white flex items-center justify-center font-medium flex-shrink-0 ${className}`}
-      aria-label={ariaLabel}
-      role="img"
+      className={`${sizes[size]} rounded-full bg-org-primary text-org-primary-foreground flex items-center justify-center font-medium flex-shrink-0 ${className}`}
       {...props}
     >
-      {initials}
+      {name ? getInitials(name) : "?"}
     </div>
   );
 }
-

@@ -109,11 +109,13 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label="First Name"
+                data-testid="alumni-first-name"
                 error={errors.first_name?.message}
                 {...register("first_name")}
               />
               <Input
                 label="Last Name"
+                data-testid="alumni-last-name"
                 error={errors.last_name?.message}
                 {...register("last_name")}
               />
@@ -123,6 +125,7 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
               label="Email"
               type="email"
               placeholder="alumni@example.com"
+              data-testid="alumni-email"
               error={errors.email?.message}
               {...register("email")}
             />
@@ -134,6 +137,7 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
                 placeholder="2020"
                 min={1900}
                 max={2100}
+                data-testid="alumni-graduation-year"
                 error={errors.graduation_year?.message}
                 {...register("graduation_year")}
               />
@@ -224,6 +228,7 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
             </Button>
             <Button
               type="submit"
+              data-testid="alumni-edit-submit"
               isLoading={isLoading}
               disabled={isReadOnly}
             >

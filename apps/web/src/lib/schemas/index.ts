@@ -24,6 +24,7 @@ export * from "./donations";
 
 // Feedback schemas
 export * from "./feedback";
+export * from "./friction-feedback-submit";
 
 // Form builder schemas
 export * from "./form-builder";
@@ -64,5 +65,14 @@ export * from "./feed";
 // Media schemas
 export * from "./media";
 
+// Invite schemas
+export * from "./invite";
+
 // Enterprise schemas
 export * from "./enterprise";
+
+// Blackbaud integration schemas
+export * from "./blackbaud";
+
+// AI assistant schemas
+export * from "./ai-assistant";

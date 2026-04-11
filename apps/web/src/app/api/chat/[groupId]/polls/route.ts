@@ -5,8 +5,21 @@ import { baseSchemas, validateJson, ValidationError } from "@/lib/security/valid
 import { createPollSchema } from "@/lib/schemas/chat-polls";
 import { getChatGroupContext } from "@/lib/auth/chat-helpers";
 
-export async function POST(req: Request, { params }: { params: { groupId: string } }) {
-  const { groupId } = params;
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+interface RouteParams {
+  params: Promise<{ groupId: string }>;
+}
+
+/**
+ * POST /api/chat/[groupId]/polls
+ * Create a poll message in the group.
+ * Auth: must be active org member + group member.
+ * Body: { question, options, allow_change }
+ */
+export async function POST(req: Request, { params }: RouteParams) {
+  const { groupId } = await params;
 
   const groupIdParsed = baseSchemas.uuid.safeParse(groupId);
   if (!groupIdParsed.success) {
@@ -46,7 +59,10 @@ export async function POST(req: Request, { params }: { params: { groupId: string
     return respond({ error: "Forbidden" }, 403);
   }
 
+  // Determine message status based on group approval requirements
   const status = ctx.group.require_approval && !ctx.canModerate ? "pending" : "approved";
+
+  // Build poll metadata from parsed input
   const metadata = {
     question: parsed.question,
     options: parsed.options.map((label) => ({ label })),

@@ -4,28 +4,26 @@ import { createClient } from "@/lib/supabase/client";
 import { canTrackBehavioralEvent, type TrackingLevel } from "@/lib/analytics/policy";
 import type { DeviceClass } from "@/lib/analytics/types";
 
-export type AnalyticsEventName =
-  | "app_open"
-  | "route_view"
-  | "nav_click"
-  | "cta_click"
-  | "page_dwell_bucket"
-  | "directory_view"
-  | "directory_filter_apply"
-  | "directory_sort_change"
-  | "profile_card_open"
-  | "events_view"
-  | "event_open"
-  | "rsvp_update"
-  | "form_open"
-  | "form_submit"
-  | "file_upload_attempt"
-  | "donation_flow_start"
-  | "donation_checkout_start"
-  | "donation_checkout_result"
-  | "chat_thread_open"
-  | "chat_message_send"
-  | "chat_participants_change";
+export const BEHAVIORAL_EVENT_NAMES = [
+  "app_open",
+  "route_view",
+  "nav_click",
+  "page_dwell_bucket",
+  "directory_view",
+  "directory_filter_apply",
+  "profile_card_open",
+  "events_view",
+  "event_open",
+  "rsvp_update",
+  "donation_flow_start",
+  "donation_checkout_start",
+  "donation_checkout_result",
+  "chat_thread_open",
+  "chat_message_send",
+  "chat_participants_change",
+] as const;
+
+export type AnalyticsEventName = (typeof BEHAVIORAL_EVENT_NAMES)[number];
 
 export type OpsEventName = "api_error" | "client_error" | "auth_fail" | "rate_limited";
 
@@ -206,8 +204,11 @@ export function trackBehavioralEvent(
     },
   };
 
-  // Fire-and-forget; do not block UI on analytics.
-  void supabase.rpc("log_analytics_event", payload);
+  void supabase.rpc("log_analytics_event", payload).then(null, (err: unknown) => {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[analytics] log_analytics_event failed:", err);
+    }
+  });
 }
 
 export function trackOpsEvent(
@@ -237,6 +238,9 @@ export function trackOpsEvent(
     p_retryable: props.retryable ?? null,
   };
 
-  // Fire-and-forget; do not block UI on ops telemetry.
-  void supabase.rpc("log_ops_event", payload);
+  void supabase.rpc("log_ops_event", payload).then(null, (err: unknown) => {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[analytics] log_ops_event failed:", err);
+    }
+  });
 }

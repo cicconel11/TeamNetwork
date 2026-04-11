@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { getStripeOrigin } from "@/lib/stripe-origin";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
@@ -102,7 +103,7 @@ export async function POST(req: Request) {
         }
       }
 
-      const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
+      const origin = getStripeOrigin(req.url);
       const refreshUrl = `${origin}/${org.slug}/philanthropy?onboarding=refresh`;
       const returnUrl = `${origin}/${org.slug}/philanthropy?onboarding=success`;
 
@@ -117,7 +118,7 @@ export async function POST(req: Request) {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to start Stripe onboarding";
       console.error("[connect-onboarding] Error:", message);
-      return respond({ error: message }, 400);
+      return respond({ error: "Unable to start Stripe onboarding" }, 400);
     }
   } catch (error) {
     if (error instanceof ValidationError) {

@@ -37,6 +37,7 @@ export function Confetti({
   const containerRef = useRef<HTMLDivElement>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
   const hasTriggered = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -73,7 +74,7 @@ export function Confetti({
             setParticles(newParticles);
 
             // Clear particles after animation completes
-            setTimeout(() => {
+            timeoutRef.current = setTimeout(() => {
               setParticles([]);
             }, 4000);
 
@@ -86,7 +87,10 @@ export function Confetti({
 
     observer.observe(containerRef.current);
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, [colors, particleCount]);
 
   return (

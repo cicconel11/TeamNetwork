@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, Badge, Button } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { MentorshipLogForm } from "./MentorshipLogForm";
-import { normalizeMentorshipStatus } from "@teammeet/core";
+import { getMentorshipStatusTranslationKey } from "@/lib/mentorship/presentation";
 
 interface MentorshipLog {
   id: string;
@@ -44,11 +45,14 @@ export function MentorshipPairCard({
   onDelete,
   highlight = false,
 }: MentorshipPairCardProps) {
+  const tMentorship = useTranslations("mentorship");
+  const tCommon = useTranslations("common");
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDeleted, setIsDeleted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showLogForm, setShowLogForm] = useState(false);
   const [showAllLogs, setShowAllLogs] = useState(false);
 
   const handleDeleteClick = () => {
@@ -73,11 +77,12 @@ export function MentorshipPairCard({
       return;
     }
 
-    // Soft-delete associated mentorship logs first.
+    // Soft-delete associated mentorship_logs first
     const { error: logsError } = await supabase
       .from("mentorship_logs")
       .update({ deleted_at: new Date().toISOString() })
-      .eq("pair_id", pair.id);
+      .eq("pair_id", pair.id)
+      .is("deleted_at", null);
 
     if (logsError) {
       setError("Unable to delete mentorship pair. Please try again.");
@@ -85,7 +90,7 @@ export function MentorshipPairCard({
       return;
     }
 
-    // Soft-delete the mentorship pair record.
+    // Soft-delete the mentorship_pair record
     const { error: pairError } = await supabase
       .from("mentorship_pairs")
       .update({ deleted_at: new Date().toISOString() })
@@ -114,14 +119,15 @@ export function MentorshipPairCard({
   const hasMoreLogs = logs.length > 5;
   const lastLogDate =
     logs.length > 0 ? new Date(logs[0].entry_date).toLocaleDateString() : null;
-  const statusLabel = normalizeMentorshipStatus(pair.status);
+
+  const cardClassName = `relative p-6 space-y-4${
+    highlight ? " ring-2 ring-[color:var(--color-org-secondary)]/60" : ""
+  }`;
+  const statusLabel = tMentorship(getMentorshipStatusTranslationKey(pair.status));
 
   return (
-    <Card
-      className={`relative p-6 space-y-4${
-        highlight ? " ring-2 ring-[color:var(--color-org-secondary)]/60" : ""
-      }`}
-    >
+    <Card className={cardClassName}>
+      {/* Row 1: mentor → mentee header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <h3 className="font-display font-semibold text-foreground truncate">
@@ -135,17 +141,15 @@ export function MentorshipPairCard({
           </h3>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="primary" className="capitalize">
-            {statusLabel}
-          </Badge>
+          <Badge variant="primary">{statusLabel}</Badge>
           {isAdmin && (
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowMenu((value) => !value)}
+                onClick={() => setShowMenu((v) => !v)}
                 onBlur={() => setTimeout(() => setShowMenu(false), 150)}
                 disabled={isDeleting || showConfirm}
-                aria-label="Open pair menu"
+                aria-label={tMentorship("openPairMenu")}
                 aria-haspopup="menu"
                 aria-expanded={showMenu}
                 className="h-8 w-8 rounded-md inline-flex items-center justify-center text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-org-secondary disabled:opacity-50 disabled:cursor-not-allowed"
@@ -172,13 +176,15 @@ export function MentorshipPairCard({
                   <button
                     type="button"
                     role="menuitem"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
+                    onMouseDown={(e) => {
+                      // onMouseDown fires before the parent button's onBlur,
+                      // so we avoid the blur race swallowing the click.
+                      e.preventDefault();
                       handleDeleteClick();
                     }}
                     className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-muted"
                   >
-                    Archive pair
+                    {tMentorship("archivePair")}
                   </button>
                 </div>
               )}
@@ -187,19 +193,27 @@ export function MentorshipPairCard({
         </div>
       </div>
 
+      {/* Row 2: last activity + log count */}
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
-        <span>{lastLogDate ? `Last session: ${lastLogDate}` : "No sessions yet"}</span>
+        <span>
+          {lastLogDate
+            ? `${tMentorship("lastSession")}: ${lastLogDate}`
+            : tMentorship("noSessionsYet")}
+        </span>
         <span aria-hidden="true" className="h-1 w-1 rounded-full bg-border" />
         <Badge variant="muted">
-          {logs.length} {logs.length === 1 ? "session" : "sessions"}
+          {logs.length}{" "}
+          {logs.length === 1
+            ? tMentorship("sessionSingular")
+            : tMentorship("sessionPlural")}
         </Badge>
       </div>
 
+      {/* Confirmation dialog */}
       {showConfirm && (
         <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 space-y-3">
           <p className="text-sm text-red-700 dark:text-red-300">
-            Archive this mentorship pair? Existing activity stays preserved, but
-            the pair will be hidden from the active list.
+            {tMentorship("archivePairConfirm")}
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -208,7 +222,7 @@ export function MentorshipPairCard({
               onClick={handleConfirmDelete}
               isLoading={isDeleting}
             >
-              Archive pair
+              {tMentorship("archivePair")}
             </Button>
             <Button
               variant="ghost"
@@ -216,30 +230,34 @@ export function MentorshipPairCard({
               onClick={handleCancelDelete}
               disabled={isDeleting}
             >
-              Cancel
+              {tCommon("cancel")}
             </Button>
           </div>
         </div>
       )}
 
+      {/* Error message */}
       {error && (
         <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
 
-      {logs.length > 0 ? (
+      {/* Activity logs */}
+      {logs.length > 0 && (
         <div className="space-y-3">
           {visibleLogs.map((log) => (
             <div key={log.id} className="p-3 rounded-xl bg-muted/50 space-y-1">
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>{new Date(log.entry_date).toLocaleDateString()}</span>
-                <span>Logged by {userLabel(log.created_by)}</span>
+                <span>
+                  {tMentorship("loggedBy", { name: userLabel(log.created_by) })}
+                </span>
               </div>
               {log.notes && <p className="text-foreground">{log.notes}</p>}
               {log.progress_metric !== null && (
                 <p className="text-xs text-muted-foreground">
-                  Progress metric: {log.progress_metric}
+                  {tMentorship("progressMetric", { value: log.progress_metric })}
                 </p>
               )}
             </div>
@@ -248,19 +266,39 @@ export function MentorshipPairCard({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowAllLogs((value) => !value)}
+              onClick={() => setShowAllLogs((v) => !v)}
             >
-              {showAllLogs ? "Show fewer sessions" : "Show all sessions"}
+              {showAllLogs
+                ? tMentorship("hideLogs")
+                : tMentorship("showAllLogs", { count: logs.length })}
             </Button>
           )}
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">No activity logged yet.</p>
       )}
 
+      {/* Collapsible log form */}
       {canLogActivity && (
         <div className="pt-2 border-t border-border">
-          <MentorshipLogForm orgId={orgId} pairId={pair.id} />
+          {showLogForm ? (
+            <div className="space-y-2">
+              <MentorshipLogForm orgId={orgId} pairId={pair.id} />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowLogForm(false)}
+              >
+                {tCommon("cancel")}
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowLogForm(true)}
+            >
+              + {tMentorship("logSession")}
+            </Button>
+          )}
         </div>
       )}
     </Card>

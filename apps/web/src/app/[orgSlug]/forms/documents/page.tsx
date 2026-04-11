@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
-import type { FormDocument } from "@teammeet/types";
+import type { FormDocument } from "@/types/database";
 
 interface DocumentFormsPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -32,7 +32,8 @@ export default async function DocumentFormsPage({ params }: DocumentFormsPagePro
     .from("form_document_submissions")
     .select("document_id")
     .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId);
+    .eq("user_id", orgCtx.userId)
+    .is("deleted_at", null);
 
   const submittedDocIds = new Set(submissions?.map((s) => s.document_id) || []);
 

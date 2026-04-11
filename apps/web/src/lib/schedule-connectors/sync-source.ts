@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import type { SyncResult, VendorId } from "./types";
+import type { ScheduleConnector, SyncResult, VendorId } from "./types";
 import { debugLog } from "@/lib/debug";
 
 export type SyncOutcome = SyncResult & { ok: boolean; error?: string };
@@ -17,12 +17,15 @@ export async function syncScheduleSource(
     };
     window: { from: Date; to: Date };
     now?: Date;
+    getConnectorById?: (vendorId: VendorId) => ScheduleConnector | null;
   }
 ): Promise<SyncOutcome> {
   const now = input.now ?? new Date();
   const vendorId = input.source.vendor_id as VendorId;
-  const { getConnectorById } = await import("./registry");
-  const connector = getConnectorById(vendorId);
+  const resolveConnector =
+    input.getConnectorById ??
+    (await import("./registry")).getConnectorById;
+  const connector = resolveConnector(vendorId);
 
   if (!connector) {
     const message = `Unsupported vendor: ${input.source.vendor_id}`;

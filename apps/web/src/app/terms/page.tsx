@@ -1,5 +1,10 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui";
+import "../landing-styles.css";
+
+// Static content — ISR revalidates every hour
+export const revalidate = 3600;
 
 type TermsSection = {
   id: string;
@@ -178,12 +183,20 @@ export default function TermsPage() {
       <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="group flex items-center gap-2">
-            <div className="w-8 h-8 rounded bg-landing-green-dark flex items-center justify-center">
-              <span className="font-display font-bold text-white text-sm">TN</span>
-            </div>
-            <span className="font-display text-xl font-bold tracking-tight">
-              Team<span className="text-landing-green">Network</span>
+            <Image
+              src="/TeamNetwor.png"
+              alt=""
+              width={541}
+              height={303}
+              sizes="28px"
+              className="h-8 w-auto shrink-0 object-contain sm:h-7"
+              aria-hidden="true"
+            />
+            <span className="font-display hidden text-base font-bold tracking-tight text-landing-cream sm:inline sm:text-xl">
+              <span className="text-landing-green">Team</span>
+              <span className="text-landing-cream">Network</span>
             </span>
+            <span className="sr-only">TeamNetwork</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/" className="text-sm text-landing-cream/60 hover:text-landing-cream transition-colors">

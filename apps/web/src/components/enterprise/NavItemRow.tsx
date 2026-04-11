@@ -1,13 +1,12 @@
 "use client";
 
-import type { ComponentType } from "react";
 import { Badge } from "@/components/ui";
 import type { OrgRole } from "@/lib/auth/role-utils";
 
 interface NavItemRowProps {
   path: string;
   label: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string }>;
   defaultRoles: OrgRole[];
   isHidden: boolean;
   hiddenForRoles: OrgRole[];

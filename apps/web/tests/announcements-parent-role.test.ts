@@ -1,6 +1,5 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canViewAnnouncement as canViewAnnouncementInCore, filterAnnouncementsForUser as filterAnnouncementsForUserInCore } from "@teammeet/core";
 import { filterAnnouncementsForUser } from "@/lib/announcements";
 import type { Announcement } from "@/types/database";
 
@@ -80,25 +79,5 @@ describe("filterAnnouncementsForUser — parent role", () => {
     const announcements = [makeAnnouncement("9", "alumni")];
     const result = filterAnnouncementsForUser(announcements, alumniCtx);
     assert.equal(result.length, 1);
-  });
-});
-
-describe("@teammeet/core announcements — parent role", () => {
-  const parentCtx = { role: "parent" as const, status: "active" as const, userId: "parent-user-1" };
-
-  it("parent sees 'alumni' audience announcements via the shared filter", () => {
-    const announcements = [makeAnnouncement("10", "alumni")];
-    const result = filterAnnouncementsForUserInCore(announcements, parentCtx);
-    assert.equal(result.length, 1);
-  });
-
-  it("shared predicate treats parent like alumni for alumni-targeted announcements", () => {
-    const announcement = makeAnnouncement("11", "alumni");
-    assert.equal(canViewAnnouncementInCore(announcement, parentCtx), true);
-  });
-
-  it("shared predicate still blocks parent from member-only announcements", () => {
-    const announcement = makeAnnouncement("12", "members");
-    assert.equal(canViewAnnouncementInCore(announcement, parentCtx), false);
   });
 });

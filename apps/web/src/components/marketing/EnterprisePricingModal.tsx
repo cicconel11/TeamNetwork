@@ -6,6 +6,7 @@ import {
   formatBucketRange,
   formatSeatPrice,
   getEnterpriseTotalPricing,
+  getFreeSubOrgCount,
   isSalesLed,
 } from "@/lib/enterprise/pricing";
 import {
@@ -32,9 +33,11 @@ function formatTotal(cents: number, interval: SubscriptionInterval): string {
 
 function getOrgCostLabel(
   orgCount: number,
-  interval: SubscriptionInterval
+  interval: SubscriptionInterval,
+  bucketCount: number
 ): string {
-  const billable = Math.max(0, orgCount - ENTERPRISE_SEAT_PRICING.freeSubOrgs);
+  const freeCount = getFreeSubOrgCount(bucketCount);
+  const billable = Math.max(0, orgCount - freeCount);
   if (billable === 0) return "Free!";
   const unitCents =
     interval === "month"
@@ -91,9 +94,10 @@ export function EnterprisePricingModal({
 
   const pricing = getEnterpriseTotalPricing(bucketCount, orgCount, interval);
   const salesLed = isSalesLed(bucketCount);
-  const billableOrgs = Math.max(0, orgCount - ENTERPRISE_SEAT_PRICING.freeSubOrgs);
-  const freeOrgs = Math.min(orgCount, ENTERPRISE_SEAT_PRICING.freeSubOrgs);
-  const orgCostLabel = getOrgCostLabel(orgCount, interval);
+  const freeSubOrgCount = getFreeSubOrgCount(bucketCount);
+  const billableOrgs = Math.max(0, orgCount - freeSubOrgCount);
+  const freeOrgs = Math.min(orgCount, freeSubOrgCount);
+  const orgCostLabel = getOrgCostLabel(orgCount, interval, bucketCount);
 
   return createPortal(
     <>
@@ -158,7 +162,7 @@ export function EnterprisePricingModal({
                   Managed Organizations
                 </h3>
                 <p className="text-landing-cream/40 text-xs mt-0.5">
-                  First {ENTERPRISE_SEAT_PRICING.freeSubOrgs} FREE &middot;{" "}
+                  First {freeSubOrgCount} FREE (3 per bucket) &middot;{" "}
                   {interval === "month" ? "$15/mo" : "$150/yr"} each additional
                 </p>
               </div>

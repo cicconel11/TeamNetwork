@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Badge, Avatar, Button, EmptyState, Input, Select } from "@/components/ui";
+import { useTranslations } from "next-intl";
+import { Card, Badge, Avatar, Button, EmptyState, Select, Input } from "@/components/ui";
 import { MentorRegistration } from "./MentorRegistration";
 
 interface MentorData {
@@ -38,6 +39,10 @@ export function MentorDirectory({
   orgId,
   orgSlug,
 }: MentorDirectoryProps) {
+  const tMentorship = useTranslations("mentorship");
+  const tMembers = useTranslations("members");
+  const tCommon = useTranslations("common");
+
   const [filters, setFilters] = useState({
     nameSearch: "",
     industry: "",
@@ -45,8 +50,10 @@ export function MentorDirectory({
   });
 
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
+
   const nameQuery = filters.nameSearch.trim().toLowerCase();
 
+  // Filter mentors
   const filteredMentors = mentors.filter((mentor) => {
     if (nameQuery && !mentor.name.toLowerCase().includes(nameQuery)) {
       return false;
@@ -72,41 +79,42 @@ export function MentorDirectory({
   };
 
   const industryOptions = [
-    { value: "", label: "All Industries" },
+    { value: "", label: tMentorship("allIndustries") },
     ...industries.map((i) => ({ value: i, label: i })),
   ];
 
   const yearOptions = [
-    { value: "", label: "All Years" },
-    ...years.map((y) => ({ value: y.toString(), label: `Class of ${y}` })),
+    { value: "", label: tMentorship("allYears") },
+    ...years.map((y) => ({ value: y.toString(), label: tMembers("classOf", { year: y }) })),
   ];
 
   return (
     <div id="mentor-directory" className="space-y-6">
       <div>
         <h2 className="font-display text-3xl font-semibold tracking-tight text-foreground">
-          Willing to Help
+          {tMentorship("willingToHelp")}
         </h2>
         <div className="mt-3 mb-4 h-px bg-border" />
         <p className="text-muted-foreground text-sm mb-4">
-          Browse alumni who have raised their hand to mentor and share their expertise.
+          {tMentorship("directoryDesc")}
         </p>
 
+        {/* Filters */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-6">
           <div className="w-full sm:flex-1">
             <Input
               type="search"
               value={filters.nameSearch}
-              onChange={(event) =>
-                setFilters({ ...filters, nameSearch: event.target.value })
+              onChange={(e) =>
+                setFilters({ ...filters, nameSearch: e.target.value })
               }
-              placeholder="Search mentors by name"
-              aria-label="Search mentors by name"
+              placeholder={tMentorship("searchPlaceholder")}
+              aria-label={tMentorship("searchPlaceholder")}
             />
           </div>
           <div className="w-full sm:w-48">
             <Select
-              label="Industry"
+              label={tMentorship("industry")}
               value={filters.industry}
               onChange={(e) => setFilters({ ...filters, industry: e.target.value })}
               options={industryOptions}
@@ -115,7 +123,7 @@ export function MentorDirectory({
           </div>
           <div className="w-full sm:w-40">
             <Select
-              label="Graduation Year"
+              label={tMentorship("graduationYear")}
               value={filters.year}
               onChange={(e) => setFilters({ ...filters, year: e.target.value })}
               options={yearOptions}
@@ -142,27 +150,29 @@ export function MentorDirectory({
                   d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
-              Clear filters
+              {tMentorship("clearFilters")}
             </Button>
           )}
         </div>
 
+        {/* Registration CTA */}
         {showRegistration && !showRegistrationForm && (
           <Card className="mb-6 bg-muted/30 border-dashed">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-medium mb-1">Want to give back?</h3>
+                <h3 className="font-medium mb-1">{tMentorship("wantToGiveBack")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Join our directory and help current members with your expertise
+                  {tMentorship("joinDirectory")}
                 </p>
               </div>
               <Button onClick={() => setShowRegistrationForm(true)}>
-                Become a Mentor
+                {tMentorship("becomeMentor")}
               </Button>
             </div>
           </Card>
         )}
 
+        {/* Registration Form */}
         {showRegistration && showRegistrationForm && (
           <div className="mb-6">
             <MentorRegistration
@@ -173,6 +183,7 @@ export function MentorDirectory({
           </div>
         )}
 
+        {/* Mentor Grid */}
         {filteredMentors.length === 0 ? (
           <EmptyState
             icon={
@@ -190,22 +201,22 @@ export function MentorDirectory({
                 />
               </svg>
             }
-            title={hasActiveFilters ? "No mentors found" : "No mentors yet"}
+            title={hasActiveFilters ? tMentorship("noMentorsFound") : tMentorship("noMentorsYet")}
             description={
               hasActiveFilters
-                ? "Try adjusting your filters to see more results."
+                ? tMentorship("adjustFilters")
                 : showRegistration
-                  ? "Be the first mentor in the directory for this organization."
-                  : "Check back later as alumni register to help."
+                ? tMentorship("beFirstMentorDesc")
+                : tMentorship("checkBackLater")
             }
             action={
               hasActiveFilters ? (
                 <Button variant="ghost" size="sm" onClick={clearFilters}>
-                  Clear filters
+                  {tMentorship("clearFilters")}
                 </Button>
               ) : showRegistration && !showRegistrationForm ? (
                 <Button onClick={() => setShowRegistrationForm(true)}>
-                  Become a Mentor
+                  {tMentorship("beFirstMentor")}
                 </Button>
               ) : undefined
             }
@@ -213,8 +224,16 @@ export function MentorDirectory({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredMentors.map((mentor) => {
+              const hasContactLinks = Boolean(
+                mentor.contact_email || mentor.contact_linkedin || mentor.contact_phone
+              );
+
               return (
-                <Card key={mentor.id} padding="md">
+                <Card
+                  key={mentor.id}
+                  padding="md"
+                  className="group relative overflow-hidden min-h-[220px]"
+                >
                   <div className="flex items-start gap-3 mb-3">
                     <Avatar
                       src={mentor.photo_url}
@@ -222,114 +241,110 @@ export function MentorDirectory({
                       size="lg"
                     />
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-base truncate">
+                      <h3 className="font-display text-lg font-semibold text-foreground truncate">
                         {mentor.name}
                       </h3>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {mentor.industry && (
-                          <Badge variant="muted">{mentor.industry}</Badge>
-                        )}
-                        {mentor.graduation_year && (
-                          <Badge variant="muted">&apos;{mentor.graduation_year.toString().slice(-2)}</Badge>
-                        )}
-                      </div>
+                      {mentor.graduation_year && (
+                        <div className="mt-1">
+                          <Badge variant="muted">
+                            &apos;{mentor.graduation_year.toString().slice(-2)}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {mentor.current_company && (
-                    <p className="text-sm text-muted-foreground mb-1">
-                      {mentor.current_company}
-                    </p>
-                  )}
-                  {mentor.current_city && (
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {mentor.current_city}
-                    </p>
-                  )}
-
-                  {mentor.bio && (
-                    <p className="text-sm mb-3 line-clamp-2">{mentor.bio}</p>
-                  )}
-
-                  {mentor.expertise_areas && mentor.expertise_areas.length > 0 && (
-                    <div className="mb-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">
-                        Expertise
+                  <div className={hasContactLinks ? "space-y-3 sm:pb-14" : "space-y-3"}>
+                    {(mentor.current_company || mentor.current_city) && (
+                      <p className="text-sm text-muted-foreground">
+                        {[mentor.current_company, mentor.current_city]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
-                      <div className="flex flex-wrap gap-1">
-                        {mentor.expertise_areas.map((area, idx) => {
-                          return (
-                            <Badge key={idx} variant="primary">
-                              {area}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Contact Links */}
-                  <div className="flex flex-wrap gap-2 pt-3 border-t border-border">
-                    {mentor.contact_email && (
-                      <a
-                        href={`mailto:${mentor.contact_email}`}
-                        className="text-sm text-org-primary hover:underline flex items-center gap-1"
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                          />
-                        </svg>
-                        Email
-                      </a>
+                    {mentor.expertise_areas && mentor.expertise_areas.length > 0 && (
+                      <div>
+                        <div className="flex flex-wrap gap-1">
+                          {mentor.expertise_areas.map((area, idx) => {
+                            return (
+                              <Badge key={idx} variant="primary">
+                                {area}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
-                    {mentor.contact_linkedin && (
-                      <a
-                        href={mentor.contact_linkedin.startsWith("http") ? mentor.contact_linkedin : `https://${mentor.contact_linkedin}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-org-primary hover:underline flex items-center gap-1"
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
-                        </svg>
-                        LinkedIn
-                      </a>
-                    )}
-                    {mentor.contact_phone && (
-                      <a
-                        href={`tel:${mentor.contact_phone}`}
-                        className="text-sm text-org-primary hover:underline flex items-center gap-1"
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                          />
-                        </svg>
-                        Phone
-                      </a>
+
+                    {mentor.bio && (
+                      <p className="text-sm line-clamp-2">{mentor.bio}</p>
                     )}
                   </div>
+
+                  {hasContactLinks && (
+                    <div className="mt-4 flex flex-wrap gap-3 border-t border-border pt-3 sm:absolute sm:inset-x-0 sm:bottom-0 sm:mt-0 sm:translate-y-full sm:bg-[var(--card)] sm:px-4 sm:py-3 sm:transition-transform sm:duration-200 sm:group-hover:translate-y-0 sm:focus-within:translate-y-0">
+                      {mentor.contact_email && (
+                        <a
+                          href={`mailto:${mentor.contact_email}`}
+                          className="text-sm text-org-primary hover:underline flex items-center gap-1"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                            />
+                          </svg>
+                          {tCommon("email")}
+                        </a>
+                      )}
+                      {mentor.contact_linkedin && (
+                        <a
+                          href={mentor.contact_linkedin.startsWith("http") ? mentor.contact_linkedin : `https://${mentor.contact_linkedin}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-org-primary hover:underline flex items-center gap-1"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+                          </svg>
+                          {tMentorship("linkedin")}
+                        </a>
+                      )}
+                      {mentor.contact_phone && (
+                        <a
+                          href={`tel:${mentor.contact_phone}`}
+                          className="text-sm text-org-primary hover:underline flex items-center gap-1"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                            />
+                          </svg>
+                          {tMentorship("phone")}
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </Card>
               );
             })}

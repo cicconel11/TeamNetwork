@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, Button, Card, EmptyState, Input } from "@/components/ui";
 import { GoogleCalendarSyncPanel } from "@/components/settings/GoogleCalendarSyncPanel";
+import { OutlookCalendarSyncPanel } from "@/components/settings/OutlookCalendarSyncPanel";
 import { useGoogleCalendarSync } from "@/hooks/useGoogleCalendarSync";
+import { useOutlookCalendarSync } from "@/hooks/useOutlookCalendarSync";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { AcademicSchedule } from "@/types/database";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -97,6 +99,9 @@ export function MyCalendarTab({
 }: MyCalendarTabProps) {
   // Google Calendar Sync hook
   const gcal = useGoogleCalendarSync({ orgId, orgSlug });
+
+  // Outlook Calendar Sync hook
+  const ocal = useOutlookCalendarSync({ orgId, orgSlug });
 
   // Personal calendar feed state
   const [feedUrl, setFeedUrl] = useState("");
@@ -319,7 +324,43 @@ export function MyCalendarTab({
         />
       </section>
 
-      {/* Section 1b: Import Google Calendar Events */}
+      {/* Section 1b: Outlook Calendar Sync */}
+      <section>
+        <h2 className="text-lg font-semibold text-foreground mb-4">Outlook Calendar Sync</h2>
+
+        {ocal.oauthStatus === "connected" && (
+          <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
+            Outlook Calendar connected successfully! Your events will now sync automatically.
+          </div>
+        )}
+        {ocal.oauthError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
+            {ocal.oauthErrorMessage || "Failed to connect Outlook Calendar. Please try again."}
+          </div>
+        )}
+
+        <OutlookCalendarSyncPanel
+          orgName={orgName}
+          organizationId={orgId}
+          connection={ocal.connection}
+          isConnected={ocal.isConnected}
+          connectionLoading={ocal.connectionLoading}
+          calendars={ocal.calendars}
+          calendarsLoading={ocal.calendarsLoading}
+          targetCalendarId={ocal.targetCalendarId}
+          preferences={ocal.preferences}
+          preferencesLoading={ocal.preferencesLoading}
+          reconnectRequired={ocal.reconnectRequired}
+          onConnect={ocal.connect}
+          onDisconnect={ocal.disconnect}
+          onSync={ocal.syncNow}
+          onReconnect={ocal.reconnect}
+          onTargetCalendarChange={ocal.setTargetCalendar}
+          onPreferenceChange={ocal.updatePreferences}
+        />
+      </section>
+
+      {/* Section 1c: Import Google Calendar Events */}
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-4">Import Google Calendar Events</h2>
         <Card className="p-4 space-y-4">

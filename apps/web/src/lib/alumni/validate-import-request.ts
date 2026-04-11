@@ -5,6 +5,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { baseSchemas } from "@/lib/security/validation";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { getAlumniCapacitySnapshot } from "@/lib/alumni/capacity";
+import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { LinkedInImportCapacitySnapshot } from "@/lib/alumni/linkedin-import";
@@ -107,6 +108,12 @@ export async function validateAlumniImportRequest(
 
   if (membershipResult.value?.role !== "admin") {
     return { ok: false, response: respond({ error: "Forbidden" }, 403) };
+  }
+
+  // Read-only org guard — block mutations on frozen orgs
+  const { isReadOnly } = await checkOrgReadOnly(organizationId);
+  if (isReadOnly) {
+    return { ok: false, response: respond(readOnlyResponse(), 403) };
   }
 
   if (capacityResult.status === "rejected") {

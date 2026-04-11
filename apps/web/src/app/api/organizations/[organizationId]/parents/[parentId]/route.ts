@@ -1,80 +1,17 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { editParentSchema } from "@/lib/schemas";
 import { getOrgMemberRole } from "@/lib/parents/auth";
-import { getUserFromRequest } from "@/lib/supabase/get-user-from-request";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 interface RouteParams {
   params: Promise<{ organizationId: string; parentId: string }>;
-}
-
-export async function GET(req: Request, { params }: RouteParams) {
-  const { organizationId, parentId } = await params;
-
-  const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
-  if (!orgIdParsed.success) {
-    return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
-  }
-  const parentIdParsed = baseSchemas.uuid.safeParse(parentId);
-  if (!parentIdParsed.success) {
-    return NextResponse.json({ error: "Invalid parent id" }, { status: 400 });
-  }
-
-  const { user, supabase } = await getUserFromRequest(req as any);
-
-  const rateLimit = checkRateLimit(req, {
-    userId: user?.id ?? null,
-    feature: "org parents detail",
-    limitPerIp: 60,
-    limitPerUser: 40,
-  });
-
-  if (!rateLimit.ok) {
-    return buildRateLimitResponse(rateLimit);
-  }
-
-  const respond = (payload: unknown, status = 200) =>
-    NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const untypedService = serviceSupabase as any;
-
-  const [rawRole, { data: parent, error: fetchError }] = await Promise.all([
-    getOrgMemberRole(supabase, user.id, organizationId),
-    untypedService
-      .from("parents")
-      .select("id,user_id,first_name,last_name,email,phone_number,photo_url,linkedin_url,student_name,relationship,notes,created_at,updated_at")
-      .eq("id", parentId)
-      .eq("organization_id", organizationId)
-      .is("deleted_at", null)
-      .single(),
-  ]);
-
-  const canRead =
-    rawRole === "admin" ||
-    rawRole === "active_member" ||
-    rawRole === "member" ||
-    rawRole === "parent";
-
-  if (!canRead) {
-    return respond({ error: "Forbidden" }, 403);
-  }
-
-  if (fetchError || !parent) {
-    return respond({ error: "Parent not found" }, 404);
-  }
-
-  return respond({ parent });
 }
 
 export async function PATCH(req: Request, { params }: RouteParams) {
@@ -89,7 +26,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid parent id" }, { status: 400 });
   }
 
-  const { user, supabase } = await getUserFromRequest(req as any);
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const rateLimit = checkRateLimit(req, {
     userId: user?.id ?? null,
@@ -200,7 +138,8 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid parent id" }, { status: 400 });
   }
 
-  const { user, supabase } = await getUserFromRequest(req as any);
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const rateLimit = checkRateLimit(req, {
     userId: user?.id ?? null,

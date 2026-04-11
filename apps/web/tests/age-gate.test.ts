@@ -89,9 +89,8 @@ describe("Age Gate", () => {
 
       const age = calculateAge(birthDate);
 
-      // If today is before Jan 1 (only possible if we're in the same year, which we're not)
-      // Otherwise, should be 20
-      const expectedAge = today.getMonth() === 0 && today.getDate() >= 1 ? 20 : 19;
+      // Jan 1 birthdays have already happened for any date in the same calendar year.
+      const expectedAge = 20;
       assert.strictEqual(age, expectedAge, "Jan 1 birthday should be calculated correctly");
     });
 

@@ -1,25 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-
-type UnifiedEvent = {
-  id: string;
-  title: string;
-  startAt: string; // ISO timestamp
-  endAt: string | null;
-  allDay: boolean;
-  location: string | null;
-  sourceType: "event" | "schedule" | "feed" | "class";
-  sourceName: string;
-  badges: string[];
-  eventId?: string; // Link to /events/[id] for manual events
-  color?: string;
-};
+import {
+  buildUnifiedCalendarDateRange,
+  buildUnifiedCalendarPastDateRange,
+  getUnifiedEventFloatingDateKey,
+  type UnifiedEvent,
+} from "@/lib/calendar/unified-events";
+import type { CalendarEventTimeframe } from "@/lib/calendar/routes";
+import { calendarNewEventPath, calendarSourcesPath } from "@/lib/calendar/routes";
+import { formatCalendarEventTime } from "@/lib/calendar/event-segments";
+import { getUnifiedEventHref } from "@/lib/calendar/navigation";
 
 type UnifiedEventFeedProps = {
   orgId: string;
   orgSlug: string;
+  initialEvents?: UnifiedEvent[];
+  timeZone?: string;
+  timeframe?: CalendarEventTimeframe;
 };
 
 type SourceFilterKey = "events" | "schedules" | "feeds" | "classes";
@@ -40,7 +39,7 @@ const SOURCE_FILTERS: {
   {
     key: "events",
     label: "Team Events",
-    colorClass: "bg-org-primary text-white border-org-primary/50",
+    colorClass: "bg-org-primary text-org-primary-foreground border-org-primary/50",
   },
   {
     key: "schedules",
@@ -64,7 +63,7 @@ function getSourceColors(sourceType: string) {
     case "event":
       return {
         dot: "bg-org-primary",
-        badge: "bg-org-primary text-white",
+        badge: "bg-org-primary text-org-primary-foreground",
       };
     case "schedule":
       return {
@@ -86,50 +85,28 @@ function getSourceColors(sourceType: string) {
   }
 }
 
-function formatEventTime(event: UnifiedEvent): string {
-  if (event.allDay) {
-    return "All day";
-  }
-
-  const start = new Date(event.startAt);
-  const timeOpts: Intl.DateTimeFormatOptions = {
-    hour: "numeric",
-    minute: "2-digit",
-  };
-
-  const startTime = start.toLocaleTimeString("en-US", timeOpts);
-
-  if (!event.endAt) {
-    return startTime;
-  }
-
-  const end = new Date(event.endAt);
-
-  // Same day: "11:30 AM – 1:00 PM"
-  if (start.toDateString() === end.toDateString()) {
-    const endTime = end.toLocaleTimeString("en-US", timeOpts);
-    return `${startTime} – ${endTime}`;
-  }
-
-  // Multi-day: "Feb 12, 11:30 AM – Feb 13, 2:00 PM"
-  const dateTimeOpts: Intl.DateTimeFormatOptions = {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  };
-  return `${start.toLocaleDateString("en-US", dateTimeOpts)} – ${end.toLocaleDateString("en-US", dateTimeOpts)}`;
-}
-
-function groupEventsByDate(events: UnifiedEvent[]): Map<string, UnifiedEvent[]> {
+function groupEventsByDate(events: UnifiedEvent[], timeZone?: string): Map<string, UnifiedEvent[]> {
   const grouped = new Map<string, UnifiedEvent[]>();
 
   events.forEach((event) => {
-    const dateKey = new Date(event.startAt).toLocaleDateString("en-US", {
+    const opts: Intl.DateTimeFormatOptions = {
       weekday: "long",
       month: "short",
       day: "numeric",
-    });
+    };
+    const floatingDateKey = getUnifiedEventFloatingDateKey(event);
+    const floatingMatch = floatingDateKey ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(floatingDateKey) : null;
+    let dateKey: string;
+
+    if (floatingMatch) {
+      const [, year, month, day] = floatingMatch;
+      const floatingDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12));
+      dateKey = floatingDate.toLocaleDateString("en-US", { ...opts, timeZone: "UTC" });
+    } else {
+      if (timeZone) opts.timeZone = timeZone;
+      dateKey = new Date(event.startAt).toLocaleDateString("en-US", opts);
+    }
+
     const existing = grouped.get(dateKey) || [];
     existing.push(event);
     grouped.set(dateKey, existing);
@@ -145,20 +122,16 @@ function getBadgeColor(badgeText: string): string {
   return "bg-muted text-muted-foreground";
 }
 
-export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
-  const [events, setEvents] = useState<UnifiedEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone, timeframe = "upcoming" }: UnifiedEventFeedProps) {
+  const hasInitialData = initialEvents !== undefined;
+  const [events, setEvents] = useState<UnifiedEvent[]>(initialEvents ?? []);
+  const [loading, setLoading] = useState(!hasInitialData);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
 
   const dateRange = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setDate(end.getDate() + 365);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }, []);
+    return timeframe === "past" ? buildUnifiedCalendarPastDateRange() : buildUnifiedCalendarDateRange();
+  }, [timeframe]);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -191,9 +164,16 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
     }
   }, [activeFilter, dateRange, orgId]);
 
+  const initialMountRef = useRef(hasInitialData);
+
   useEffect(() => {
+    if (initialMountRef.current && activeFilter === "all") {
+      initialMountRef.current = false;
+      return;
+    }
+    initialMountRef.current = false;
     fetchEvents();
-  }, [fetchEvents]);
+  }, [fetchEvents]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -212,19 +192,20 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
     setActiveFilter(key);
   };
 
-  const groupedEvents = useMemo(() => groupEventsByDate(events), [events]);
+  const groupedEvents = useMemo(() => groupEventsByDate(events, timeZone), [events, timeZone]);
 
   const renderEmptyState = () => {
     const hasEventsSource = activeFilter === "all" || activeFilter === "events";
     const hasSchedulesSource = activeFilter === "all" || activeFilter === "schedules";
+    const emptyMessage = timeframe === "past" ? "No past events" : "No upcoming events";
 
     return (
       <div className="text-center py-12 space-y-4">
-        <p className="text-sm text-muted-foreground">No upcoming events</p>
+        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {hasEventsSource && (
             <Link
-              href={`/${orgSlug}/events/new`}
+              href={calendarNewEventPath(orgSlug)}
               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
             >
               Create your first event
@@ -232,7 +213,7 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
           )}
           {hasSchedulesSource && (
             <Link
-              href={`/${orgSlug}/calendar/sources`}
+              href={calendarSourcesPath(orgSlug)}
               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
             >
               Connect a schedule source
@@ -245,7 +226,7 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
 
   const renderEventRow = (event: UnifiedEvent) => {
     const { dot, badge } = getSourceColors(event.sourceType);
-    const formattedTime = formatEventTime(event);
+    const formattedTime = formatCalendarEventTime(event, "en-US", timeZone);
 
     const rowContent = (
       <>
@@ -280,13 +261,14 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
       </>
     );
 
-    const className = "flex items-start gap-3 py-3";
+    const className = "flex items-start gap-3 py-3.5";
+    const href = getUnifiedEventHref(orgSlug, event);
 
-    if (event.sourceType === "event" && event.eventId) {
+    if (href) {
       return (
         <Link
           key={event.id}
-          href={`/${orgSlug}/events/${event.eventId}`}
+          href={href}
           className={`${className} hover:bg-accent/50 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
         >
           {rowContent}
@@ -341,11 +323,11 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
       ) : events.length === 0 ? (
         renderEmptyState()
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {Array.from(groupedEvents.entries()).map(([dateLabel, dayEvents]) => (
             <div key={dateLabel}>
               <h3
-                className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 text-sm font-semibold text-foreground mb-1 pb-1 border-b border-border/40"
+                className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-3 pb-2 mb-1 border-b border-border/20"
                 style={{ textWrap: "balance" } as React.CSSProperties}
               >
                 {dateLabel}

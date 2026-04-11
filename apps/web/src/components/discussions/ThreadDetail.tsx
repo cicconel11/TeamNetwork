@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import type { Database } from "@/types/database";
@@ -23,14 +24,13 @@ interface ThreadDetailProps {
 }
 
 function formatDateTime(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const d = new Date(dateString);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+  return `${get("month")} ${get("day")}, ${get("year")}, ${get("hour")}:${get("minute")} ${get("dayPeriod")}`;
 }
 
 export function ThreadDetail({ thread, replies, isAdmin, orgSlug }: ThreadDetailProps) {
@@ -100,9 +100,11 @@ export function ThreadDetail({ thread, replies, isAdmin, orgSlug }: ThreadDetail
       <Card className="p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-xl font-bold text-foreground mb-2">{thread.title}</h2>
+            <UserContent as="h2" className="text-xl font-bold text-foreground mb-2">
+              {thread.title}
+            </UserContent>
             <div className="text-sm text-muted-foreground">
-              Posted by {thread.author?.name || "Unknown"} on {formatDateTime(thread.created_at)}
+              Posted by <UserContent>{thread.author?.name || "Unknown"}</UserContent> on {formatDateTime(thread.created_at)}
             </div>
           </div>
           {isAdmin && (
@@ -120,7 +122,9 @@ export function ThreadDetail({ thread, replies, isAdmin, orgSlug }: ThreadDetail
           )}
         </div>
         <div className="prose max-w-none">
-          <p className="whitespace-pre-wrap text-foreground">{thread.body}</p>
+          <UserContent as="p" className="whitespace-pre-wrap text-foreground">
+            {thread.body}
+          </UserContent>
         </div>
       </Card>
 
@@ -133,10 +137,12 @@ export function ThreadDetail({ thread, replies, isAdmin, orgSlug }: ThreadDetail
           {replies.map((reply) => (
             <Card key={reply.id} className="p-4">
               <div className="text-sm text-muted-foreground mb-2">
-                {reply.author?.name || "Unknown"} • {formatDateTime(reply.created_at)}
+                <UserContent>{reply.author?.name || "Unknown"}</UserContent> • {formatDateTime(reply.created_at)}
               </div>
               <div className="prose max-w-none">
-                <p className="whitespace-pre-wrap text-foreground">{reply.body}</p>
+                <UserContent as="p" className="whitespace-pre-wrap text-foreground">
+                  {reply.body}
+                </UserContent>
               </div>
             </Card>
           ))}

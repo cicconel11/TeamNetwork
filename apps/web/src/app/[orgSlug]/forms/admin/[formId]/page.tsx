@@ -39,6 +39,7 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
     .from("form_submissions")
     .select("*, users(name, email)")
     .eq("form_id", formId)
+    .is("deleted_at", null)
     .order("submitted_at", { ascending: false });
 
   if (submissionsError) {
@@ -94,7 +95,7 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
               </thead>
               <tbody>
                 {typedSubmissions.map((submission) => {
-                  const responses = (submission.responses || {}) as Record<string, unknown>;
+                  const responses = ((submission as FormSubmission & { data?: unknown }).data || {}) as Record<string, unknown>;
                   return (
                     <tr key={submission.id} className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer">
                       <td className="p-3 text-foreground">
@@ -130,7 +131,7 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
 
       <NonSubmitters
         orgId={orgCtx.organization.id}
-        submitterUserIds={typedSubmissions.map((s) => s.user_id)}
+        submitterUserIds={typedSubmissions.map((s) => s.user_id).filter((id): id is string => id !== null)}
       />
     </div>
   );

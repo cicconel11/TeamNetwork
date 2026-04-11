@@ -263,14 +263,15 @@ export async function storeCalendarConnection(
         .from("user_calendar_connections")
         .upsert({
             user_id: userId,
-            google_email: tokens.email,
+            provider: "google",
+            provider_email: tokens.email,
             access_token_encrypted: encryptedAccessToken,
             refresh_token_encrypted: encryptedRefreshToken,
             token_expires_at: tokens.expiresAt.toISOString(),
             status: "connected",
             last_sync_at: new Date().toISOString(),
         }, {
-            onConflict: "user_id",
+            onConflict: "user_id,provider",
         });
 
     if (error) {
@@ -292,18 +293,19 @@ export async function getCalendarConnection(
     userId: string
 ): Promise<{
     id: string;
-    googleEmail: string;
+    providerEmail: string;
     accessToken: string;
     refreshToken: string;
     expiresAt: Date;
     status: "connected" | "disconnected" | "error";
-    targetCalendarId: string;
+    targetCalendarId: string | null;
     lastSyncAt: Date | null;
 } | null> {
     const { data, error } = await supabase
         .from("user_calendar_connections")
         .select("*")
         .eq("user_id", userId)
+        .eq("provider", "google")
         .maybeSingle();
 
     if (error || !data) {
@@ -313,7 +315,7 @@ export async function getCalendarConnection(
     try {
         return {
             id: data.id,
-            googleEmail: data.google_email,
+            providerEmail: data.provider_email,
             accessToken: decryptToken(data.access_token_encrypted),
             refreshToken: decryptToken(data.refresh_token_encrypted),
             expiresAt: new Date(data.token_expires_at),
@@ -341,7 +343,8 @@ export async function updateConnectionStatus(
     await supabase
         .from("user_calendar_connections")
         .update({ status })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("provider", "google");
 }
 
 /**
@@ -366,7 +369,8 @@ export async function updateStoredTokens(
             token_expires_at: expiresAt.toISOString(),
             status: "connected",
         })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("provider", "google");
 }
 
 /**
@@ -381,7 +385,8 @@ export async function removeCalendarConnection(
     await supabase
         .from("user_calendar_connections")
         .delete()
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("provider", "google");
 }
 
 
@@ -467,11 +472,12 @@ export async function disconnectCalendar(
     // Remove the connection from the database regardless of revocation result
     await removeCalendarConnection(supabase, userId);
 
-    // Also clean up any event calendar entries for this user
+    // Also clean up any event calendar entries for this user (Google only)
     await supabase
         .from("event_calendar_entries")
         .delete()
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("provider", "google");
 
     // Clean up personal Google Calendar feeds for this user (cascades to calendar_events)
     await supabase

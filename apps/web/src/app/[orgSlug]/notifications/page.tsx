@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { Button, Card, Badge, EmptyState, SoftDeleteButton } from "@/components/ui";
-import { isOrgAdmin } from "@/lib/auth";
+import { getOrgContext } from "@/lib/auth/roles";
 
 interface NotificationsPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -11,24 +11,15 @@ interface NotificationsPageProps {
 
 export default async function NotificationsPage({ params }: NotificationsPageProps) {
   const { orgSlug } = await params;
-  const supabase = await createClient();
 
-  // Get org
-  const { data: orgs, error: orgError } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .limit(1);
+  const { organization: org, isAdmin } = await getOrgContext(orgSlug);
+  if (!org) return notFound();
 
-  const org = orgs?.[0];
-
-  if (!org || orgError) notFound();
-
-  // Check if user is admin
-  const adminCheck = await isOrgAdmin(org.id);
-  if (!adminCheck) {
+  if (!isAdmin) {
     redirect(`/${orgSlug}`);
   }
+
+  const supabase = await createClient();
 
   // Fetch notifications
   const { data: notifications } = await supabase

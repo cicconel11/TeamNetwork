@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { ScheduleFileUpload } from "./ScheduleFileUpload";
 import { ScheduleFilesList } from "./ScheduleFilesList";
-import type { ScheduleFile, User } from "@teammeet/types";
+import type { ScheduleFile, User } from "@/types/database";
 
 interface ScheduleFilesSectionProps {
   orgId: string;
@@ -40,7 +40,7 @@ export function ScheduleFilesSection({
             onClick={() => setActiveTab("my")}
             className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "my"
-                ? "bg-org-primary text-white"
+                ? "bg-org-primary text-org-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -50,7 +50,7 @@ export function ScheduleFilesSection({
             onClick={() => setActiveTab("all")}
             className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "all"
-                ? "bg-org-primary text-white"
+                ? "bg-org-primary text-org-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Form, FormDocument } from "@/types/database";
 import { FormsAdminView } from "@/components/forms/FormsAdminView";
@@ -21,7 +22,11 @@ export default async function FormsPage({ params }: FormsPageProps) {
 
   const orgId = orgCtx.organization.id;
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/forms", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/forms", navConfig, t, locale);
+  const tForms = await getTranslations("forms");
+  const tCommon = await getTranslations("common");
 
   if (orgCtx.isAdmin) {
     // Admin view: fetch ALL forms (including inactive)
@@ -39,7 +44,8 @@ export default async function FormsPage({ params }: FormsPageProps) {
     const { data: allSubmissions, error: subsError } = await supabase
       .from("form_submissions")
       .select("form_id, submitted_at")
-      .eq("organization_id", orgId);
+      .eq("organization_id", orgId)
+      .is("deleted_at", null);
 
     if (subsError)
       console.error("[forms] Failed to fetch submissions:", subsError.message);
@@ -80,7 +86,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
       <div className="space-y-6 animate-fade-in">
         <PageHeader
           title={pageLabel}
-          description={`Manage organization ${pageLabel.toLowerCase()}`}
+          description={tForms("manageDescription", { label: pageLabel.toLowerCase() })}
           actions={
             <div className="flex items-center gap-2">
               <Link href={`/${orgSlug}/forms/admin/documents`}>
@@ -98,7 +104,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
                       d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
                     />
                   </svg>
-                  Document Forms
+                  {tForms("documentForms")}
                 </Button>
               </Link>
               <Link href={`/${orgSlug}/forms/admin/new`}>
@@ -116,7 +122,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
                       d="M12 4.5v15m7.5-7.5h-15"
                     />
                   </svg>
-                  Create Form
+                  {tForms("createForm")}
                 </Button>
               </Link>
             </div>
@@ -135,11 +141,11 @@ export default async function FormsPage({ params }: FormsPageProps) {
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-foreground">
-                Document Forms
+                {tForms("documentForms")}
               </h2>
               <Link href={`/${orgSlug}/forms/documents`}>
                 <Button variant="secondary" size="sm">
-                  View All
+                  {tCommon("viewAll")}
                 </Button>
               </Link>
             </div>
@@ -169,7 +175,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
                         href={`/${orgSlug}/forms/admin/documents/${doc.id}`}
                       >
                         <Button size="sm" variant="secondary">
-                          Manage
+                          {tCommon("manage")}
                         </Button>
                       </Link>
                     </div>
@@ -210,7 +216,8 @@ export default async function FormsPage({ params }: FormsPageProps) {
     .from("form_submissions")
     .select("form_id")
     .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId);
+    .eq("user_id", orgCtx.userId)
+    .is("deleted_at", null);
 
   if (subsError)
     console.error("[forms] Failed to fetch submissions:", subsError.message);
@@ -219,7 +226,8 @@ export default async function FormsPage({ params }: FormsPageProps) {
     .from("form_document_submissions")
     .select("document_id")
     .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId);
+    .eq("user_id", orgCtx.userId)
+    .is("deleted_at", null);
 
   if (docSubsError)
     console.error(
@@ -237,7 +245,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={pageLabel}
-        description={`View and fill out organization ${pageLabel.toLowerCase()}`}
+        description={tForms("viewDescription", { label: pageLabel.toLowerCase() })}
       />
 
       {forms && forms.length > 0 ? (
@@ -251,7 +259,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
                     <h3 className="font-semibold text-foreground">
                       {form.title}
                     </h3>
-                    {isSubmitted && <Badge variant="success">Submitted</Badge>}
+                    {isSubmitted && <Badge variant="success">{tCommon("submitted")}</Badge>}
                   </div>
                   {form.description && (
                     <p className="text-sm text-muted-foreground line-clamp-2">
@@ -267,7 +275,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
                         size="sm"
                         variant={isSubmitted ? "secondary" : "primary"}
                       >
-                        {isSubmitted ? "View / Edit" : "Fill Out"}
+                        {isSubmitted ? tForms("viewEdit") : tForms("fillOut")}
                       </Button>
                     </Link>
                   </div>
@@ -279,8 +287,8 @@ export default async function FormsPage({ params }: FormsPageProps) {
       ) : (
         <Card>
           <EmptyState
-            title={`No ${pageLabel.toLowerCase()} available`}
-            description={`${pageLabel} will appear here when available.`}
+            title={tForms("noFormsAvailable", { label: pageLabel.toLowerCase() })}
+            description={tForms("formsWillAppear", { label: pageLabel })}
           />
         </Card>
       )}
@@ -290,11 +298,11 @@ export default async function FormsPage({ params }: FormsPageProps) {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">
-              Document Forms
+              {tForms("documentForms")}
             </h2>
             <Link href={`/${orgSlug}/forms/documents`}>
               <Button variant="secondary" size="sm">
-                View All
+                {tCommon("viewAll")}
               </Button>
             </Link>
           </div>
@@ -318,7 +326,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
                         </h3>
                       </div>
                       {isSubmitted && (
-                        <Badge variant="success">Submitted</Badge>
+                        <Badge variant="success">{tCommon("submitted")}</Badge>
                       )}
                     </div>
                     {doc.description && (
@@ -333,8 +341,8 @@ export default async function FormsPage({ params }: FormsPageProps) {
                           variant={isSubmitted ? "secondary" : "primary"}
                         >
                           {isSubmitted
-                            ? "View / Resubmit"
-                            : "Download & Submit"}
+                            ? tForms("viewResubmit")
+                            : tForms("downloadSubmit")}
                         </Button>
                       </Link>
                     </div>

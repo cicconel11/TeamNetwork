@@ -1,8 +1,9 @@
 import { GALLERY_ALLOWED_MIME_TYPES } from "@/lib/schemas/media";
 
-const GALLERY_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
-const GALLERY_VIDEO_MAX_BYTES = 100 * 1024 * 1024; // 100MB
-const MAX_BATCH_SIZE = 20;
+export const GALLERY_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+export const GALLERY_RAW_IMAGE_MAX_BYTES = 50 * 1024 * 1024; // 50MB
+export const GALLERY_VIDEO_MAX_BYTES = 100 * 1024 * 1024; // 100MB
+const MAX_BATCH_SIZE = 100;
 
 const HEIC_EXTENSIONS = new Set([".heic", ".heif"]);
 
@@ -12,10 +13,20 @@ interface ValidationResult {
 }
 
 /**
- * Validate a file for gallery upload.
- * Checks MIME type (with HEIC extension fallback) and file size.
+ * Raw-time validation for a gallery upload candidate, run BEFORE any
+ * client-side normalization (`prepareImageUpload`).
+ *
+ * Responsibilities:
+ *  - mime type allowlist (with HEIC extension fallback)
+ *  - explicit HEIC rejection (no browser conversion support yet)
+ *  - empty-file check
+ *  - video raw-size cap (100 MB) — videos are uploaded as-is
+ *
+ * Image size is intentionally NOT checked here: iPhone JPEGs can be 14 MB raw
+ * but compress to well under 1 MB after `prepareImageUpload`. Use
+ * `validateGalleryPreparedSize` after prep for images.
  */
-export function validateGalleryFile(file: File): ValidationResult {
+export function validateGalleryRawFile(file: File): ValidationResult {
   let mimeType = file.type;
 
   // HEIC fallback: some browsers report empty file.type for HEIC files
@@ -33,13 +44,10 @@ export function validateGalleryFile(file: File): ValidationResult {
     };
   }
 
-  const isImage = mimeType.startsWith("image/");
-  const maxBytes = isImage ? GALLERY_IMAGE_MAX_BYTES : GALLERY_VIDEO_MAX_BYTES;
-
-  if (file.size > maxBytes) {
+  if (mimeType === "image/heic") {
     return {
       valid: false,
-      error: isImage ? "Images must be under 10 MB." : "Videos must be under 100 MB.",
+      error: "HEIC uploads are not supported in the browser yet. Convert to JPG, PNG, or WebP first.",
     };
   }
 
@@ -47,6 +55,36 @@ export function validateGalleryFile(file: File): ValidationResult {
     return { valid: false, error: "File is empty." };
   }
 
+  if (mimeType.startsWith("image/") && file.size > GALLERY_RAW_IMAGE_MAX_BYTES) {
+    return { valid: false, error: "Images must be under 50 MB before upload." };
+  }
+
+  // Videos are uploaded as-is, so cap the raw size here. Images are checked
+  // post-prep via `validateGalleryPreparedSize`.
+  if (!mimeType.startsWith("image/") && file.size > GALLERY_VIDEO_MAX_BYTES) {
+    return { valid: false, error: "Videos must be under 100 MB." };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Post-prep validation for an image that has already been run through
+ * `prepareImageUpload`. Enforces the 10 MB image cap against the
+ * normalized bytes (what the server will actually store).
+ *
+ * No-op for non-image mime types (video caps are enforced raw-time).
+ */
+export function validateGalleryPreparedSize(
+  preparedBytes: number,
+  mimeType: string,
+): ValidationResult {
+  if (!mimeType.startsWith("image/")) {
+    return { valid: true };
+  }
+  if (preparedBytes > GALLERY_IMAGE_MAX_BYTES) {
+    return { valid: false, error: "Images must be under 10 MB." };
+  }
   return { valid: true };
 }
 
@@ -59,6 +97,12 @@ export function deriveDefaultTitle(fileName: string): string {
 
 /**
  * Detect duplicate files by matching name + size against existing entries.
+ *
+ * IMPORTANT: callers must pass the RAW file's name and size, and `existing`
+ * must be built from the raw (`originalName`/`originalSize`) fields — not
+ * from post-prep `fileName`/`fileSize`. `prepareImageUpload` rewrites
+ * `.jpeg` → `.jpg` and shrinks the byte count, so keying dedupe off post-prep
+ * values silently breaks cross-batch dedupe.
  */
 export function detectDuplicate(
   file: File,

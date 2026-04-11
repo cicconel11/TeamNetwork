@@ -1,6 +1,5 @@
 "use client";
 
-import type { ComponentType } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -129,7 +128,7 @@ interface EnterpriseSidebarProps {
 interface NavItem {
   href: string;
   label: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string }>;
   requiresBilling?: boolean;
 }
 

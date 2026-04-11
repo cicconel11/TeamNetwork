@@ -12,6 +12,7 @@ export type OrgMetadata = {
   createdBy: string | null;
   baseInterval: SubscriptionInterval;
   alumniBucket: AlumniBucket;
+  isTrial: boolean;
 };
 
 type OrgProvisionerDeps = {
@@ -42,6 +43,7 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
     createdBy: null,
     baseInterval: normalizeInterval((metadata?.base_interval as string | undefined) ?? null),
     alumniBucket: normalizeBucket((metadata?.alumni_bucket as string | undefined) ?? null),
+    isTrial: metadata?.is_trial === "true",
   });
 
   const resolveCreatorFromPaymentAttempt = async (
@@ -49,11 +51,15 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
   ): Promise<string | null> => {
     if (!paymentAttemptId) return null;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("payment_attempts")
       .select("user_id")
       .eq("id", paymentAttemptId)
       .maybeSingle();
+
+    if (error) {
+      throw new Error(`[resolveCreatorFromPaymentAttempt] DB query failed: ${error.message}`);
+    }
 
     return data?.user_id ?? null;
   };
@@ -149,16 +155,21 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
     const alumniBucket = metadata.alumniBucket || "none";
     const alumniPlanInterval = alumniBucket === "none" || alumniBucket === "5000+" ? null : baseInterval;
 
-    const { data: existing } = await orgSubs()
+    const { data: existing, error: existingError } = await orgSubs()
       .select("id")
       .eq("organization_id", orgId)
       .maybeSingle();
+
+    if (existingError) {
+      throw new Error(`[ensureSubscriptionSeed] Existence check failed: ${existingError.message}`);
+    }
 
     if (existing?.id) {
       const payload = {
         base_plan_interval: baseInterval,
         alumni_bucket: alumniBucket,
         alumni_plan_interval: alumniPlanInterval,
+        is_trial: metadata.isTrial,
         status: "pending",
         updated_at: new Date().toISOString(),
       } satisfies Database["public"]["Tables"]["organization_subscriptions"]["Update"];
@@ -175,6 +186,7 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
         base_plan_interval: baseInterval,
         alumni_bucket: alumniBucket,
         alumni_plan_interval: alumniPlanInterval,
+        is_trial: metadata.isTrial,
         status: "pending",
       } satisfies Database["public"]["Tables"]["organization_subscriptions"]["Insert"];
 

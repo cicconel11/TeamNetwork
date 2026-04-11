@@ -76,7 +76,7 @@ export type ConsentUpdateInput = z.infer<typeof consentUpdateSchema>;
 const analyticsCommonFieldsSchema = z.object({
   org_id: z.string().uuid().nullable().optional(),
   session_id: z.string().min(1).max(100),
-  client_day: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  client_day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   platform: z.enum(["web", "ios", "android", "desktop"]),
   device_class: z.enum(["mobile", "tablet", "desktop"]),
   app_version: z.string().max(50),
@@ -98,30 +98,10 @@ const navClickPayloadSchema = analyticsCommonFieldsSchema.extend({
   position: z.number().int().nonnegative(),
 });
 
-const ctaClickPayloadSchema = analyticsCommonFieldsSchema.extend({
-  cta: z.string().max(200),
-  feature: z.string().max(200),
-  surface: z.string().max(100),
-  position: z.number().int().nonnegative(),
-});
-
 const pageDwellPayloadSchema = analyticsCommonFieldsSchema.extend({
   screen: z.string().max(200),
   feature: z.string().max(200),
   dwell_bucket: z.enum(["0-5s", "6-15s", "16-30s", "31-60s", "61-180s", "180s+"]),
-});
-
-const signupPayloadSchema = analyticsCommonFieldsSchema.extend({
-  signup_method: z.enum(["magic_link", "oauth_google", "oauth_apple", "invite_code"]),
-});
-
-const inviteCodeSubmitPayloadSchema = analyticsCommonFieldsSchema.extend({
-  result: z.enum(["success", "invalid", "expired", "already_used"]),
-});
-
-const onboardingStepPayloadSchema = analyticsCommonFieldsSchema.extend({
-  step: z.string().max(100),
-  result: z.string().max(50).optional(),
 });
 
 const directoryTypeSchema = z.enum(["active_members", "alumni", "parents"]);
@@ -134,11 +114,6 @@ const directoryFilterPayloadSchema = analyticsCommonFieldsSchema.extend({
   directory_type: directoryTypeSchema,
   filter_keys: z.array(z.string().max(50)).max(50),
   filters_count: z.number().int().nonnegative(),
-});
-
-const directorySortPayloadSchema = analyticsCommonFieldsSchema.extend({
-  directory_type: directoryTypeSchema,
-  sort_key: z.string().max(50),
 });
 
 const profileCardPayloadSchema = analyticsCommonFieldsSchema.extend({
@@ -158,44 +133,6 @@ const eventOpenPayloadSchema = analyticsCommonFieldsSchema.extend({
 const rsvpUpdatePayloadSchema = analyticsCommonFieldsSchema.extend({
   event_id: z.string().uuid(),
   rsvp_status: z.enum(["going", "maybe", "not_going"]),
-});
-
-const eventCreateAttemptPayloadSchema = analyticsCommonFieldsSchema.extend({
-  result: z.enum(["success", "fail_validation", "fail_server"]),
-  error_code: z.string().max(100).optional(),
-});
-
-const scheduleSourceAddPayloadSchema = analyticsCommonFieldsSchema.extend({
-  vendor_type: z.enum(["manual", "ics", "sectionxi", "chsaa", "other_vendor"]),
-  result: z.string().max(50).optional(),
-  error_code: z.string().max(100).optional(),
-});
-
-const scheduleSyncPayloadSchema = analyticsCommonFieldsSchema.extend({
-  vendor_type: z.enum(["manual", "ics", "sectionxi", "chsaa", "other_vendor"]),
-  result: z.string().max(50),
-  items_loaded_bucket: z.enum(["0", "1-5", "6-20", "21-100", "100+"]),
-  duration_bucket: z.enum(["<1s", "1-3s", "3-10s", "10-30s", "30s+"]),
-  error_code: z.string().max(100).optional(),
-});
-
-const formOpenPayloadSchema = analyticsCommonFieldsSchema.extend({
-  form_id: z.string().uuid(),
-  open_source: z.enum(["list", "search_results", "deep_link"]).optional(),
-});
-
-const formSubmitPayloadSchema = analyticsCommonFieldsSchema.extend({
-  form_id: z.string().uuid(),
-  result: z.enum(["success", "fail_validation", "fail_server"]),
-  duration_bucket: z.enum(["<1s", "1-3s", "3-10s", "10-30s", "30s+"]),
-  error_code: z.string().max(100).optional(),
-});
-
-const fileUploadPayloadSchema = analyticsCommonFieldsSchema.extend({
-  file_type: z.enum(["image", "pdf", "doc", "other"]),
-  file_size_bucket: z.enum(["<1MB", "1-5MB", "5-25MB", "25MB+"]),
-  result: z.enum(["success", "fail_validation", "fail_server"]),
-  error_code: z.string().max(100).optional(),
 });
 
 const donationFlowPayloadSchema = analyticsCommonFieldsSchema.extend({
@@ -236,25 +173,13 @@ export const analyticsEventSchema = z.discriminatedUnion("event_name", [
   z.object({ event_name: z.literal("app_open"), payload: appOpenPayloadSchema }),
   z.object({ event_name: z.literal("route_view"), payload: routeViewPayloadSchema }),
   z.object({ event_name: z.literal("nav_click"), payload: navClickPayloadSchema }),
-  z.object({ event_name: z.literal("cta_click"), payload: ctaClickPayloadSchema }),
   z.object({ event_name: z.literal("page_dwell_bucket"), payload: pageDwellPayloadSchema }),
-  z.object({ event_name: z.literal("signup_start"), payload: signupPayloadSchema }),
-  z.object({ event_name: z.literal("signup_complete"), payload: signupPayloadSchema }),
-  z.object({ event_name: z.literal("invite_code_submit"), payload: inviteCodeSubmitPayloadSchema }),
-  z.object({ event_name: z.literal("onboarding_step_complete"), payload: onboardingStepPayloadSchema }),
   z.object({ event_name: z.literal("directory_view"), payload: directoryViewPayloadSchema }),
   z.object({ event_name: z.literal("directory_filter_apply"), payload: directoryFilterPayloadSchema }),
-  z.object({ event_name: z.literal("directory_sort_change"), payload: directorySortPayloadSchema }),
   z.object({ event_name: z.literal("profile_card_open"), payload: profileCardPayloadSchema }),
   z.object({ event_name: z.literal("events_view"), payload: eventsViewPayloadSchema }),
   z.object({ event_name: z.literal("event_open"), payload: eventOpenPayloadSchema }),
   z.object({ event_name: z.literal("rsvp_update"), payload: rsvpUpdatePayloadSchema }),
-  z.object({ event_name: z.literal("event_create_attempt"), payload: eventCreateAttemptPayloadSchema }),
-  z.object({ event_name: z.literal("schedule_source_add"), payload: scheduleSourceAddPayloadSchema }),
-  z.object({ event_name: z.literal("schedule_sync_run"), payload: scheduleSyncPayloadSchema }),
-  z.object({ event_name: z.literal("form_open"), payload: formOpenPayloadSchema }),
-  z.object({ event_name: z.literal("form_submit"), payload: formSubmitPayloadSchema }),
-  z.object({ event_name: z.literal("file_upload_attempt"), payload: fileUploadPayloadSchema }),
   z.object({ event_name: z.literal("donation_flow_start"), payload: donationFlowPayloadSchema }),
   z.object({ event_name: z.literal("donation_checkout_start"), payload: donationCheckoutStartPayloadSchema }),
   z.object({ event_name: z.literal("donation_checkout_result"), payload: donationCheckoutResultPayloadSchema }),
@@ -271,13 +196,13 @@ const opsCommonFieldsSchema = analyticsCommonFieldsSchema.extend({
 
 const apiErrorPayloadSchema = opsCommonFieldsSchema.extend({
   endpoint_group: z.enum(["auth", "directory", "events", "forms", "chat", "donations", "schedule", "admin"]),
-  http_status: z.number().int().min(100).max(599),
+  http_status: z.number().int().min(0).max(599),
   error_code: z.string().max(100).optional(),
   retryable: z.boolean().optional(),
 });
 
 const clientErrorPayloadSchema = opsCommonFieldsSchema.extend({
-  error_surface: z.enum(["page", "modal", "background_task"]),
+  error_surface: z.enum(["page", "modal", "background_task"]).optional(),
   error_code: z.string().max(100).optional(),
 });
 

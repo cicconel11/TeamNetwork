@@ -1,0 +1,153 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
+import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
+import { getMicrosoftConnection } from "@/lib/microsoft/oauth";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
+
+export const dynamic = "force-dynamic";
+
+const WINDOW_PAST_DAYS = 30;
+const WINDOW_FUTURE_DAYS = 366;
+
+const outlookCalendarConnectSchema = z.object({
+    orgId: z.string().uuid(),
+    outlookCalendarId: z.string().min(1),
+    title: z.string().optional(),
+});
+
+export async function POST(request: Request) {
+    try {
+        const supabase = await createClient();
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+            return NextResponse.json(
+                { error: "Unauthorized", message: "You must be logged in." },
+                { status: 401 }
+            );
+        }
+
+        const body = await validateJson(request, outlookCalendarConnectSchema);
+
+        // Check admin role
+        const membership = await getOrgMembership(supabase, user.id, body.orgId);
+        if (!membership || membership.role !== "admin") {
+            return NextResponse.json(
+                { error: "Forbidden", message: "Only admins can connect schedule sources." },
+                { status: 403 }
+            );
+        }
+
+        // Block mutations if org is in grace period
+        const { isReadOnly } = await checkOrgReadOnly(body.orgId);
+        if (isReadOnly) {
+            return NextResponse.json(readOnlyResponse(), { status: 403 });
+        }
+
+        // Verify user has an active Outlook connection
+        const serviceClient = createServiceClient();
+        const connection = await getMicrosoftConnection(serviceClient, user.id);
+
+        if (!connection || connection.status !== "connected") {
+            return NextResponse.json(
+                {
+                    error: "Not connected",
+                    message: "No Outlook account connected. Please connect your Outlook account first.",
+                },
+                { status: 400 }
+            );
+        }
+
+        const sourceUrl = `outlook://${body.outlookCalendarId}`;
+
+        // Create schedule source
+        const { data: source, error: insertError } = await supabase
+            .from("schedule_sources")
+            .insert({
+                org_id: body.orgId,
+                created_by: user.id,
+                vendor_id: "outlook_calendar",
+                source_url: sourceUrl,
+                title: body.title ?? null,
+                connected_user_id: user.id,
+                external_calendar_id: body.outlookCalendarId,
+            })
+            .select("id, org_id, vendor_id, source_url, status, last_synced_at, last_error, title, connected_user_id")
+            .single();
+
+        if (insertError || !source) {
+            if (insertError?.code === "23505") {
+                return NextResponse.json(
+                    { error: "Already connected", message: "This Outlook Calendar is already connected." },
+                    { status: 409 }
+                );
+            }
+            console.error("[schedules/outlook/connect] Failed to create source:", insertError);
+            return NextResponse.json(
+                { error: "Database error", message: "Failed to create schedule source." },
+                { status: 500 }
+            );
+        }
+
+        // Trigger initial sync
+        const { syncScheduleSource } = await import("@/lib/schedule-connectors/sync-source");
+        const window = buildSyncWindow();
+        const syncResult = await syncScheduleSource(serviceClient, {
+            source: {
+                id: source.id,
+                org_id: source.org_id,
+                vendor_id: source.vendor_id,
+                source_url: source.source_url,
+                connected_user_id: source.connected_user_id,
+            },
+            window,
+        });
+
+        // Re-fetch source to get post-sync state
+        const { data: freshSource } = await supabase
+            .from("schedule_sources")
+            .select("id, org_id, vendor_id, status, last_synced_at, last_error, title")
+            .eq("id", source.id)
+            .single();
+
+        const s = freshSource ?? source;
+
+        return NextResponse.json({
+            source: {
+                id: s.id,
+                vendor_id: s.vendor_id,
+                status: s.status,
+                last_synced_at: s.last_synced_at,
+                last_error: s.last_error,
+                title: s.title,
+            },
+            sync: syncResult,
+        });
+    } catch (error) {
+        if (error instanceof ValidationError) {
+            return validationErrorResponse(error);
+        }
+
+        console.error("[schedules/outlook/connect] Error:", error instanceof Error ? error.message : error);
+        return NextResponse.json(
+            { error: "Internal error", message: "Failed to connect Outlook Calendar." },
+            { status: 500 }
+        );
+    }
+}
+
+function buildSyncWindow() {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - WINDOW_PAST_DAYS);
+    from.setHours(0, 0, 0, 0);
+
+    const to = new Date(now);
+    to.setDate(to.getDate() + WINDOW_FUTURE_DAYS);
+    to.setHours(23, 59, 59, 999);
+
+    return { from, to };
+}

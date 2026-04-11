@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { OrgSidebar } from "./OrgSidebar";
-import type { Organization } from "@teammeet/types";
+import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
 
 interface MobileNavProps {
@@ -16,13 +16,13 @@ interface MobileNavProps {
   currentMemberId?: string;
   currentMemberName?: string;
   currentMemberAvatar?: string | null;
+  pendingApprovalsCount?: number;
 }
 
-export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar }: MobileNavProps) {
+export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, pendingApprovalsCount }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hasEverOpened, setHasEverOpened] = useState(false);
   const basePath = `/${organization.slug}`;
-
   // Prevent caching issues by forcing re-render of menu when open state changes
   const toggleMenu = () => setIsOpen(!isOpen);
   const closeMenu = () => setIsOpen(false);
@@ -71,11 +71,12 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
           </div>
         </Link>
 
-        <button
-          onClick={toggleMenu}
-          className="p-2 -mr-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-lg"
-          aria-label="Toggle menu"
-        >
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleMenu}
+            className="p-2 -mr-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-lg"
+            aria-label="Toggle menu"
+          >
           {isOpen ? (
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -85,7 +86,8 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
           )}
-        </button>
+          </button>
+        </div>
       </header>
 
       {/* Drawer Overlay */}
@@ -113,6 +115,7 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
             currentMemberId={currentMemberId}
             currentMemberName={currentMemberName}
             currentMemberAvatar={currentMemberAvatar}
+            pendingApprovalsCount={pendingApprovalsCount}
             className="h-full border-r border-border"
             onClose={closeMenu}
           />

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
+import { OrgMainContent } from "@/components/layout/OrgMainContent";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { GracePeriodBanner } from "@/components/layout/GracePeriodBanner";
 import { CancelingBanner } from "@/components/layout/CancelingBanner";
@@ -14,7 +15,19 @@ import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext
 import { ConsentModal } from "@/components/analytics/ConsentModal";
 import { LinkedInUrlPrompt } from "@/components/linkedin/LinkedInUrlPrompt";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
-import { computeOrgThemeVariables } from "@/lib/theming/org-colors";
+import { AIPanelProvider } from "@/components/ai-assistant";
+import { JoinOrgGate } from "@/components/join/JoinOrgGate";
+import { MediaUploadManagerProvider } from "@/components/media/MediaUploadManagerContext";
+import dynamic from "next/dynamic";
+const AIPanel = dynamic(
+  () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
+  { ssr: false },
+);
+const AIEdgeTab = dynamic(
+  () => import("@/components/ai-assistant/AIEdgeTab").then((m) => m.AIEdgeTab),
+  { ssr: false },
+);
+import { computeOrgThemeVariables, safeHexColor } from "@/lib/theming/org-colors";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -54,16 +67,63 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     );
   }
 
+  if (orgContext.status === "pending" && !isDevAdmin) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="border-b border-border bg-card">
+          <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+            <a href="/app" className="text-2xl font-bold text-foreground">
+              Team<span className="text-emerald-500">Network</span>
+            </a>
+            <form action="/auth/signout" method="POST">
+              <button type="submit" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Sign Out
+              </button>
+            </form>
+          </div>
+        </header>
+
+        <main className="max-w-md mx-auto px-6 py-16">
+          <a href="/app" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-8">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+            Back
+          </a>
+
+          <div className="rounded-2xl border border-border bg-card p-8 text-center">
+            <div className="h-16 w-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+              <svg className="h-8 w-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Pending admin approval</h2>
+            <p className="text-muted-foreground mb-6">
+              Your request to join <span className="font-semibold text-foreground">{orgContext.organization.name}</span> has been submitted.
+            </p>
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm mb-6">
+              <p className="font-medium mb-1">Awaiting Admin Approval</p>
+              <p className="text-amber-600 dark:text-amber-400">
+                An admin will review your request and grant you access. You&apos;ll be able to access the organization once approved.
+              </p>
+            </div>
+            <div className="flex justify-center gap-3">
+              <a href="/app" className="inline-flex items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+                Back to Dashboard
+              </a>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (!orgContext.role && !isDevAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-6">
-        <div className="max-w-lg text-center space-y-4">
-          <h1 className="text-2xl font-bold text-foreground">No membership found</h1>
-          <p className="text-muted-foreground">
-            You are signed in but do not have access to this organization. Please ask an admin to invite you.
-          </p>
-        </div>
-      </div>
+      <JoinOrgGate
+        orgName={orgContext.organization.name}
+        orgSlug={orgSlug}
+      />
     );
   }
 
@@ -108,7 +168,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     }
   }
   
-  const activeStatuses = ["active", "trialing", "canceling"];
+  const activeStatuses = ["active", "trialing", "canceling", "enterprise_managed"];
   const shouldShowBillingGate = 
     subscriptionStatus && 
     !activeStatuses.includes(subscriptionStatus) && 
@@ -130,6 +190,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   let currentMemberId: string | undefined;
   let currentMemberName: string | undefined;
   let currentMemberAvatar: string | undefined;
+  let pendingApprovalsCount = 0;
   if (orgContext.userId) {
     const supabase = await createClient();
     const { data: memberRow } = await supabase
@@ -144,6 +205,16 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       ? `${memberRow.first_name} ${memberRow.last_name}`
       : undefined;
     currentMemberAvatar = memberRow?.photo_url ?? undefined;
+
+    // Pending approvals count for admin sidebar badge (HEAD query, ~2ms)
+    if (isAdmin) {
+      const { count } = await supabase
+        .from("user_organization_roles")
+        .select("*", { count: "exact", head: true })
+        .eq("organization_id", organization.id)
+        .eq("status", "pending");
+      pendingApprovalsCount = count ?? 0;
+    }
   }
 
   let serviceSupabase = null;
@@ -171,8 +242,8 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         .eq("organization_id", organization.id)
         .maybeSingle()
     : { data: null };
-  const primary = organization.primary_color || "#1e3a5f";
-  const secondary = organization.secondary_color || "#10b981";
+  const primary = safeHexColor(organization.primary_color, "#1e3a5f");
+  const secondary = safeHexColor(organization.secondary_color, "#10b981");
 
   // Compute theme variables for both light and dark modes
   const lightModeVars = computeOrgThemeVariables(primary, secondary, false);
@@ -181,6 +252,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   return (
     <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
     <AnalyticsProvider>
+    <AIPanelProvider autoOpen={isAdmin}>
     <div data-org-shell className="min-h-screen">
       <style
         dangerouslySetInnerHTML={{
@@ -233,16 +305,18 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       )}
 
       <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
-        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} />
+        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} pendingApprovalsCount={pendingApprovalsCount} />
       </div>
 
-      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} />
+      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} pendingApprovalsCount={pendingApprovalsCount} />
       {!isDevAdmin && <ConsentModal />}
       {!isDevAdmin && <LinkedInUrlPrompt />}
 
-      <main className={`lg:ml-64 ${(await headers()).get("x-pathname")?.includes("/messages") ? "h-[calc(100dvh-4rem)] lg:h-dvh overflow-hidden pt-16 lg:pt-0" : "p-4 lg:p-8 pt-20 lg:pt-8"} ${orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling ? "mt-12" : ""}`}>
-        {children}
-      </main>
+      <MediaUploadManagerProvider orgId={organization.id}>
+        <OrgMainContent hasTopBanner={orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling}>
+          {children}
+        </OrgMainContent>
+      </MediaUploadManagerProvider>
 
       {isDevAdmin && (
         <DevPanel
@@ -258,7 +332,14 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
           memberCount={memberCount}
         />
       )}
+      {isAdmin && (
+        <>
+          <AIPanel orgId={organization.id} />
+          <AIEdgeTab isAdmin={isAdmin} />
+        </>
+      )}
     </div>
+    </AIPanelProvider>
     </AnalyticsProvider>
     </OrgAnalyticsProvider>
   );

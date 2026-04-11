@@ -1,14 +1,17 @@
 "use client";
 
 import { Card } from "@/components/ui";
-import { AvailabilityGrid } from "../AvailabilityGrid";
+import { PersonalAvailabilityAgenda } from "@/components/schedules/PersonalAvailabilityAgenda";
+import { TeamAvailabilityRows } from "@/components/schedules/TeamAvailabilityRows";
 import type { AcademicSchedule, User } from "@/types/database";
 
 type AvailabilityTabProps = {
   orgId: string;
+  orgSlug: string;
   isAdmin: boolean;
   mySchedules: AcademicSchedule[];
   allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
+  timeZone?: string;
 };
 
 function UserIcon({ className }: { className?: string }) {
@@ -29,9 +32,11 @@ function UsersIcon({ className }: { className?: string }) {
 
 export function AvailabilityTab({
   orgId,
+  orgSlug,
   isAdmin,
   mySchedules,
   allSchedules,
+  timeZone,
 }: AvailabilityTabProps) {
   return (
     <div className="space-y-8">
@@ -42,11 +47,16 @@ export function AvailabilityTab({
           </div>
           <div>
             <h2 className="text-xl font-display font-semibold text-foreground">My Availability</h2>
-            <p className="text-xs text-muted-foreground">Your personal schedule overview</p>
+            <p className="text-xs text-muted-foreground">Your personal schedule this week</p>
           </div>
         </div>
         <Card className="p-6 overflow-hidden">
-          <AvailabilityGrid schedules={mySchedules || []} orgId={orgId} mode="personal" />
+          <PersonalAvailabilityAgenda
+            schedules={mySchedules ?? []}
+            orgId={orgId}
+            orgSlug={orgSlug}
+            timeZone={timeZone}
+          />
         </Card>
       </section>
 
@@ -58,11 +68,15 @@ export function AvailabilityTab({
             </div>
             <div>
               <h2 className="text-xl font-display font-semibold text-foreground">Team Availability</h2>
-              <p className="text-xs text-muted-foreground">Aggregate view across all team members</p>
+              <p className="text-xs text-muted-foreground">See when your team is free</p>
             </div>
           </div>
           <Card className="p-6 overflow-hidden">
-            <AvailabilityGrid schedules={allSchedules} orgId={orgId} mode="team" />
+            <TeamAvailabilityRows
+              schedules={allSchedules}
+              orgId={orgId}
+              timeZone={timeZone}
+            />
           </Card>
         </section>
       )}

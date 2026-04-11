@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 
 /**
+ * Standard Cache-Control header presets.
+ *
+ * SECURITY: Never use `publicShort` on routes that check auth or return
+ * user-specific data — a CDN/proxy could serve one user's response to another.
+ * Use `noStore` for privilege-sensitive enterprise routes.
+ */
+export const CACHE_HEADERS = {
+  noStore: { "Cache-Control": "no-store" } as Record<string, string>,
+  privateShort: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } as Record<string, string>,
+} as const;
+
+/**
  * Standard error response codes used across the API
  */
 export type ErrorCode =

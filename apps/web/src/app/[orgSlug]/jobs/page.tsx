@@ -2,6 +2,7 @@
 import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/layout";
 import { JobList } from "@/components/jobs/JobList";
 import { JobsFilters } from "@/components/jobs/JobsFilters";
@@ -23,6 +24,7 @@ interface PageProps {
 }
 
 export default async function JobsPage({ params, searchParams }: PageProps) {
+  const tJobs = await getTranslations("jobs");
   const { orgSlug } = await params;
   const {
     page: pageParam,
@@ -122,12 +124,12 @@ export default async function JobsPage({ params, searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Jobs"
-        description="Career opportunities shared by our community"
+        title={tJobs("title")}
+        description={tJobs("description")}
         actions={
           canPost && (
             <Link href={`/${orgSlug}/jobs/new`}>
-              <Button>Post a Job</Button>
+              <Button>{tJobs("postJob")}</Button>
             </Link>
           )
         }

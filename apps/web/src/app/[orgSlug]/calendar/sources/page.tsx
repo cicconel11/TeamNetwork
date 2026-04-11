@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getOrgContext } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui";
@@ -19,19 +20,20 @@ export default async function CalendarSourcesPage({ params }: SourcesPageProps) 
   }
 
   const orgId = orgCtx.organization.id;
+  const tCalendar = await getTranslations("calendar");
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Manage Sources"
-        description="Import and manage team schedule sources"
+        title={tCalendar("manageSources")}
+        description={tCalendar("manageSourcesDesc")}
         actions={
           <Link href={`/${orgSlug}/calendar`}>
             <Button variant="secondary">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
               </svg>
-              <span className="sr-only">Back to </span>Calendar
+              <span className="sr-only">{tCalendar("backToCalendar")}</span>
             </Button>
           </Link>
         }

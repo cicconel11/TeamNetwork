@@ -10,6 +10,25 @@ export function requireEnv(name: string): string {
 }
 
 /**
+ * Like `requireEnv`, but returns `dummy` when `SKIP_STRIPE_VALIDATION=true`.
+ *
+ * Use this only at module-load-time in Stripe integration code, so that
+ * `next build` can do its "Collect page data" pass in CI without real Stripe
+ * credentials. The flag is only ever set in local dev and CI — never in
+ * production — so the fallback branch is unreachable at runtime in prod.
+ *
+ * See `.github/workflows/ci.yml` and `next.config.mjs`'s `validateBuildEnv()`
+ * for the other half of the skip-Stripe-in-CI story.
+ */
+export function requireEnvOrDummy(name: string, dummy: string): string {
+  if (process.env.SKIP_STRIPE_VALIDATION === "true") {
+    const value = process.env[name];
+    return value && value.trim() !== "" ? value.trim() : dummy;
+  }
+  return requireEnv(name);
+}
+
+/**
  * Checks if hCaptcha is properly configured
  * Returns true if the secret key is set, false otherwise
  */
@@ -122,37 +141,6 @@ export function shouldLogAuth(): boolean {
  */
 export function shouldLogAuthFailures(): boolean {
   return process.env.LOG_AUTH_FAILURES !== "false";
-}
-
-/**
- * Validates CORS configuration.
- * - In production: warns if CORS_ALLOWED_ORIGINS is not set (cross-origin requests will be blocked)
- * - In development: logs info about CORS mode
- *
- * Call this during app initialization to catch configuration issues early.
- */
-export function validateCorsEnv(): void {
-  const isProduction = process.env.NODE_ENV === "production";
-  const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS?.trim();
-
-  if (isProduction) {
-    if (!allowedOrigins) {
-      console.warn(
-        "[env] CORS_ALLOWED_ORIGINS not configured in production. " +
-        "Cross-origin API requests will be blocked. " +
-        "Set CORS_ALLOWED_ORIGINS to a comma-separated list of allowed origins " +
-        "(e.g., 'https://www.myteamnetwork.com,https://app.myteamnetwork.com')."
-      );
-    }
-  } else {
-    if (!allowedOrigins) {
-      console.info(
-        "[env] CORS_ALLOWED_ORIGINS not set in development. " +
-        "All cross-origin requests will be allowed. " +
-        "Set CORS_ALLOWED_ORIGINS to test production CORS behavior locally."
-      );
-    }
-  }
 }
 
 

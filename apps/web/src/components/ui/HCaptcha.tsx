@@ -172,23 +172,6 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
           </div>
         )}
 
-        {/* Timeout fallback */}
-        {isLoading && timedOut && (
-          <div
-            className="flex flex-col items-center justify-center p-4 text-muted-foreground text-sm"
-            role="alert"
-          >
-            <p>Captcha failed to load. This may be caused by an ad blocker.</p>
-            <button
-              type="button"
-              className="mt-2 text-primary underline hover:no-underline"
-              onClick={() => window.location.reload()}
-            >
-              Reload page
-            </button>
-          </div>
-        )}
-
         {/* Error display */}
         {error && (
           <div

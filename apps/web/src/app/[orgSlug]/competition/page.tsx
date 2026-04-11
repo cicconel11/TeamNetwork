@@ -49,6 +49,7 @@ export default async function CompetitionPage({ params }: CompetitionPageProps) 
         .from("competition_teams")
         .select("*")
         .eq("competition_id", competition.id)
+        .is("deleted_at", null)
         .order("name")
     : { data: [], error: null };
   if (teamsError) console.error("competition_teams fetch error:", teamsError);
@@ -96,7 +97,7 @@ export default async function CompetitionPage({ params }: CompetitionPageProps) 
         description={competition?.description || "Track team standings and points"}
         actions={
           isAdmin && !competition && (
-            <Link href={`/${orgSlug}/competitions/new`}>
+            <Link href={`/${orgSlug}/competition/new`}>
               <Button variant="secondary">New Competition</Button>
             </Link>
           )
@@ -110,7 +111,7 @@ export default async function CompetitionPage({ params }: CompetitionPageProps) 
             description="Create a competition to start tracking standings."
             action={
               isAdmin && (
-                <Link href={`/${orgSlug}/competitions/new`}>
+                <Link href={`/${orgSlug}/competition/new`}>
                   <Button>Create Competition</Button>
                 </Link>
               )

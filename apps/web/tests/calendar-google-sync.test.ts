@@ -226,7 +226,7 @@ describe("syncGoogleCalendarFeed", () => {
       organization_id: orgId,
       scope: "org",
       connected_user_id: connectedUserId,
-      google_calendar_id: "team-cal@group.calendar.google.com",
+      external_calendar_id: "team-cal@group.calendar.google.com",
       ...overrides,
     }]);
   }
@@ -235,7 +235,7 @@ describe("syncGoogleCalendarFeed", () => {
     stub.seed("user_calendar_connections", [{
       id: "conn-1",
       user_id: connectedUserId,
-      google_email: "admin@test.com",
+      provider_email: "admin@test.com",
       access_token_encrypted: "fake-enc-access",
       refresh_token_encrypted: "fake-enc-refresh",
       token_expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),

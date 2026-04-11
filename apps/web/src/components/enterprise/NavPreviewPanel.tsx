@@ -1,24 +1,10 @@
 "use client";
 
-import type { ComponentType } from "react";
 import type { OrgRole } from "@/lib/auth/role-utils";
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: ComponentType<{ className?: string }>;
-  roles: OrgRole[];
-}
-
-interface NavConfig {
-  [path: string]: {
-    hidden?: boolean;
-    hiddenForRoles?: OrgRole[];
-  };
-}
+import type { NavConfig, OrgNavItem } from "@/lib/navigation/nav-items";
 
 interface NavPreviewPanelProps {
-  navItems: NavItem[];
+  navItems: OrgNavItem[];
   navConfig: NavConfig;
   selectedRole: OrgRole;
   onRoleChange: (role: OrgRole) => void;
@@ -36,7 +22,7 @@ export function NavPreviewPanel({
     { value: "alumni", label: "Alumni" },
   ];
 
-  const isItemVisible = (item: NavItem): boolean => {
+  const isItemVisible = (item: OrgNavItem): boolean => {
     // Check if role has access to this item by default
     if (!item.roles.includes(selectedRole)) return false;
 

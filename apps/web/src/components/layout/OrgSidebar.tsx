@@ -4,15 +4,16 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import type { Organization } from "@teammeet/types";
+import { useLocale, useTranslations } from "next-intl";
+import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavGroupId, GridIcon, LogOutIcon, getConfigKey } from "@/lib/navigation/nav-items";
 import { bucketItemsByGroup, buildSectionOrder, buildGlobalIndexMap, getActiveGroup, type VisibleNavItem } from "@/lib/navigation/sidebar-groups";
 import { NavGroupSection, NavItemLink } from "@/components/layout/NavGroupSection";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+
 
 interface OrgSidebarProps {
   organization: Organization;
@@ -23,14 +24,19 @@ interface OrgSidebarProps {
   currentMemberId?: string;
   currentMemberName?: string;
   currentMemberAvatar?: string | null;
+  pendingApprovalsCount?: number;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, pendingApprovalsCount, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
+  const locale = useLocale();
+  const tNav = useTranslations("nav");
+  const tSidebar = useTranslations("sidebar");
+  const tAuth = useTranslations("auth");
 
   const [openGroups, setOpenGroups] = useState<Set<NavGroupId>>(new Set());
 
@@ -60,9 +66,16 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
     .map((item) => {
       const configKey = getConfigKey(item.href);
       const config = navConfig[configKey];
+      const translatedLabel = tNav(`items.${item.i18nKey}`);
+      // For non-English locales, prefer the i18n translation over custom labels
+      // (which are typically set in English by admins). For English, custom labels win.
+      const customLabel = config?.label?.trim();
+      const effectiveLabel = locale === "en"
+        ? (customLabel || translatedLabel)
+        : (translatedLabel || customLabel || item.label);
       return {
         ...item,
-        label: (config?.label?.trim() || item.label).slice(0, 80),
+        label: effectiveLabel.slice(0, 80),
         order: config?.order,
       };
     })
@@ -80,7 +93,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
         if (bIdx >= 0) return 1;
       }
       return ORG_NAV_ITEMS.findIndex(i => i.href === a.href) - ORG_NAV_ITEMS.findIndex(i => i.href === b.href);
-    }), [role, hasAlumniAccess, hasParentsAccess, navConfig, profile]);
+    }), [role, hasAlumniAccess, hasParentsAccess, navConfig, profile, tNav, locale]);
 
   // Auto-expand active group on navigation
   useEffect(() => {
@@ -102,13 +115,25 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
     });
   }, []);
 
-  // Sort-then-bucket: bucket already-sorted items
+  // Sort-then-bucket: bucket already-sorted items, translate group labels
   const { sections, globalIndexMap } = useMemo(() => {
+    const translatedGroups = ORG_NAV_GROUPS.map(g => ({
+      ...g,
+      label: tNav(`groups.${g.i18nKey}`),
+    }));
     const b = bucketItemsByGroup(visibleNav);
-    const s = buildSectionOrder(b, ORG_NAV_GROUPS);
+    const s = buildSectionOrder(b, translatedGroups);
     const g = buildGlobalIndexMap(visibleNav);
     return { sections: s, globalIndexMap: g };
-  }, [visibleNav]);
+  }, [visibleNav, tNav]);
+
+  const badgeCounts = useMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    if (pendingApprovalsCount && pendingApprovalsCount > 0) {
+      counts["/settings/approvals"] = pendingApprovalsCount;
+    }
+    return counts;
+  }, [pendingApprovalsCount]);
 
   return (
     <aside className={`flex flex-col bg-card border-r border-border h-full ${className}`}>
@@ -176,6 +201,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                     organizationId={organization.id}
                     globalIndex={globalIndexMap.get(section.item.href) ?? 0}
                     onClose={onClose}
+                    badgeCounts={badgeCounts}
                   />
                 </ul>
               );
@@ -194,6 +220,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                   organizationId={organization.id}
                   globalIndexMap={globalIndexMap}
                   onClose={onClose}
+                  badgeCounts={badgeCounts}
                 />
               );
             }
@@ -210,6 +237,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                       organizationId={organization.id}
                       globalIndex={globalIndexMap.get(item.href) ?? 0}
                       onClose={onClose}
+                      badgeCounts={badgeCounts}
                     />
                   ))}
                 </ul>
@@ -225,30 +253,12 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
 
       {/* User Section */}
       <div className="p-4 border-t border-border space-y-1">
-        <div className="flex items-center justify-between px-3 py-2.5">
-          <span className="text-sm font-medium text-muted-foreground">Theme</span>
-          <ThemeToggle />
-        </div>
-
-        {currentMemberId && (
-          <Link
-            href={`${basePath}/members/${currentMemberId}`}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" />
-            </svg>
-            My Profile
-          </Link>
-        )}
-
         <Link
           href="/app"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           <GridIcon className="h-5 w-5" />
-          Switch Organization
+          {tSidebar("switchOrg")}
         </Link>
 
         <form action="/auth/signout" method="POST">
@@ -257,7 +267,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             <LogOutIcon className="h-5 w-5" />
-            Sign Out
+            {tAuth("signOut")}
           </button>
         </form>
       </div>
@@ -266,7 +276,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
       <div className="px-4 py-4 border-t border-border">
         <Link href="/" className="flex flex-col items-start gap-1 group">
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">
-            Powered by
+            {tSidebar("poweredBy")}
           </span>
           <Image
             src="/TeamNetwor.png"

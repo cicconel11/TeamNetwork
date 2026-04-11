@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Badge, Button, Card, Select } from "@/components/ui";
 import type { AlumniBucket } from "@/types/database";
 import type { SubscriptionInfo } from "@/types/subscription";
@@ -23,6 +24,8 @@ const BUCKET_OPTIONS: { value: AlumniBucket; label: string; limit: number | null
 ];
 
 export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh }: SubscriptionCardProps) {
+  const tSettings = useTranslations("settings");
+  const tCommon = useTranslations("common");
   const [selectedBucket, setSelectedBucket] = useState<AlumniBucket>(quota?.bucket ?? "0-250");
   const [selectedInterval, setSelectedInterval] = useState<"month" | "year">("month");
   const [isUpdatingPlan, setIsUpdatingPlan] = useState(false);
@@ -41,7 +44,7 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
       targetLimit !== null &&
       quota.alumniCount > targetLimit
     ) {
-      setPlanError("You are above the limit for that plan. Choose a larger bucket first.");
+      setPlanError(tSettings("subscription.downgradeDisabled"));
       return;
     }
 
@@ -61,16 +64,16 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Unable to update subscription");
+        throw new Error(data.error || tSettings("subscription.unableToUpdate"));
       }
       if (data.url) {
         window.location.href = data.url as string;
         return;
       }
-      setPlanSuccess("Subscription updated.");
+      setPlanSuccess(tSettings("subscription.updated"));
       onQuotaRefresh();
     } catch (err) {
-      setPlanError(err instanceof Error ? err.message : "Unable to update subscription");
+      setPlanError(err instanceof Error ? err.message : tSettings("subscription.unableToUpdate"));
     } finally {
       setIsUpdatingPlan(false);
     }
@@ -80,9 +83,9 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
     <Card className="p-6 mb-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="font-semibold text-foreground">Subscription & Alumni Quota</h3>
+          <h3 className="font-semibold text-foreground">{tSettings("subscription.title")}</h3>
           <p className="text-sm text-muted-foreground">
-            Alumni additions are capped by your current plan. Upgrade to add more alumni.
+            {tSettings("subscription.description")}
           </p>
         </div>
         {quota?.status && (
@@ -105,31 +108,31 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
 
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
         <div>
-          <p className="text-sm text-muted-foreground">Current alumni plan</p>
+          <p className="text-sm text-muted-foreground">{tSettings("subscription.currentPlan")}</p>
           <p className="text-lg font-semibold text-foreground">
-            {isLoadingQuota ? "Loading..." : quota?.bucket || "none"}
+            {isLoadingQuota ? tCommon("loading") : quota?.bucket || "none"}
           </p>
           {!quota?.stripeSubscriptionId && (
-            <p className="text-xs text-amber-600">Billing not connected</p>
+            <p className="text-xs text-amber-600">{tSettings("subscription.billingNotConnected")}</p>
           )}
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">Alumni used</p>
+          <p className="text-sm text-muted-foreground">{tSettings("subscription.alumniUsed")}</p>
           <p className="text-lg font-semibold text-foreground">
             {isLoadingQuota
-              ? "Loading..."
+              ? tCommon("loading")
               : quota?.alumniLimit === null
-                ? `${quota?.alumniCount ?? 0} / Unlimited`
+                ? `${quota?.alumniCount ?? 0} / ${tCommon("unlimited")}`
                 : `${quota?.alumniCount ?? 0} / ${quota?.alumniLimit ?? 0}`}
           </p>
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">Remaining</p>
+          <p className="text-sm text-muted-foreground">{tSettings("subscription.remaining")}</p>
           <p className="text-lg font-semibold text-foreground">
             {isLoadingQuota
-              ? "Loading..."
+              ? tCommon("loading")
               : quota?.alumniLimit === null
-                ? "Unlimited"
+                ? tCommon("unlimited")
                 : Math.max((quota?.alumniLimit ?? 0) - (quota?.alumniCount ?? 0), 0)}
           </p>
         </div>
@@ -137,14 +140,14 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
 
       {quota && quota.alumniLimit !== null && quota.alumniCount >= quota.alumniLimit && (
         <div className="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
-          Alumni limit reached. Upgrade to add more alumni.
+          {tSettings("subscription.planLimitReached")}
         </div>
       )}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
         <div className="space-y-2">
           <Select
-            label="Alumni plan"
+            label={tSettings("subscription.alumniPlan")}
             value={selectedBucket}
             onChange={(e) => setSelectedBucket(e.target.value as AlumniBucket)}
             disabled={isLoadingQuota}
@@ -159,19 +162,19 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
           />
           <p className="text-xs text-muted-foreground">
             {quota?.stripeSubscriptionId && quota?.stripeCustomerId
-              ? "Downgrades are disabled if your alumni count exceeds the plan limit."
-              : "Select a plan and click Update to start billing checkout."}
+              ? tSettings("subscription.downgradeDisabled")
+              : tSettings("subscription.selectPlan")}
           </p>
         </div>
         <div className="space-y-2">
           <Select
-            label="Billing interval"
+            label={tSettings("subscription.billingInterval")}
             value={selectedInterval}
             onChange={(e) => setSelectedInterval(e.target.value as "month" | "year")}
             disabled={isLoadingQuota}
             options={[
-              { value: "month", label: "Monthly" },
-              { value: "year", label: "Yearly (save ~17%)" },
+              { value: "month", label: tSettings("subscription.monthly") },
+              { value: "year", label: tSettings("subscription.yearly") },
             ]}
           />
         </div>
@@ -181,7 +184,7 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
             isLoading={isUpdatingPlan}
             disabled={isLoadingQuota || !quota || (selectedBucket === quota.bucket && !!quota.stripeSubscriptionId)}
           >
-            Update plan
+            {tSettings("subscription.updatePlan")}
           </Button>
         </div>
       </div>

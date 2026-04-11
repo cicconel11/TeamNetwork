@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Card, Button, Badge } from "@/components/ui";
 
 const EXPERIENCE_LABELS: Record<string, string> = {
@@ -110,8 +111,12 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
           <div>
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h1 className="text-3xl font-bold mb-2">{job.title}</h1>
-                <p className="text-xl text-gray-600">{job.company}</p>
+                <UserContent as="h1" className="text-3xl font-bold mb-2">
+                  {job.title}
+                </UserContent>
+                <UserContent as="p" className="text-xl text-gray-600">
+                  {job.company}
+                </UserContent>
               </div>
               {canEdit && (
                 <div className="flex gap-2">
@@ -140,7 +145,7 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
             <div className="flex flex-wrap gap-2 mb-4">
               {job.location && (
                 <Badge variant="muted">
-                  {job.location}
+                  <UserContent>{job.location}</UserContent>
                 </Badge>
               )}
               {job.location_type && (
@@ -153,7 +158,9 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
                 </Badge>
               )}
               {job.industry && (
-                <Badge variant="muted">{job.industry}</Badge>
+                <Badge variant="muted">
+                  <UserContent>{job.industry}</UserContent>
+                </Badge>
               )}
               {job.experience_level && EXPERIENCE_LABELS[job.experience_level] && (
                 <Badge variant="primary">
@@ -184,7 +191,7 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
           <div className="border-t pt-6">
             <h2 className="text-xl font-semibold mb-3">Description</h2>
             <div className="prose max-w-none whitespace-pre-wrap">
-              {job.description}
+              <UserContent>{job.description}</UserContent>
             </div>
           </div>
 

@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 const TABS = [
-  { href: "/settings/notifications", label: "Notifications" },
-];
+  { href: "/settings/connected-accounts", i18nKey: "connectedAccounts" },
+  { href: "/settings/notifications", i18nKey: "notifications" },
+  { href: "/settings/language", i18nKey: "language" },
+] as const;
 
 export default function SettingsLayout({
   children,
@@ -13,6 +16,7 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const t = useTranslations("settings.tabs");
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -29,7 +33,7 @@ export default function SettingsLayout({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {tab.label}
+              {t(tab.i18nKey)}
             </Link>
           );
         })}

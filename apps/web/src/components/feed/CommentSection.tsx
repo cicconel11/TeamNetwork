@@ -6,11 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { createCommentSchema } from "@/lib/schemas/feed";
-import type { Database } from "@/types/database";
-
-type CommentWithAuthor = Database["public"]["Tables"]["feed_comments"]["Row"] & {
-  author: { name: string } | null;
-};
+import type { CommentWithAuthor } from "./types";
 
 interface CommentSectionProps {
   postId: string;

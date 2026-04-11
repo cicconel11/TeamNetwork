@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { GripVertical } from "lucide-react";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Card } from "@/components/ui";
 
 export interface MediaAlbum {
@@ -10,26 +12,48 @@ export interface MediaAlbum {
   cover_media_id?: string | null;
   cover_url?: string | null;
   item_count: number;
+  sort_order?: number;
   created_by: string;
   created_at: string;
   updated_at: string;
+  import_status?: "creating_album" | "waiting_for_uploads" | "adding_items" | "partial_success" | "success" | "failed";
+  import_expected_count?: number;
+  import_uploaded_count?: number;
+  import_failed_count?: number;
 }
 
 interface AlbumCardProps {
   album: MediaAlbum;
   onClick: () => void;
+  /** When true, navigation is disabled and a drag handle is shown (listeners on the handle only). */
+  reorderMode?: boolean;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+  isDragging?: boolean;
 }
 
-export function AlbumCard({ album, onClick }: AlbumCardProps) {
+export function AlbumCard({ album, onClick, reorderMode = false, dragHandleProps, isDragging = false }: AlbumCardProps) {
+  const importLabel = getAlbumImportLabel(album);
+
   return (
     <Card
-      interactive
+      interactive={!reorderMode}
       padding="none"
-      className="group overflow-hidden"
-      onClick={onClick}
+      className={`group overflow-hidden ${isDragging ? "ring-2 ring-[var(--color-org-secondary)] shadow-xl" : ""}`}
+      onClick={reorderMode ? undefined : onClick}
     >
       {/* Cover image */}
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+        {reorderMode && dragHandleProps && (
+          <button
+            type="button"
+            className="absolute left-2 top-2 z-10 p-2 rounded-lg bg-background/90 backdrop-blur-sm border border-border shadow-sm text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+            aria-label={`Drag to reorder ${album.name}`}
+            onClick={(e) => e.stopPropagation()}
+            {...dragHandleProps}
+          >
+            <GripVertical className="w-5 h-5" aria-hidden />
+          </button>
+        )}
         {album.cover_url ? (
           <Image
             src={album.cover_url}
@@ -42,9 +66,17 @@ export function AlbumCard({ album, onClick }: AlbumCardProps) {
           <AlbumPlaceholder />
         )}
 
+        {importLabel && !reorderMode && (
+          <div className="absolute right-2 top-2 z-10 rounded-full bg-background/90 px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm backdrop-blur-sm">
+            {importLabel}
+          </div>
+        )}
+
         {/* Overlay with name + count */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-          <p className="text-sm font-semibold text-white truncate">{album.name}</p>
+          <UserContent as="p" className="text-sm font-semibold text-white truncate">
+            {album.name}
+          </UserContent>
           <p className="text-xs text-white/70 mt-0.5">
             {album.item_count} {album.item_count === 1 ? "photo" : "photos"}
           </p>
@@ -52,6 +84,25 @@ export function AlbumCard({ album, onClick }: AlbumCardProps) {
       </div>
     </Card>
   );
+}
+
+function getAlbumImportLabel(album: MediaAlbum): string | null {
+  switch (album.import_status) {
+    case "creating_album":
+      return "Starting import";
+    case "waiting_for_uploads":
+    case "adding_items":
+      if (typeof album.import_expected_count === "number" && album.import_expected_count > 0) {
+        return `Importing ${album.import_uploaded_count ?? 0}/${album.import_expected_count}`;
+      }
+      return "Importing";
+    case "partial_success":
+      return "Partially imported";
+    case "failed":
+      return "Import failed";
+    default:
+      return null;
+  }
 }
 
 function AlbumPlaceholder() {

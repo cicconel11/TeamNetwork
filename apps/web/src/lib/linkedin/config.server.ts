@@ -22,6 +22,10 @@ export function getLinkedInIntegrationStatus(): LinkedInIntegrationStatus {
   });
 
   if (missingEnvVars.length > 0) {
+    console.warn(
+      "[linkedin-config] OAuth unavailable — missing env vars:",
+      missingEnvVars.join(", ")
+    );
     return {
       oauthAvailable: false,
       reason: "not_configured",
@@ -30,7 +34,11 @@ export function getLinkedInIntegrationStatus(): LinkedInIntegrationStatus {
 
   try {
     getEncryptionKeyBuffer(process.env.LINKEDIN_TOKEN_ENCRYPTION_KEY as string);
-  } catch {
+  } catch (err) {
+    console.warn(
+      "[linkedin-config] OAuth unavailable — encryption key validation failed:",
+      err instanceof Error ? err.message : err
+    );
     return {
       oauthAvailable: false,
       reason: "not_configured",

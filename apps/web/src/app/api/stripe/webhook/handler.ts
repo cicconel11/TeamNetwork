@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
-import { requireEnv } from "@/lib/env";
+import { requireEnvOrDummy } from "@/lib/env";
 import type { Database } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { markStripeEventProcessed, registerStripeEvent } from "@/lib/payments/stripe-events";
@@ -20,12 +20,18 @@ import {
   buildRenewalReminderEmail,
   buildPaymentActionRequiredEmail,
   buildFinalizationFailedEmail,
+  buildTrialEndingEmail,
 } from "@/lib/stripe/invoice-email-templates";
 import { sendEmail } from "@/lib/notifications";
 import { sendInvoiceEmailToAdmins } from "@/lib/stripe/invoice-email-sender";
 import type { BillingInterval } from "@/types/enterprise";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
-const webhookSecret = requireEnv("STRIPE_WEBHOOK_SECRET");
+import {
+  isOrgTrialMetadata,
+  shouldProvisionOrgCheckoutOnCompletion,
+} from "@/lib/subscription/org-trial";
+// See src/lib/stripe.ts for the SKIP_STRIPE_VALIDATION rationale.
+const webhookSecret = requireEnvOrDummy("STRIPE_WEBHOOK_SECRET", "whsec_ci_dummy");
 
 export type StripeWebhookDeps = {
   stripeClient?: typeof stripe;
@@ -112,7 +118,7 @@ export async function handleStripeWebhookPost(
 
   const applyUpdate = async (
     match: { organization_id?: string; stripe_subscription_id?: string },
-    data: Partial<Pick<OrgSubUpdate, "stripe_subscription_id" | "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at">>
+    data: Partial<Pick<OrgSubUpdate, "stripe_subscription_id" | "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at" | "is_trial">>
   ) => {
     const payload = {
       ...data,
@@ -134,12 +140,12 @@ export async function handleStripeWebhookPost(
 
   const updateByOrgId = async (
     organizationId: string,
-    data: Partial<Pick<OrgSubUpdate, "stripe_subscription_id" | "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at">>
+    data: Partial<Pick<OrgSubUpdate, "stripe_subscription_id" | "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at" | "is_trial">>
   ) => applyUpdate({ organization_id: organizationId }, data);
 
   const updateBySubscriptionId = async (
     subscriptionId: string,
-    data: Partial<Pick<OrgSubUpdate, "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at">>
+    data: Partial<Pick<OrgSubUpdate, "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at" | "is_trial">>
   ) => applyUpdate({ stripe_subscription_id: subscriptionId }, data);
 
   const {
@@ -208,11 +214,15 @@ export async function handleStripeWebhookPost(
     subscription: SubscriptionWithPeriod
   ): Promise<string | null> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase as any)
+    const { data, error: lookupError } = await (supabase as any)
       .from("enterprise_subscriptions")
       .select("id")
       .eq("stripe_subscription_id", subscription.id)
       .maybeSingle();
+
+    if (lookupError) {
+      throw new Error(`[handleEnterpriseSubscriptionUpdate] Lookup failed: ${lookupError.message}`);
+    }
 
     if (!data) return null; // Not an enterprise subscription
 
@@ -244,10 +254,14 @@ export async function handleStripeWebhookPost(
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    const { error: updateError } = await (supabase as any)
       .from("enterprise_subscriptions")
       .update(updatePayload)
       .eq("id", data.id);
+
+    if (updateError) {
+      throw new Error(`[handleEnterpriseSubscriptionUpdate] Update failed: ${updateError.message}`);
+    }
 
     return data.id;
   };
@@ -260,22 +274,30 @@ export async function handleStripeWebhookPost(
     subscriptionId: string
   ): Promise<string | null> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase as any)
+    const { data, error: lookupError } = await (supabase as any)
       .from("enterprise_subscriptions")
       .select("id")
       .eq("stripe_subscription_id", subscriptionId)
       .maybeSingle();
 
+    if (lookupError) {
+      throw new Error(`[handleEnterprisePaymentFailed] Lookup failed: ${lookupError.message}`);
+    }
+
     if (!data) return null; // Not an enterprise subscription
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    const { error: updateError } = await (supabase as any)
       .from("enterprise_subscriptions")
       .update({
         status: "past_due",
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.id);
+
+    if (updateError) {
+      throw new Error(`[handleEnterprisePaymentFailed] Update failed: ${updateError.message}`);
+    }
 
     return data.id;
   };
@@ -406,7 +428,10 @@ export async function handleStripeWebhookPost(
               error: subError.message,
               enterpriseId: enterprise.id,
             });
-            // Don't fail the webhook - enterprise exists, subscription can be fixed
+            return NextResponse.json(
+              { error: "Enterprise subscription provisioning failed" },
+              { status: 500 }
+            );
           }
 
           // Grant owner role to creator (idempotent)
@@ -434,7 +459,7 @@ export async function handleStripeWebhookPost(
         }
 
         if (session.mode === "subscription" || subscriptionId) {
-          if (session.payment_status !== "paid") {
+          if (!shouldProvisionOrgCheckoutOnCompletion(session.payment_status, session.metadata)) {
             debugLog("stripe-webhook", "Checkout completed without payment; skipping org provisioning");
             break;
           }
@@ -453,15 +478,21 @@ export async function handleStripeWebhookPost(
             );
           }
 
-          // Log warning if admin role wasn't granted, but don't fail the webhook
-          // The reconciliation endpoint can fix this, and user can contact support
+          // New-org checkout flows always carry payment_attempt_id and must grant
+          // the purchaser an admin role. If that final write fails, return 500 so
+          // Stripe retries the idempotent provisioning sequence instead of leaving
+          // a paid org in a partially provisioned state.
           if (paymentAttemptId && !adminGranted) {
-            console.error("[stripe-webhook] WARNING: Org created but admin role not granted", {
+            console.error("[stripe-webhook] Failed to grant org admin role - forcing retry", {
               eventId: maskPII(event.id),
               organizationId: maskPII(organizationId),
               paymentAttemptId: maskPII(paymentAttemptId),
               sessionId: maskPII(session.id),
             });
+            return NextResponse.json(
+              { error: "Organization admin grant failed - will retry" },
+              { status: 500 }
+            );
           }
 
           // SECURITY FIX: Validate org owns this Stripe resource
@@ -522,6 +553,7 @@ export async function handleStripeWebhookPost(
           await updateByOrgId(organizationId, {
             stripe_subscription_id: subscriptionId,
             stripe_customer_id: customerId,
+            is_trial: isOrgTrialMetadata(session.metadata),
             status,
             current_period_end: currentPeriodEnd,
           });
@@ -581,18 +613,35 @@ export async function handleStripeWebhookPost(
           await updateByOrgId(organizationId, {
             stripe_subscription_id: subscription.id,
             stripe_customer_id: customerId,
+            is_trial: isOrgTrialMetadata(subscription.metadata),
             status,
             current_period_end: currentPeriodEnd,
             ...(gracePeriodUpdate !== undefined && { grace_period_ends_at: gracePeriodUpdate }),
           });
         } else {
           await updateBySubscriptionId(subscription.id, {
+            is_trial: isOrgTrialMetadata(subscription.metadata),
             status,
             current_period_end: currentPeriodEnd,
             stripe_customer_id: customerId,
             ...(gracePeriodUpdate !== undefined && { grace_period_ends_at: gracePeriodUpdate }),
           });
         }
+        break;
+      }
+      case "customer.subscription.trial_will_end": {
+        const subscription = event.data.object as SubscriptionWithPeriod;
+        const trialEnd = subscription.current_period_end
+          ? formatStripeDateUtc(subscription.current_period_end)
+          : "soon";
+
+        await sendInvoiceEmailToAdmins(
+          supabase,
+          subscription.id,
+          "trial ending reminder",
+          (entityName) => buildTrialEndingEmail(trialEnd, { entityName }),
+          sendEmailFn,
+        );
         break;
       }
       case "invoice.paid": {

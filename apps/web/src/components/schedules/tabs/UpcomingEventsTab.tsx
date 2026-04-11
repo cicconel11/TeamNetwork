@@ -18,9 +18,10 @@ type CalendarEventSummary = {
 
 type UpcomingEventsTabProps = {
   orgId: string;
+  timeZone?: string;
 };
 
-function formatEventTime(event: CalendarEventSummary) {
+function formatEventTime(event: CalendarEventSummary, timeZone?: string) {
   const start = new Date(event.start_at);
 
   if (event.all_day) {
@@ -31,6 +32,7 @@ function formatEventTime(event: CalendarEventSummary) {
     hour: "numeric",
     minute: "2-digit",
   };
+  if (timeZone) timeOpts.timeZone = timeZone;
 
   const startTime = start.toLocaleTimeString("en-US", timeOpts);
 
@@ -53,18 +55,21 @@ function formatEventTime(event: CalendarEventSummary) {
     hour: "numeric",
     minute: "2-digit",
   };
+  if (timeZone) dateTimeOpts.timeZone = timeZone;
   return `${start.toLocaleDateString("en-US", dateTimeOpts)} – ${end.toLocaleDateString("en-US", dateTimeOpts)}`;
 }
 
-function groupEventsByDate(events: CalendarEventSummary[]): Map<string, CalendarEventSummary[]> {
+function groupEventsByDate(events: CalendarEventSummary[], timeZone?: string): Map<string, CalendarEventSummary[]> {
   const grouped = new Map<string, CalendarEventSummary[]>();
 
   events.forEach((event) => {
-    const dateKey = new Date(event.start_at).toLocaleDateString("en-US", {
+    const opts: Intl.DateTimeFormatOptions = {
       weekday: "long",
       month: "short",
       day: "numeric",
-    });
+    };
+    if (timeZone) opts.timeZone = timeZone;
+    const dateKey = new Date(event.start_at).toLocaleDateString("en-US", opts);
     const existing = grouped.get(dateKey) || [];
     existing.push(event);
     grouped.set(dateKey, existing);
@@ -73,7 +78,7 @@ function groupEventsByDate(events: CalendarEventSummary[]): Map<string, Calendar
   return grouped;
 }
 
-export function UpcomingEventsTab({ orgId }: UpcomingEventsTabProps) {
+export function UpcomingEventsTab({ orgId, timeZone }: UpcomingEventsTabProps) {
   const [events, setEvents] = useState<CalendarEventSummary[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -131,7 +136,7 @@ export function UpcomingEventsTab({ orgId }: UpcomingEventsTabProps) {
     };
   }, [fetchEvents]);
 
-  const groupedEvents = useMemo(() => groupEventsByDate(events), [events]);
+  const groupedEvents = useMemo(() => groupEventsByDate(events, timeZone), [events, timeZone]);
 
   return (
     <div className="space-y-6">
@@ -165,7 +170,7 @@ export function UpcomingEventsTab({ orgId }: UpcomingEventsTabProps) {
                     {dayEvents.map((event) => (
                       <div key={event.id} className="py-3">
                         <p className="font-medium text-foreground">{event.title || "Untitled event"}</p>
-                        <p className="text-sm text-muted-foreground">{formatEventTime(event)}</p>
+                        <p className="text-sm text-muted-foreground">{formatEventTime(event, timeZone)}</p>
                         {event.location && (
                           <p className="text-sm text-muted-foreground">{event.location}</p>
                         )}

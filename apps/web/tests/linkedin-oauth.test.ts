@@ -28,7 +28,11 @@ describe("linkedin-oauth", () => {
       assert.equal(parsed.searchParams.get("response_type"), "code");
       assert.equal(parsed.searchParams.get("client_id"), "test-client-id");
       assert.equal(parsed.searchParams.get("state"), "test-state-123");
-      assert.equal(parsed.searchParams.get("scope"), "openid profile email offline_access");
+      assert.equal(parsed.searchParams.get("scope"), "openid profile email");
+      assert.ok(
+        !parsed.searchParams.get("scope")?.includes("offline_access"),
+        "LinkedIn OIDC auth URLs must not request offline_access",
+      );
       assert.equal(
         parsed.searchParams.get("redirect_uri"),
         "https://example.com/api/linkedin/callback"

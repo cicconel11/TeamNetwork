@@ -118,7 +118,7 @@ export function formatGracePeriodDate(date: Date | string | null): string {
 export function shouldBlockAccess(subscription: SubscriptionStatus | null): boolean {
   if (!subscription) return true;
   
-  const activeStatuses = ["active", "trialing", "canceling"];
+  const activeStatuses = ["active", "trialing", "canceling", "enterprise_managed"];
   if (activeStatuses.includes(subscription.status || "")) {
     return false;
   }

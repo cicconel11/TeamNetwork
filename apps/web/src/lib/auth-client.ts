@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { normalizeRole } from "./auth/role-utils";
-import type { UserRole } from "@teammeet/types";
+import type { UserRole } from "@/types/database";
 
 export async function checkIsOrgAdmin(orgSlug: string): Promise<boolean> {
   const supabase = createClient();

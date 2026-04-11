@@ -7,11 +7,14 @@
 -- which casts NEW.status::text::member_status → fails because 'revoked' is not
 -- in the enum (only active, inactive, pending).
 --
--- Fix: Early return when NEW.status = 'revoked'. The role is being revoked,
--- so there is nothing to sync to members/alumni/parents tables.
+-- Fix: When status = 'revoked', soft-delete the corresponding alumni, members,
+-- and parents records before returning. The `deleted_at IS NULL` guard stops
+-- the trigger cycle after two iterations — alumni_soft_delete_sync /
+-- members_soft_delete_sync fire back but the second pass finds deleted_at
+-- already set and updates zero rows.
 --
--- This migration was applied directly to production on 2026-03-10; this file
--- captures the change locally to keep migration history in sync.
+-- This migration was applied directly to production on 2026-03-10; revocation
+-- cleanup was added on 2026-03-18.
 
 CREATE OR REPLACE FUNCTION public.handle_org_member_sync()
 RETURNS trigger
@@ -28,9 +31,40 @@ DECLARE
   v_alumni_id uuid;
   v_parent_id uuid;
 BEGIN
-  -- Skip sync when role is being revoked — 'revoked' is not a valid
-  -- member_status enum value and there is nothing meaningful to sync.
+  -- When revoking access, soft-delete related records then exit.
+  -- 'revoked' is not a valid member_status enum value so we cannot
+  -- proceed to the normal sync path.
   IF NEW.status = 'revoked' THEN
+    -- Soft-delete alumni record if this is an alumni role
+    IF NEW.role = 'alumni' AND NEW.user_id IS NOT NULL THEN
+      UPDATE public.alumni
+      SET deleted_at = now(), updated_at = now()
+      WHERE organization_id = NEW.organization_id
+        AND user_id = NEW.user_id
+        AND deleted_at IS NULL;
+    END IF;
+
+    -- Soft-delete members record — intentionally ungated by role because
+    -- every role has a corresponding members row.
+    IF NEW.user_id IS NOT NULL THEN
+      UPDATE public.members
+      SET deleted_at = now(), updated_at = now()
+      WHERE organization_id = NEW.organization_id
+        AND user_id = NEW.user_id
+        AND deleted_at IS NULL;
+    END IF;
+
+    -- Parent cleanup is handled by the role-change block below only when
+    -- the role itself changes away from 'parent'. For status-only revocation
+    -- of a parent role, soft-delete the parents record too.
+    IF NEW.role = 'parent' AND NEW.user_id IS NOT NULL THEN
+      UPDATE public.parents
+      SET deleted_at = now(), updated_at = now()
+      WHERE organization_id = NEW.organization_id
+        AND user_id = NEW.user_id
+        AND deleted_at IS NULL;
+    END IF;
+
     RETURN NEW;
   END IF;
 
@@ -173,7 +207,16 @@ BEGIN
     END IF;
   END IF;
 
-  -- 4. Cleanup: if role changed AWAY from parent, soft-delete the parents record
+  -- 4. Cleanup: if role changed AWAY from alumni, soft-delete the alumni record
+  IF TG_OP = 'UPDATE' AND OLD.role = 'alumni' AND NEW.role != 'alumni' THEN
+    UPDATE public.alumni
+    SET deleted_at = now(), updated_at = now()
+    WHERE organization_id = NEW.organization_id
+      AND user_id = NEW.user_id
+      AND deleted_at IS NULL;
+  END IF;
+
+  -- 5. Cleanup: if role changed AWAY from parent, soft-delete the parents record
   --    TG_OP = 'UPDATE' guards this block so INSERT paths are never affected.
   IF TG_OP = 'UPDATE' AND OLD.role = 'parent' AND NEW.role != 'parent' THEN
     UPDATE public.parents

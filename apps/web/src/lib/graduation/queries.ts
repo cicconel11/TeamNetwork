@@ -178,29 +178,11 @@ export async function checkAlumniCapacity(
 
   const currentCount = count || 0;
 
-  // Cross-reference: also count from user_organization_roles for consistency check
-  const { count: roleCount, error: roleCountError } = await supabase
-    .from("user_organization_roles")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", orgId)
-    .eq("role", "alumni")
-    .eq("status", "active");
-
-  const roleAlumniCount = roleCountError ? -1 : (roleCount || 0);
-
-  if (!roleCountError && roleAlumniCount !== currentCount) {
-    console.warn(
-      `[graduation] ALUMNI COUNT MISMATCH: org=${maskPII(orgId)} alumni_table=${currentCount} roles_table=${roleAlumniCount}. ` +
-      "The alumni table and user_organization_roles disagree. This may indicate a failed DB trigger (handle_org_member_sync)."
-    );
-  }
-
   debugLog("graduation", "checkAlumniCapacity", {
     orgId: maskPII(orgId),
     bucket: alumniBucket,
     limit,
     alumniTableCount: currentCount,
-    rolesTableCount: roleAlumniCount,
     hasCapacity: currentCount < limit,
   });
 
@@ -240,6 +222,11 @@ export async function transitionToAlumni(
     return { success: false, error: error.message };
   }
 
+  if (!data) {
+    debugLog("graduation", "transitionToAlumni: RPC returned null data");
+    return { success: false, error: "RPC returned no data" };
+  }
+
   const result = data as { success: boolean; skipped?: boolean; error?: string };
   debugLog("graduation", "transitionToAlumni result", result);
   return result;
@@ -268,6 +255,10 @@ export async function revokeMemberAccess(
 
   if (error) {
     return { success: false, error: error.message };
+  }
+
+  if (!data) {
+    return { success: false, error: "RPC returned no data" };
   }
 
   const result = data as { success: boolean; skipped?: boolean; error?: string };
@@ -330,6 +321,11 @@ export async function reinstateToActiveMember(
     return { success: false, error: error.message };
   }
 
+  if (!data) {
+    debugLog("graduation", "reinstateToActiveMember: RPC returned null data");
+    return { success: false, error: "RPC returned no data" };
+  }
+
   const result = data as { success: boolean; skipped?: boolean; error?: string };
   debugLog("graduation", "reinstateToActiveMember result", result);
   return result;
@@ -364,6 +360,199 @@ export async function getMembersToReinstate(
   return (data || []) as GraduatingMember[];
 }
 
+// ---------------------------------------------------------------------------
+// Batch helpers — replace N+1 loops in the graduation cron
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch organization details for multiple IDs in a single query.
+ * Returns a Map keyed by org ID. Missing IDs are absent from the map.
+ */
+export async function batchGetOrganizations(
+  supabase: SupabaseClient<Database>,
+  orgIds: string[]
+): Promise<Map<string, OrgWithSlug>> {
+  if (orgIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("id, name, slug")
+    .in("id", orgIds);
+
+  if (error) {
+    throw new Error(`Failed to batch-fetch organizations: ${error.message}`);
+  }
+
+  const result = new Map<string, OrgWithSlug>();
+  for (const org of data ?? []) {
+    result.set(org.id, org as OrgWithSlug);
+  }
+  return result;
+}
+
+/**
+ * Fetch admin emails for multiple organizations in 2 queries total.
+ * Returns a Map keyed by org ID. Orgs with no admins map to an empty array.
+ */
+export async function batchGetOrgAdminEmails(
+  supabase: SupabaseClient<Database>,
+  orgIds: string[]
+): Promise<Map<string, string[]>> {
+  if (orgIds.length === 0) return new Map();
+
+  // Pre-initialize all orgIds so every key is present even with no admins
+  const result = new Map<string, string[]>();
+  for (const orgId of orgIds) {
+    result.set(orgId, []);
+  }
+
+  const { data: roles, error: rolesError } = await supabase
+    .from("user_organization_roles")
+    .select("user_id, organization_id")
+    .eq("role", "admin")
+    .eq("status", "active")
+    .in("organization_id", orgIds);
+
+  if (rolesError) {
+    throw new Error(`Failed to batch-fetch admin emails: ${rolesError.message}`);
+  }
+
+  if (!roles || roles.length === 0) {
+    return result;
+  }
+
+  const userIds = [...new Set(roles.map((r) => r.user_id))];
+
+  const { data: users, error: usersError } = await supabase
+    .from("users")
+    .select("id, email")
+    .in("id", userIds);
+
+  if (usersError || !users) {
+    throw new Error(`Failed to batch-fetch admin user emails: ${usersError?.message ?? "no data"}`);
+  }
+
+  const emailById = new Map<string, string | null>();
+  for (const user of users) {
+    emailById.set(user.id as string, user.email as string | null);
+  }
+
+  for (const role of roles) {
+    const email = emailById.get(role.user_id as string);
+    if (email) {
+      const orgEmails = result.get(role.organization_id as string) ?? [];
+      orgEmails.push(email);
+      result.set(role.organization_id as string, orgEmails);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Result type for alumni capacity check.
+ */
+export interface CapacityResult {
+  hasCapacity: boolean;
+  currentCount: number;
+  limit: number | null;
+}
+
+/**
+ * Check alumni capacity for multiple organizations in 3 queries total.
+ * Mirrors the per-org logic in checkAlumniCapacity but batched.
+ */
+export async function batchCheckAlumniCapacity(
+  supabase: SupabaseClient<Database>,
+  orgIds: string[]
+): Promise<Map<string, CapacityResult>> {
+  if (orgIds.length === 0) return new Map();
+
+  // Query 1: subscriptions
+  const { data: subscriptions, error: subError } = await supabase
+    .from("organization_subscriptions")
+    .select("organization_id, alumni_bucket")
+    .in("organization_id", orgIds);
+
+  if (subError) {
+    throw new Error(`Failed to batch-check alumni capacity: ${subError.message}`);
+  }
+
+  // Build bucket map; orgs without a subscription default to "none"
+  const bucketByOrg = new Map<string, string>();
+  for (const sub of subscriptions ?? []) {
+    bucketByOrg.set(sub.organization_id as string, (sub.alumni_bucket as string) || "none");
+  }
+
+  // Query 2: alumni table counts (source of truth for quota)
+  const { data: alumniRows, error: alumniError } = await supabase
+    .from("alumni")
+    .select("organization_id")
+    .is("deleted_at", null)
+    .in("organization_id", orgIds);
+
+  if (alumniError) {
+    throw new Error(`Failed to batch-fetch alumni counts: ${alumniError.message}`);
+  }
+
+  const alumniCountByOrg = new Map<string, number>();
+  for (const row of alumniRows ?? []) {
+    const orgId = row.organization_id as string;
+    alumniCountByOrg.set(orgId, (alumniCountByOrg.get(orgId) ?? 0) + 1);
+  }
+
+  // Query 3: user_organization_roles counts (cross-reference)
+  const { data: roleRows, error: roleError } = await supabase
+    .from("user_organization_roles")
+    .select("organization_id")
+    .eq("role", "alumni")
+    .eq("status", "active")
+    .in("organization_id", orgIds);
+
+  const roleCountByOrg = new Map<string, number>();
+  if (!roleError) {
+    for (const row of roleRows ?? []) {
+      const orgId = row.organization_id as string;
+      roleCountByOrg.set(orgId, (roleCountByOrg.get(orgId) ?? 0) + 1);
+    }
+  }
+
+  const result = new Map<string, CapacityResult>();
+
+  for (const orgId of orgIds) {
+    const bucket = bucketByOrg.get(orgId) ?? "none";
+    const limit = getAlumniLimit(bucket as Parameters<typeof getAlumniLimit>[0]);
+
+    if (limit === null) {
+      result.set(orgId, { hasCapacity: true, currentCount: 0, limit: null });
+      continue;
+    }
+
+    const currentCount = alumniCountByOrg.get(orgId) ?? 0;
+    const roleCount = roleCountByOrg.get(orgId) ?? 0;
+
+    if (!roleError && roleCount !== currentCount) {
+      console.warn(
+        `[graduation] ALUMNI COUNT MISMATCH: org=${maskPII(orgId)} alumni_table=${currentCount} roles_table=${roleCount}. ` +
+        "The alumni table and user_organization_roles disagree. This may indicate a failed DB trigger (handle_org_member_sync)."
+      );
+    }
+
+    debugLog("graduation", "batchCheckAlumniCapacity", {
+      orgId: maskPII(orgId),
+      bucket,
+      limit,
+      alumniTableCount: currentCount,
+      rolesTableCount: roleCount,
+      hasCapacity: currentCount < limit,
+    });
+
+    result.set(orgId, { hasCapacity: currentCount < limit, currentCount, limit });
+  }
+
+  return result;
+}
+
 /**
  * Dry-run result for the graduation cron job.
  */
@@ -388,12 +577,17 @@ export async function getGraduationDryRun(
     getMembersNearingGraduation(supabase, 30),
   ]);
 
-  // Determine capacity per org for past-graduation members
+  // Determine capacity per org for past-graduation members.
+  // NOTE: This snapshot is taken once before any transitions occur, so it may be
+  // slightly optimistic for orgs near their quota limit. For example, an org at
+  // 249/250 with 3 graduating members would show all 3 in toAlumni, but the live
+  // cron run would transition only the first and revoke the remaining two. This is
+  // an acceptable approximation for a preview — dry-run does not write anything.
   const orgIds = [...new Set(pastGraduation.map((m) => m.organization_id))];
+  const capacityMap = await batchCheckAlumniCapacity(supabase, orgIds);
   const capacityByOrg: Record<string, { hasCapacity: boolean; currentCount: number; limit: number | null }> = {};
-
-  for (const orgId of orgIds) {
-    capacityByOrg[orgId] = await checkAlumniCapacity(supabase, orgId);
+  for (const [orgId, cap] of capacityMap) {
+    capacityByOrg[orgId] = cap;
   }
 
   const toAlumni: GraduatingMember[] = [];

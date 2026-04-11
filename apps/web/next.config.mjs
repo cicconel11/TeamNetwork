@@ -1,4 +1,7 @@
 import bundleAnalyzer from "@next/bundle-analyzer";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
@@ -49,6 +52,19 @@ const linkedInEnv = [
   "LINKEDIN_CLIENT_ID",
   "LINKEDIN_CLIENT_SECRET",
   "LINKEDIN_TOKEN_ENCRYPTION_KEY",
+];
+
+const blackbaudEnv = [
+  "BLACKBAUD_CLIENT_ID",
+  "BLACKBAUD_CLIENT_SECRET",
+  "BLACKBAUD_TOKEN_ENCRYPTION_KEY",
+  "BLACKBAUD_SUBSCRIPTION_KEY",
+];
+
+const microsoftCalendarEnv = [
+  "MICROSOFT_CLIENT_ID",
+  "MICROSOFT_CLIENT_SECRET",
+  "GOOGLE_TOKEN_ENCRYPTION_KEY",
 ];
 
 function assertEnv(name, required = true) {
@@ -110,6 +126,28 @@ function validateBuildEnv() {
     console.warn(`⚠️  Partial LinkedIn config: missing ${missingLinkedInVars.join(", ")}. LinkedIn integration will not work.`);
   }
 
+  // Optional: warn if Blackbaud env vars are partially configured
+  const missingBlackbaudVars = blackbaudEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  if (missingBlackbaudVars.length > 0 && missingBlackbaudVars.length < blackbaudEnv.length) {
+    console.warn(`⚠️  Partial Blackbaud config: missing ${missingBlackbaudVars.join(", ")}. Blackbaud integration will not work.`);
+  }
+
+  // Optional: warn if Microsoft Calendar env vars are partially configured
+  const missingMicrosoftVars = microsoftCalendarEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  if (missingMicrosoftVars.length > 0 && missingMicrosoftVars.length < microsoftCalendarEnv.length) {
+    console.warn(`⚠️  Partial Microsoft Calendar config: missing ${missingMicrosoftVars.join(", ")}. Outlook Calendar integration will not work.`);
+  }
+
+  // Optional: Bright Data enrichment (enriches member profiles from LinkedIn)
+  if (!process.env.BRIGHT_DATA_API_KEY) {
+    console.log("ℹ️  BRIGHT_DATA_API_KEY not set — LinkedIn profile enrichment disabled");
+  }
+
+  // Optional: warn if z.ai (AI assistant) API key is missing
+  if (!process.env.ZAI_API_KEY) {
+    console.log("ℹ️  ZAI_API_KEY not set — AI assistant features disabled");
+  }
+
   // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let parsedSiteUrl = null;
@@ -146,12 +184,24 @@ validateBuildEnv();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ["@teammeet/core", "@teammeet/types", "@teammeet/validation"],
   eslint: {
     // Temporarily ignore ESLint during builds to avoid circular reference issue
     ignoreDuringBuilds: true,
   },
+  typescript: {
+    // Type-checking runs as a required GitHub Actions check (`.github/workflows/ci.yml` → typecheck job).
+    // Skipping it inside `next build` shaves ~30-60s off every Vercel Preview/Production build.
+    // SAFETY: this is only safe while branch protection requires the GitHub Actions `typecheck` job to pass.
+    // If that protection is removed, flip this back to false or delete the block.
+    ignoreBuildErrors: true,
+  },
   experimental: {
-    serverComponentsExternalPackages: ["googleapis"],
+    staleTimes: {
+      dynamic: 0,
+    },
+    // Load server-side; avoids flaky missing `./vendor-chunks/@supabase.js` after HMR / partial `.next` deletes
+    serverComponentsExternalPackages: ["googleapis", "@supabase/supabase-js", "@supabase/ssr"],
   },
   images: {
     formats: ["image/avif", "image/webp"],
@@ -235,7 +285,10 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' blob: data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://rytsziwekhtjdqzzpdso.supabase.co https://media.licdn.com",
+              // External member avatars are browser-fetched via <img>, so CSP
+              // must allow arbitrary HTTPS image origins without widening the
+              // Next.js server-side optimizer allowlist.
+              "img-src 'self' blob: data: https:",
               "font-src 'self' https://fonts.gstatic.com",
               "frame-src https://hcaptcha.com https://newassets.hcaptcha.com https://challenges.cloudflare.com https://js.stripe.com https://connect.stripe.com https://*.stripe.com",
               "media-src 'self' blob: https://rytsziwekhtjdqzzpdso.supabase.co",
@@ -248,4 +301,4 @@ const nextConfig = {
   },
 };
 
-export default withBundleAnalyzer(nextConfig);
+export default withNextIntl(withBundleAnalyzer(nextConfig));

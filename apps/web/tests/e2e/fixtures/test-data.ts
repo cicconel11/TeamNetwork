@@ -46,6 +46,32 @@ export const TestData = {
   getOrgSlug: () => process.env.E2E_ORG_SLUG || "e2e-test-org",
 
   /**
+   * Generate a unique alumni with random data
+   */
+  generateAlumni: () => {
+    const id = randomUUID().slice(0, 8);
+    return {
+      firstName: `TestAlumni-${id}`,
+      lastName: `E2E-${id}`,
+      email: `test-alumni-${id}@e2e.local`,
+      graduationYear: "2020",
+    };
+  },
+
+  /**
+   * Generate a unique event with random data
+   */
+  generateEvent: () => {
+    const id = randomUUID().slice(0, 8);
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+    return {
+      title: `Test Event ${id}`,
+      startDate: tomorrow,
+      location: `Test Location ${id}`,
+    };
+  },
+
+  /**
    * Generate an invalid email for error testing
    */
   invalidEmail: "not-an-email",

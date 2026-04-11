@@ -4,6 +4,7 @@ export {
   getRequiredBucketQuantity,
   isSalesLed,
   getAlumniBucketPricing,
+  getFreeSubOrgCount,
   getBillableOrgCount,
   getSubOrgPricing,
   getEnterpriseTotalPricing,

@@ -5,6 +5,9 @@ export {
   getOrganization,
   getOrgAdminEmails,
   checkAlumniCapacity,
+  batchGetOrganizations,
+  batchGetOrgAdminEmails,
+  batchCheckAlumniCapacity,
   transitionToAlumni,
   revokeMemberAccess,
   reinstateToActiveMember,
@@ -12,6 +15,7 @@ export {
   getGraduationDryRun,
   type GraduatingMember,
   type OrgWithSlug,
+  type CapacityResult,
   type GraduationDryRunResult,
 } from "./queries";
 

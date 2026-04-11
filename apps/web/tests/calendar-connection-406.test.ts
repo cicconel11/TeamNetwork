@@ -222,7 +222,8 @@ describe("calendar-connection 406 bug", () => {
     stub.seed("user_calendar_connections", [
       {
         user_id: userId,
-        google_email: "test@gmail.com",
+        provider: "google",
+        provider_email: "test@gmail.com",
         access_token_encrypted: encAccess,
         refresh_token_encrypted: encRefresh,
         token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
@@ -235,7 +236,7 @@ describe("calendar-connection 406 bug", () => {
     const result = await getCalendarConnection(supabase, userId);
 
     assert.ok(result, "should return connection data");
-    assert.equal(result!.googleEmail, "test@gmail.com");
+    assert.equal(result!.providerEmail, "test@gmail.com");
     assert.equal(result!.accessToken, "access-token-123");
     assert.equal(result!.refreshToken, "refresh-token-456");
     assert.equal(result!.status, "connected");

@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getAlumniLimit, normalizeBucket } from "@/lib/alumni-quota";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { getCorsHeadersForOrigin } from "@/lib/security/cors";
 import {
   baseSchemas,
   validateJson,
@@ -22,15 +21,6 @@ import { extractSubscriptionPeriodEndIso } from "@/lib/stripe/subscription-perio
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-// Helper to get CORS headers for a specific request
-function getCorsHeaders(req: Request) {
-  return getCorsHeadersForOrigin(req.headers.get("origin"), { includeAllMethods: true });
-}
-
-export async function OPTIONS(req: Request) {
-  return NextResponse.json({}, { headers: getCorsHeaders(req) });
-}
 
 interface RouteParams {
   params: Promise<{ organizationId: string }>;
@@ -208,7 +198,6 @@ async function requireAdmin(
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const corsHeaders = getCorsHeaders(req);
 
   const rateLimit = checkRateLimit(req, {
     userId: user?.id ?? null,
@@ -222,7 +211,7 @@ async function requireAdmin(
   }
 
   const respond = (payload: unknown, status = 200) =>
-    NextResponse.json(payload, { status, headers: { ...rateLimit.headers, ...corsHeaders } });
+    NextResponse.json(payload, { status, headers: rateLimit.headers });
 
   if (!user) {
     return { error: respond({ error: "Unauthorized" }, 401) };
@@ -304,11 +293,10 @@ function buildQuotaResponse(params: {
 }
 
 export async function GET(req: Request, { params }: RouteParams) {
-  const corsHeaders = getCorsHeaders(req);
   const { organizationId } = await params;
   const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
   if (!orgIdParsed.success) {
-    return NextResponse.json({ error: "Invalid organization id" }, { status: 400, headers: corsHeaders });
+    return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
   const auth = await requireAdmin(req, organizationId, "subscription lookup", {
@@ -419,12 +407,11 @@ export async function GET(req: Request, { params }: RouteParams) {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
-  const corsHeaders = getCorsHeaders(req);
   try {
     const { organizationId } = await params;
     const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
     if (!orgIdParsed.success) {
-      return NextResponse.json({ error: "Invalid organization id" }, { status: 400, headers: corsHeaders });
+      return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
     }
 
     // POST is admin-only (no allowNavEditPath) -- billing changes require admin privileges

@@ -1,9 +1,13 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, EmptyState } from "@/components/ui";
 import { MentorshipPairCard } from "./MentorshipPairCard";
-import { getVisibleMentorshipPairs, isUserInMentorshipPair } from "@teammeet/core";
+import {
+  getVisibleMentorshipPairs,
+  isUserInMentorshipPair,
+} from "@/lib/mentorship/presentation";
 
 interface MentorshipLog {
   id: string;
@@ -48,6 +52,7 @@ export function MentorshipPairsList({
   currentUserId,
   emptyStateAction,
 }: MentorshipPairsListProps) {
+  const tMentorship = useTranslations("mentorship");
   const [deletedPairIds, setDeletedPairIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -73,8 +78,8 @@ export function MentorshipPairsList({
     return (
       <Card>
         <EmptyState
-          title="No mentorship pairs yet"
-          description="Pairs will appear here once created."
+          title={tMentorship("noPairs")}
+          description={tMentorship("pairsWillAppear")}
           action={emptyStateAction}
         />
       </Card>

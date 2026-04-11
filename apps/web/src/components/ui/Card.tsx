@@ -1,4 +1,4 @@
-import { HTMLAttributes, forwardRef, KeyboardEvent } from "react";
+import { HTMLAttributes, forwardRef } from "react";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   interactive?: boolean;
@@ -6,7 +6,7 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className = "", interactive = false, padding = "md", children, onClick, ...props }, ref) => {
+  ({ className = "", interactive = false, padding = "md", children, ...props }, ref) => {
     const paddings = {
       none: "",
       sm: "p-4",
@@ -14,23 +14,10 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       lg: "p-8",
     };
 
-    const isClickable = interactive && onClick;
-
-    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-      if (isClickable && (event.key === "Enter" || event.key === " ")) {
-        event.preventDefault();
-        event.currentTarget.click();
-      }
-    };
-
     return (
       <div
         ref={ref}
         className={`card ${interactive ? "card-interactive cursor-pointer" : ""} ${paddings[padding]} ${className}`}
-        onClick={onClick}
-        onKeyDown={isClickable ? handleKeyDown : undefined}
-        role={isClickable ? "button" : undefined}
-        tabIndex={isClickable ? 0 : undefined}
         {...props}
       >
         {children}

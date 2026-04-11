@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import type { Form, FormField, FormSubmission } from "@teammeet/types";
+import type { Form, FormField, FormSubmission } from "@/types/database";
 
 export default function FillFormPage() {
   const router = useRouter();
@@ -49,11 +49,12 @@ export default function FillFormPage() {
           .select("*")
           .eq("form_id", formId)
           .eq("user_id", user.id)
+          .is("deleted_at", null)
           .maybeSingle();
 
         if (submission) {
           setExistingSubmission(submission as FormSubmission);
-          setResponses((submission.responses as Record<string, unknown>) || {});
+          setResponses((((submission as FormSubmission & { data?: unknown }).data) as Record<string, unknown>) || {});
         }
       }
 
@@ -143,7 +144,7 @@ export default function FillFormPage() {
   if (success) {
     return (
       <div className="animate-fade-in">
-        <PageHeader title={form.title} backHref={`/${orgSlug}/forms`} />
+        <PageHeader title={form.title} backHref={`/${orgSlug}/forms`} translateTitle />
         <Card className="p-8 text-center max-w-xl mx-auto">
           <div className="text-green-500 mb-4">
             <svg className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -166,6 +167,8 @@ export default function FillFormPage() {
         title={form.title}
         description={form.description || undefined}
         backHref={`/${orgSlug}/forms`}
+        translateTitle
+        translateDescription={Boolean(form.description)}
       />
 
       <Card className="max-w-2xl">

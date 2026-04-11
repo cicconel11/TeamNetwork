@@ -5,6 +5,7 @@ import {
   parseLinkedInUrlPatchBody,
   saveLinkedInUrlForUser,
 } from "@/lib/linkedin/settings";
+import { runBrightDataEnrichment } from "@/lib/linkedin/oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
  * PATCH /api/user/linkedin/url
  *
  * Saves a LinkedIn profile URL to the user's member and alumni records
- * across all organizations.
+ * across all organizations. Triggers Bright Data enrichment if a URL is provided.
  */
 export async function PATCH(request: Request) {
   try {
@@ -47,6 +48,11 @@ export async function PATCH(request: Request) {
         { error: saveResult.error },
         { status: saveResult.reason === "not_found" ? 404 : 500 }
       );
+    }
+
+    // Best-effort enrichment when a URL is saved
+    if (parsedBody.linkedinUrl) {
+      await runBrightDataEnrichment(serviceClient, user.id, parsedBody.linkedinUrl);
     }
 
     return NextResponse.json({ success: true });

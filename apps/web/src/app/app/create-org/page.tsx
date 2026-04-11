@@ -1,17 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Input, Card, Textarea } from "@/components/ui";
+import { Button, Input, Card, Textarea, Select, InlineBanner, ToggleSwitch } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { useIdempotencyKey } from "@/hooks";
 import { createOrgSchema, type CreateOrgForm } from "@/lib/schemas/organization";
+import { ORG_TRIAL_DAYS, isOrgFreeTrialSelectable } from "@/lib/subscription/org-trial";
+import {
+  BASE_PRICES,
+  ALUMNI_ADD_ON_PRICES,
+  ALUMNI_BUCKET_LABELS,
+  getTotalPrice,
+  formatPrice,
+} from "@/lib/pricing";
+import type { AlumniBucket } from "@/types/database";
+
+const ALUMNI_OPTIONS = (Object.entries(ALUMNI_BUCKET_LABELS) as [AlumniBucket, string][]).map(
+  ([value, label]) => ({ value, label }),
+);
 
 export default function CreateOrgPage() {
   const router = useRouter();
+  const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -21,6 +36,7 @@ export default function CreateOrgPage() {
     handleSubmit,
     watch,
     setValue,
+    trigger,
     formState: { errors },
   } = useForm<CreateOrgForm>({
     resolver: zodResolver(createOrgSchema),
@@ -31,23 +47,33 @@ export default function CreateOrgPage() {
       primaryColor: "#1e3a5f",
       billingInterval: "month",
       alumniBucket: "none",
+      withTrial: false,
     },
   });
 
   const formValues = watch();
-  const { name, slug, description, primaryColor, billingInterval, alumniBucket } = formValues;
+  const { name, slug, primaryColor, billingInterval, alumniBucket, withTrial } = formValues;
+  const trialEligible = isOrgFreeTrialSelectable({ billingInterval, alumniBucket });
+  const effectiveWithTrial = trialEligible && Boolean(withTrial);
+
+  useEffect(() => {
+    if (!trialEligible && withTrial) {
+      setValue("withTrial", false);
+    }
+  }, [setValue, trialEligible, withTrial]);
 
   const fingerprint = useMemo(
     () =>
       JSON.stringify({
         name: name?.trim() || "",
         slug: slug?.trim() || "",
-        description: description?.trim() || "",
+        description: formValues.description?.trim() || "",
         primaryColor: primaryColor || "",
         billingInterval,
         alumniBucket,
+        withTrial: effectiveWithTrial,
       }),
-    [alumniBucket, billingInterval, description, name, primaryColor, slug],
+    [alumniBucket, billingInterval, formValues.description, effectiveWithTrial, name, primaryColor, slug],
   );
   const { idempotencyKey } = useIdempotencyKey({
     storageKey: "create-org-checkout",
@@ -65,6 +91,13 @@ export default function CreateOrgPage() {
       .replace(/-+/g, "-")
       .trim();
     setValue("slug", generatedSlug);
+  };
+
+  const handleNext = async () => {
+    const valid = await trigger(["name", "slug"]);
+    if (valid) {
+      setStep(2);
+    }
   };
 
   const onSubmit = async (data: CreateOrgForm) => {
@@ -88,6 +121,7 @@ export default function CreateOrgPage() {
           primaryColor: data.primaryColor,
           billingInterval: data.billingInterval,
           alumniBucket: data.alumniBucket,
+          withTrial: effectiveWithTrial,
           idempotencyKey,
         }),
       });
@@ -116,14 +150,26 @@ export default function CreateOrgPage() {
     }
   };
 
+  // Dynamic pricing summary
+  const basePrice = BASE_PRICES[billingInterval];
+  const alumniAddon =
+    alumniBucket !== "none" && alumniBucket !== "5000+"
+      ? ALUMNI_ADD_ON_PRICES[alumniBucket][billingInterval]
+      : null;
+  const totalPrice = getTotalPrice(billingInterval, alumniBucket);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/app">
-            <h1 className="text-2xl font-bold text-foreground">
-              Team<span className="text-emerald-500">Network</span>
+            <h1 className="flex items-center gap-2.5">
+              <Image src="/TeamNetwor.png" alt="" width={541} height={303}
+                     className="h-7 w-auto object-contain" aria-hidden="true" />
+              <span className="text-2xl font-bold text-foreground">
+                <span className="text-green-500">Team</span>Network
+              </span>
             </h1>
           </Link>
           <form action="/auth/signout" method="POST">
@@ -147,39 +193,49 @@ export default function CreateOrgPage() {
 
         <Card className="p-8">
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-foreground mb-2">Create a New Organization</h2>
+            <p className="text-sm font-medium text-muted-foreground mb-1">
+              Step {step} of 2
+            </p>
+            <h2 className="text-2xl font-bold text-foreground mb-2">
+              {step === 1 ? "Your Organization" : "Plan & Billing"}
+            </h2>
             <p className="text-muted-foreground">
-              Set up your team, club, or group. You&apos;ll be the admin and can invite members later.
+              {step === 1
+                ? "Set up your team, club, or group. You\u2019ll be the admin and can invite members later."
+                : "Choose your billing plan and alumni access level."}
             </p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            <InlineBanner variant="error" className="mb-6">
               {error}
               <div className="mt-2 flex justify-end">
                 <FeedbackButton context="create-org" trigger="checkout_error" />
               </div>
-            </div>
+            </InlineBanner>
           )}
           {infoMessage && (
-            <div className="mb-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-sm">
+            <InlineBanner variant="success" className="mb-6">
               {infoMessage}
-            </div>
+            </InlineBanner>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="space-y-6">
-              <Input
-                label="Organization Name"
-                type="text"
-                placeholder="e.g., Stanford Crew, The Whiffenpoofs"
-                error={errors.name?.message}
-                {...register("name", {
-                  onChange: (e) => handleNameChange(e.target.value),
-                })}
-              />
+            <input type="hidden" {...register("withTrial")} />
 
-              <div>
+            {/* Step 1: Your Organization */}
+            {step === 1 && (
+              <div className="space-y-6">
+                <Input
+                  label="Organization Name"
+                  type="text"
+                  placeholder="e.g., Stanford Crew, The Whiffenpoofs"
+                  error={errors.name?.message}
+                  {...register("name", {
+                    onChange: (e) => handleNameChange(e.target.value),
+                  })}
+                />
+
                 <Input
                   label="URL Slug"
                   type="text"
@@ -192,52 +248,56 @@ export default function CreateOrgPage() {
                     },
                   })}
                 />
-              </div>
 
-              <Textarea
-                label="Description"
-                placeholder="Tell people about your organization..."
-                rows={3}
-                error={errors.description?.message}
-                {...register("description")}
-              />
+                <Textarea
+                  label="Description"
+                  placeholder="Tell people about your organization..."
+                  rows={3}
+                  error={errors.description?.message}
+                  {...register("description")}
+                />
 
-              <div className="p-4 rounded-xl bg-muted/50 text-sm space-y-2">
-                <p className="font-semibold text-foreground">Pricing</p>
-                <p className="text-muted-foreground">Active Team (Required): $15/mo or $150/yr.</p>
-                <p className="text-muted-foreground">
-                  Alumni Add-On (Optional): 0–250: +$10/mo or $100/yr; 251–500: +$20/mo or $200/yr; 501–1,000: +$35/mo or $350/yr; 1,001–2,500: +$60/mo or $600/yr; 2,500–5,000: +$100/mo or $1,000/yr.
-                </p>
-                <p className="text-muted-foreground">
-                  5,000+ alumni routes to a custom quote (no checkout; we will contact you).
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Brand Color
-                </label>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="color"
-                    value={primaryColor}
-                    onChange={(e) => setValue("primaryColor", e.target.value)}
-                    className="h-12 w-20 rounded-xl border border-border cursor-pointer"
-                  />
-                  <Input
-                    type="text"
-                    placeholder="#1e3a5f"
-                    className="flex-1"
-                    error={errors.primaryColor?.message}
-                    {...register("primaryColor")}
-                  />
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Brand Color
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="color"
+                      value={primaryColor}
+                      onChange={(e) => setValue("primaryColor", e.target.value)}
+                      className="h-12 w-20 rounded-xl border border-border cursor-pointer"
+                    />
+                    <Input
+                      type="text"
+                      placeholder="#1e3a5f"
+                      className="flex-1"
+                      error={errors.primaryColor?.message}
+                      {...register("primaryColor")}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This color will be used for your organization&apos;s branding
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  This color will be used for your organization&apos;s branding
-                </p>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex gap-4 pt-4">
+                  <Link href="/app" className="flex-1">
+                    <Button type="button" variant="secondary" className="w-full">
+                      Cancel
+                    </Button>
+                  </Link>
+                  <Button type="button" className="flex-1" onClick={handleNext}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Plan & Billing */}
+            {step === 2 && (
+              <div className="space-y-6">
+                {/* Billing Interval */}
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">Billing Interval</p>
                   <div className="flex gap-2">
@@ -248,7 +308,7 @@ export default function CreateOrgPage() {
                         onClick={() => setValue("billingInterval", interval)}
                         className={`flex-1 px-4 py-3 rounded-xl border ${
                           billingInterval === interval
-                            ? "border-org-primary bg-org-primary text-white"
+                            ? "border-org-primary bg-org-primary text-org-primary-foreground"
                             : "border-border bg-muted text-foreground"
                         }`}
                       >
@@ -256,48 +316,88 @@ export default function CreateOrgPage() {
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Monthly = $15/mo base. Yearly = $150/yr (save 2 months).
-                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-foreground">Alumni Access</p>
-                  <select
-                    className="w-full rounded-xl border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-org-primary"
-                    {...register("alumniBucket")}
-                  >
-                    <option value="none">No alumni access</option>
-                    <option value="0-250">0–250 alumni</option>
-                    <option value="251-500">251–500 alumni</option>
-                    <option value="501-1000">501–1,000 alumni</option>
-                    <option value="1001-2500">1,001–2,500 alumni</option>
-                    <option value="2500-5000">2,500–5,000 alumni</option>
-                    <option value="5000+">Over 5,000 (custom pricing)</option>
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    Alumni access adds read access for alumni directories and communications; pricing scales by bucket.
-                  </p>
-                </div>
-              </div>
+                {/* Alumni Access */}
+                <Select
+                  label="Alumni Access"
+                  options={ALUMNI_OPTIONS}
+                  error={errors.alumniBucket?.message}
+                  {...register("alumniBucket")}
+                />
 
-              {alumniBucket === "5000+" && (
-                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
-                  For 5,000+ alumni, we will contact you with custom pricing. No payment is collected now and the org will remain pending_sales.
+                {/* Dynamic Pricing Summary */}
+                <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm space-y-2">
+                  <p className="font-semibold text-foreground">Pricing Summary</p>
+                  {totalPrice !== null ? (
+                    <>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Active Team</span>
+                        <span>{formatPrice(basePrice, billingInterval)}</span>
+                      </div>
+                      {alumniAddon !== null && (
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Alumni ({ALUMNI_BUCKET_LABELS[alumniBucket]})</span>
+                          <span>+{formatPrice(alumniAddon, billingInterval)}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-border my-1" />
+                      <div className="flex justify-between font-medium text-foreground">
+                        <span>Total</span>
+                        <span>{formatPrice(totalPrice, billingInterval)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Custom quote &mdash; we&apos;ll reach out to discuss pricing for your alumni network.
+                    </p>
+                  )}
                 </div>
-              )}
 
-              <div className="flex gap-4 pt-4">
-                <Link href="/app" className="flex-1">
-                  <Button type="button" variant="secondary" className="w-full">
-                    Cancel
+                {/* 5000+ warning */}
+                {alumniBucket === "5000+" && (
+                  <InlineBanner variant="warning">
+                    For 5,000+ alumni, we will contact you with custom pricing. No payment is collected now and the org will remain pending_sales.
+                  </InlineBanner>
+                )}
+
+                {/* Trial toggle */}
+                {trialEligible && (
+                  <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1 pr-4">
+                        <p className="font-medium text-foreground">
+                          {ORG_TRIAL_DAYS}-day free trial
+                        </p>
+                        <p className="text-muted-foreground">
+                          Your card is collected now. Billing starts when the trial ends unless you cancel.
+                        </p>
+                      </div>
+                      <ToggleSwitch
+                        checked={effectiveWithTrial}
+                        onChange={(checked) => setValue("withTrial", checked)}
+                        label={`Enable ${ORG_TRIAL_DAYS}-day free trial`}
+                      />
+                    </div>
+                    {effectiveWithTrial && (
+                      <p className="text-emerald-600 dark:text-emerald-400">
+                        Trial selected. Your organization will be active immediately, and the first charge will happen after {ORG_TRIAL_DAYS} days.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex gap-4 pt-4">
+                  <Button type="button" variant="secondary" className="flex-1" onClick={() => setStep(1)}>
+                    Back
                   </Button>
-                </Link>
-                <Button type="submit" className="flex-1" isLoading={isLoading}>
-                  Create Organization
-                </Button>
+                  <Button type="submit" className="flex-1" isLoading={isLoading}>
+                    {effectiveWithTrial ? `Start ${ORG_TRIAL_DAYS}-Day Free Trial` : "Create Organization"}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </form>
         </Card>
       </main>

@@ -166,8 +166,8 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="New Chat Group"
-        description="Create a new group for your organization to communicate"
+        title="New Chat"
+        description="Create a new chat channel for your organization"
       />
 
       <Card className="p-6 mt-4 max-w-2xl">

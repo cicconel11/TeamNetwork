@@ -35,7 +35,7 @@ export function RecentAnnouncementsWidget({ announcements, orgSlug }: RecentAnno
         {announcements.map((announcement) => (
           <li key={announcement.id}>
             <Link
-              href={`/${orgSlug}/announcements/${announcement.id}`}
+              href={`/${orgSlug}/announcements`}
               className="block p-2 -m-2 rounded-xl hover:bg-muted transition-all duration-200"
             >
               <p className="text-sm font-semibold text-foreground line-clamp-1">{announcement.title}</p>

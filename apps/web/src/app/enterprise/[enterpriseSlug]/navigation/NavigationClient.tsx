@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Card } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { EnterpriseNavEditor } from "@/components/enterprise/EnterpriseNavEditor";
+
+const EnterpriseNavEditor = dynamic(
+  () => import("@/components/enterprise/EnterpriseNavEditor").then((mod) => mod.EnterpriseNavEditor),
+  { loading: () => <div className="animate-pulse bg-[var(--muted)] rounded-2xl h-64" /> }
+);
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 

@@ -1,0 +1,80 @@
+// Compatibility aliases (app-wide imports depend on these exports)
+export type AcademicSchedule = Tables<"academic_schedules">;
+export type Alumni = Tables<"alumni">;
+export type Announcement = Tables<"announcements">;
+export type ChatGroup = Tables<"chat_groups">;
+export type ChatGroupMember = Tables<"chat_group_members">;
+export type ChatMessage = Tables<"chat_messages">;
+export type ChatPollVote = Tables<"chat_poll_votes">;
+export type ChatFormResponse = Tables<"chat_form_responses">;
+export type Event = Tables<"events">;
+export type Form = Tables<"forms">;
+export type FormDocument = Tables<"form_documents">;
+export type FormDocumentSubmission = Tables<"form_document_submissions">;
+export type FormSubmission = Tables<"form_submissions">;
+export type Member = Tables<"members">;
+export type NotificationPreference = Tables<"notification_preferences">;
+export type Organization = Tables<"organizations">;
+export type OrganizationDonation = Tables<"organization_donations">;
+export type OrganizationDonationStat = Tables<"organization_donation_stats">;
+export type ScheduleFile = Tables<"schedule_files">;
+export type User = Tables<"users">;
+export type Workout = Tables<"workouts">;
+export type WorkoutLog = Tables<"workout_logs">;
+
+// Enum type exports
+export type EventType = Enums<"event_type">;
+export type ChatMessageStatus = Enums<"chat_message_status">;
+export type MemberStatus = Enums<"member_status">;
+export type MembershipStatus = Enums<"membership_status">;
+export type UserRole = Enums<"user_role">;
+
+// Additional type aliases for backward compatibility and convenience
+export type RsvpStatus = "attending" | "not_attending" | "maybe";
+export type AnnouncementAudience = "all" | "members" | "active_members" | "alumni" | "individuals";
+export type NotificationAudience = "members" | "alumni" | "both";
+export type NotificationChannel = "email" | "sms" | "both";
+export type WorkoutStatus = "not_started" | "in_progress" | "completed";
+export type AlumniBucket = "none" | "0-250" | "251-500" | "501-1000" | "1001-2500" | "2500-5000" | "5000+";
+export type ParentsBucket = "none" | "0-250" | "251-500" | "501-1000" | "1001-2500" | "2500-5000" | "5000+";
+export type SubscriptionInterval = "month" | "year";
+export type EmbedType = "link" | "iframe";
+export type OccurrenceType = "single" | "daily" | "weekly" | "monthly";
+
+export type FormFieldType = "text" | "textarea" | "email" | "phone" | "date" | "select" | "checkbox" | "radio";
+
+export interface FormFieldOption {
+  label: string;
+  value: string;
+}
+
+export interface FormField {
+  name: string;
+  label: string;
+  type: FormFieldType;
+  required?: boolean;
+  placeholder?: string;
+  options?: (string | FormFieldOption)[];
+}
+
+export interface PhilanthropyEmbed {
+  id: string;
+  organization_id: string;
+  title: string;
+  url: string;
+  embed_type: "link" | "iframe";
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DonationEmbed {
+  id: string;
+  organization_id: string;
+  title: string;
+  url: string;
+  embed_type: "link" | "iframe";
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}

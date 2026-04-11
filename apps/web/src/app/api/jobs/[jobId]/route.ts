@@ -86,9 +86,11 @@ export async function PATCH(
     // Validate job fields
     const validationResult = updateJobSchema.safeParse(body);
     if (!validationResult.success) {
-      console.error("PATCH /api/jobs validation error:", validationResult.error.issues);
+      const details = validationResult.error.issues.map(
+        (issue) => `${issue.path.join(".") || "body"}: ${issue.message}`
+      );
       return NextResponse.json(
-        { error: "Validation failed", details: validationResult.error.issues },
+        { error: "Validation failed", details },
         { status: 400 }
       );
     }
@@ -140,7 +142,7 @@ export async function PATCH(
 
     if (error) {
       console.error("PATCH /api/jobs update error:", JSON.stringify(error));
-      return NextResponse.json({ error: `Failed to update job: ${error.message} (${error.code})` }, { status: 500 });
+      return NextResponse.json({ error: "Failed to update job" }, { status: 500 });
     }
 
     return NextResponse.json({ job }, { headers: rateLimit.headers });

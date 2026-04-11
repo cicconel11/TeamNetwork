@@ -4,13 +4,16 @@ import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "rea
 import { createClient } from "@/lib/supabase/client";
 import { Card, Badge, Skeleton } from "@/components/ui";
 import type { AcademicSchedule, User } from "@/types/database";
+import { splitEventIntoLocalDaySegments } from "@/lib/calendar/event-segments";
 import { computeSummaryStats, formatDateKey, type ConflictInfo } from "./availability-stats";
 import { computeEventBlocks, resolveOverlaps, type PositionedBlock } from "./availability-blocks";
+import { buildAvailabilityRenderState } from "./availability-week";
 
 interface AvailabilityGridProps {
   schedules: (AcademicSchedule & { users?: Pick<User, "name" | "email"> | null })[];
   orgId: string;
   mode?: "personal" | "team";
+  timeZone?: string;
 }
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -28,7 +31,7 @@ type CalendarEventSummary = {
   end_at: string | null;
   all_day: boolean | null;
   users?: { name: string | null; email: string | null } | null;
-  origin?: "calendar" | "schedule";
+  origin?: "calendar" | "schedule" | "org";
 };
 
 type PopoverState = {
@@ -52,12 +55,6 @@ function startOfDay(date: Date): Date {
 }
 
 // Get start of week (Sunday) for a given date
-function getWeekStart(date: Date): Date {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  d.setDate(d.getDate() - d.getDay());
-  return d;
-}
-
 function getWeekNumber(date: Date): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -81,21 +78,21 @@ function getBlockColor(block: PositionedBlock): {
     return {
       bg: "bg-org-primary/15 dark:bg-org-primary/25",
       border: "border-l-org-primary",
-      text: "text-org-primary dark:text-org-primary-light",
+      text: "text-foreground",
     };
   }
   if (block.origin === "academic") {
     return {
       bg: "bg-org-secondary/15 dark:bg-org-secondary/25",
       border: "border-l-org-secondary",
-      text: "text-org-secondary-dark dark:text-org-secondary-light",
+      text: "text-foreground",
     };
   }
   // calendar
   return {
     bg: "bg-blue-500/15 dark:bg-blue-500/25",
     border: "border-l-blue-500",
-    text: "text-blue-700 dark:text-blue-300",
+    text: "text-foreground",
   };
 }
 
@@ -111,7 +108,7 @@ function getHeatmapOverlay(busyCount: number, totalMembers: number, isOrgBusy: b
   return "";
 }
 
-export function AvailabilityGrid({ schedules, orgId, mode = "team" }: AvailabilityGridProps) {
+export function AvailabilityGrid({ schedules, orgId, mode = "team", timeZone }: AvailabilityGridProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedCell, setSelectedCell] = useState<PopoverState>(null);
   const [totalMembers, setTotalMembers] = useState<number>(mode === "team" ? 0 : 1);
@@ -119,7 +116,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [currentMinute, setCurrentMinute] = useState<number>(-1);
+  const [clockTick, setClockTick] = useState<number>(0);
   const gridRef = useRef<HTMLDivElement>(null);
 
   // Mark component as mounted to avoid hydration mismatch with dates
@@ -132,58 +129,23 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     if (!mounted) return;
 
     const updateTime = () => {
-      const now = new Date();
-      setCurrentMinute(now.getHours() * 60 + now.getMinutes());
+      setClockTick(Date.now());
     };
     updateTime();
 
     const interval = setInterval(updateTime, 60_000);
     return () => clearInterval(interval);
-  }, [mounted]);
+  }, [mounted, timeZone]);
 
-  const { weekStart, weekEnd, weekLabel, weekDays, rangeStart, rangeEnd } = useMemo(() => {
-    // Use a fixed date during SSR to avoid hydration mismatch
-    // After mount, use the actual current date
-    const today = mounted ? new Date() : new Date(2026, 0, 1); // fallback date for SSR
-    const currentWeekStart = getWeekStart(today);
+  const now = useMemo(
+    () => (mounted && clockTick > 0 ? new Date(clockTick) : new Date("2026-01-01T12:00:00.000Z")),
+    [clockTick, mounted],
+  );
 
-    // Apply week offset
-    const targetWeekStart = new Date(currentWeekStart);
-    targetWeekStart.setDate(currentWeekStart.getDate() + weekOffset * 7);
-
-    const targetWeekEnd = new Date(targetWeekStart);
-    targetWeekEnd.setDate(targetWeekStart.getDate() + 6);
-
-    // Format label: "Jan 19 - 25, 2026" or "Jan 26 - Feb 1, 2026"
-    const startMonth = targetWeekStart.toLocaleDateString("en-US", { month: "short" });
-    const endMonth = targetWeekEnd.toLocaleDateString("en-US", { month: "short" });
-    const sameMonth = targetWeekStart.getMonth() === targetWeekEnd.getMonth();
-    const label = sameMonth
-      ? `${startMonth} ${targetWeekStart.getDate()} - ${targetWeekEnd.getDate()}, ${targetWeekEnd.getFullYear()}`
-      : `${startMonth} ${targetWeekStart.getDate()} - ${endMonth} ${targetWeekEnd.getDate()}, ${targetWeekEnd.getFullYear()}`;
-
-    const rangeStartDate = new Date(targetWeekStart);
-    rangeStartDate.setHours(0, 0, 0, 0);
-    const rangeEndDate = new Date(targetWeekEnd);
-    rangeEndDate.setHours(23, 59, 59, 999);
-
-    // Build array of 7 days for the week
-    const days: Date[] = [];
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(targetWeekStart);
-      day.setDate(targetWeekStart.getDate() + i);
-      days.push(day);
-    }
-
-    return {
-      weekStart: targetWeekStart,
-      weekEnd: targetWeekEnd,
-      weekLabel: label,
-      weekDays: days,
-      rangeStart: rangeStartDate,
-      rangeEnd: rangeEndDate,
-    };
-  }, [weekOffset, mounted]);
+  const { weekStart, weekLabel, weekDays, rangeStart, rangeEnd, todayKey, currentMinute } = useMemo(
+    () => buildAvailabilityRenderState(now, weekOffset, timeZone),
+    [now, weekOffset, timeZone],
+  );
 
   useEffect(() => {
     if (mode !== "team") {
@@ -252,6 +214,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
   // Conflict grid (used by team mode + summary stats)
   const conflictGrid = useMemo(() => {
     const grid: Map<string, ConflictInfo[]> = new Map();
+    const weekDayKeys = new Set(weekDays.map((day) => formatDateKey(day)));
 
     const addConflict = (date: Date, hour: number, conflict: ConflictInfo) => {
       if (hour < GRID_START_HOUR || hour >= GRID_END_HOUR) {
@@ -323,13 +286,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     });
 
     calendarEvents.forEach((event) => {
-      const start = new Date(event.start_at);
-      if (Number.isNaN(start.getTime())) {
-        return;
-      }
-
-      const end = event.end_at ? new Date(event.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
-      const isOrgEvent = event.origin === "schedule";
+      const isOrgEvent = event.origin === "schedule" || event.origin === "org";
       const userId = isOrgEvent ? `org:${event.id}` : event.user_id;
       const fallbackName = mode === "personal" ? "You" : "Unknown";
       const memberName = isOrgEvent
@@ -338,40 +295,22 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       const title = event.title || (isOrgEvent ? "Org schedule" : "Calendar event");
       const conflict = { userId, memberName, title, isOrg: isOrgEvent };
 
-      if (event.all_day) {
-        const startDay = startOfDay(start);
-        const endDay = startOfDay(end);
-        const endIsMidnight = end.getHours() === 0 && end.getMinutes() === 0;
-        const inclusiveEnd = endIsMidnight && endDay > startDay
-          ? new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate() - 1)
-          : endDay;
+      const segments = splitEventIntoLocalDaySegments({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: Boolean(event.all_day),
+      }, timeZone);
 
-        for (let day = new Date(startDay); day <= inclusiveEnd; day.setDate(day.getDate() + 1)) {
-          if (day < weekStart || day > weekEnd) continue;
-          addHoursForDay(day, GRID_START_HOUR, GRID_END_HOUR, conflict);
-        }
-        return;
-      }
-
-      const startDay = startOfDay(start);
-      const endDay = startOfDay(end);
-
-      for (let day = new Date(startDay); day <= endDay; day.setDate(day.getDate() + 1)) {
-        if (day < weekStart || day > weekEnd) continue;
-
-        const isFirstDay = day.getTime() === startDay.getTime();
-        const isLastDay = day.getTime() === endDay.getTime();
-        const dayStart = isFirstDay ? start : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0);
-        const dayEnd = isLastDay ? end : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
-
-        const sHour = dayStart.getHours();
-        const eHour = dayEnd.getHours() + (dayEnd.getMinutes() > 0 ? 1 : 0);
-        addHoursForDay(day, sHour, eHour, conflict);
-      }
+      segments.forEach((segment) => {
+        if (!weekDayKeys.has(segment.dateKey)) return;
+        const startHour = Math.floor(segment.startMinute / 60);
+        const endHour = Math.ceil(segment.endMinute / 60);
+        addHoursForDay(segment.date, startHour, endHour, conflict);
+      });
     });
 
     return grid;
-  }, [calendarEvents, weekDays, weekEnd, weekStart, mode, schedules]);
+  }, [calendarEvents, weekDays, mode, schedules, timeZone]);
 
   const getConflicts = (dateKey: string, hour: number): ConflictInfo[] => {
     return conflictGrid.get(`${dateKey}-${hour}`) || [];
@@ -380,13 +319,13 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
   // Event blocks for personal mode
   const eventBlocks = useMemo(() => {
     if (mode !== "personal") return new Map<string, PositionedBlock[]>();
-    const raw = computeEventBlocks(schedules, calendarEvents, weekDays);
+    const raw = computeEventBlocks(schedules, calendarEvents, weekDays, timeZone);
     const positioned = new Map<string, PositionedBlock[]>();
     raw.forEach((blocks, dateKey) => {
       positioned.set(dateKey, resolveOverlaps(blocks));
     });
     return positioned;
-  }, [mode, schedules, calendarEvents, weekDays]);
+  }, [mode, schedules, calendarEvents, weekDays, timeZone]);
 
   // Compute summary stats from the conflict grid
   const summaryStats = useMemo(
@@ -395,7 +334,6 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
   );
 
   // Is today in view?
-  const todayKey = mounted ? formatDateKey(new Date()) : "";
   const todayInView = weekDays.some((d) => formatDateKey(d) === todayKey);
   const showTimeLine = todayInView && currentMinute >= GRID_START_MINUTE && currentMinute < GRID_END_HOUR * 60;
   const timeLineTop = showTimeLine ? (currentMinute - GRID_START_MINUTE) : -1;
@@ -523,7 +461,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
         {weekOffset !== 0 && (
           <button
             onClick={() => setWeekOffset(0)}
-            className="px-4 py-2 rounded-full bg-org-primary/10 text-org-primary text-sm font-medium hover:bg-org-primary/20 transition-colors inline-flex items-center gap-1.5"
+            className="px-4 py-2 rounded-full bg-muted/50 text-foreground text-sm font-medium hover:bg-muted transition-colors inline-flex items-center gap-1.5"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
@@ -563,14 +501,14 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
                 key={dateKey}
                 className={`sticky top-0 z-20 bg-card border-b border-border/30 border-l border-l-border/20 py-2 px-1 text-center`}
               >
-                <div className={`text-xs font-medium uppercase tracking-wider ${isToday ? "text-org-primary" : "text-muted-foreground"}`}>
+                <div className={`text-xs font-medium uppercase tracking-wider ${isToday ? "text-card-foreground font-semibold" : "text-muted-foreground"}`}>
                   {DAYS[day.getDay()]}
                 </div>
                 <div className="mt-0.5 flex justify-center">
                   <span
                     className={`inline-flex items-center justify-center text-sm font-semibold ${
                       isToday
-                        ? "w-8 h-8 rounded-full bg-org-primary text-white"
+                        ? "w-8 h-8 rounded-full bg-org-primary text-org-primary-foreground"
                         : "text-foreground"
                     }`}
                   >

@@ -146,6 +146,7 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
         <SeatUsageBar
           currentSeats={enterpriseManagedOrgCount}
           billingInterval={subscription?.billing_interval ?? "year"}
+          bucketQuantity={subscription?.alumni_bucket_quantity ?? 1}
         />
         {(role === "owner" || role === "billing_admin") ? (
           <div className="mt-4 flex justify-end">

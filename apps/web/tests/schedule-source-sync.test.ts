@@ -1,4 +1,4 @@
-import test, { mock } from "node:test";
+import test from "node:test";
 import assert from "node:assert";
 import type { SyncInput, SyncResult, ScheduleConnector } from "@/lib/schedule-connectors/types";
 
@@ -47,20 +47,6 @@ function createSpyConnector(vendorId: string): ScheduleConnector {
 const googleSpy = createSpyConnector("google_calendar");
 const icsSpy = createSpyConnector("ics");
 
-// Mock the registry module before importing sync-source
-mock.module("@/lib/schedule-connectors/registry", {
-  namedExports: {
-    getConnectorById(id: string) {
-      if (id === "google_calendar") return googleSpy;
-      if (id === "ics") return icsSpy;
-      return null;
-    },
-    connectors: [icsSpy, googleSpy],
-    detectConnector: async () => ({ connector: icsSpy, confidence: 1.0 }),
-  },
-});
-
-// Dynamic import AFTER mock is set up
 const { syncScheduleSource } = await import("@/lib/schedule-connectors/sync-source");
 const { createSupabaseStub } = await import("./utils/supabaseStub");
 
@@ -68,6 +54,12 @@ const { createSupabaseStub } = await import("./utils/supabaseStub");
 
 function makeWindow() {
   return { from: new Date("2025-01-01"), to: new Date("2025-12-31") };
+}
+
+function getConnectorById(id: string) {
+  if (id === "google_calendar") return googleSpy;
+  if (id === "ics") return icsSpy;
+  return null;
 }
 
 // ---- tests ----
@@ -93,6 +85,7 @@ test("syncScheduleSource passes connected_user_id as userId to Google Calendar c
       connected_user_id: "user-xyz",
     },
     window: makeWindow(),
+    getConnectorById,
   });
 
   assert.strictEqual(result.ok, true, "sync should succeed");
@@ -126,6 +119,7 @@ test("syncScheduleSource passes undefined userId when connected_user_id is null"
       connected_user_id: null,
     },
     window: makeWindow(),
+    getConnectorById,
   });
 
   assert.strictEqual(result.ok, true, "sync should succeed for ICS without userId");
@@ -155,6 +149,7 @@ test("syncScheduleSource returns error for unsupported vendor", async () => {
       connected_user_id: null,
     },
     window: makeWindow(),
+    getConnectorById,
   });
 
   assert.strictEqual(result.ok, false, "should fail for unsupported vendor");
@@ -189,6 +184,7 @@ test("syncScheduleSource updates source metadata on success", async () => {
       connected_user_id: null,
     },
     window: makeWindow(),
+    getConnectorById,
   });
 
   assert.strictEqual(result.ok, true);
@@ -224,6 +220,7 @@ test("syncScheduleSource records error when connector throws", async () => {
       connected_user_id: "user-expired",
     },
     window: makeWindow(),
+    getConnectorById,
   });
 
   assert.strictEqual(result.ok, false);

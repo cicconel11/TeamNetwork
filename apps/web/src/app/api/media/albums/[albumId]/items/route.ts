@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import {
+  GALLERY_ALBUM_BATCH_RATE_LIMIT,
+  isMissingMediaAlbumsDraftColumnError,
+  withMediaAlbumsDraftColumnFallback,
+} from "@/lib/media/gallery-upload-server";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { z } from "zod";
 import { baseSchemas } from "@/lib/security/validation";
@@ -17,6 +22,12 @@ const addItemsSchema = z.object({
 });
 
 type Params = { params: { albumId: string } };
+type AlbumRow = {
+  id: string;
+  created_by: string;
+  organization_id: string;
+  is_upload_draft: boolean;
+};
 
 /**
  * POST /api/media/albums/[albumId]/items
@@ -28,8 +39,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const rateLimit = checkRateLimit(request, {
       feature: "media album add items",
-      limitPerIp: 30,
-      limitPerUser: 20,
+      ...GALLERY_ALBUM_BATCH_RATE_LIMIT,
     });
     if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
@@ -47,15 +57,36 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const isAdmin = membership.role === "admin";
     const serviceClient = createServiceClient();
+    const selectWithDraftColumn = "id, created_by, organization_id, is_upload_draft";
+    const selectWithoutDraftColumn = "id, created_by, organization_id";
 
     // Verify album exists and user has permission
-    const { data: album, error: albumError } = await (serviceClient as any)
-      .from("media_albums")
-      .select("id, created_by, organization_id")
-      .eq("id", albumId)
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .maybeSingle();
+    const { data: rawAlbum, error: albumError, usedDraftColumn } = await withMediaAlbumsDraftColumnFallback({
+      withDraftColumn: async () => await (serviceClient as any)
+        .from("media_albums")
+        .select(selectWithDraftColumn)
+        .eq("id", albumId)
+        .eq("organization_id", orgId)
+        .is("deleted_at", null)
+        .maybeSingle(),
+      withoutDraftColumn: async () => await (serviceClient as any)
+        .from("media_albums")
+        .select(selectWithoutDraftColumn)
+        .eq("id", albumId)
+        .eq("organization_id", orgId)
+        .is("deleted_at", null)
+        .maybeSingle(),
+    });
+
+    const rawAlbumRecord = rawAlbum as Record<string, unknown> | null;
+    const album: AlbumRow | null = rawAlbumRecord
+      ? {
+        id: String(rawAlbumRecord.id),
+        created_by: String(rawAlbumRecord.created_by),
+        organization_id: String(rawAlbumRecord.organization_id),
+        is_upload_draft: usedDraftColumn ? Boolean(rawAlbumRecord.is_upload_draft) : false,
+      }
+      : null;
 
     if (albumError || !album) {
       return NextResponse.json({ error: "Album not found" }, { status: 404 });
@@ -100,6 +131,24 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (insertError) {
       console.error("[media/albums/items] Insert failed:", insertError);
       return NextResponse.json({ error: "Failed to add items to album" }, { status: 500 });
+    }
+
+    if (album.is_upload_draft) {
+      const { error: draftUpdateError } = await serviceClient
+        .from("media_albums")
+        .update({
+          is_upload_draft: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", albumId);
+
+      if (draftUpdateError) {
+        if (isMissingMediaAlbumsDraftColumnError(draftUpdateError)) {
+          return NextResponse.json({ success: true, added: mediaIds.length }, { headers: rateLimit.headers });
+        }
+        console.error("[media/albums/items] Draft clear failed:", draftUpdateError);
+        return NextResponse.json({ error: "Failed to finalize album upload" }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ success: true, added: mediaIds.length }, { headers: rateLimit.headers });

@@ -5,7 +5,7 @@ import { Card, Badge } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { DocumentSubmissionsList } from "@/components/forms/DocumentSubmissionsList";
 import { DocumentActions } from "@/components/forms/DocumentActions";
-import type { FormDocument, FormDocumentSubmission, User } from "@teammeet/types";
+import type { FormDocument, FormDocumentSubmission, User } from "@/types/database";
 
 interface DocumentSubmissionsPageProps {
   params: Promise<{ orgSlug: string; documentId: string }>;
@@ -37,6 +37,7 @@ export default async function DocumentSubmissionsPage({ params }: DocumentSubmis
     .from("form_document_submissions")
     .select("*, users(name, email)")
     .eq("document_id", documentId)
+    .is("deleted_at", null)
     .order("submitted_at", { ascending: false });
 
   const typedSubmissions = (submissions || []) as (FormDocumentSubmission & { users: Pick<User, "name" | "email"> | null })[];

@@ -20,7 +20,12 @@ export const newMemberSchema = z.object({
   graduation_year: graduationYearSchema,
   expected_graduation_date: optionalDateStringSchema,
   photo_url: optionalHttpsUrlSchema,
-  linkedin_url: optionalHttpsUrlSchema,
+  linkedin_url: optionalLinkedInProfileUrlSchema,
+  current_company: optionalSafeString(200),
+  school: optionalSafeString(200),
+  bio: optionalSafeString(2000),
+  current_city: optionalSafeString(200),
+  major: optionalSafeString(200),
 });
 export type NewMemberForm = z.infer<typeof newMemberSchema>;
 
@@ -70,7 +75,7 @@ export const newParentSchema = z.object({
   email: optionalEmail,
   phone_number: optionalSafeString(50),
   photo_url: optionalHttpsUrlSchema,
-  linkedin_url: optionalHttpsUrlSchema,
+  linkedin_url: optionalLinkedInProfileUrlSchema,
   student_name: optionalSafeString(200),
   // Accepts null (API sends null for empty fields) or "" (react-hook-form Select value).
   // Runtime refine enforces that non-empty values must match a PARENT_RELATIONSHIPS option.

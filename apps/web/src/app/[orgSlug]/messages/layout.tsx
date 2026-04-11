@@ -21,16 +21,20 @@ export default async function MessagesLayout({ children, params }: MessagesLayou
   const orgId = orgCtx.organization.id;
 
   // Fetch chat groups user is a member of (or all if admin)
-  const { data: chatGroups } = await supabase
+  const { data: chatGroups, error: chatGroupsError } = await supabase
     .from("chat_groups")
-    .select("id, name, description, is_default, last_activity_at")
+    .select("id, name, description, is_default, updated_at")
     .eq("organization_id", orgId)
     .is("deleted_at", null)
     .order("is_default", { ascending: false })
     .order("name", { ascending: true });
 
+  if (chatGroupsError) {
+    console.error("[messages-layout] chat_groups query failed:", chatGroupsError.message, chatGroupsError);
+  }
+
   // Fetch discussion threads
-  const { data: threads } = await supabase
+  const { data: threads, error: threadsError } = await supabase
     .from("discussion_threads")
     .select("id, title, is_pinned, is_locked, reply_count, last_activity_at")
     .eq("organization_id", orgId)
@@ -39,10 +43,14 @@ export default async function MessagesLayout({ children, params }: MessagesLayou
     .order("last_activity_at", { ascending: false })
     .limit(50);
 
+  if (threadsError) {
+    console.error("[messages-layout] discussion_threads query failed:", threadsError.message, threadsError);
+  }
+
   return (
     <div className="flex h-full min-h-0">
       {/* Sidebar - hidden on mobile, shown on lg+ */}
-      <div className="hidden lg:block w-[280px] flex-shrink-0 border-r border-border">
+      <div className="hidden lg:block w-[280px] flex-shrink-0 border-r border-border h-full">
         <ChannelSidebar
           chatGroups={chatGroups || []}
           discussionThreads={threads || []}
@@ -52,7 +60,7 @@ export default async function MessagesLayout({ children, params }: MessagesLayou
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
         {children}
       </div>
     </div>

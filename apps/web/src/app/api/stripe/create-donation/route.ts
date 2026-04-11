@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { stripe, getConnectAccountStatus } from "@/lib/stripe";
+import { getStripeOrigin } from "@/lib/stripe-origin";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
@@ -89,19 +90,10 @@ export async function POST(req: Request) {
   const captchaResult = await verifyCaptcha(body.captchaToken, clientIp);
   if (!captchaResult.success) {
     const errorCode = captchaResult.error_codes?.[0];
-    const details = captchaResult.error_codes?.filter(Boolean) ?? [];
-
     if (errorCode === "missing-input-response") {
-      return respond(
-        { error: "Captcha verification required", details: details.length > 0 ? details : undefined },
-        400
-      );
+      return respond({ error: "Captcha verification required" }, 400);
     }
-
-    return respond(
-      { error: "Captcha verification failed", details: details.length > 0 ? details : undefined },
-      403
-    );
+    return respond({ error: "Captcha verification failed" }, 403);
   }
 
   const amountCents = Math.round(Number(body.amount || 0) * 100);
@@ -162,7 +154,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
+  const origin = getStripeOrigin(req.url);
   const donorName = body.donorName?.trim();
   const donorEmail = body.donorEmail?.trim();
   const purpose = body.purpose?.trim();
@@ -381,6 +373,6 @@ export async function POST(req: Request) {
       await supabase.from("payment_attempts").update(errorUpdate).eq("id", resolvedAttemptId);
     }
     console.error("[create-donation] Error:", message);
-    return respond({ error: message }, 400);
+    return respond({ error: "Unable to start donation checkout" }, 400);
   }
 }

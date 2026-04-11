@@ -315,68 +315,6 @@ export function useStadiumLights(beamSelector: string) {
   }, [beamSelector, reduced]);
 }
 
-// Counting number animation for scoreboard
-export function useCountUp(
-  elementRef: React.RefObject<HTMLElement | null>,
-  finalValue: number,
-  options?: { duration?: number; prefix?: string; suffix?: string }
-) {
-  const reduced = prefersReducedMotion();
-  const hasAnimated = useRef(false);
-
-  useEffect(() => {
-    if (!elementRef.current || hasAnimated.current) return;
-
-    const { duration = 2000, prefix = "", suffix = "" } = options || {};
-
-    if (reduced) {
-      elementRef.current.textContent = `${prefix}${finalValue.toLocaleString()}${suffix}`;
-      return;
-    }
-
-    // Custom easing function (ease out expo)
-    const easeOutExpo = (t: number): number => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
-
-    const animateValue = (start: number, end: number, dur: number, onUpdate: (val: number) => void) => {
-      const startTime = performance.now();
-      function step(currentTime: number) {
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / dur, 1);
-        const easedProgress = easeOutExpo(progress);
-        const currentValue = Math.round(start + (end - start) * easedProgress);
-        onUpdate(currentValue);
-        if (progress < 1) {
-          requestAnimationFrame(step);
-        }
-      }
-      requestAnimationFrame(step);
-    };
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && elementRef.current && !hasAnimated.current) {
-            hasAnimated.current = true;
-
-            animateValue(0, finalValue, duration, (val) => {
-              if (elementRef.current) {
-                elementRef.current.textContent = `${prefix}${val.toLocaleString()}${suffix}`;
-              }
-            });
-
-            observer.disconnect();
-          }
-        });
-      },
-      { threshold: 0.3 }
-    );
-
-    observer.observe(elementRef.current);
-
-    return () => observer.disconnect();
-  }, [elementRef, finalValue, options, reduced]);
-}
-
 // Banner drop animation with swing physics
 export function useBannerDrop(selector: string) {
   const reduced = prefersReducedMotion();

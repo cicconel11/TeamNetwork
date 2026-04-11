@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Card, Badge, Button } from "@/components/ui";
 
 interface PermissionRoleCardProps {
@@ -14,12 +15,6 @@ interface PermissionRoleCardProps {
   success: string | null;
 }
 
-const ROLE_OPTIONS = [
-  { value: "active_member", label: "Active Members" },
-  { value: "alumni", label: "Alumni" },
-  { value: "parent", label: "Parents" },
-];
-
 export function PermissionRoleCard({
   title,
   description,
@@ -31,6 +26,15 @@ export function PermissionRoleCard({
   error,
   success,
 }: PermissionRoleCardProps) {
+  const tCustom = useTranslations("customization");
+  const tCommon = useTranslations("common");
+
+  const ROLE_OPTIONS = [
+    { value: "active_member", label: tCustom("permissions.roleLabels.activeMembers") },
+    { value: "alumni", label: tCustom("permissions.roleLabels.alumni") },
+    { value: "parent", label: tCustom("permissions.roleLabels.parents") },
+  ];
+
   return (
     <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
       <div className="flex items-start justify-between gap-3">
@@ -38,15 +42,15 @@ export function PermissionRoleCard({
           <p className="font-semibold text-foreground">{title}</p>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        <Badge variant="muted">Admin</Badge>
+        <Badge variant="muted">{tCommon("admin")}</Badge>
       </div>
 
       <div className="space-y-3">
         <label className="flex items-center gap-3 cursor-not-allowed opacity-60">
           <input type="checkbox" className="h-4 w-4 rounded border-border" checked disabled />
           <div>
-            <span className="font-medium text-sm text-foreground">Admin</span>
-            <p className="text-xs text-muted-foreground">Admins can always {featureVerb}.</p>
+            <span className="font-medium text-sm text-foreground">{tCommon("admin")}</span>
+            <p className="text-xs text-muted-foreground">{tCustom("permissions.adminAlways", { verb: featureVerb })}</p>
           </div>
         </label>
         {ROLE_OPTIONS.map((opt) => (
@@ -60,7 +64,7 @@ export function PermissionRoleCard({
             <div>
               <span className="font-medium text-sm text-foreground">{opt.label}</span>
               <p className="text-xs text-muted-foreground">
-                Allow {opt.label.toLowerCase()} to {featureVerb}.
+                {tCustom("permissions.allow", { role: opt.label.toLowerCase(), verb: featureVerb })}
               </p>
             </div>
           </label>
@@ -72,7 +76,7 @@ export function PermissionRoleCard({
 
       <div className="flex justify-end pt-1">
         <Button onClick={onSave} isLoading={saving}>
-          Save permissions
+          {tCustom("permissions.savePermissions")}
         </Button>
       </div>
     </Card>

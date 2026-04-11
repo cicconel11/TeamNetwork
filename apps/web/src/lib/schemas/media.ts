@@ -44,6 +44,8 @@ export type UpdateMediaForm = z.infer<typeof updateMediaSchema>;
 
 export const mediaFeatureEnum = z.enum(["feed_post", "discussion_thread", "job_posting"]);
 export type MediaUploadFeature = z.infer<typeof mediaFeatureEnum>;
+export const previewImageMimeTypeSchema = z.enum(["image/jpeg", "image/png", "image/webp"]);
+export type PreviewImageMimeType = z.infer<typeof previewImageMimeTypeSchema>;
 
 export const uploadIntentSchema = z.object({
   orgId: baseSchemas.uuid,
@@ -51,7 +53,21 @@ export const uploadIntentSchema = z.object({
   fileName: safeString(255),
   mimeType: safeString(127),
   fileSize: z.number().int().positive().max(25 * 1024 * 1024),
-});
+  previewMimeType: previewImageMimeTypeSchema.optional(),
+  previewFileSize: z.number().int().nonnegative().max(25 * 1024 * 1024).optional(),
+}).refine(
+  (data) => data.mimeType.startsWith("image/") || data.previewMimeType === undefined,
+  {
+    message: "Preview uploads are only supported for images",
+    path: ["previewMimeType"],
+  },
+).refine(
+  (data) => data.previewMimeType !== undefined || data.previewFileSize === undefined,
+  {
+    message: "Preview size is only allowed when preview uploads are present",
+    path: ["previewFileSize"],
+  },
+);
 
 export type UploadIntentInput = z.infer<typeof uploadIntentSchema>;
 
@@ -82,8 +98,23 @@ export const mediaIdsSchema = z
 export const createAlbumSchema = z.object({
   name: safeString(200, 2),
   description: optionalSafeString(2000),
+  isUploadDraft: z.boolean().optional(),
 });
 export type CreateAlbumForm = z.infer<typeof createAlbumSchema>;
+
+/** Full permutation of non-deleted album ids for an org (same length as server count). */
+export const reorderAlbumsSchema = z.object({
+  orgId: baseSchemas.uuid,
+  albumIds: z.array(baseSchemas.uuid),
+});
+export type ReorderAlbumsInput = z.infer<typeof reorderAlbumsSchema>;
+
+/** Full permutation of non-deleted media item ids for an org gallery. */
+export const reorderMediaGallerySchema = z.object({
+  orgId: baseSchemas.uuid,
+  mediaIds: z.array(baseSchemas.uuid).max(10000),
+});
+export type ReorderMediaGalleryInput = z.infer<typeof reorderMediaGallerySchema>;
 
 // --- Gallery (media_items) schemas with moderation ---
 
@@ -121,6 +152,8 @@ export const galleryUploadIntentSchema = z.object({
   fileName: safeString(255),
   mimeType: galleryMimeTypeSchema,
   fileSizeBytes: z.number().int().positive().max(GALLERY_VIDEO_MAX_BYTES),
+  previewMimeType: previewImageMimeTypeSchema.optional(),
+  previewFileSizeBytes: z.number().int().nonnegative().max(GALLERY_IMAGE_MAX_BYTES).optional(),
   title: optionalSafeString(200),
   description: optionalSafeString(2000),
   tags: galleryTagsSchema,
@@ -134,6 +167,18 @@ export const galleryUploadIntentSchema = z.object({
     return true;
   },
   { message: "Images must be under 10MB", path: ["fileSizeBytes"] },
+).refine(
+  (data) => data.mimeType.startsWith("image/") || data.previewMimeType === undefined,
+  {
+    message: "Preview uploads are only supported for images",
+    path: ["previewMimeType"],
+  },
+).refine(
+  (data) => data.previewMimeType !== undefined || data.previewFileSizeBytes === undefined,
+  {
+    message: "Preview size is only allowed when preview uploads are present",
+    path: ["previewFileSizeBytes"],
+  },
 );
 export type GalleryUploadIntentInput = z.infer<typeof galleryUploadIntentSchema>;
 

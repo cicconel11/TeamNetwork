@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { isOrgAdmin } from "@/lib/auth";
+import { getCurrentUser, getOrgContext } from "@/lib/auth/roles";
 import { MembersFilter } from "@/components/members/MembersFilter";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { resolveDataClient, getDevAdminEmails } from "@/lib/auth/dev-admin";
@@ -33,22 +35,12 @@ interface MemberWithAdminFlag {
 export default async function MembersPage({ params, searchParams }: MembersPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
+  const { organization: org, isAdmin } = await getOrgContext(orgSlug);
+  if (!org) notFound();
+
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const dataClient = resolveDataClient(user, supabase, "view_members");
-
-  // Fetch organization
-  const { data: orgs, error: orgError } = await dataClient
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .limit(1);
-
-  const org = orgs?.[0];
-
-  if (!org || orgError) return null;
-
-  const isAdmin = await isOrgAdmin(org.id);
 
   // Build query with filters
   const devAdminEmails = getDevAdminEmails();
@@ -121,7 +113,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       .from("members")
       .select("role")
       .eq("organization_id", org.id)
-      .is("deleted_at", null),
+      .is("deleted_at", null)
+      .limit(1000),
   ]);
 
   // Combine and add isAdmin flag
@@ -168,15 +161,18 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 
   const navConfig = org.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/members", navConfig);
-  const actionLabel = resolveActionLabel("/members", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/members", navConfig, t, locale);
+  const actionLabel = resolveActionLabel("/members", navConfig, "Add", t, locale);
+  const tPagesMembers = await getTranslations("pages.members");
 
   return (
     <div className="animate-fade-in">
       <DirectoryViewTracker organizationId={org.id} directoryType="active_members" />
       <PageHeader
         title={pageLabel}
-        description={`${members?.length || 0} ${filters.status === "inactive" ? "inactive" : "active"} ${pageLabel.toLowerCase()}`}
+        description={`${members?.length || 0} ${filters.status === "inactive" ? tPagesMembers("inactive") : tPagesMembers("active")} ${pageLabel.toLowerCase()}`}
         actions={
           isAdmin && (
             <Link href={`/${orgSlug}/members/new`}>
@@ -254,8 +250,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
               </svg>
             }
-            title={`No ${pageLabel.toLowerCase()} found`}
-            description={filters.status === "inactive" ? `No inactive ${pageLabel.toLowerCase()}` : `No active ${pageLabel.toLowerCase()} yet`}
+            title={tPagesMembers("noMembersFound", { label: pageLabel.toLowerCase() })}
+            description={filters.status === "inactive" ? tPagesMembers("noInactiveMembers", { label: pageLabel.toLowerCase() }) : tPagesMembers("noActiveMembers", { label: pageLabel.toLowerCase() })}
             action={
               isAdmin && (
                 <Link href={`/${orgSlug}/members/new`}>

@@ -1,10 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import { acceptAdoptionRequest } from "../../src/lib/enterprise/adoption.ts";
+import { createSupabaseStub } from "../utils/supabaseStub.ts";
 
 /**
  * Tests for enterprise adoption library functions.
  *
- * Because createAdoptionRequest/acceptAdoptionRequest/rejectAdoptionRequest
+ * Because createAdoptionRequest/rejectAdoptionRequest
  * call createServiceClient() and checkAdoptionQuota() internally, we test them
  * via simulation functions that replicate the exact branching logic from
  * adoption.ts, using dependency-injected mocks — the same pattern used in
@@ -65,6 +67,7 @@ interface AcceptAdoptionResult {
 interface RejectAdoptionResult {
   success: boolean;
   error?: string;
+  status?: number;
 }
 
 // ── Simulation helpers mirroring adoption.ts exact branching ──────────────────
@@ -142,7 +145,9 @@ function simulateCreateAdoptionRequest(params: {
  */
 function simulateAcceptAdoptionRequest(params: {
   request: AdoptionRequestRow | null;
+  requestFetchError?: unknown;
   reVerifiedOrg: { enterprise_id: string | null } | null;
+  orgVerifyError?: unknown;
   quotaCheck: AdoptionQuotaResult;
   seatQuota: SeatQuotaInfo;
   orgSub: OrgSubscriptionRow | null;
@@ -153,10 +158,14 @@ function simulateAcceptAdoptionRequest(params: {
   rollbackError?: { message: string } | null;
 }): AcceptAdoptionResult {
   const {
-    request, reVerifiedOrg, quotaCheck, seatQuota,
+    request, requestFetchError, reVerifiedOrg, orgVerifyError, quotaCheck, seatQuota,
     orgSub, orgUpdateError, subUpdateError, subCreateError,
     markAcceptedError,
   } = params;
+
+  if (requestFetchError) {
+    return { success: false, error: "Internal error", status: 503 };
+  }
 
   if (!request) {
     return { success: false, error: "Request not found" };
@@ -168,6 +177,10 @@ function simulateAcceptAdoptionRequest(params: {
 
   if (request.expires_at && new Date(request.expires_at) < new Date()) {
     return { success: false, error: "Request has expired" };
+  }
+
+  if (orgVerifyError) {
+    return { success: false, error: "Internal error", status: 503 };
   }
 
   if (reVerifiedOrg?.enterprise_id) {
@@ -221,8 +234,14 @@ function simulateAcceptAdoptionRequest(params: {
  */
 function simulateRejectAdoptionRequest(params: {
   request: { status: string } | null;
+  requestFetchError?: unknown;
+  updateError?: unknown;
 }): RejectAdoptionResult {
-  const { request } = params;
+  const { request, requestFetchError, updateError } = params;
+
+  if (requestFetchError) {
+    return { success: false, error: "Internal error", status: 503 };
+  }
 
   if (!request) {
     return { success: false, error: "Request not found" };
@@ -230,6 +249,10 @@ function simulateRejectAdoptionRequest(params: {
 
   if (request.status !== "pending") {
     return { success: false, error: "Request has already been processed" };
+  }
+
+  if (updateError) {
+    return { success: false, error: "Internal error", status: 503 };
   }
 
   return { success: true };
@@ -714,6 +737,94 @@ describe("acceptAdoptionRequest", () => {
 
     assert.strictEqual(result.success, true);
   });
+
+  it("returns 503 when request fetch DB errors", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: null,
+      requestFetchError: new Error("timeout"),
+      reVerifiedOrg: null,
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 503);
+    assert.strictEqual(result.error, "Internal error");
+  });
+
+  it("org points to different enterprise → returns error", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest({ enterprise_id: "enterprise-1" }),
+      reVerifiedOrg: { enterprise_id: "enterprise-other" },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Organization already belongs to an enterprise");
+  });
+
+  it("returns 503 when org re-verify DB errors", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: null,
+      orgVerifyError: new Error("timeout"),
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 503);
+    assert.strictEqual(result.error, "Internal error");
+  });
+
+  it("retries partial adoption by reconciling subscription before accepting", async () => {
+    const supabase = createSupabaseStub();
+
+    supabase.seed("enterprise_adoption_requests", [{
+      id: "request-1",
+      enterprise_id: "enterprise-1",
+      organization_id: "org-1",
+      requested_by: "user-requester",
+      status: "pending",
+      expires_at: null,
+    }]);
+    supabase.seed("organizations", [{
+      id: "org-1",
+      enterprise_id: "enterprise-1",
+      enterprise_relationship_type: "adopted",
+      enterprise_adopted_at: "2026-01-01T00:00:00.000Z",
+    }]);
+
+    const result = await acceptAdoptionRequest("request-1", "user-admin", {
+      supabase: supabase as never,
+      checkAdoptionQuotaFn: async () => ({ allowed: true }),
+      canEnterpriseAddSubOrgFn: async () => ({ currentCount: 0, maxAllowed: null }),
+    });
+
+    assert.deepStrictEqual(result, { success: true });
+
+    const requests = supabase.getRows("enterprise_adoption_requests");
+    assert.strictEqual(requests[0].status, "accepted");
+    assert.strictEqual(requests[0].responded_by, "user-admin");
+
+    const subscriptions = supabase.getRows("organization_subscriptions");
+    assert.strictEqual(subscriptions.length, 1);
+    assert.strictEqual(subscriptions[0].organization_id, "org-1");
+    assert.strictEqual(subscriptions[0].status, "enterprise_managed");
+  });
 });
 
 // ── rejectAdoptionRequest ──────────────────────────────────────────────────────
@@ -751,6 +862,28 @@ describe("rejectAdoptionRequest", () => {
     const result = simulateRejectAdoptionRequest({ request: { status: "pending" } });
 
     assert.strictEqual(result.success, true);
+  });
+
+  it("returns 503 when request fetch DB errors", () => {
+    const result = simulateRejectAdoptionRequest({
+      request: null,
+      requestFetchError: new Error("timeout"),
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 503);
+    assert.strictEqual(result.error, "Internal error");
+  });
+
+  it("returns 503 when update fails", () => {
+    const result = simulateRejectAdoptionRequest({
+      request: { status: "pending" },
+      updateError: new Error("DB write failed"),
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 503);
+    assert.strictEqual(result.error, "Internal error");
   });
 });
 

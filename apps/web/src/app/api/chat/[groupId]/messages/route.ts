@@ -5,12 +5,26 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { baseSchemas, safeString, validateJson, ValidationError } from "@/lib/security/validation";
 import { getChatGroupContext } from "@/lib/auth/chat-helpers";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+interface RouteParams {
+  params: Promise<{ groupId: string }>;
+}
+
 const sendMessageSchema = z.object({
   body: safeString(4000),
 });
+type SendMessageBody = z.infer<typeof sendMessageSchema>;
 
-export async function POST(req: Request, { params }: { params: { groupId: string } }) {
-  const { groupId } = params;
+/**
+ * POST /api/chat/[groupId]/messages
+ * Send a text message in the chat group.
+ * Auth: active org role + (group member OR org admin).
+ * Body: { body: string }
+ */
+export async function POST(req: Request, { params }: RouteParams) {
+  const { groupId } = await params;
 
   const groupIdParsed = baseSchemas.uuid.safeParse(groupId);
   if (!groupIdParsed.success) {
@@ -35,7 +49,7 @@ export async function POST(req: Request, { params }: { params: { groupId: string
 
   if (!user) return respond({ error: "Unauthorized" }, 401);
 
-  let parsed: z.infer<typeof sendMessageSchema>;
+  let parsed: SendMessageBody;
   try {
     parsed = await validateJson(req, sendMessageSchema);
   } catch (err) {

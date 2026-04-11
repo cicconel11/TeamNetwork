@@ -5,8 +5,9 @@ import { MentorshipContextStrip } from "@/components/mentorship/MentorshipContex
 import { MentorshipPairsList } from "@/components/mentorship/MentorshipPairsList";
 import { MentorDirectory } from "@/components/mentorship/MentorDirectory";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import { getMentorshipSectionOrder } from "@teammeet/core";
+import { getMentorshipSectionOrder } from "@/lib/mentorship/presentation";
 
 interface MentorshipPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -149,22 +150,29 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
   ).sort((a, b) => b - a);
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/mentorship", navConfig);
+  const [tNav, tMentorship, locale] = await Promise.all([
+    getTranslations("nav.items"),
+    getTranslations("mentorship"),
+    getLocale(),
+  ]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/mentorship", navConfig, t, locale);
+
+  // Compute "my pair" context for the active member header strip.
   const hasPairs = filteredPairs.length > 0;
+
   const myPair =
     orgCtx.role === "active_member"
-      ? filteredPairs.find((pair) => pair.mentee_user_id === orgCtx.userId) ?? null
+      ? filteredPairs.find((p) => p.mentee_user_id === orgCtx.userId) ?? null
       : null;
+
   const myMentorName = myPair
-    ? usersForClient.find((user) => user.id === myPair.mentor_user_id)?.name ?? null
+    ? usersForClient.find((u) => u.id === myPair.mentor_user_id)?.name ?? null
     : null;
+
   const myLastLogDate = myPair
-    ? logsForClient.find((log) => log.pair_id === myPair.id)?.entry_date ?? null
+    ? logsForClient.find((l) => l.pair_id === myPair.id)?.entry_date ?? null
     : null;
-  const sectionOrder = getMentorshipSectionOrder({
-    hasPairs,
-    isAdmin: orgCtx.isAdmin,
-  });
 
   const pairsList = (
     <MentorshipPairsList
@@ -181,7 +189,7 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
             href="#mentor-directory"
             className="text-sm text-[color:var(--color-org-secondary)] hover:underline"
           >
-            Browse mentors ↓
+            {tMentorship("browseMentors")} ↓
           </a>
         ) : undefined
       }
@@ -199,16 +207,25 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     />
   );
 
+  // Order: active members & alumni with a pair see their pairs first;
+  // admins always see the directory first (they scan while managing).
+  const sectionOrder = getMentorshipSectionOrder({
+    hasPairs,
+    isAdmin: orgCtx.isAdmin,
+  });
+
   return (
     <div className="space-y-8 animate-fade-in">
       <PageHeader
         title={pageLabel}
-        description="Connect alumni with current members and keep mentorship momentum visible."
+        description={tMentorship("editorialStrapline")}
+        variant="editorial"
       />
 
       <MentorshipContextStrip
         role={orgCtx.role ?? ""}
         orgId={orgId}
+        orgSlug={orgSlug}
         myMentorName={myMentorName}
         myLastLogDate={myLastLogDate}
       />

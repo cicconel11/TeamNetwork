@@ -54,6 +54,11 @@ interface AdoptionRequestContext {
   organization?: MockOrganization | null;
   quotaAllowed?: boolean;
   quotaError?: string;
+  rejectResult?: {
+    success: boolean;
+    error?: string;
+    status?: number;
+  };
 }
 
 // Auth helpers for enterprise roles
@@ -787,6 +792,13 @@ function simulateRejectAdoption(
     return { status: 400, error: "Request has already been processed" };
   }
 
+  if (ctx.rejectResult && !ctx.rejectResult.success) {
+    return {
+      status: ctx.rejectResult.status ?? 400,
+      error: ctx.rejectResult.error,
+    };
+  }
+
   return { status: 200, success: true };
 }
 
@@ -914,4 +926,34 @@ test("Reject adoption returns 404 for request belonging to different org", () =>
   );
 
   assert.strictEqual(result.status, 404);
+});
+
+test("Reject adoption returns 503 on helper infra failure", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateRejectAdoption(
+    {
+      auth: AuthPresets.orgAdmin("org-1"),
+      orgId: "org-1",
+      requestId: "request-1",
+    },
+    {
+      supabase,
+      request: {
+        id: "request-1",
+        enterprise_id: "enterprise-1",
+        organization_id: "org-1",
+        requested_by: "user-1",
+        status: "pending",
+        expires_at: null,
+      },
+      rejectResult: {
+        success: false,
+        error: "Internal error",
+        status: 503,
+      },
+    }
+  );
+
+  assert.strictEqual(result.status, 503);
+  assert.strictEqual(result.error, "Internal error");
 });

@@ -72,15 +72,6 @@ export function SoftDeleteButton({
       }
     }
 
-    // Invalidate server-side cache for related pages (dashboard, list pages)
-    if (revalidatePaths && revalidatePaths.length > 0) {
-      try {
-        await revalidatePathsAction(revalidatePaths);
-      } catch (revalidateError) {
-        console.error("Cache revalidation error:", revalidateError);
-      }
-    }
-
     router.refresh();
     if (redirectTo) {
       router.push(redirectTo);

@@ -5,8 +5,21 @@ import { baseSchemas } from "@/lib/security/validation";
 import { chatFormResponseSchema, type FormMetadata } from "@/lib/schemas/chat-polls";
 import { getChatGroupContext } from "@/lib/auth/chat-helpers";
 
-export async function POST(req: Request, { params }: { params: { groupId: string; messageId: string } }) {
-  const { groupId, messageId } = params;
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+interface RouteParams {
+  params: Promise<{ groupId: string; messageId: string }>;
+}
+
+/**
+ * POST /api/chat/[groupId]/forms/[messageId]/responses
+ * Submit a response to a form message.
+ * Auth: must be active org member + group member.
+ * Body: Record<fieldId, value>
+ */
+export async function POST(req: Request, { params }: RouteParams) {
+  const { groupId, messageId } = await params;
 
   const groupIdParsed = baseSchemas.uuid.safeParse(groupId);
   if (!groupIdParsed.success) {
@@ -46,6 +59,7 @@ export async function POST(req: Request, { params }: { params: { groupId: string
     return respond({ error: "Invalid JSON payload" }, 400);
   }
 
+  // Backward compat: unwrap { responses: {...} } from stale clients
   if (
     rawBody &&
     typeof rawBody === "object" &&
@@ -68,10 +82,12 @@ export async function POST(req: Request, { params }: { params: { groupId: string
   const ctx = await getChatGroupContext(supabase, user.id, groupId);
   if (!ctx.ok) return respond({ error: ctx.error }, ctx.status);
 
+  // Form responses require group membership (org admins without membership cannot submit)
   if (!ctx.membership) {
     return respond({ error: "Forbidden" }, 403);
   }
 
+  // Verify the message exists, is a form, and is not deleted
   const { data: message } = await supabase
     .from("chat_messages")
     .select("id, author_id, message_type, status, metadata, deleted_at")
@@ -83,18 +99,20 @@ export async function POST(req: Request, { params }: { params: { groupId: string
   if (!message) return respond({ error: "Form not found" }, 404);
   if (message.message_type !== "form") return respond({ error: "Message is not a form" }, 400);
 
+  // Align with polls: allow authors + moderators to submit to pending forms
   const isAuthor = message.author_id === user.id;
   if (message.status !== "approved" && !isAuthor && !ctx.canModerate) {
     return respond({ error: "Form is not available" }, 403);
   }
 
+  // Validate required fields and strip extra keys from form metadata
   const formMetadata = message.metadata as FormMetadata | null;
   let filteredResponses = parsed;
 
   if (formMetadata?.fields) {
-    const allowedFieldIds = new Set(formMetadata.fields.map((field) => field.id));
+    const allowedFieldIds = new Set(formMetadata.fields.map((f) => f.id));
     filteredResponses = Object.fromEntries(
-      Object.entries(parsed).filter(([key]) => allowedFieldIds.has(key)),
+      Object.entries(parsed).filter(([key]) => allowedFieldIds.has(key))
     );
 
     const requiredFieldIds = formMetadata.fields
@@ -111,6 +129,7 @@ export async function POST(req: Request, { params }: { params: { groupId: string
     }
   }
 
+  // Check if user already submitted a response
   const { data: existingResponse } = await supabase
     .from("chat_form_responses")
     .select("id")
@@ -120,6 +139,7 @@ export async function POST(req: Request, { params }: { params: { groupId: string
 
   if (existingResponse) return respond({ error: "Already submitted" }, 409);
 
+  // Insert the form response
   const { data: response, error: insertError } = await supabase
     .from("chat_form_responses")
     .insert({

@@ -3,6 +3,13 @@
  * Provides centralized color manipulation and CSS variable generation for org branding
  */
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+/** Returns the color if valid 6-digit hex, otherwise the fallback. */
+export function safeHexColor(raw: string | null | undefined, fallback: string): string {
+  return typeof raw === "string" && HEX_COLOR_RE.test(raw) ? raw : fallback;
+}
+
 /**
  * Adjusts a hex color by lightening or darkening it
  * @param hex - Hex color code (3 or 6 digits)
@@ -102,11 +109,13 @@ export function computeOrgThemeVariables(
     const cardColor = adjustColor(darkColors.primary, 18);
     const muted = adjustColor(darkColors.primary, 28);
     const borderColor = adjustColor(darkColors.primary, 35);
+    const primaryForeground = isColorDark(darkColors.primary) ? "#f8fafc" : "#0f172a";
 
     return {
       "--color-org-primary": darkColors.primary,
       "--color-org-primary-light": darkColors.primaryLight,
       "--color-org-primary-dark": darkColors.primaryDark,
+      "--color-org-primary-foreground": primaryForeground,
       "--color-org-secondary": darkColors.secondary,
       "--color-org-secondary-light": darkColors.secondaryLight,
       "--color-org-secondary-dark": darkColors.secondaryDark,
@@ -130,6 +139,7 @@ export function computeOrgThemeVariables(
   const isPrimaryDark = isColorDark(primaryColor);
   const isSecondaryDark = isColorDark(secondaryColor);
   const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
+  const primaryForeground = isPrimaryDark ? "#ffffff" : "#0f172a";
   const secondaryForeground = isSecondaryDark ? "#ffffff" : "#0f172a";
   const cardColor = isPrimaryDark ? adjustColor(primaryColor, 18) : adjustColor(primaryColor, -12);
   const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
@@ -143,6 +153,7 @@ export function computeOrgThemeVariables(
     "--color-org-primary": primaryColor,
     "--color-org-primary-light": primaryLight,
     "--color-org-primary-dark": primaryDark,
+    "--color-org-primary-foreground": primaryForeground,
     "--color-org-secondary": secondaryColor,
     "--color-org-secondary-light": secondaryLight,
     "--color-org-secondary-dark": secondaryDark,

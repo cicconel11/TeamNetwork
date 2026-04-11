@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Badge, Button, Card, Input } from "@/components/ui";
 import { validateOrgName } from "@/lib/validation/org-name";
 
@@ -12,6 +13,8 @@ interface OrgNameCardProps {
 }
 
 export function OrgNameCard({ orgId, orgName, isAdmin, onNameUpdated }: OrgNameCardProps) {
+  const tSettings = useTranslations("settings");
+  const tCommon = useTranslations("common");
   const [editedOrgName, setEditedOrgName] = useState(orgName);
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -19,13 +22,13 @@ export function OrgNameCard({ orgId, orgName, isAdmin, onNameUpdated }: OrgNameC
 
   const handleNameSave = async () => {
     if (!isAdmin) {
-      setNameError("Only admins can change the organization name.");
+      setNameError(tSettings("orgName.adminOnly"));
       return;
     }
 
     const validation = validateOrgName(editedOrgName);
     if (!validation.valid) {
-      setNameError(validation.error || "Invalid organization name");
+      setNameError(validation.error || tSettings("orgName.invalid"));
       return;
     }
 
@@ -42,15 +45,15 @@ export function OrgNameCard({ orgId, orgName, isAdmin, onNameUpdated }: OrgNameC
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        throw new Error(data?.error || "Unable to update organization name");
+        throw new Error(data?.error || tSettings("orgName.unableToUpdate"));
       }
 
       const updatedName = data?.name || editedOrgName.trim();
       setEditedOrgName(updatedName);
-      setNameSuccess("Organization name updated successfully.");
+      setNameSuccess(tSettings("orgName.saved"));
       onNameUpdated(updatedName);
     } catch (err) {
-      setNameError(err instanceof Error ? err.message : "Unable to update organization name");
+      setNameError(err instanceof Error ? err.message : tSettings("orgName.unableToUpdate"));
     } finally {
       setNameSaving(false);
     }
@@ -60,18 +63,18 @@ export function OrgNameCard({ orgId, orgName, isAdmin, onNameUpdated }: OrgNameC
     <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2 lg:col-span-2">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-foreground">Organization name</p>
+          <p className="font-semibold text-foreground">{tSettings("orgName.title")}</p>
           <p className="text-sm text-muted-foreground">
-            Change your organization&apos;s display name.
+            {tSettings("orgName.description")}
           </p>
         </div>
-        <Badge variant={isAdmin ? "muted" : "warning"}>{isAdmin ? "Admin" : "View only"}</Badge>
+        <Badge variant={isAdmin ? "muted" : "warning"}>{isAdmin ? tCommon("admin") : tCommon("viewOnly")}</Badge>
       </div>
 
       <div className="max-w-md space-y-4">
         {isAdmin ? (
           <Input
-            label="Name"
+            label={tCommon("name")}
             type="text"
             value={editedOrgName}
             onChange={(e) => {
@@ -79,12 +82,12 @@ export function OrgNameCard({ orgId, orgName, isAdmin, onNameUpdated }: OrgNameC
               setNameSuccess(null);
               setNameError(null);
             }}
-            placeholder="Organization name"
+            placeholder={tSettings("orgName.placeholder")}
             maxLength={100}
           />
         ) : (
           <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Name</p>
+            <p className="text-sm font-medium text-foreground">{tCommon("name")}</p>
             <p className="text-foreground">{orgName}</p>
           </div>
         )}
@@ -94,7 +97,7 @@ export function OrgNameCard({ orgId, orgName, isAdmin, onNameUpdated }: OrgNameC
       {nameError && <div className="text-sm text-red-600 dark:text-red-400">{nameError}</div>}
       {!isAdmin && (
         <div className="text-sm text-muted-foreground">
-          Only admins can change the organization name.
+          {tSettings("orgName.adminOnly")}
         </div>
       )}
 
@@ -105,7 +108,7 @@ export function OrgNameCard({ orgId, orgName, isAdmin, onNameUpdated }: OrgNameC
             isLoading={nameSaving}
             disabled={editedOrgName.trim() === orgName}
           >
-            Save name
+            {tSettings("orgName.saveName")}
           </Button>
         </div>
       )}

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { useLocale, useTranslations } from "next-intl";
 import { newAnnouncementSchema, type NewAnnouncementForm } from "@/lib/schemas/content";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
@@ -28,7 +29,10 @@ export default function NewAnnouncementPage() {
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
 
   // Get the custom label for this page
-  const singularLabel = resolveActionLabel("/announcements", navConfig, "").trim();
+  const tNav = useTranslations("nav.items");
+  const locale = useLocale();
+  const t = (key: string) => tNav(key);
+  const singularLabel = resolveActionLabel("/announcements", navConfig, "", t, locale).trim();
 
   const {
     register,
@@ -162,21 +166,6 @@ export default function NewAnnouncementPage() {
             body: JSON.stringify({ announcementId: announcement.id, category: "announcement" }),
           });
         }
-
-        // Send mobile push notification
-        await fetch("/api/mobile/push", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            organizationId: org.id,
-            title: data.title,
-            body: data.body || undefined,
-            type: "announcement",
-            resourceId: announcement.id,
-            audience: notifAudience,
-            targetUserIds: audienceUserIds || undefined,
-          }),
-        });
       } catch (notifError) {
         console.error("Failed to send notification:", notifError);
         // Don't block on notification failure - announcement was created successfully
@@ -273,7 +262,7 @@ export default function NewAnnouncementPage() {
               {...register("send_notification")}
             />
             <label htmlFor="send_notification" className="text-sm text-foreground">
-              Notify audience via email
+              Send push notification to selected audience
             </label>
           </div>
 

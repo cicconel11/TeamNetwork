@@ -122,7 +122,7 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
       : "Subscription canceled. Resubscribe to continue using this organization.",
     incomplete: "Your checkout wasn't completed. Click below to finish setting up your subscription.",
     incomplete_expired: "Your previous checkout expired. Start a new checkout to activate your organization.",
-    trialing: "Trial active. Ensure billing is set up before the trial ends.",
+    trialing: "Your free trial is active. Your card will be charged automatically when the trial ends unless you cancel first.",
     complete: "Payment completed but subscription status needs to be synced.",
     completed: "Payment completed but subscription status needs to be synced.",
   };
@@ -153,7 +153,7 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
           <p className="text-sm text-muted-foreground">{friendlyStatus}</p>
           {status === "pending_sales" && (
             <p className="text-amber-600 dark:text-amber-400 text-sm">
-              You selected the 5000+ alumni option. Our team will reach out to finalize pricing.
+              You selected the 1500+ alumni option. Our team will reach out to finalize pricing.
             </p>
           )}
         </div>

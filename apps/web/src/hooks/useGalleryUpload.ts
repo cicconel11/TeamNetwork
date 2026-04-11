@@ -2,12 +2,21 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
-  validateGalleryFile,
+  validateGalleryRawFile,
+  validateGalleryPreparedSize,
   deriveDefaultTitle,
   detectDuplicate,
   resolveGalleryMimeType,
   checkBatchLimit,
 } from "@/lib/media/gallery-validation";
+import {
+  getGalleryRetryProgress,
+  getGalleryUploadMode,
+} from "@/lib/media/gallery-upload-flow";
+import {
+  prepareImageUpload,
+  type PreparedImageUpload,
+} from "@/lib/media/image-preparation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,15 +27,19 @@ export type FileUploadStatus =
   | "requesting"
   | "uploading"
   | "finalizing"
+  | "associating"
   | "done"
   | "error";
 
 export interface UploadFileEntry {
   id: string;
   file: File | null; // nulled after upload completes to free memory
+  previewFile: File | null;
   fileName: string;
   fileSize: number;
+  previewFileSize: number;
   mimeType: string;
+  previewMimeType: string | null;
   previewUrl: string | null;
   title: string;
   description: string;
@@ -37,6 +50,15 @@ export interface UploadFileEntry {
   error: string | null;
   retryCount: number;
   mediaId: string | null; // from upload intent response
+  uploadFinalized: boolean;
+  /**
+   * The user's original file name and size, captured before
+   * `prepareImageUpload` rewrites `.jpeg` → `.jpg` and shrinks the byte
+   * count. Used as the dedupe key across `addFiles` calls so that re-picking
+   * the same source file is detected even after normalization.
+   */
+  originalName: string;
+  originalSize: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,12 +66,13 @@ export interface UploadFileEntry {
 // ---------------------------------------------------------------------------
 
 type Action =
-  | { type: "ADD_FILES"; entries: UploadFileEntry[] }
+  | { type: "ADD_FILES"; entries: UploadFileEntry[]; replaceExisting?: boolean }
   | { type: "UPDATE_FIELD"; id: string; field: "title" | "description" | "takenAt"; value: string }
   | { type: "UPDATE_TAGS"; id: string; tags: string[] }
   | { type: "SET_STATUS"; id: string; status: FileUploadStatus; error?: string }
   | { type: "SET_PROGRESS"; id: string; progress: number }
   | { type: "SET_MEDIA_ID"; id: string; mediaId: string }
+  | { type: "MARK_FINALIZED"; id: string }
   | { type: "MARK_DONE"; id: string; mediaId: string }
   | { type: "REMOVE_FILE"; id: string }
   | { type: "CLEAR_ALL" }
@@ -62,10 +85,12 @@ interface State {
   pendingAlbumName: string | null;
 }
 
-function reducer(state: State, action: Action): State {
+export function galleryUploadReducer(state: State, action: Action): State {
   switch (action.type) {
     case "ADD_FILES":
-      return { ...state, files: [...state.files, ...action.entries] };
+      return action.replaceExisting
+        ? { ...state, files: action.entries, completedMediaIds: [] }
+        : { ...state, files: [...state.files, ...action.entries] };
 
     case "UPDATE_FIELD":
       return {
@@ -114,12 +139,27 @@ function reducer(state: State, action: Action): State {
         ),
       };
 
+    case "MARK_FINALIZED":
+      return {
+        ...state,
+        files: state.files.map((f) =>
+          f.id === action.id ? { ...f, uploadFinalized: true } : f,
+        ),
+      };
+
     case "MARK_DONE":
       return {
         ...state,
         files: state.files.map((f) =>
           f.id === action.id
-            ? { ...f, status: "done", progress: 100, file: null, error: null }
+            ? {
+                ...f,
+                status: "done",
+                progress: 100,
+                file: null,
+                error: null,
+                uploadFinalized: true,
+              }
             : f,
         ),
         completedMediaIds: [...state.completedMediaIds, action.mediaId],
@@ -146,9 +186,145 @@ function reducer(state: State, action: Action): State {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_CONCURRENT = 3;
+const MAX_CONCURRENT = 4;
 const STAGGER_MS = 500;
 const MAX_RETRIES = 3;
+
+// ---------------------------------------------------------------------------
+// Pure helper: prepare a batch of files for upload
+// ---------------------------------------------------------------------------
+
+export interface PrepareGalleryUploadInput {
+  files: File[];
+  /** Raw `{name, size}` pairs of files already in the queue (for dedupe). */
+  existingEntries: { name: string; size: number }[];
+  /** Injectable for tests; defaults to the real `prepareImageUpload`. */
+  prepareImage?: (file: File) => Promise<PreparedImageUpload>;
+  /** Injectable for tests; defaults to `crypto.randomUUID`. */
+  generateId?: () => string;
+  /** Injectable for tests; defaults to `URL.createObjectURL`. */
+  createObjectUrl?: (file: File | Blob) => string;
+  /** Injectable for tests; defaults to `URL.revokeObjectURL`. */
+  revokeObjectUrl?: (url: string) => void;
+}
+
+export interface PrepareGalleryUploadResult {
+  entries: UploadFileEntry[];
+  rejected: { name: string; error: string }[];
+}
+
+/**
+ * Pure async helper that walks a batch of user-selected files, runs raw
+ * validation → dedupe → prep → prepared-size validation, and returns the
+ * accepted `UploadFileEntry`s plus any rejections.
+ *
+ * Extracted from `addFiles` so it can be unit-tested without rendering the
+ * hook. The hook is a thin wrapper that wires this helper into React state.
+ *
+ * Validation order is load-bearing: image size MUST be checked AFTER prep so
+ * that a 14 MB iPhone JPEG (which compresses to ~600 KB) is not rejected on
+ * its raw byte count.
+ */
+export async function prepareGalleryUploadEntries(
+  input: PrepareGalleryUploadInput,
+): Promise<PrepareGalleryUploadResult> {
+  const {
+    files,
+    existingEntries: initialExisting,
+    prepareImage = prepareImageUpload,
+    generateId = () => crypto.randomUUID(),
+    createObjectUrl = (file) => URL.createObjectURL(file),
+    revokeObjectUrl = (url) => URL.revokeObjectURL(url),
+  } = input;
+
+  const existing = [...initialExisting];
+  const entries: UploadFileEntry[] = [];
+  const rejected: { name: string; error: string }[] = [];
+
+  for (const file of files) {
+    const rawCheck = validateGalleryRawFile(file);
+    if (!rawCheck.valid) {
+      rejected.push({ name: file.name, error: rawCheck.error! });
+      continue;
+    }
+
+    if (detectDuplicate(file, existing)) {
+      rejected.push({ name: file.name, error: "File already in queue." });
+      continue;
+    }
+
+    const mimeType = resolveGalleryMimeType(file);
+    let uploadFile: File = file;
+    let previewFile: File | null = null;
+    let previewUrl: string | null = createObjectUrl(file);
+    let previewMimeType: string | null = null;
+    let fileSize = file.size;
+    let previewFileSize = 0;
+
+    if (mimeType.startsWith("image/")) {
+      try {
+        const prepared = await prepareImage(file);
+        uploadFile = prepared.file;
+        previewFile = prepared.previewFile;
+        previewMimeType = prepared.previewMimeType;
+        fileSize = prepared.file.size;
+        previewFileSize = prepared.previewFile?.size ?? 0;
+        if (previewUrl) revokeObjectUrl(previewUrl);
+        previewUrl = prepared.previewUrl;
+        console.log("[media/upload] prepared gallery image", {
+          fileName: file.name,
+          originalBytes: prepared.originalBytes,
+          normalizedBytes: prepared.normalizedBytes,
+        });
+      } catch (error) {
+        if (previewUrl) revokeObjectUrl(previewUrl);
+        rejected.push({
+          name: file.name,
+          error: error instanceof Error ? error.message : "Failed to prepare image upload.",
+        });
+        continue;
+      }
+    }
+
+    // Now that we know the post-prep byte count, enforce the image size cap.
+    const sizeCheck = validateGalleryPreparedSize(fileSize, uploadFile.type || mimeType);
+    if (!sizeCheck.valid) {
+      if (previewUrl) revokeObjectUrl(previewUrl);
+      rejected.push({ name: file.name, error: sizeCheck.error! });
+      continue;
+    }
+
+    const entry: UploadFileEntry = {
+      id: generateId(),
+      file: uploadFile,
+      previewFile,
+      fileName: uploadFile.name,
+      fileSize,
+      previewFileSize,
+      mimeType: uploadFile.type || mimeType,
+      previewMimeType,
+      previewUrl,
+      title: deriveDefaultTitle(file.name),
+      description: "",
+      tags: [],
+      takenAt: "",
+      status: "queued",
+      progress: 0,
+      error: null,
+      retryCount: 0,
+      mediaId: null,
+      uploadFinalized: false,
+      originalName: file.name,
+      originalSize: file.size,
+    };
+
+    entries.push(entry);
+    // Subsequent files in the same batch dedupe against the raw original.
+    existing.push({ name: file.name, size: file.size });
+  }
+
+  return { entries, rejected };
+}
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -156,11 +332,12 @@ const MAX_RETRIES = 3;
 
 interface UseGalleryUploadOptions {
   orgId: string;
+  targetAlbumId?: string;
   onFileComplete?: (entry: UploadFileEntry, mediaId: string) => void;
 }
 
-export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOptions) {
-  const [state, dispatch] = useReducer(reducer, {
+export function useGalleryUpload({ orgId, targetAlbumId, onFileComplete }: UseGalleryUploadOptions) {
+  const [state, dispatch] = useReducer(galleryUploadReducer, {
     files: [],
     completedMediaIds: [],
     pendingAlbumName: null,
@@ -171,66 +348,55 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
   const onFileCompleteRef = useRef(onFileComplete);
   onFileCompleteRef.current = onFileComplete;
 
+  const resetQueue = useCallback((entries: UploadFileEntry[] = []) => {
+    xhrRefs.current.forEach((xhr) => xhr.abort());
+    xhrRefs.current.clear();
+
+    state.files.forEach((f) => {
+      if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+    });
+
+    processingRef.current.clear();
+
+    if (entries.length > 0) {
+      dispatch({ type: "ADD_FILES", entries, replaceExisting: true });
+      return;
+    }
+
+    dispatch({ type: "CLEAR_ALL" });
+  }, [state.files]);
+
   // ------- Add files -------
   const addFiles = useCallback(
-    (newFiles: File[]) => {
+    async (newFiles: File[], options?: { replaceExisting?: boolean }) => {
       const batchCheck = checkBatchLimit(newFiles.length);
       if (!batchCheck.valid) {
         return { rejected: newFiles.map((f) => ({ name: f.name, error: batchCheck.error! })) };
       }
 
-      const existingEntries = state.files.map((f) => ({
-        name: f.fileName,
-        size: f.fileSize,
+      // Dedupe against raw original name/size — NOT post-prep `fileName`,
+      // which gets `.jpeg` rewritten to `.jpg` and trips false negatives.
+      const existingEntries = (options?.replaceExisting ? [] : state.files).map((f) => ({
+        name: f.originalName,
+        size: f.originalSize,
       }));
 
-      const entries: UploadFileEntry[] = [];
-      const rejected: { name: string; error: string }[] = [];
-
-      for (const file of newFiles) {
-        const validation = validateGalleryFile(file);
-        if (!validation.valid) {
-          rejected.push({ name: file.name, error: validation.error! });
-          continue;
-        }
-
-        if (detectDuplicate(file, existingEntries)) {
-          rejected.push({ name: file.name, error: "File already in queue." });
-          continue;
-        }
-
-        const mimeType = resolveGalleryMimeType(file);
-        const previewUrl = URL.createObjectURL(file);
-
-        const entry: UploadFileEntry = {
-          id: crypto.randomUUID(),
-          file,
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType,
-          previewUrl,
-          title: deriveDefaultTitle(file.name),
-          description: "",
-          tags: [],
-          takenAt: "",
-          status: "queued",
-          progress: 0,
-          error: null,
-          retryCount: 0,
-          mediaId: null,
-        };
-
-        entries.push(entry);
-        existingEntries.push({ name: file.name, size: file.size });
-      }
+      const { entries, rejected } = await prepareGalleryUploadEntries({
+        files: newFiles,
+        existingEntries,
+      });
 
       if (entries.length > 0) {
-        dispatch({ type: "ADD_FILES", entries });
+        if (options?.replaceExisting) {
+          resetQueue(entries);
+        } else {
+          dispatch({ type: "ADD_FILES", entries });
+        }
       }
 
       return { rejected };
     },
-    [state.files],
+    [resetQueue, state.files],
   );
 
   // ------- Set pending album name (from folder upload) -------
@@ -245,7 +411,49 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
   // ------- Process a single file -------
   const processFile = useCallback(
     async (entry: UploadFileEntry) => {
-      if (!entry.file) return;
+      const mode = getGalleryUploadMode({
+        mediaId: entry.mediaId,
+        targetAlbumId,
+        uploadFinalized: entry.uploadFinalized,
+      });
+
+      if (mode === "upload" && !entry.file) return;
+
+      const associateWithAlbum = async (mediaId: string) => {
+        if (!targetAlbumId) return;
+
+        dispatch({ type: "SET_STATUS", id: entry.id, status: "associating" });
+
+        const albumRes = await fetch(`/api/media/albums/${targetAlbumId}/items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orgId, mediaIds: [mediaId] }),
+        });
+
+        if (!albumRes.ok) {
+          const data = await albumRes.json().catch(() => null);
+          throw new Error(data?.error || "Failed to add upload to album");
+        }
+      };
+
+      if (mode === "associate-only" && entry.mediaId) {
+        try {
+          await associateWithAlbum(entry.mediaId);
+          dispatch({ type: "MARK_DONE", id: entry.id, mediaId: entry.mediaId });
+          onFileCompleteRef.current?.(entry, entry.mediaId);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Upload failed";
+          dispatch({
+            type: "SET_STATUS",
+            id: entry.id,
+            status: "error",
+            error: message,
+          });
+        } finally {
+          processingRef.current.delete(entry.id);
+        }
+        return;
+      }
 
       dispatch({ type: "SET_STATUS", id: entry.id, status: "requesting" });
 
@@ -259,6 +467,8 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
             fileName: entry.fileName,
             mimeType: entry.mimeType,
             fileSizeBytes: entry.fileSize,
+            previewMimeType: entry.previewMimeType ?? undefined,
+            previewFileSizeBytes: entry.previewFileSize || undefined,
             title: entry.title.trim() || deriveDefaultTitle(entry.fileName),
             description: entry.description.trim() || undefined,
             tags,
@@ -271,7 +481,7 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
           throw new Error(data?.error || "Failed to initiate upload");
         }
 
-        const { mediaId, signedUrl, token } = await intentRes.json();
+        const { mediaId, signedUrl, token, previewSignedUrl } = await intentRes.json();
         dispatch({ type: "SET_MEDIA_ID", id: entry.id, mediaId });
 
         dispatch({ type: "SET_STATUS", id: entry.id, status: "uploading" });
@@ -312,6 +522,18 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
           xhr.send(entry.file);
         });
 
+        if (previewSignedUrl && entry.previewFile) {
+          const previewUploadRes = await fetch(previewSignedUrl, {
+            method: "PUT",
+            headers: { "Content-Type": entry.previewFile.type },
+            body: entry.previewFile,
+          });
+
+          if (!previewUploadRes.ok) {
+            throw new Error("Preview upload failed");
+          }
+        }
+
         dispatch({ type: "SET_STATUS", id: entry.id, status: "finalizing" });
         dispatch({ type: "SET_PROGRESS", id: entry.id, progress: 100 });
 
@@ -322,6 +544,12 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
         if (!finalizeRes.ok) {
           const data = await finalizeRes.json().catch(() => null);
           throw new Error(data?.error || "Failed to finalize upload");
+        }
+
+        dispatch({ type: "MARK_FINALIZED", id: entry.id });
+
+        if (targetAlbumId) {
+          await associateWithAlbum(mediaId);
         }
 
         dispatch({ type: "MARK_DONE", id: entry.id, mediaId });
@@ -341,13 +569,17 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
         processingRef.current.delete(entry.id);
       }
     },
-    [orgId],
+    [orgId, targetAlbumId],
   );
 
   // ------- Concurrency dispatcher -------
   useEffect(() => {
     const activeCount = state.files.filter(
-      (f) => f.status === "requesting" || f.status === "uploading" || f.status === "finalizing",
+      (f) =>
+        f.status === "requesting" ||
+        f.status === "uploading" ||
+        f.status === "finalizing" ||
+        f.status === "associating",
     ).length;
 
     if (activeCount >= MAX_CONCURRENT) return;
@@ -388,7 +620,7 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
       dispatch({
         type: "SET_PROGRESS",
         id,
-        progress: 0,
+        progress: getGalleryRetryProgress(entry.uploadFinalized),
       });
     },
     [state.files],
@@ -416,16 +648,8 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
   );
 
   const cancelAll = useCallback(() => {
-    xhrRefs.current.forEach((xhr) => xhr.abort());
-    xhrRefs.current.clear();
-
-    state.files.forEach((f) => {
-      if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-    });
-
-    processingRef.current.clear();
-    dispatch({ type: "CLEAR_ALL" });
-  }, [state.files]);
+    resetQueue();
+  }, [resetQueue]);
 
   // ------- Field updates -------
   const updateField = useCallback(
@@ -442,7 +666,11 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
   // ------- beforeunload -------
   useEffect(() => {
     const hasActive = state.files.some(
-      (f) => f.status === "requesting" || f.status === "uploading" || f.status === "finalizing",
+      (f) =>
+        f.status === "requesting" ||
+        f.status === "uploading" ||
+        f.status === "finalizing" ||
+        f.status === "associating",
     );
 
     if (!hasActive) return;
@@ -456,12 +684,13 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
 
   // ------- Cleanup preview URLs on unmount -------
   useEffect(() => {
+    const xhrMap = xhrRefs.current;
     return () => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
       state.files.forEach((f) => {
         if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
       });
-      xhrRefs.current.forEach((xhr) => xhr.abort());
+      xhrMap.forEach((xhr) => xhr.abort());
     };
     // We intentionally only run this on unmount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -472,7 +701,11 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
     total: state.files.length,
     queued: state.files.filter((f) => f.status === "queued").length,
     active: state.files.filter(
-      (f) => f.status === "requesting" || f.status === "uploading" || f.status === "finalizing",
+      (f) =>
+        f.status === "requesting" ||
+        f.status === "uploading" ||
+        f.status === "finalizing" ||
+        f.status === "associating",
     ).length,
     done: state.files.filter((f) => f.status === "done").length,
     errored: state.files.filter((f) => f.status === "error").length,
@@ -483,7 +716,11 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
           )
         : 0,
     isUploading: state.files.some(
-      (f) => f.status === "requesting" || f.status === "uploading" || f.status === "finalizing",
+      (f) =>
+        f.status === "requesting" ||
+        f.status === "uploading" ||
+        f.status === "finalizing" ||
+        f.status === "associating",
     ),
     allDone:
       state.files.length > 0 &&

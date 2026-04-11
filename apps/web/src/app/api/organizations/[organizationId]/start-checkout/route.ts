@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getPriceIds } from "@/lib/stripe";
+import { getStripeOrigin } from "@/lib/stripe-origin";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
@@ -10,7 +11,7 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
-import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
+import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -120,7 +121,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       .eq("organization_id", organizationId);
 
     const { stripe } = await import("@/lib/stripe");
-    const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
+    const origin = getStripeOrigin(req.url);
 
     const metadata = {
       organization_id: org.id,

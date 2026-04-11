@@ -102,10 +102,10 @@ export async function syncGoogleCalendarFeed(
   const checkAdminRole = options?.checkAdminRole ?? defaultCheckAdminRole;
 
   const connectedUserId = feed.connected_user_id;
-  const googleCalendarId = feed.google_calendar_id;
+  const externalCalendarId = feed.external_calendar_id;
 
-  if (!connectedUserId || !googleCalendarId) {
-    return setFeedError(supabase, feed, "Missing connected_user_id or google_calendar_id");
+  if (!connectedUserId || !externalCalendarId) {
+    return setFeedError(supabase, feed, "Missing connected_user_id or external_calendar_id");
   }
 
   // Check admin role at sync time (only for org-scoped feeds)
@@ -123,7 +123,7 @@ export async function syncGoogleCalendarFeed(
   }
 
   try {
-    const instances = await fetchGoogleCalendarEvents(accessToken, googleCalendarId, window, fetcher);
+    const instances = await fetchGoogleCalendarEvents(accessToken, externalCalendarId, window, fetcher);
     const instanceKeys = new Set(instances.map((i) => i.instanceKey));
 
     await upsertInstances(supabase, feed, instances);

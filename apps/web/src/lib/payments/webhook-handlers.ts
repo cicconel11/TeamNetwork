@@ -120,11 +120,15 @@ export async function resolveDonorFromPaymentAttempt(
 ): Promise<DonorInfo> {
   if (!paymentAttemptId) return { donorName: null, donorEmail: null, anonymous: false };
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("payment_attempts")
     .select("metadata")
     .eq("id", paymentAttemptId)
     .maybeSingle();
+
+  if (error) {
+    throw new Error(`[resolveDonorFromPaymentAttempt] DB query failed: ${error.message}`);
+  }
 
   const meta = data?.metadata as Record<string, string> | null;
   return {

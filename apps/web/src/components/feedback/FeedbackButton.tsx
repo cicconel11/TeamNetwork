@@ -33,34 +33,53 @@ export function FeedbackButton({ context, trigger, className = "" }: FeedbackBut
     setIsModalOpen(false);
   }, []);
 
-  const handleSubmit = useCallback(async (data: {
-    message: string;
-    screenshot?: File;
-    context: FeedbackContext;
-  }) => {
-    // TODO: Implement API call to submit feedback
-    // For now, just log the submission
-    const formData = new FormData();
-    formData.append("message", data.message);
-    formData.append("pageUrl", data.context.pageUrl);
-    formData.append("userAgent", data.context.userAgent);
-    formData.append("timestamp", data.context.timestamp);
-    formData.append("triggerType", data.context.triggerType);
+  const handleSubmit = useCallback(
+    async (data: {
+      message: string;
+      screenshot?: File;
+      context: FeedbackContext;
+    }) => {
+      let screenshotUrl: string | undefined;
+      if (data.screenshot) {
+        const up = new FormData();
+        up.append("file", data.screenshot);
+        up.append("context", context);
+        up.append("trigger", trigger);
+        const shotRes = await fetch("/api/feedback/screenshot", {
+          method: "POST",
+          body: up,
+        });
+        const shotJson = await shotRes.json().catch(() => ({}));
+        if (!shotRes.ok) {
+          throw new Error(shotJson.error || "Failed to upload screenshot");
+        }
+        if (typeof shotJson.screenshot_url === "string") {
+          screenshotUrl = shotJson.screenshot_url;
+        }
+      }
 
-    if (data.screenshot) {
-      formData.append("screenshot", data.screenshot);
-    }
+      const payload = {
+        message: data.message,
+        page_url: data.context.pageUrl,
+        user_agent: data.context.userAgent,
+        context,
+        trigger,
+        ...(screenshotUrl ? { screenshot_url: screenshotUrl } : {}),
+      };
 
-    const response = await fetch("/api/feedback", {
-      method: "POST",
-      body: formData,
-    });
+      const response = await fetch("/api/feedback/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to submit feedback");
-    }
-  }, []);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to submit feedback");
+      }
+    },
+    [context, trigger],
+  );
 
   return (
     <>

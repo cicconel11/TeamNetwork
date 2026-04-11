@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
@@ -8,11 +7,12 @@ import {
   buildRateLimitResponse,
 } from "@/lib/security/rate-limit";
 import {
-  safeString,
   validateJson,
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
+import { isAnonymousFrictionAllowed } from "@/lib/feedback/anonymous-friction";
+import { frictionFeedbackSubmitSchema } from "@/lib/schemas/friction-feedback-submit";
 import type { Json } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -28,21 +28,6 @@ const resend = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@myteamnetwork.com";
 
-const feedbackSchema = z
-  .object({
-    message: safeString(2000, 1),
-    screenshot_url: z
-      .string()
-      .url({ message: "Screenshot URL must be a valid URL" })
-      .max(2048, "Screenshot URL is too long")
-      .optional(),
-    page_url: safeString(2048, 1),
-    user_agent: safeString(512, 1),
-    context: safeString(500, 1),
-    trigger: safeString(100, 1),
-  })
-  .strict();
-
 interface FeedbackResponses {
   message: string;
   screenshot_url: string | null;
@@ -54,14 +39,16 @@ interface FeedbackResponses {
 
 async function sendAdminNotification(
   userEmail: string | null,
-  userId: string,
+  userId: string | null,
   responses: FeedbackResponses,
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = `[Feedback] New friction report from ${userEmail || "Anonymous"}`;
+  const who = userEmail || "Anonymous";
+  const idLabel = userId ?? "anonymous";
+  const subject = `[Feedback] New friction report from ${who}`;
   const body = `
 New feedback submission received:
 
-User: ${userEmail || "Anonymous"} (${userId})
+User: ${who} (${idLabel})
 Page: ${responses.page_url}
 Context: ${responses.context}
 Trigger: ${responses.trigger}
@@ -119,12 +106,22 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // Rate limit: 5 submissions per hour per user
+    const body = await validateJson(request, frictionFeedbackSubmitSchema, {
+      maxBodyBytes: 50_000,
+    });
+    const { message, screenshot_url, page_url, user_agent, context, trigger } =
+      body;
+
+    const anonymousOk = !user && isAnonymousFrictionAllowed(context, trigger);
+    if (!user && !anonymousOk) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const rateLimit = checkRateLimit(request, {
       userId: user?.id ?? null,
-      feature: "feedback submission",
-      limitPerIp: 10,
-      limitPerUser: 5,
+      feature: anonymousOk ? "feedback submission (anonymous)" : "feedback submission",
+      limitPerIp: anonymousOk ? 5 : 10,
+      limitPerUser: anonymousOk ? 0 : 5,
       windowMs: HOUR_MS,
     });
 
@@ -135,25 +132,17 @@ export async function POST(request: Request) {
     respond = (payload: unknown, status = 200) =>
       NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-    if (!user) {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-
-    const body = await validateJson(request, feedbackSchema, {
-      maxBodyBytes: 50_000,
-    });
-    const { message, screenshot_url, page_url, user_agent, context, trigger } =
-      body;
-
     // Get user's primary organization (if any) for the form_submissions FK
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("organization_id")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+    const { data: membership } = user
+      ? await supabase
+          .from("user_organization_roles")
+          .select("organization_id")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle()
+      : { data: null as null };
 
     // Build the responses JSONB payload
     const responses: FeedbackResponses = {
@@ -174,7 +163,7 @@ export async function POST(request: Request) {
         form_id: FORM_ID,
         organization_id:
           membership?.organization_id ?? "00000000-0000-0000-0000-000000000000",
-        user_id: user.id,
+        user_id: user?.id ?? null,
         data: responses as unknown as Json,
         submitted_at: new Date().toISOString(),
       })
@@ -188,8 +177,8 @@ export async function POST(request: Request) {
 
     // Send admin notification (non-blocking - don't fail the request if email fails)
     const emailResult = await sendAdminNotification(
-      user.email ?? null,
-      user.id,
+      user?.email ?? null,
+      user?.id ?? null,
       responses,
     );
     if (!emailResult.success) {

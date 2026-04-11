@@ -19,6 +19,7 @@ export default function EditMemberPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
 
   const {
     register,
@@ -38,6 +39,11 @@ export default function EditMemberPage() {
       expected_graduation_date: "",
       photo_url: "",
       linkedin_url: "",
+      current_company: "",
+      school: "",
+      bio: "",
+      current_city: "",
+      major: "",
     },
   });
 
@@ -68,6 +74,8 @@ export default function EditMemberPage() {
         return;
       }
 
+      setOrgId(org.id);
+
       // Fetch member profile
       const { data: member } = await supabase
         .from("members")
@@ -86,6 +94,11 @@ export default function EditMemberPage() {
       const m = member as Member & {
         expected_graduation_date?: string;
         graduated_at?: string;
+        current_company?: string;
+        school?: string;
+        bio?: string;
+        current_city?: string;
+        major?: string;
       };
       reset({
         first_name: m.first_name || "",
@@ -97,6 +110,11 @@ export default function EditMemberPage() {
         expected_graduation_date: m.expected_graduation_date || "",
         photo_url: m.photo_url || "",
         linkedin_url: m.linkedin_url || "",
+        current_company: m.current_company || "",
+        school: m.school || "",
+        bio: m.bio || "",
+        current_city: m.current_city || "",
+        major: m.major || "",
       });
 
       // Fetch system access role
@@ -125,18 +143,24 @@ export default function EditMemberPage() {
   }, [orgSlug, memberId, reset]);
 
   const handleAccessUpdate = async () => {
-    if (!accessData.userId) return;
+    if (!accessData.userId || !orgId) return;
+
+    const validStatuses = ["active", "revoked", "pending"];
+    const validRoles = ["admin", "active_member", "alumni", "parent"];
+
+    if (!validStatuses.includes(accessData.status)) {
+      setAccessError("Invalid access status");
+      return;
+    }
+    if (!validRoles.includes(accessData.role)) {
+      setAccessError("Invalid role");
+      return;
+    }
+
     setIsUpdatingAccess(true);
     setAccessError(null);
 
     const supabase = createClient();
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("id")
-      .eq("slug", orgSlug)
-      .single();
-
-    if (!org) return;
 
     const { error: updateError } = await supabase
       .from("user_organization_roles")
@@ -144,7 +168,7 @@ export default function EditMemberPage() {
         role: accessData.role as "admin" | "active_member" | "alumni",
         status: accessData.status as "active" | "revoked" | "pending",
       })
-      .eq("organization_id", org.id)
+      .eq("organization_id", orgId)
       .eq("user_id", accessData.userId);
 
     if (updateError) {
@@ -156,24 +180,12 @@ export default function EditMemberPage() {
   };
 
   const handleReinstate = async () => {
+    if (!orgId) return;
     setIsReinstating(true);
     setReinstateError(null);
 
-    const supabase = createClient();
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("id")
-      .eq("slug", orgSlug)
-      .single();
-
-    if (!org) {
-      setReinstateError("Organization not found");
-      setIsReinstating(false);
-      return;
-    }
-
     const response = await fetch(
-      `/api/organizations/${org.id}/members/${memberId}/reinstate`,
+      `/api/organizations/${orgId}/members/${memberId}/reinstate`,
       { method: "POST" }
     );
 
@@ -189,22 +201,11 @@ export default function EditMemberPage() {
   };
 
   const onSubmit = async (data: EditMemberForm) => {
+    if (!orgId) return;
     setIsLoading(true);
     setError(null);
 
     const supabase = createClient();
-
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("id")
-      .eq("slug", orgSlug)
-      .single();
-
-    if (!org) {
-      setError("Organization not found");
-      setIsLoading(false);
-      return;
-    }
 
     const { error: updateError } = await supabase
       .from("members")
@@ -213,15 +214,19 @@ export default function EditMemberPage() {
         last_name: data.last_name,
         email: data.email || null,
         role: data.role || null,
-        status: data.status,
         graduation_year: data.graduation_year ? parseInt(data.graduation_year) : null,
         expected_graduation_date: data.expected_graduation_date || null,
         photo_url: data.photo_url || null,
         linkedin_url: data.linkedin_url || null,
+        current_company: data.current_company || null,
+        school: data.school || null,
+        bio: data.bio || null,
+        current_city: data.current_city || null,
+        major: data.major || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", memberId)
-      .eq("organization_id", org.id);
+      .eq("organization_id", orgId);
 
     if (updateError) {
       setError(updateError.message);
@@ -229,6 +234,7 @@ export default function EditMemberPage() {
       return;
     }
 
+    setIsLoading(false);
     router.refresh();
     router.push(`/${orgSlug}/members/${memberId}`);
   };
@@ -262,7 +268,16 @@ export default function EditMemberPage() {
 
       <div className="grid gap-6">
         <Card className="max-w-2xl">
-          <form data-testid="member-edit-form" onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
+          <form
+            data-testid="member-edit-form"
+            onSubmit={handleSubmit(onSubmit)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+                e.preventDefault();
+              }
+            }}
+            className="p-6 space-y-6"
+          >
             <div>
               <h3 className="font-semibold text-foreground mb-4">Profile Information</h3>
               {error && (
@@ -334,6 +349,48 @@ export default function EditMemberPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   When this member will automatically transition to alumni status
                 </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <Input
+                  label="Current Company"
+                  placeholder="e.g., Acme Corp"
+                  error={errors.current_company?.message}
+                  {...register("current_company")}
+                />
+                <Input
+                  label="Current City"
+                  placeholder="e.g., San Francisco, CA"
+                  error={errors.current_city?.message}
+                  {...register("current_city")}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <Input
+                  label="School"
+                  placeholder="e.g., State University"
+                  error={errors.school?.message}
+                  {...register("school")}
+                />
+                <Input
+                  label="Major / Field of Study"
+                  placeholder="e.g., Computer Science"
+                  error={errors.major?.message}
+                  {...register("major")}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-foreground mb-1.5">Bio</label>
+                <textarea
+                  className="w-full rounded-xl border border-border bg-[var(--card)] px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[var(--ring)] min-h-[100px] resize-y"
+                  placeholder="A short bio or about section"
+                  {...register("bio")}
+                />
+                {errors.bio?.message && (
+                  <p className="mt-1 text-xs text-red-500">{errors.bio.message}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">

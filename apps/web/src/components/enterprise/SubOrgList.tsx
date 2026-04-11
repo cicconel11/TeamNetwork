@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Card, Badge, EmptyState } from "@/components/ui";
 import type { EnterpriseRelationshipType, SubOrgBillingType } from "@/types/enterprise";
 
@@ -18,13 +21,16 @@ interface SubOrgListProps {
 }
 
 export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
+  const tEnterprise = useTranslations("enterprise");
+  const tCommon = useTranslations("common");
+
   if (orgs.length === 0) {
     return (
       <Card>
         <EmptyState
           icon={<BuildingIcon className="h-12 w-12" />}
-          title="No organizations yet"
-          description="Create a new organization or adopt an existing one to get started."
+          title={tEnterprise("subOrgList.noOrgs")}
+          description={tEnterprise("subOrgList.noOrgsDesc")}
         />
       </Card>
     );
@@ -36,25 +42,25 @@ export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
         <thead>
           <tr className="border-b border-border">
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-              Organization
+              {tEnterprise("subOrgList.organization")}
             </th>
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-              Slug
+              {tEnterprise("subOrgList.slug")}
             </th>
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-              Alumni
+              {tCommon("role") === "Role" ? "Alumni" : tCommon("role")}
             </th>
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-              Parents
+              {tCommon("role") === "Role" ? "Parents" : tCommon("role")}
             </th>
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-              Relationship
+              {tEnterprise("subOrgList.relationship")}
             </th>
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-              Billing
+              {tEnterprise("subOrgList.billing")}
             </th>
             <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">
-              Actions
+              {tCommon("actions")}
             </th>
           </tr>
         </thead>
@@ -77,12 +83,12 @@ export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
               </td>
               <td className="py-4 px-4">
                 <Badge variant={org.relationshipType === "created" ? "primary" : "success"}>
-                  {org.relationshipType === "created" ? "Created" : "Adopted"}
+                  {org.relationshipType === "created" ? tEnterprise("subOrgList.created") : tEnterprise("subOrgList.adopted")}
                 </Badge>
               </td>
               <td className="py-4 px-4">
                 <Badge variant={org.billingType === "enterprise_managed" ? "muted" : "warning"}>
-                  {org.billingType === "enterprise_managed" ? "Enterprise" : "Independent"}
+                  {org.billingType === "enterprise_managed" ? tEnterprise("subOrgList.enterpriseBilling") : tEnterprise("subOrgList.independent")}
                 </Badge>
               </td>
               <td className="py-4 px-4 text-right">
@@ -90,14 +96,14 @@ export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
                   href={`/enterprise/${enterpriseSlug}/invites?org=${org.id}`}
                   className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                 >
-                  Invite
+                  {tEnterprise("subOrgList.invite")}
                 </Link>
                 <span className="mx-2 text-muted-foreground">|</span>
                 <Link
                   href={`/${org.slug}`}
                   className="text-sm text-purple-600 dark:text-purple-400 hover:underline"
                 >
-                  View Dashboard
+                  {tEnterprise("subOrgList.viewDashboard")}
                 </Link>
               </td>
             </tr>

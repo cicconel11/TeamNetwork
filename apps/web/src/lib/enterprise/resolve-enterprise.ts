@@ -14,7 +14,7 @@ export type ResolveEnterpriseError = { message: string; status: number };
 
 export async function resolveEnterpriseParam(
   idOrSlug: string,
-  serviceSupabase: SupabaseClient<Database, "public">,
+  serviceSupabase: SupabaseClient<Database>,
 ): Promise<{ data: ResolvedEnterpriseParam | null; error?: ResolveEnterpriseError }> {
   if (UUID_REGEX.test(idOrSlug)) {
     return { data: { enterpriseId: idOrSlug, enterpriseSlug: null } };
@@ -25,12 +25,11 @@ export async function resolveEnterpriseParam(
     return { data: null, error: { message: "Invalid enterprise id", status: 400 } };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (serviceSupabase as any)
+  const { data, error } = await serviceSupabase
     .from("enterprises")
     .select("id, slug")
     .eq("slug", slugParsed.data)
-    .maybeSingle() as { data: { id: string; slug: string } | null; error: Error | null };
+    .maybeSingle();
 
   if (error) {
     return { data: null, error: { message: "Failed to resolve enterprise", status: 500 } };

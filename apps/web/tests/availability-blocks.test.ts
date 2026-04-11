@@ -1,10 +1,22 @@
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeEventBlocks,
   resolveOverlaps,
   type EventBlock,
 } from "@/components/schedules/availability-blocks";
+
+const originalTimeZone = process.env.TZ;
+process.env.TZ = "UTC";
+
+after(() => {
+  if (originalTimeZone === undefined) {
+    delete process.env.TZ;
+    return;
+  }
+
+  process.env.TZ = originalTimeZone;
+});
 
 // Build a week starting from Sunday Jan 4 2026
 function buildWeekDays(): Date[] {
@@ -159,6 +171,40 @@ describe("computeEventBlocks", () => {
     assert.equal(blocks[0].title, "Holiday");
   });
 
+  it("splits timed multi-day events into per-day blocks", () => {
+    const calendarEvents = [
+      {
+        id: "camp",
+        user_id: "u1",
+        title: "June Camp",
+        start_at: "2026-01-05T08:00:00",
+        end_at: "2026-01-08T17:00:00",
+        all_day: false,
+        users: null,
+      },
+    ];
+
+    const result = computeEventBlocks([], calendarEvents, weekDays);
+
+    assert.deepStrictEqual(
+      ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"].map((dateKey) => ({
+        dateKey,
+        block: result.get(dateKey)?.[0]
+          ? {
+            startMinute: result.get(dateKey)?.[0].startMinute,
+            endMinute: result.get(dateKey)?.[0].endMinute,
+          }
+          : null,
+      })),
+      [
+        { dateKey: "2026-01-05", block: { startMinute: 480, endMinute: 1320 } },
+        { dateKey: "2026-01-06", block: { startMinute: 360, endMinute: 1320 } },
+        { dateKey: "2026-01-07", block: { startMinute: 360, endMinute: 1320 } },
+        { dateKey: "2026-01-08", block: { startMinute: 360, endMinute: 1020 } },
+      ],
+    );
+  });
+
   it("handles org schedule events", () => {
     const calendarEvents = [
       {
@@ -179,6 +225,52 @@ describe("computeEventBlocks", () => {
     assert.equal(blocks[0].isOrg, true);
     assert.equal(blocks[0].origin, "schedule");
     assert.equal(blocks[0].memberName, "Org schedule");
+  });
+
+  it("handles org-origin events (from events table)", () => {
+    const calendarEvents = [
+      {
+        id: "org2",
+        user_id: "u1",
+        title: "Team Meeting",
+        start_at: "2026-01-06T10:00:00",
+        end_at: "2026-01-06T11:00:00",
+        all_day: false,
+        users: null,
+        origin: "org" as const,
+      },
+    ];
+
+    const result = computeEventBlocks([], calendarEvents, weekDays);
+    const blocks = result.get("2026-01-06")!;
+    assert.equal(blocks.length, 1);
+    assert.equal(blocks[0].isOrg, true);
+    assert.equal(blocks[0].origin, "org");
+    assert.equal(blocks[0].memberName, "Org schedule");
+    assert.equal(blocks[0].userId, "org:org2");
+  });
+
+  it("uses org timezone when placing timed calendar blocks", () => {
+    const calendarEvents = [
+      {
+        id: "tz-1",
+        user_id: "u1",
+        title: "Late practice",
+        start_at: "2026-01-06T01:00:00.000Z",
+        end_at: "2026-01-06T03:00:00.000Z",
+        all_day: false,
+        users: null,
+      },
+    ];
+
+    const result = computeEventBlocks([], calendarEvents, weekDays, "America/New_York");
+    assert.ok(result.has("2026-01-05"));
+    assert.ok(!result.has("2026-01-06"));
+
+    const blocks = result.get("2026-01-05")!;
+    assert.equal(blocks.length, 1);
+    assert.equal(blocks[0].startMinute, 1200);
+    assert.equal(blocks[0].endMinute, 1320);
   });
 
   it("handles single occurrence schedule", () => {

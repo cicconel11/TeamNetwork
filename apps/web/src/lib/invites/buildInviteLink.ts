@@ -1,22 +1,14 @@
 interface BuildInviteLinkInput {
-  kind: "org" | "parent";
+  kind: "org" | "parent" | "enterprise";
   baseUrl: string;
   orgId?: string | null;
   code?: string | null;
   token?: string | null;
+  isEnterpriseWide?: boolean;
 }
 
 export function buildInviteLink(input: BuildInviteLinkInput): string {
   const baseUrl = input.baseUrl ?? "";
-
-  if (input.kind === "parent") {
-    if (!input.orgId || !input.code) return `${baseUrl}/app/parents-join`;
-    const params = new URLSearchParams({
-      org: input.orgId,
-      code: input.code,
-    });
-    return `${baseUrl}/app/parents-join?${params.toString()}`;
-  }
 
   const hasToken = Boolean(input.token);
   const value = input.token ?? input.code;
@@ -25,6 +17,10 @@ export function buildInviteLink(input: BuildInviteLinkInput): string {
   const params = new URLSearchParams({
     [hasToken ? "token" : "code"]: value,
   });
+
+  if (input.kind === "enterprise" && input.isEnterpriseWide && hasToken) {
+    params.set("invite", "enterprise");
+  }
 
   return `${baseUrl}/app/join?${params.toString()}`;
 }

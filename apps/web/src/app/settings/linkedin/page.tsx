@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LinkedInSettingsPage() {
-  redirect("/settings/notifications");
+  redirect("/settings/connected-accounts");
 }

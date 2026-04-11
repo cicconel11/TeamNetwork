@@ -1,16 +1,32 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { optionalLinkedInProfileUrlSchema } from "@/lib/alumni/linkedin-url";
+import {
+  getLinkedInConnectionSource,
+  type LinkedInConnectionSource,
+} from "@/lib/linkedin/connection-source";
+import {
+  mapBrightDataToFields,
+  type BrightDataProfileResult,
+} from "@/lib/linkedin/bright-data";
 
 type LinkedInProfileTable = "members" | "alumni" | "parents";
 
+export interface LinkedInEnrichmentInfo {
+  jobTitle: string | null;
+  currentCompany: string | null;
+  school: string | null;
+}
+
 export interface LinkedInStatusConnection {
+  source: LinkedInConnectionSource;
   status: "connected" | "disconnected" | "error";
   linkedInName: string | null;
   linkedInEmail: string | null;
   linkedInPhotoUrl: string | null;
   lastSyncAt: string | null;
   syncError: string | null;
+  enrichment: LinkedInEnrichmentInfo | null;
 }
 
 export interface LinkedInStatusResult {
@@ -50,6 +66,29 @@ async function getLatestLinkedInUrl(
   return data?.[0]?.linkedin_url ?? null;
 }
 
+export async function getLinkedInProfileUrlForUser(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<string | null> {
+  const [membersResult, alumniResult, parentsResult] =
+    await Promise.allSettled([
+      getLatestLinkedInUrl(supabase, "members", userId),
+      getLatestLinkedInUrl(supabase, "alumni", userId),
+      getLatestLinkedInUrl(supabase, "parents", userId),
+    ]);
+
+  if (membersResult.status === "rejected") throw membersResult.reason;
+  const membersUrl = membersResult.value;
+  if (membersUrl) return membersUrl;
+
+  if (alumniResult.status === "rejected") throw alumniResult.reason;
+  const alumniUrl = alumniResult.value;
+  if (alumniUrl) return alumniUrl;
+
+  if (parentsResult.status === "rejected") throw parentsResult.reason;
+  return parentsResult.value || null;
+}
+
 export async function getLinkedInStatusForUser(
   supabase: SupabaseClient<Database>,
   userId: string,
@@ -58,7 +97,7 @@ export async function getLinkedInStatusForUser(
   // semantics: members -> alumni -> parents. A higher-priority table failure
   // must still fail closed if we would have needed to consult that table in the
   // original sequential flow.
-  const [connectionResult, membersResult, alumniResult, parentsResult] =
+  const [connectionResult, linkedinUrlResult] =
     await Promise.allSettled([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any)
@@ -66,9 +105,7 @@ export async function getLinkedInStatusForUser(
         .select("*")
         .eq("user_id", userId)
         .maybeSingle(),
-      getLatestLinkedInUrl(supabase, "members", userId),
-      getLatestLinkedInUrl(supabase, "alumni", userId),
-      getLatestLinkedInUrl(supabase, "parents", userId),
+      getLinkedInProfileUrlForUser(supabase, userId),
     ]);
 
   // Connection row is required — rethrow if it failed
@@ -78,43 +115,50 @@ export async function getLinkedInStatusForUser(
     throw new Error(`Failed to fetch LinkedIn connection: ${connectionError.message}`);
   }
 
+  // Extract enrichment data from linkedin_data JSONB if present
+  let enrichment: LinkedInEnrichmentInfo | null = null;
+  if (connectionRow?.linkedin_data?.enrichment) {
+    const raw = connectionRow.linkedin_data.enrichment;
+
+    // Detect legacy ProxyCurl format (uses `experiences` plural) vs Bright Data (`experience` singular)
+    const isLegacyFormat = Array.isArray(raw.experiences);
+
+    if (isLegacyFormat) {
+      const currentJob = (raw.experiences as Array<{ ends_at: unknown; title: string | null; company: string | null }>)
+        ?.find((e) => !e.ends_at) ?? raw.experiences?.[0];
+      const latestEdu = (raw.education as Array<{ school: string | null }>)?.[0];
+      enrichment = {
+        jobTitle: currentJob?.title || raw.occupation || null,
+        currentCompany: currentJob?.company || null,
+        school: latestEdu?.school || null,
+      };
+    } else {
+      const fields = mapBrightDataToFields(raw as BrightDataProfileResult);
+      enrichment = {
+        jobTitle: fields.job_title,
+        currentCompany: fields.current_company,
+        school: fields.school,
+      };
+    }
+  }
+
   const connection = connectionRow
     ? {
+        source: getLinkedInConnectionSource(connectionRow),
         status: connectionRow.status as "connected" | "disconnected" | "error",
         linkedInName: connectionRow.linkedin_name || null,
         linkedInEmail: connectionRow.linkedin_email || null,
         linkedInPhotoUrl: connectionRow.linkedin_picture_url || null,
         lastSyncAt: connectionRow.last_synced_at || null,
         syncError: connectionRow.sync_error || null,
+        enrichment,
       }
     : null;
 
-  if (membersResult.status === "rejected") throw membersResult.reason;
-  const membersUrl = membersResult.value;
-
-  // Use truthiness (not ??) to match current falsy-check behavior: legacy
-  // empty-string rows should continue falling through to lower-priority tables.
-  if (membersUrl) {
-    return {
-      linkedin_url: membersUrl,
-      connection,
-    };
-  }
-
-  if (alumniResult.status === "rejected") throw alumniResult.reason;
-  const alumniUrl = alumniResult.value;
-  if (alumniUrl) {
-    return {
-      linkedin_url: alumniUrl,
-      connection,
-    };
-  }
-
-  if (parentsResult.status === "rejected") throw parentsResult.reason;
-  const parentsUrl = parentsResult.value;
+  if (linkedinUrlResult.status === "rejected") throw linkedinUrlResult.reason;
 
   return {
-    linkedin_url: parentsUrl || null,
+    linkedin_url: linkedinUrlResult.value || null,
     connection,
   };
 }

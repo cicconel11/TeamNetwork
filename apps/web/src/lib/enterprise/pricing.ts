@@ -43,19 +43,31 @@ export function getAlumniBucketPricing(
 }
 
 /**
- * Calculate the number of billable organizations (those beyond the free tier).
- * First 3 organizations are included with any alumni bucket.
+ * Get the number of free sub-orgs for a given bucket quantity.
+ * Each alumni bucket grants 3 free organizations.
+ * Sales-led enterprises (5+ buckets) have negotiated terms — this formula
+ * still applies as a baseline but may be overridden contractually.
  */
-export function getBillableOrgCount(totalOrgs: number): number {
-  return Math.max(0, totalOrgs - ENTERPRISE_SEAT_PRICING.freeSubOrgs);
+export function getFreeSubOrgCount(bucketQuantity: number): number {
+  return bucketQuantity * ENTERPRISE_SEAT_PRICING.freeSubOrgsPerBucket;
 }
 
 /**
- * Get sub-org add-on pricing for a given total org count and interval.
+ * Calculate the number of billable organizations (those beyond the free tier).
+ * Free tier scales with alumni bucket quantity: 3 free orgs per bucket.
+ */
+export function getBillableOrgCount(totalOrgs: number, bucketQuantity: number = 1): number {
+  return Math.max(0, totalOrgs - getFreeSubOrgCount(bucketQuantity));
+}
+
+/**
+ * Get sub-org add-on pricing for a given total org count, interval, and bucket quantity.
+ * Free tier scales: 3 free orgs per alumni bucket.
  */
 export function getSubOrgPricing(
   totalOrgs: number,
-  interval: BillingInterval
+  interval: BillingInterval,
+  bucketQuantity: number = 1
 ): {
   totalOrgs: number;
   freeOrgs: number;
@@ -63,14 +75,15 @@ export function getSubOrgPricing(
   unitCents: number;
   totalCents: number;
 } {
-  const billable = getBillableOrgCount(totalOrgs);
+  const freeCount = getFreeSubOrgCount(bucketQuantity);
+  const billable = getBillableOrgCount(totalOrgs, bucketQuantity);
   const unitCents = interval === "month"
     ? ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly
     : ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
 
   return {
     totalOrgs,
-    freeOrgs: Math.min(totalOrgs, ENTERPRISE_SEAT_PRICING.freeSubOrgs),
+    freeOrgs: Math.min(totalOrgs, freeCount),
     billableOrgs: billable,
     unitCents,
     totalCents: billable * unitCents,
@@ -95,7 +108,7 @@ export function getEnterpriseTotalPricing(
   totalCents: number;
 } {
   const alumni = getAlumniBucketPricing(alumniBucketQuantity, interval);
-  const subOrgs = getSubOrgPricing(totalOrgs, interval);
+  const subOrgs = getSubOrgPricing(totalOrgs, interval, alumniBucketQuantity);
 
   return {
     alumni,

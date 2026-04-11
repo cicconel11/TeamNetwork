@@ -6,8 +6,21 @@ import { voteSchema } from "@/lib/schemas/chat-polls";
 import type { PollMetadata } from "@/lib/schemas/chat-polls";
 import { getChatGroupContext } from "@/lib/auth/chat-helpers";
 
-export async function POST(req: Request, { params }: { params: { groupId: string; messageId: string } }) {
-  const { groupId, messageId } = params;
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+interface RouteParams {
+  params: Promise<{ groupId: string; messageId: string }>;
+}
+
+/**
+ * POST /api/chat/[groupId]/polls/[messageId]/votes
+ * Cast or change a vote on a poll.
+ * Auth: must be active org member + group member.
+ * Body: { option_index }
+ */
+export async function POST(req: Request, { params }: RouteParams) {
+  const { groupId, messageId } = await params;
 
   const groupIdParsed = baseSchemas.uuid.safeParse(groupId);
   if (!groupIdParsed.success) {
@@ -52,6 +65,7 @@ export async function POST(req: Request, { params }: { params: { groupId: string
     return respond({ error: "Forbidden" }, 403);
   }
 
+  // Fetch the poll message
   const { data: pollMessage, error: messageError } = await supabase
     .from("chat_messages")
     .select("id, author_id, message_type, metadata, status, deleted_at")
@@ -71,11 +85,14 @@ export async function POST(req: Request, { params }: { params: { groupId: string
     return respond({ error: "Message is not a poll" }, 400);
   }
 
+  // Determine if user can access non-approved polls
   const isAuthor = pollMessage.author_id === user.id;
+
   if (pollMessage.status !== "approved" && !isAuthor && !ctx.canModerate) {
     return respond({ error: "Poll is not yet approved" }, 403);
   }
 
+  // Validate option_index is within bounds of available options
   const pollMetadata = pollMessage.metadata as PollMetadata | null;
   if (!pollMetadata || !Array.isArray(pollMetadata.options)) {
     return respond({ error: "Poll metadata is invalid" }, 500);
@@ -84,10 +101,12 @@ export async function POST(req: Request, { params }: { params: { groupId: string
   if (parsed.option_index >= pollMetadata.options.length) {
     return respond(
       { error: `option_index out of bounds (poll has ${pollMetadata.options.length} options)` },
-      400,
+      400
     );
   }
 
+  // When allow_change is false, use INSERT to enforce single-vote immutability.
+  // A unique violation (23505) means the user already voted.
   if (pollMetadata.allow_change === false) {
     const { data: vote, error: insertError } = await supabase
       .from("chat_poll_votes")
@@ -112,6 +131,7 @@ export async function POST(req: Request, { params }: { params: { groupId: string
     return respond({ vote });
   }
 
+  // allow_change is true/null/missing — upsert as before
   const { data: vote, error: voteError } = await supabase
     .from("chat_poll_votes")
     .upsert(
@@ -123,7 +143,7 @@ export async function POST(req: Request, { params }: { params: { groupId: string
         option_index: parsed.option_index,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "message_id,user_id" },
+      { onConflict: "message_id,user_id" }
     )
     .select()
     .single();
@@ -135,8 +155,13 @@ export async function POST(req: Request, { params }: { params: { groupId: string
   return respond({ vote });
 }
 
-export async function DELETE(req: Request, { params }: { params: { groupId: string; messageId: string } }) {
-  const { groupId, messageId } = params;
+/**
+ * DELETE /api/chat/[groupId]/polls/[messageId]/votes
+ * Retract the current user's vote on a poll.
+ * Auth: must be active org member + group member.
+ */
+export async function DELETE(req: Request, { params }: RouteParams) {
+  const { groupId, messageId } = await params;
 
   const groupIdParsed = baseSchemas.uuid.safeParse(groupId);
   if (!groupIdParsed.success) {
@@ -171,6 +196,7 @@ export async function DELETE(req: Request, { params }: { params: { groupId: stri
     return respond({ error: "Forbidden" }, 403);
   }
 
+  // Validate the poll message exists, belongs to this group, and is not deleted
   const { data: pollMessage } = await supabase
     .from("chat_messages")
     .select("id, message_type, metadata, deleted_at")
@@ -186,11 +212,13 @@ export async function DELETE(req: Request, { params }: { params: { groupId: stri
     return respond({ error: "Message is not a poll" }, 400);
   }
 
+  // Block retraction when allow_change is explicitly false
   const pollMetadata = pollMessage.metadata as PollMetadata | null;
   if (pollMetadata?.allow_change === false) {
     return respond({ error: "Vote cannot be retracted for this poll" }, 403);
   }
 
+  // Delete the vote for this user on this message (scoped to group)
   const { error: deleteError } = await supabase
     .from("chat_poll_votes")
     .delete()

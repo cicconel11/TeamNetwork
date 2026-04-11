@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Badge, Button, Card, Select } from "@/components/ui";
 import { getRoleBadgeVariant, getRoleLabel } from "@/lib/auth/role-display";
@@ -22,20 +23,29 @@ interface MembershipPanelProps {
 
 export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: MembershipPanelProps) {
   const supabase = useMemo(() => createClient(), []);
+  const tSettings = useTranslations("settings");
+  const tCommon = useTranslations("common");
+  const tRoles = useTranslations("roles");
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [roleChangeUserId, setRoleChangeUserId] = useState<string | null>(null);
   const [isChangingRole, setIsChangingRole] = useState(false);
   const [showAdminConfirm, setShowAdminConfirm] = useState(false);
   const [pendingAdminUserId, setPendingAdminUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Fetch memberships
   useEffect(() => {
     const fetchMemberships = async () => {
-      const { data: membershipRows } = await supabase
+      const offset = page * PAGE_SIZE;
+      const { data: membershipRows, count } = await supabase
         .from("user_organization_roles")
-        .select("user_id, role, status, users(name,email)")
-        .eq("organization_id", orgId);
+        .select("user_id, role, status, created_at, users(name,email)", { count: "exact" })
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1);
 
       const normalizedMemberships: Membership[] =
         membershipRows?.map((m) => {
@@ -52,10 +62,11 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
         }) || [];
 
       setMemberships(normalizedMemberships);
+      setTotalCount(count ?? 0);
     };
 
     fetchMemberships();
-  }, [orgId, supabase]);
+  }, [orgId, supabase, page]);
 
   const canChangeToAlumni = useCallback(() => {
     if (!quota) return true;
@@ -142,15 +153,15 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
       <Card className="p-6 mt-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-semibold text-foreground">Access control</h3>
+            <h3 className="font-semibold text-foreground">{tSettings("membership.title")}</h3>
             <p className="text-sm text-muted-foreground">
-              Manage roles and access for members of this org.
+              {tSettings("membership.description")}
             </p>
             {quota && (
               <p className="text-xs text-muted-foreground mt-1">
-                Alumni slots: {quota.alumniLimit === null
-                  ? "Unlimited"
-                  : `${quota.remaining ?? 0} remaining (${quota.alumniCount}/${quota.alumniLimit} used)`}
+                {quota.alumniLimit === null
+                  ? tSettings("membership.alumniQuotaUnlimited", { used: quota.alumniCount })
+                  : `${tSettings("membership.alumniRemaining", { remaining: quota.remaining ?? 0 })} (${quota.alumniCount}/${quota.alumniLimit})`}
               </p>
             )}
           </div>
@@ -163,14 +174,14 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
         )}
 
         {memberships.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No members found.</p>
+          <p className="text-sm text-muted-foreground">{tSettings("membership.noMembers")}</p>
         ) : (
           <div className="divide-y divide-border">
             {memberships.map((m) => (
               <div key={m.user_id} className="py-3 flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-foreground truncate">
-                    {m.users?.name || m.users?.email || "User"}
+                    {m.users?.name || m.users?.email || tSettings("membership.user")}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">{m.users?.email}</p>
                 </div>
@@ -184,10 +195,10 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
                       }
                       disabled={isChangingRole && roleChangeUserId === m.user_id}
                       options={[
-                        { value: "active_member", label: "Active Member" },
-                        { value: "alumni", label: "Alumni", disabled: m.role !== "alumni" && !canChangeToAlumni() },
-                        { value: "parent", label: "Parent" },
-                        { value: "admin", label: "Admin" },
+                        { value: "active_member", label: tRoles("activeMember") },
+                        { value: "alumni", label: tRoles("alumni"), disabled: m.role !== "alumni" && !canChangeToAlumni() },
+                        { value: "parent", label: tRoles("parent") },
+                        { value: "admin", label: tRoles("admin") },
                       ]}
                     />
                   </div>
@@ -217,7 +228,7 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
                       className="text-red-600 hover:text-red-700"
                       disabled={isChangingRole && roleChangeUserId === m.user_id}
                     >
-                      Remove access
+                      {tSettings("membership.removeAccess")}
                     </Button>
                   ) : (
                     <Button
@@ -225,12 +236,37 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
                       size="sm"
                       onClick={() => updateAccess(m.user_id, "active")}
                     >
-                      Restore access
+                      {tSettings("membership.restoreAccess")}
                     </Button>
                   )}
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Pagination controls */}
+        {totalCount > PAGE_SIZE && (
+          <div className="pt-4 flex items-center justify-between">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {page + 1} of {Math.ceil(totalCount / PAGE_SIZE)}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= totalCount}
+            >
+              Next
+            </Button>
           </div>
         )}
       </Card>
@@ -241,23 +277,21 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
           <Card className="max-w-md w-full p-6 space-y-4">
             <div>
               <h3 className="text-lg font-bold text-amber-700 dark:text-amber-300">
-                Confirm Admin Promotion
+                {tSettings("membership.confirmAdminTitle")}
               </h3>
               <p className="text-sm text-muted-foreground mt-2">
-                You are about to promote{" "}
-                <strong>
-                  {memberships.find((m) => m.user_id === pendingAdminUserId)?.users?.name ||
+                {tSettings("membership.confirmAdminDesc", {
+                  name: memberships.find((m) => m.user_id === pendingAdminUserId)?.users?.name ||
                     memberships.find((m) => m.user_id === pendingAdminUserId)?.users?.email ||
-                    "this user"}
-                </strong>{" "}
-                to Admin.
+                    tSettings("membership.user"),
+                })}
               </p>
-              <p className="text-sm text-muted-foreground mt-2">Admins have full access to:</p>
+              <p className="text-sm text-muted-foreground mt-2">{tSettings("membership.adminAccessTo")}</p>
               <ul className="text-sm text-muted-foreground mt-1 list-disc list-inside">
-                <li>Organization settings and billing</li>
-                <li>Member management and approvals</li>
-                <li>All content creation and editing</li>
-                <li>Navigation customization</li>
+                <li>{tSettings("membership.capability1")}</li>
+                <li>{tSettings("membership.capability2")}</li>
+                <li>{tSettings("membership.capability3")}</li>
+                <li>{tSettings("membership.capability4")}</li>
               </ul>
             </div>
 
@@ -270,14 +304,14 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
                 }}
                 disabled={isChangingRole}
               >
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button
                 onClick={confirmAdminPromotion}
                 isLoading={isChangingRole}
                 className="!bg-amber-600 !text-white hover:!bg-amber-700 !border-amber-600"
               >
-                Promote to Admin
+                {tSettings("membership.promoteToAdmin")}
               </Button>
             </div>
           </Card>

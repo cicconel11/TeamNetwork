@@ -121,15 +121,3 @@ export async function verifyCaptcha(
     }
 }
 
-/**
- * Checks if captcha verification is enabled
- * Returns true if the secret key is configured or we're in development mode
- */
-export function isCaptchaEnabled(): boolean {
-    const secretKey = process.env.HCAPTCHA_SECRET_KEY;
-    if (secretKey && secretKey.trim() !== "") {
-        return true;
-    }
-    // In development, captcha is "enabled" but will be bypassed
-    return process.env.NODE_ENV === "development";
-}

@@ -19,6 +19,8 @@ type TableName =
   | "google_tokens"
   | "alumni"
   | "members"
+  | "mentorship_pairs"
+  | "graph_sync_queue"
   | "donations"
   | "philanthropy_events"
   | "users"
@@ -42,6 +44,7 @@ type TableName =
   | "chat_poll_votes"
   | "chat_form_responses"
   | "enterprise_subscriptions"
+  | "enterprise_adoption_requests"
   | "user_enterprise_roles";
 
 type Row = Record<string, unknown>;
@@ -77,6 +80,8 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   google_tokens: ["user_id"],
   alumni: [],
   members: [],
+  mentorship_pairs: [],
+  graph_sync_queue: [],
   donations: [],
   philanthropy_events: [],
   users: [],
@@ -100,6 +105,7 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   chat_poll_votes: [["message_id", "user_id"]],
   chat_form_responses: [["message_id", "user_id"]],
   enterprise_subscriptions: ["enterprise_id"],
+  enterprise_adoption_requests: [],
   user_enterprise_roles: [["user_id", "enterprise_id"]],
 };
 
@@ -127,6 +133,8 @@ export function createSupabaseStub() {
     google_tokens: [],
     alumni: [],
     members: [],
+    mentorship_pairs: [],
+    graph_sync_queue: [],
     donations: [],
     philanthropy_events: [],
     users: [],
@@ -150,6 +158,7 @@ export function createSupabaseStub() {
     chat_poll_votes: [],
     chat_form_responses: [],
     enterprise_subscriptions: [],
+    enterprise_adoption_requests: [],
     user_enterprise_roles: [],
   };
 
@@ -216,6 +225,14 @@ export function createSupabaseStub() {
     },
 
     upsert: (payload: Row | Row[], options?: { onConflict?: string }) => {
+      if (errorSimulation[table]) {
+        return {
+          then(resolve: (value: SupabaseResponse<null>) => void) {
+            resolve({ data: null, error: errorSimulation[table] ?? null });
+          },
+        };
+      }
+
       const records = Array.isArray(payload) ? payload : [payload];
       const conflictColumns = options?.onConflict?.split(",").map((c) => c.trim()) ?? [];
 
