@@ -3148,6 +3148,42 @@ export type Database = {
         }
         Relationships: []
       }
+      mcp_resources: {
+        Row: {
+          body: string
+          category: string
+          description: string
+          id: string
+          metadata: Json
+          mime_type: string
+          title: string
+          updated_at: string
+          uri: string
+        }
+        Insert: {
+          body: string
+          category: string
+          description: string
+          id?: string
+          metadata?: Json
+          mime_type?: string
+          title: string
+          updated_at?: string
+          uri: string
+        }
+        Update: {
+          body?: string
+          category?: string
+          description?: string
+          id?: string
+          metadata?: Json
+          mime_type?: string
+          title?: string
+          updated_at?: string
+          uri?: string
+        }
+        Relationships: []
+      }
       media_album_items: {
         Row: {
           added_at: string
@@ -5757,6 +5793,13 @@ export type Database = {
       }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
+      get_enterprise_member_counts: {
+        Args: { enterprise_ids: string[] }
+        Returns: {
+          enterprise_id: string
+          member_count: number
+        }[]
+      }
       get_linkedin_manual_sync_status: {
         Args: { p_user_id: string }
         Returns: Json

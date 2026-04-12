@@ -203,9 +203,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Update record: status=ready, actual file size, entity link
-    const updateData: Record<string, unknown> = {
+    const updateData: {
+      status: string;
+      file_size: number;
+      finalized_at: string;
+      entity_type?: string;
+      entity_id?: string;
+    } = {
       status: "ready",
-      file_size: actualFileSize ?? media.file_size,
+      file_size: actualFileSize ?? media.file_size ?? 0,
       finalized_at: new Date().toISOString(),
     };
 
@@ -216,7 +222,8 @@ export async function POST(request: NextRequest) {
 
     const { error: updateError } = await serviceClient
       .from("media_uploads")
-      .update(updateData)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update(updateData as any)
       .eq("id", body.mediaId);
 
     if (updateError) {

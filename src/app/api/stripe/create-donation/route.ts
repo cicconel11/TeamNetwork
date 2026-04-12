@@ -366,11 +366,12 @@ export async function POST(req: Request) {
 
     const message = error instanceof Error ? error.message : "Unable to start donation checkout";
     if (resolvedAttemptId) {
-      const errorUpdate: Record<string, unknown> = { last_error: message };
+      const errorUpdate: { last_error: string; status?: string } = { last_error: message };
       if (!stripeResourceCreated) {
         errorUpdate.status = "initiated";
       }
-      await supabase.from("payment_attempts").update(errorUpdate).eq("id", resolvedAttemptId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await supabase.from("payment_attempts").update(errorUpdate as any).eq("id", resolvedAttemptId);
     }
     console.error("[create-donation] Error:", message);
     return respond({ error: "Unable to start donation checkout" }, 400);

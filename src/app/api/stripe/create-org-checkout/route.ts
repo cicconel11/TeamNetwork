@@ -371,11 +371,12 @@ export async function POST(req: Request) {
 
       const lastError = stripeErr?.message || stripeErr?.raw?.message || "checkout_failed";
       if (resolvedAttemptId) {
-        const errorUpdate: Record<string, unknown> = { last_error: lastError };
+        const errorUpdate: { last_error: string; status?: string } = { last_error: lastError };
         if (!stripeResourceCreated) {
           errorUpdate.status = "initiated";
         }
-        await serviceSupabase.from("payment_attempts").update(errorUpdate).eq("id", resolvedAttemptId);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await serviceSupabase.from("payment_attempts").update(errorUpdate as any).eq("id", resolvedAttemptId);
       }
 
       return respond({ error: "Unable to start checkout" }, 400);

@@ -155,7 +155,11 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const serviceSupabase = createServiceClient();
-  const updates: Record<string, string | null> = {};
+  const updates: {
+    primary_color?: string;
+    secondary_color?: string;
+    logo_url?: string;
+  } = {};
 
   if (primary.color) {
     updates.primary_color = primary.color;
@@ -188,7 +192,8 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const { data: updatedOrg, error: updateError } = await serviceSupabase
     .from("organizations")
-    .update(updates)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update(updates as any)
     .eq("id", organizationId)
     .select("id, name, slug, logo_url, primary_color, secondary_color")
     .maybeSingle();

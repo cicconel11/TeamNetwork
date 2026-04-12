@@ -203,14 +203,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const membership = await getOrgMembership(supabase, user.id, item.organization_id);
     const finalStatus = membership?.role === "admin" ? "approved" : "pending";
 
-    const updatePayload: Record<string, unknown> = { status: finalStatus };
+    const updatePayload: { status: string; file_size_bytes?: number } = { status: finalStatus };
     if (actualFileSize !== null && actualFileSize > 0) {
       updatePayload.file_size_bytes = actualFileSize;
     }
 
     const { data: updated, error: updateError } = await serviceClient
       .from("media_items")
-      .update(updatePayload)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update(updatePayload as any)
       .eq("id", mediaId)
       .eq("status", "uploading") // Optimistic lock
       .select("id, status")
