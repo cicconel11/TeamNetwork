@@ -1,99 +1,104 @@
-/**
- * Org Config Fail-Closed Tests
- *
- * Verifies that all API routes capturing org config for role-based access
- * destructure `error` from the query and return 500 on failure, rather than
- * silently falling through to feature defaults (fail-open).
- *
- * Pattern: source-code audit (reads files, asserts on code shape).
- */
-
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
+import type { OrgRoleConfigColumn } from "../../src/lib/auth/org-role-config.ts";
+import { DEFAULT_ORG_ROLE_CONFIG, getAllowedOrgRoles } from "../../src/lib/auth/org-role-config.ts";
 
-function readSource(relPath: string): string {
-  return fs.readFileSync(path.join(process.cwd(), relPath), "utf8");
+type QueryResult = {
+  data: Record<string, unknown> | null;
+  error: { message: string } | null;
+};
+
+function makeSupabase(result: QueryResult) {
+  const chain = {
+    select() {
+      return chain;
+    },
+    eq() {
+      return chain;
+    },
+    maybeSingle() {
+      return Promise.resolve(result);
+    },
+  };
+
+  return {
+    from(table: string) {
+      assert.equal(table, "organizations");
+      return chain;
+    },
+  } as never;
 }
 
-describe("org config queries fail closed", () => {
-  const routes = [
-    {
-      file: "src/app/api/media/upload-intent/route.ts",
-      label: "upload-intent",
-      roleColumn: "roleColumn",
-      hasRateLimitHeaders: true,
-    },
-    {
-      file: "src/app/api/feed/route.ts",
-      label: "feed",
-      roleColumn: "feed_post_roles",
-      hasRateLimitHeaders: false,
-    },
-    {
-      file: "src/app/api/discussions/route.ts",
-      label: "discussions",
-      roleColumn: "discussion_post_roles",
-      hasRateLimitHeaders: false,
-    },
-    {
-      file: "src/app/api/jobs/route.ts",
-      label: "jobs",
-      roleColumn: "job_post_roles",
-      hasRateLimitHeaders: false,
-    },
-  ];
-
-  for (const route of routes) {
-    describe(route.label, () => {
-      it("destructures error from the org config query", () => {
-        const source = readSource(route.file);
-        // Must capture error from the org config query (e.g. `error: orgError` or `error: orgConfigError`)
-        assert.match(
-          source,
-          /const\s*\{[^}]*error\s*:\s*org\w*Error[^}]*\}\s*=\s*await\s+supabase/,
-          `${route.label}: org config query must destructure error (e.g. error: orgError)`,
-        );
-      });
-
-      it("returns 500 when the org config query errors", () => {
-        const source = readSource(route.file);
-        // Must have a conditional that checks the error and returns 500
-        assert.match(
-          source,
-          /if\s*\(\s*org\w*Error\s*\)/,
-          `${route.label}: must check orgError and return 500`,
-        );
-        assert.ok(
-          source.includes("Failed to verify permissions"),
-          `${route.label}: 500 response must include "Failed to verify permissions"`,
-        );
-      });
-
-      it("preserves the feature defaults fallback for null org", () => {
-        const source = readSource(route.file);
-        // The fallback pattern (|| defaults) must still exist — don't accidentally remove it
-        assert.ok(
-          source.includes("featureDefaults") || source.includes('|| ["admin'),
-          `${route.label}: feature defaults fallback must still be present`,
-        );
-      });
-
-      if (route.hasRateLimitHeaders) {
-        it("includes rateLimit.headers in the 500 response", () => {
-          const source = readSource(route.file);
-          // Find the orgConfigError check block and verify it includes rateLimit.headers
-          const errorCheckIdx = source.indexOf("orgConfigError");
-          assert.ok(errorCheckIdx > -1, "must have orgConfigError check");
-          // The 500 response near the error check should include rateLimit.headers
-          const afterErrorCheck = source.slice(errorCheckIdx, errorCheckIdx + 500);
-          assert.ok(
-            afterErrorCheck.includes("rateLimit.headers"),
-            "upload-intent: 500 response for orgConfigError must include rateLimit.headers",
-          );
-        });
-      }
+describe("getAllowedOrgRoles", () => {
+  it("throws when the org config lookup errors", async () => {
+    const supabase = makeSupabase({
+      data: null,
+      error: { message: "connection refused" },
     });
-  }
+
+    await assert.rejects(
+      () => getAllowedOrgRoles(supabase, "org-1", "feed_post_roles", "feed"),
+      /\[feed\] Failed to fetch org config: connection refused/,
+    );
+  });
+
+  it("throws when the org config row is missing", async () => {
+    const supabase = makeSupabase({
+      data: null,
+      error: null,
+    });
+
+    await assert.rejects(
+      () => getAllowedOrgRoles(supabase, "org-1", "feed_post_roles", "feed"),
+      /\[feed\] Organization config not found for org org-1/,
+    );
+  });
+
+  it("returns default roles when the org config column is null", async () => {
+    const supabase = makeSupabase({
+      data: { feed_post_roles: null },
+      error: null,
+    });
+
+    const roles = await getAllowedOrgRoles(supabase, "org-1", "feed_post_roles", "feed");
+    assert.deepEqual(roles, DEFAULT_ORG_ROLE_CONFIG.feed_post_roles);
+  });
+
+  it("preserves explicit configured roles", async () => {
+    const supabase = makeSupabase({
+      data: { discussion_post_roles: ["admin", "parent"] },
+      error: null,
+    });
+
+    const roles = await getAllowedOrgRoles(
+      supabase,
+      "org-1",
+      "discussion_post_roles",
+      "discussions",
+    );
+    assert.deepEqual(roles, ["admin", "parent"]);
+  });
+
+  it("preserves an explicit empty role list instead of widening permissions", async () => {
+    const supabase = makeSupabase({
+      data: { job_post_roles: [] },
+      error: null,
+    });
+
+    const roles = await getAllowedOrgRoles(supabase, "org-1", "job_post_roles", "jobs");
+    assert.deepEqual(roles, []);
+  });
+
+  it("defines defaults for every org role config column used by route guards", () => {
+    const columns: OrgRoleConfigColumn[] = [
+      "feed_post_roles",
+      "discussion_post_roles",
+      "job_post_roles",
+    ];
+
+    for (const column of columns) {
+      assert.ok(DEFAULT_ORG_ROLE_CONFIG[column].length > 0, `${column} should have defaults`);
+      assert.ok(DEFAULT_ORG_ROLE_CONFIG[column].includes("admin"), `${column} should include admin`);
+    }
+  });
 });

@@ -64,26 +64,30 @@ describe("philanthropy soft-delete filters", () => {
       );
     });
 
-    it("eventsQuery has a .limit()", () => {
+    it("eventsQuery does not use a .limit()", () => {
       const source = readSource(file);
       const eventsQueryIdx = source.indexOf("eventsQuery");
       // Find the eventsQuery block up to Promise.all
       const promiseAllIdx = source.indexOf("Promise.all");
       const block = source.slice(eventsQueryIdx, promiseAllIdx > -1 ? promiseAllIdx : eventsQueryIdx + 500);
-      assert.ok(
-        block.includes(".limit("),
-        "eventsQuery must have a .limit() to bound results",
-      );
+      assert.ok(!block.includes(".limit("), "eventsQuery must not silently truncate results");
     });
 
-    it("allPhilanthropyEvents has a .limit()", () => {
+    it("allPhilanthropyEvents does not use a .limit()", () => {
       const source = readSource(file);
       const idx = source.indexOf("allPhilanthropyEvents");
       const block = source.slice(idx, idx + 600);
       assert.ok(
-        block.includes(".limit("),
-        "allPhilanthropyEvents must have a .limit() to bound results",
+        !block.includes(".limit("),
+        "allPhilanthropyEvents must not silently truncate counts or donation form options",
       );
+    });
+
+    it("allPhilanthropyEvents orders by start_date for stable UI output", () => {
+      const source = readSource(file);
+      const idx = source.indexOf("allPhilanthropyEvents");
+      const block = source.slice(idx, idx + 600);
+      assert.ok(block.includes('.order("start_date")'), "allPhilanthropyEvents must order by start_date");
     });
   });
 
