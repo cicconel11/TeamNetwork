@@ -234,6 +234,43 @@ export async function acceptAdoptionRequest(
     if (seatQuota.error) {
       return { success: false, error: "Unable to verify seat limit. Please try again.", status: 503 };
     }
+
+    // Check enterprise admin cap (12 max across all orgs)
+    // Count current enterprise admins via user_organization_roles joined to enterprise orgs
+    const { count: currentAdminCount, error: adminCountError } = await supabase
+      .from("user_organization_roles")
+      .select("id, organizations!inner(enterprise_id)", { count: "exact", head: true })
+      .eq("organizations.enterprise_id", request.enterprise_id)
+      .eq("role", "admin")
+      .eq("status", "active");
+
+    if (adminCountError) {
+      console.error("[acceptAdoptionRequest] Failed to count enterprise admins:", adminCountError);
+      return { success: false, error: "Unable to verify admin limit. Please try again.", status: 503 };
+    }
+
+    // Count admins in the org being adopted
+    const { count: orgAdminCount, error: orgAdminCountError } = await supabase
+      .from("user_organization_roles")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", request.organization_id)
+      .eq("role", "admin")
+      .eq("status", "active");
+
+    if (orgAdminCountError) {
+      console.error("[acceptAdoptionRequest] Failed to count org admins:", orgAdminCountError);
+      return { success: false, error: "Unable to verify admin limit. Please try again.", status: 503 };
+    }
+
+    const totalAdminsAfterAdoption = (currentAdminCount ?? 0) + (orgAdminCount ?? 0);
+    const ENTERPRISE_ADMIN_CAP = 12;
+
+    if (totalAdminsAfterAdoption > ENTERPRISE_ADMIN_CAP) {
+      return {
+        success: false,
+        error: `Adoption would exceed enterprise admin limit (${totalAdminsAfterAdoption}/${ENTERPRISE_ADMIN_CAP}). Remove some admins from the organization first.`,
+      };
+    }
   }
 
   // Get org's current subscription for preservation

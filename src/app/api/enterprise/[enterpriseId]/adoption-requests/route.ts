@@ -72,7 +72,8 @@ export async function GET(req: Request, { params }: RouteParams) {
       organization:organizations(id, name, slug)
     `)
     .eq("enterprise_id", ctx.enterpriseId)
-    .order("requested_at", { ascending: false }) as { data: AdoptionRequestRow[] | null; error: Error | null };
+    .order("requested_at", { ascending: false })
+    .limit(100) as { data: AdoptionRequestRow[] | null; error: Error | null };
 
   if (error) {
     console.error("[enterprise/adoption-requests GET] DB error:", error);
