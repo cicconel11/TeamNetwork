@@ -3,7 +3,6 @@
     "groups": {
       "people": "Pessoas",
       "community": "Comunidade",
-      "schedule": "Agenda",
       "activity": "Atividade",
       "finance": "Financeiro",
       "admin": "Admin"
@@ -221,11 +220,26 @@
       "savePreferences": "Salvar preferencias",
       "turnOnOff": "Ative ou desative e-mails para esta organizacao.",
       "categories": {
-        "announcements": { "label": "Avisos", "desc": "Novos avisos da organizacao" },
-        "discussions": { "label": "Discussoes", "desc": "Novos topicos de discussao" },
-        "events": { "label": "Eventos", "desc": "Novos eventos e agendas" },
-        "workouts": { "label": "Treinos", "desc": "Novos planos de treino" },
-        "competitions": { "label": "Competicoes", "desc": "Novas atualizacoes de competicoes" }
+        "announcements": {
+          "label": "Avisos",
+          "desc": "Novos avisos da organizacao"
+        },
+        "discussions": {
+          "label": "Discussoes",
+          "desc": "Novos topicos de discussao"
+        },
+        "events": {
+          "label": "Eventos",
+          "desc": "Novos eventos e agendas"
+        },
+        "workouts": {
+          "label": "Treinos",
+          "desc": "Novos planos de treino"
+        },
+        "competitions": {
+          "label": "Competicoes",
+          "desc": "Novas atualizacoes de competicoes"
+        }
       }
     },
     "billing": {
@@ -939,12 +953,30 @@
     "failedDisconnect": "Falha ao desconectar o Google Calendar",
     "failedSync": "Falha ao sincronizar o Google Calendar",
     "types": {
-      "general": { "label": "Eventos gerais", "desc": "Eventos e atividades gerais da organizacao" },
-      "game": { "label": "Jogos", "desc": "Jogos esportivos e competicoes" },
-      "meeting": { "label": "Reunioes", "desc": "Reunioes e encontros do grupo" },
-      "social": { "label": "Eventos sociais", "desc": "Encontros sociais e festas" },
-      "fundraiser": { "label": "Arrecadacoes", "desc": "Eventos e campanhas de arrecadacao" },
-      "philanthropy": { "label": "Filantropia", "desc": "Servico comunitario e eventos de filantropia" }
+      "general": {
+        "label": "Eventos gerais",
+        "desc": "Eventos e atividades gerais da organizacao"
+      },
+      "game": {
+        "label": "Jogos",
+        "desc": "Jogos esportivos e competicoes"
+      },
+      "meeting": {
+        "label": "Reunioes",
+        "desc": "Reunioes e encontros do grupo"
+      },
+      "social": {
+        "label": "Eventos sociais",
+        "desc": "Encontros sociais e festas"
+      },
+      "fundraiser": {
+        "label": "Arrecadacoes",
+        "desc": "Eventos e campanhas de arrecadacao"
+      },
+      "philanthropy": {
+        "label": "Filantropia",
+        "desc": "Servico comunitario e eventos de filantropia"
+      }
     }
   },
   "blackbaud": {
@@ -952,7 +984,7 @@
     "notConfigured": "A integracao do Blackbaud nao esta configurada neste ambiente. Entre em contato com seu administrador para configurar as credenciais de desenvolvedor do Blackbaud.",
     "connectDesc": "Conecte sua conta Blackbaud RE NXT para sincronizar automaticamente os dados de constituintes no seu diretorio de ex-alunos.",
     "connect": "Conectar Blackbaud",
-    "lastSyncedRecords": "Ultima sincronizacao: {time} \u00b7 {count} registros sincronizados",
+    "lastSyncedRecords": "Ultima sincronizacao: {time} · {count} registros sincronizados",
     "lastSyncDetails": "Detalhes da ultima sincronizacao",
     "created": "Criados",
     "updated": "Atualizados",

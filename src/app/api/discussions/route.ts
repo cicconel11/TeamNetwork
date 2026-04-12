@@ -7,6 +7,7 @@ import { notifyNewThread } from "@/lib/discussions/notifications";
 import { validateJson, validationErrorResponse, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { getAllowedOrgRoles } from "@/lib/auth/org-role-config";
 import { linkMediaToEntity } from "@/lib/media/link";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
 import { z } from "zod";
@@ -152,13 +153,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch configurable discussion posting roles from the org
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("discussion_post_roles")
-      .eq("id", orgId)
-      .maybeSingle();
+    let allowedRoles: string[];
+    try {
+      allowedRoles = await getAllowedOrgRoles(supabase, orgId, "discussion_post_roles", "discussions");
+    } catch (error) {
+      console.error("[discussions] Failed to fetch org config:", error);
+      return NextResponse.json(
+        { error: "Failed to verify permissions" },
+        { status: 500 },
+      );
+    }
 
-    const allowedRoles = (org as Record<string, unknown> | null)?.discussion_post_roles as string[] || ["admin", "active_member", "alumni"];
     if (!allowedRoles.includes(membership.role)) {
       return NextResponse.json({ error: "You do not have permission to create discussions" }, { status: 403 });
     }

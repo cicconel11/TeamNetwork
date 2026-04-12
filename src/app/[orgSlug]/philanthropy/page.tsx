@@ -33,6 +33,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
     .from("events")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .or("is_philanthropy.eq.true,event_type.eq.philanthropy");
 
   if (filters.view === "past") {
@@ -51,9 +52,11 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
       .maybeSingle(),
     supabase
       .from("events")
-      .select("*")
+      .select("id, title, start_date")
       .eq("organization_id", org.id)
-      .or("is_philanthropy.eq.true,event_type.eq.philanthropy"),
+      .is("deleted_at", null)
+      .or("is_philanthropy.eq.true,event_type.eq.philanthropy")
+      .order("start_date"),
     org.stripe_connect_account_id
       ? getConnectAccountStatus(org.stripe_connect_account_id)
       : Promise.resolve(null),

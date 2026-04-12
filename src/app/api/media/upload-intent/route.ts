@@ -7,6 +7,7 @@ import { uploadIntentSchema } from "@/lib/schemas/media";
 import { validateJson, validationErrorResponse, ValidationError } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { getAllowedOrgRoles, type OrgRoleConfigColumn } from "@/lib/auth/org-role-config";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { validateFileConstraints } from "@/lib/media/validation";
 import { isImageMimeType, type MediaFeature } from "@/lib/media/constants";
@@ -67,27 +68,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Check feature-level posting roles
-    const featureRoleColumns: Record<string, string> = {
+    const featureRoleColumns: Record<string, OrgRoleConfigColumn> = {
       feed_post: "feed_post_roles",
       discussion_thread: "discussion_post_roles",
       job_posting: "job_post_roles",
     };
-    const featureDefaults: Record<string, string[]> = {
-      feed_post: ["admin", "active_member", "alumni"],
-      discussion_thread: ["admin", "active_member", "alumni"],
-      job_posting: ["admin", "alumni"],
-    };
     const roleColumn = featureRoleColumns[body.feature];
     if (roleColumn) {
-      const { data: org } = await supabase
-        .from("organizations")
-        .select(roleColumn)
-        .eq("id", body.orgId)
-        .maybeSingle();
+      let allowedRoles: string[];
+      try {
+        allowedRoles = await getAllowedOrgRoles(
+          supabase,
+          body.orgId,
+          roleColumn,
+          "media/upload-intent",
+        );
+      } catch (error) {
+        console.error("[media/upload-intent] Failed to fetch org config:", error);
+        return NextResponse.json(
+          { error: "Failed to verify permissions" },
+          { status: 500, headers: rateLimit.headers },
+        );
+      }
 
-      const allowedRoles: string[] =
-        (org as Record<string, unknown> | null)?.[roleColumn] as string[] ||
-        featureDefaults[body.feature];
       if (!allowedRoles.includes(membership.role)) {
         console.warn("[media/upload-intent] rejected", {
           orgId: body.orgId,

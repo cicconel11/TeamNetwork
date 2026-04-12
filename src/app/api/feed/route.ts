@@ -5,6 +5,7 @@ import { createPollSchema } from "@/lib/schemas/chat-polls";
 import { validateJson, validationErrorResponse, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { getAllowedOrgRoles } from "@/lib/auth/org-role-config";
 import { linkMediaToEntity } from "@/lib/media/link";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
 import type { PollMetadata } from "@/components/feed/types";
@@ -216,13 +217,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Check feed_post_roles
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("feed_post_roles")
-      .eq("id", orgId)
-      .maybeSingle();
+    let allowedRoles: string[];
+    try {
+      allowedRoles = await getAllowedOrgRoles(supabase, orgId, "feed_post_roles", "feed");
+    } catch (error) {
+      console.error("[feed] Failed to fetch org config:", error);
+      return NextResponse.json(
+        { error: "Failed to verify permissions" },
+        { status: 500 },
+      );
+    }
 
-    const allowedRoles: string[] = (org?.feed_post_roles as string[] | null) || ["admin", "active_member", "alumni"];
     if (!allowedRoles.includes(membership.role)) {
       return NextResponse.json({ error: "Your role is not allowed to create posts" }, { status: 403 });
     }

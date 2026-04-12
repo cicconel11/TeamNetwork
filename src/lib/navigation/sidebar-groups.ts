@@ -55,19 +55,19 @@ export function buildSectionOrder(
     sections.push({ type: "dashboard", item: dashboardItems[0] });
   }
 
-  // 2. Each non-admin group in definition order
+  // 2. Standalone top-level items (no group, non-Dashboard) — right after Home
+  const standaloneItems = buckets.get("standalone");
+  if (standaloneItems && standaloneItems.length > 0) {
+    sections.push({ type: "standalone", items: standaloneItems });
+  }
+
+  // 3. Each non-admin group in definition order
   for (const group of groups) {
     if (group.id === "admin") continue;
     const items = buckets.get(group.id);
     if (items && items.length > 0) {
       sections.push({ type: "group", group, items });
     }
-  }
-
-  // 3. Standalone middle items (no group, non-Dashboard)
-  const standaloneItems = buckets.get("standalone");
-  if (standaloneItems && standaloneItems.length > 0) {
-    sections.push({ type: "standalone", items: standaloneItems });
   }
 
   // 4. Admin group (always last, only if it has items)

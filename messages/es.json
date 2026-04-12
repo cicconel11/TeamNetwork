@@ -3,7 +3,6 @@
     "groups": {
       "people": "Personas",
       "community": "Comunidad",
-      "schedule": "Horario",
       "activity": "Actividad",
       "finance": "Finanzas",
       "admin": "Admin"
@@ -221,11 +220,26 @@
       "savePreferences": "Guardar preferencias",
       "turnOnOff": "Activa o desactiva correos para esta organizacion.",
       "categories": {
-        "announcements": { "label": "Anuncios", "desc": "Nuevos anuncios de la organizacion" },
-        "discussions": { "label": "Debates", "desc": "Nuevos hilos de debate" },
-        "events": { "label": "Eventos", "desc": "Nuevos eventos y horarios" },
-        "workouts": { "label": "Entrenamientos", "desc": "Nuevos planes de entrenamiento" },
-        "competitions": { "label": "Competencias", "desc": "Nuevas actualizaciones de competencias" }
+        "announcements": {
+          "label": "Anuncios",
+          "desc": "Nuevos anuncios de la organizacion"
+        },
+        "discussions": {
+          "label": "Debates",
+          "desc": "Nuevos hilos de debate"
+        },
+        "events": {
+          "label": "Eventos",
+          "desc": "Nuevos eventos y horarios"
+        },
+        "workouts": {
+          "label": "Entrenamientos",
+          "desc": "Nuevos planes de entrenamiento"
+        },
+        "competitions": {
+          "label": "Competencias",
+          "desc": "Nuevas actualizaciones de competencias"
+        }
       }
     },
     "billing": {
@@ -896,7 +910,7 @@
     "experience": "Experiencia",
     "education": "Educacion",
     "headline": "Titulo",
-    "waitAfterChange": "Si acabas de cambiar esta configuracion, espera 24\u201348 horas para que LinkedIn se actualice",
+    "waitAfterChange": "Si acabas de cambiar esta configuracion, espera 24–48 horas para que LinkedIn se actualice",
     "comeBackSync": "Vuelve y haz clic en Sincronizar datos de LinkedIn",
     "connectedAccount": "Cuenta conectada",
     "lastSynced": "Ultima sincronizacion: {time}",
@@ -910,7 +924,7 @@
     "connectLinkedIn": "Conectar LinkedIn",
     "profileSync": "Sincronizacion de perfil",
     "missingDetails": "No pudimos encontrar tu cargo o datos de educacion. Para solucionarlo:",
-    "limitReached": "Limite alcanzado \u2014 se restablece el proximo mes",
+    "limitReached": "Limite alcanzado — se restablece el proximo mes",
     "syncsRemaining": "{remaining} de {max} sincronizaciones restantes",
     "resyncManaged": "La resincronizacion es gestionada por tu organizacion",
     "urlSaved": "URL de LinkedIn guardada.",
@@ -939,12 +953,30 @@
     "failedDisconnect": "No se pudo desconectar Google Calendar",
     "failedSync": "No se pudo sincronizar Google Calendar",
     "types": {
-      "general": { "label": "Eventos generales", "desc": "Eventos y actividades generales de la organizacion" },
-      "game": { "label": "Juegos", "desc": "Juegos deportivos y competencias" },
-      "meeting": { "label": "Reuniones", "desc": "Reuniones y encuentros del grupo" },
-      "social": { "label": "Eventos sociales", "desc": "Encuentros sociales y fiestas" },
-      "fundraiser": { "label": "Recaudaciones", "desc": "Eventos y campanas de recaudacion de fondos" },
-      "philanthropy": { "label": "Filantropia", "desc": "Eventos de servicio comunitario y filantropia" }
+      "general": {
+        "label": "Eventos generales",
+        "desc": "Eventos y actividades generales de la organizacion"
+      },
+      "game": {
+        "label": "Juegos",
+        "desc": "Juegos deportivos y competencias"
+      },
+      "meeting": {
+        "label": "Reuniones",
+        "desc": "Reuniones y encuentros del grupo"
+      },
+      "social": {
+        "label": "Eventos sociales",
+        "desc": "Encuentros sociales y fiestas"
+      },
+      "fundraiser": {
+        "label": "Recaudaciones",
+        "desc": "Eventos y campanas de recaudacion de fondos"
+      },
+      "philanthropy": {
+        "label": "Filantropia",
+        "desc": "Eventos de servicio comunitario y filantropia"
+      }
     }
   },
   "blackbaud": {
@@ -952,7 +984,7 @@
     "notConfigured": "La integracion con Blackbaud no esta configurada en este entorno. Contacta a tu administrador para configurar las credenciales de desarrollador de Blackbaud.",
     "connectDesc": "Conecta tu cuenta de Blackbaud RE NXT para sincronizar automaticamente datos de contribuyentes con tu directorio de egresados.",
     "connect": "Conectar Blackbaud",
-    "lastSyncedRecords": "Ultima sincronizacion: {time} \u00b7 {count} registros sincronizados",
+    "lastSyncedRecords": "Ultima sincronizacion: {time} · {count} registros sincronizados",
     "lastSyncDetails": "Detalles de la ultima sincronizacion",
     "created": "Creados",
     "updated": "Actualizados",

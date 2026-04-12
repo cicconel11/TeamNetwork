@@ -27,7 +27,7 @@ import {
   ShieldCheckIcon,
 } from "@/components/icons/nav-icons";
 
-export type NavGroupId = "people" | "community" | "schedule" | "activity" | "finance" | "admin";
+export type NavGroupId = "people" | "community" | "activity" | "finance" | "admin";
 
 export type NavGroup = {
   id: NavGroupId;
@@ -39,7 +39,6 @@ export type NavGroup = {
 export const ORG_NAV_GROUPS: NavGroup[] = [
   { id: "people", label: "People", i18nKey: "people" },
   { id: "community", label: "Community", i18nKey: "community" },
-  { id: "schedule", label: "Schedule", i18nKey: "schedule" },
   { id: "activity", label: "Activity", i18nKey: "activity" },
   { id: "finance", label: "Finance", i18nKey: "finance" },
   { id: "admin", label: "Admin", i18nKey: "admin" },
@@ -84,7 +83,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "/donations", label: "Donations", i18nKey: "donations", icon: DollarIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "finance" },
   { href: "/expenses", label: "Expenses", i18nKey: "expenses", icon: ReceiptIcon, roles: ["admin", "active_member"], group: "finance" },
   { href: "/records", label: "Records", i18nKey: "records", icon: TrophyIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "activity" },
-  { href: "/calendar", label: "Calendar", i18nKey: "calendar", icon: BookOpenIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "schedule" },
+  { href: "/calendar", label: "Calendar", i18nKey: "calendar", icon: BookOpenIcon, roles: ["admin", "active_member", "alumni", "parent"] },
   { href: "/jobs", label: "Jobs", i18nKey: "jobs", icon: BriefcaseIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/forms", label: "Forms", i18nKey: "forms", icon: ClipboardIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/media", label: "Media", i18nKey: "media", icon: GridIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
