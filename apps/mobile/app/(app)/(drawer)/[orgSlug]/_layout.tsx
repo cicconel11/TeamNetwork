@@ -1,7 +1,28 @@
 import { useEffect } from "react";
+import { View } from "react-native";
 import { Stack, useRouter } from "expo-router";
+import type { ErrorBoundaryProps } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import LoadingScreen from "@/components/LoadingScreen";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { captureException } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
+
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  captureException(error, { context: "OrgErrorBoundary" });
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0f172a" }}>
+      <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+        <ErrorState
+          onRetry={retry}
+          title="Something went wrong"
+          subtitle="This screen encountered an error."
+        />
+      </View>
+    </SafeAreaView>
+  );
+}
 
 function OrgLayoutInner() {
   const router = useRouter();

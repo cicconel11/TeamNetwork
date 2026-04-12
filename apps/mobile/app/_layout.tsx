@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from "react";
-import { StyleSheet, Platform } from "react-native";
+import { StyleSheet, Platform, View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
+import type { ErrorBoundaryProps } from "expo-router";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
@@ -23,6 +24,25 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
 import { useSupabaseAppState } from "@/hooks/useSupabaseAppState";
 import { getNativeAppLinkRoute, sanitizeUrlForTelemetry } from "@/lib/url-safety";
+
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ErrorState } from "@/components/ui/ErrorState";
+
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  captureException(error, { context: "RootErrorBoundary" });
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0f172a" }}>
+      <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+        <ErrorState
+          onRetry={retry}
+          title="Something went wrong"
+          subtitle="The app encountered an unexpected error."
+        />
+      </View>
+    </SafeAreaView>
+  );
+}
 
 // Prevent splash screen from auto-hiding until fonts are loaded
 SplashScreen.preventAutoHideAsync();
