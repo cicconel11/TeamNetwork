@@ -3,7 +3,6 @@
     "groups": {
       "people": "人员",
       "community": "社区",
-      "schedule": "日程",
       "activity": "活动",
       "finance": "财务",
       "admin": "管理"
@@ -221,11 +220,26 @@
       "savePreferences": "保存偏好",
       "turnOnOff": "为此组织开启或关闭邮件。",
       "categories": {
-        "announcements": { "label": "公告", "desc": "来自组织的新公告" },
-        "discussions": { "label": "讨论", "desc": "新的讨论主题" },
-        "events": { "label": "活动", "desc": "新的活动和日程" },
-        "workouts": { "label": "训练", "desc": "新的训练计划" },
-        "competitions": { "label": "比赛", "desc": "新的比赛动态" }
+        "announcements": {
+          "label": "公告",
+          "desc": "来自组织的新公告"
+        },
+        "discussions": {
+          "label": "讨论",
+          "desc": "新的讨论主题"
+        },
+        "events": {
+          "label": "活动",
+          "desc": "新的活动和日程"
+        },
+        "workouts": {
+          "label": "训练",
+          "desc": "新的训练计划"
+        },
+        "competitions": {
+          "label": "比赛",
+          "desc": "新的比赛动态"
+        }
       }
     },
     "billing": {
@@ -939,12 +953,30 @@
     "failedDisconnect": "断开 Google Calendar 连接失败",
     "failedSync": "同步 Google Calendar 失败",
     "types": {
-      "general": { "label": "常规活动", "desc": "组织的一般活动" },
-      "game": { "label": "比赛", "desc": "体育比赛和竞赛" },
-      "meeting": { "label": "会议", "desc": "分会会议和聚会" },
-      "social": { "label": "社交活动", "desc": "社交聚会和派对" },
-      "fundraiser": { "label": "筹款活动", "desc": "筹款活动和募捐" },
-      "philanthropy": { "label": "慈善", "desc": "社区服务和慈善活动" }
+      "general": {
+        "label": "常规活动",
+        "desc": "组织的一般活动"
+      },
+      "game": {
+        "label": "比赛",
+        "desc": "体育比赛和竞赛"
+      },
+      "meeting": {
+        "label": "会议",
+        "desc": "分会会议和聚会"
+      },
+      "social": {
+        "label": "社交活动",
+        "desc": "社交聚会和派对"
+      },
+      "fundraiser": {
+        "label": "筹款活动",
+        "desc": "筹款活动和募捐"
+      },
+      "philanthropy": {
+        "label": "慈善",
+        "desc": "社区服务和慈善活动"
+      }
     }
   },
   "blackbaud": {

@@ -3,7 +3,6 @@
     "groups": {
       "people": "Persone",
       "community": "Comunità",
-      "schedule": "Programma",
       "activity": "Attività",
       "finance": "Finanze",
       "admin": "Admin"
@@ -221,11 +220,26 @@
       "savePreferences": "Salva preferenze",
       "turnOnOff": "Attiva o disattiva le e-mail per questa organizzazione.",
       "categories": {
-        "announcements": { "label": "Annunci", "desc": "Nuovi annunci dall'organizzazione" },
-        "discussions": { "label": "Discussioni", "desc": "Nuove discussioni" },
-        "events": { "label": "Eventi", "desc": "Nuovi eventi e programmi" },
-        "workouts": { "label": "Allenamenti", "desc": "Nuovi piani di allenamento" },
-        "competitions": { "label": "Competizioni", "desc": "Aggiornamenti sulle competizioni" }
+        "announcements": {
+          "label": "Annunci",
+          "desc": "Nuovi annunci dall'organizzazione"
+        },
+        "discussions": {
+          "label": "Discussioni",
+          "desc": "Nuove discussioni"
+        },
+        "events": {
+          "label": "Eventi",
+          "desc": "Nuovi eventi e programmi"
+        },
+        "workouts": {
+          "label": "Allenamenti",
+          "desc": "Nuovi piani di allenamento"
+        },
+        "competitions": {
+          "label": "Competizioni",
+          "desc": "Aggiornamenti sulle competizioni"
+        }
       }
     },
     "billing": {
@@ -896,7 +910,7 @@
     "experience": "Esperienza",
     "education": "Formazione",
     "headline": "Titolo",
-    "waitAfterChange": "Se hai appena cambiato queste impostazioni, aspetta 24\u201348 ore per l'aggiornamento di LinkedIn",
+    "waitAfterChange": "Se hai appena cambiato queste impostazioni, aspetta 24–48 ore per l'aggiornamento di LinkedIn",
     "comeBackSync": "Torna e premi Sincronizza dati LinkedIn",
     "connectedAccount": "Account collegato",
     "lastSynced": "Ultima sincronizzazione: {time}",
@@ -939,12 +953,30 @@
     "failedDisconnect": "Disconnessione di Google Calendar non riuscita",
     "failedSync": "Sincronizzazione di Google Calendar non riuscita",
     "types": {
-      "general": { "label": "Eventi generali", "desc": "Eventi e attività generali dell'organizzazione" },
-      "game": { "label": "Partite", "desc": "Partite sportive e competizioni" },
-      "meeting": { "label": "Riunioni", "desc": "Riunioni e incontri del gruppo" },
-      "social": { "label": "Eventi sociali", "desc": "Incontri sociali e feste" },
-      "fundraiser": { "label": "Raccolte fondi", "desc": "Eventi e campagne di raccolta fondi" },
-      "philanthropy": { "label": "Filantropia", "desc": "Servizio comunitario ed eventi di filantropia" }
+      "general": {
+        "label": "Eventi generali",
+        "desc": "Eventi e attività generali dell'organizzazione"
+      },
+      "game": {
+        "label": "Partite",
+        "desc": "Partite sportive e competizioni"
+      },
+      "meeting": {
+        "label": "Riunioni",
+        "desc": "Riunioni e incontri del gruppo"
+      },
+      "social": {
+        "label": "Eventi sociali",
+        "desc": "Incontri sociali e feste"
+      },
+      "fundraiser": {
+        "label": "Raccolte fondi",
+        "desc": "Eventi e campagne di raccolta fondi"
+      },
+      "philanthropy": {
+        "label": "Filantropia",
+        "desc": "Servizio comunitario ed eventi di filantropia"
+      }
     }
   },
   "blackbaud": {
