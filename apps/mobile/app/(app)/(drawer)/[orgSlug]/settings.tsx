@@ -145,6 +145,7 @@ export default function SettingsScreen() {
                 orgLoading={orgSettingsLoading}
                 updateName={updateName}
                 isAdmin={isAdmin}
+                orgSlug={orgSlug}
               />
 
               <SettingsNotificationsSection
