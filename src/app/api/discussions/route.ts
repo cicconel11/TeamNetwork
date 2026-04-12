@@ -152,11 +152,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch configurable discussion posting roles from the org
-    const { data: org } = await supabase
+    const { data: org, error: orgConfigError } = await supabase
       .from("organizations")
       .select("discussion_post_roles")
       .eq("id", orgId)
       .maybeSingle();
+
+    if (orgConfigError) {
+      console.error("[discussions] Failed to fetch org config:", orgConfigError);
+      return NextResponse.json(
+        { error: "Failed to verify permissions" },
+        { status: 500 },
+      );
+    }
 
     const allowedRoles = (org as Record<string, unknown> | null)?.discussion_post_roles as string[] || ["admin", "active_member", "alumni"];
     if (!allowedRoles.includes(membership.role)) {

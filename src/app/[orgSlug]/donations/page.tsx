@@ -44,6 +44,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
       .from("events")
       .select("id, title")
       .eq("organization_id", org.id)
+      .is("deleted_at", null)
       .or("is_philanthropy.eq.true,event_type.eq.philanthropy")
       .order("start_date"),
     org.stripe_connect_account_id

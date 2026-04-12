@@ -79,11 +79,19 @@ export async function POST(request: NextRequest) {
     };
     const roleColumn = featureRoleColumns[body.feature];
     if (roleColumn) {
-      const { data: org } = await supabase
+      const { data: org, error: orgConfigError } = await supabase
         .from("organizations")
         .select(roleColumn)
         .eq("id", body.orgId)
         .maybeSingle();
+
+      if (orgConfigError) {
+        console.error("[media/upload-intent] Failed to fetch org config:", orgConfigError);
+        return NextResponse.json(
+          { error: "Failed to verify permissions" },
+          { status: 500, headers: rateLimit.headers },
+        );
+      }
 
       const allowedRoles: string[] =
         (org as Record<string, unknown> | null)?.[roleColumn] as string[] ||

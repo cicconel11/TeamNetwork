@@ -138,11 +138,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch configurable job posting roles from the org
-    const { data: org } = await supabase
+    const { data: org, error: orgConfigError } = await supabase
       .from("organizations")
       .select("job_post_roles")
       .eq("id", orgId)
       .maybeSingle();
+
+    if (orgConfigError) {
+      console.error("[jobs] Failed to fetch org config:", orgConfigError);
+      return NextResponse.json(
+        { error: "Failed to verify permissions" },
+        { status: 500 },
+      );
+    }
 
     const allowedRoles = (org as Record<string, unknown> | null)?.job_post_roles as string[] || ["admin", "alumni"];
     if (!allowedRoles.includes(membership.role)) {

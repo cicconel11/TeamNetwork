@@ -216,11 +216,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Check feed_post_roles
-    const { data: org } = await supabase
+    const { data: org, error: orgConfigError } = await supabase
       .from("organizations")
       .select("feed_post_roles")
       .eq("id", orgId)
       .maybeSingle();
+
+    if (orgConfigError) {
+      console.error("[feed] Failed to fetch org config:", orgConfigError);
+      return NextResponse.json(
+        { error: "Failed to verify permissions" },
+        { status: 500 },
+      );
+    }
 
     const allowedRoles: string[] = (org?.feed_post_roles as string[] | null) || ["admin", "active_member", "alumni"];
     if (!allowedRoles.includes(membership.role)) {
