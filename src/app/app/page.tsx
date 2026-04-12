@@ -354,6 +354,8 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                           role={item.role}
                           subOrgCount={subOrgs.length}
                           alumniCount={0}
+                          adminCount={item.adminCount}
+                          memberCount={item.memberCount}
                         />
                       </div>
                       {subOrgs.length > 0 && (

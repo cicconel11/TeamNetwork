@@ -120,6 +120,8 @@ export interface UserEnterpriseItem {
     created_at: string;
     updated_at: string;
   } | null;
+  adminCount?: number;
+  memberCount?: number;
 }
 
 /**
@@ -131,6 +133,7 @@ export interface UserEnterpriseItem {
  */
 export async function getUserEnterprises(userId: string): Promise<UserEnterpriseItem[]> {
   const supabase = await createClient();
+  const serviceSupabase = createServiceClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
@@ -143,7 +146,42 @@ export async function getUserEnterprises(userId: string): Promise<UserEnterprise
 
   if (error) {
     console.error("[enterprise-context] Failed to fetch user enterprises:", error);
+    return [];
   }
 
-  return (data as UserEnterpriseItem[] | null) ?? [];
+  const items = (data as UserEnterpriseItem[] | null) ?? [];
+
+  // Fetch admin and member counts for each enterprise
+  const enterpriseIds = items
+    .map((item) => item.enterprise?.id)
+    .filter((id): id is string => id != null);
+
+  if (enterpriseIds.length === 0) return items;
+
+  // Get admin counts (enterprise-level admins)
+  const { data: adminCounts } = await serviceSupabase
+    .from("user_enterprise_roles")
+    .select("enterprise_id")
+    .in("enterprise_id", enterpriseIds);
+
+  // Get member counts (org-level members across all enterprise orgs)
+  const { data: memberCounts } = await serviceSupabase
+    .rpc("get_enterprise_member_counts", { enterprise_ids: enterpriseIds });
+
+  const adminCountMap = new Map<string, number>();
+  for (const row of adminCounts ?? []) {
+    const current = adminCountMap.get(row.enterprise_id) ?? 0;
+    adminCountMap.set(row.enterprise_id, current + 1);
+  }
+
+  const memberCountMap = new Map<string, number>();
+  for (const row of (memberCounts as Array<{ enterprise_id: string; member_count: number }>) ?? []) {
+    memberCountMap.set(row.enterprise_id, row.member_count);
+  }
+
+  return items.map((item) => ({
+    ...item,
+    adminCount: item.enterprise ? (adminCountMap.get(item.enterprise.id) ?? 0) : 0,
+    memberCount: item.enterprise ? (memberCountMap.get(item.enterprise.id) ?? 0) : 0,
+  }));
 }
