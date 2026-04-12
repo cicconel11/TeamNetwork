@@ -30,12 +30,12 @@ describe("allowedImageUrl validation", () => {
   });
 
   describe("rejects disallowed hosts", () => {
-    it("rejects Google Drive share links", () => {
+    it("rejects Google Drive share links with helpful message", () => {
       const url = "https://drive.google.com/file/d/1KX0h_2T91jdarsbVwr869bIQCwJV7fkl/view?usp=sharing";
       const result = allowedImageUrl.safeParse(url);
       assert.strictEqual(result.success, false);
       if (!result.success) {
-        assert.ok(result.error.issues[0].message.includes("allowed host"));
+        assert.ok(result.error.issues[0].message.includes("download the image"));
       }
     });
 

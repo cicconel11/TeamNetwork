@@ -133,6 +133,6 @@ export const allowedImageUrl = z
       }
     },
     {
-      message: `Image URL must be from an allowed host: ${ALLOWED_IMAGE_HOSTS.join(", ")}`,
+      message: "External image links aren't supported. Please download the image to your computer first, then upload it here.",
     }
   );
