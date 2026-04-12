@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button, Input, Badge, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { EnterpriseBrandingCard } from "@/components/enterprise";
 
 interface EnterpriseAdmin {
   user_id: string;
@@ -35,7 +36,7 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
   // Form state
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [primaryColor, setPrimaryColor] = useState("#6B21A8");
   const [billingContactEmail, setBillingContactEmail] = useState("");
 
@@ -63,7 +64,7 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
       // Populate form
       setName(data.enterprise.name || "");
       setDescription(data.enterprise.description || "");
-      setLogoUrl(data.enterprise.logo_url || "");
+      setLogoUrl(data.enterprise.logo_url || null);
       setPrimaryColor(data.enterprise.primary_color || "#6B21A8");
       setBillingContactEmail(data.enterprise.billing_contact_email || "");
     } catch (err) {
@@ -89,8 +90,6 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
         body: JSON.stringify({
           name,
           description: description || null,
-          logo_url: logoUrl || null,
-          primary_color: primaryColor || null,
           billing_contact_email: billingContactEmail || null,
         }),
       });
@@ -222,6 +221,16 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
         </div>
       )}
 
+      {/* Branding */}
+      <EnterpriseBrandingCard
+        enterpriseId={enterpriseId}
+        enterpriseName={name}
+        enterpriseSlug={enterpriseSlug}
+        isAdmin={userRole !== null}
+        initialLogoUrl={logoUrl}
+        initialPrimaryColor={primaryColor}
+      />
+
       {/* General Settings */}
       <Card className="p-6 mb-6">
         <h3 className="font-semibold text-foreground mb-4">General Settings</h3>
@@ -245,34 +254,6 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
               rows={3}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
-          </div>
-
-          <Input
-            label="Logo URL"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://example.com/logo.png"
-          />
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Brand Color
-            </label>
-            <div className="flex items-center gap-4">
-              <input
-                type="color"
-                value={primaryColor}
-                onChange={(e) => setPrimaryColor(e.target.value)}
-                className="h-12 w-20 rounded-xl border border-border cursor-pointer"
-              />
-              <Input
-                type="text"
-                placeholder="#6B21A8"
-                value={primaryColor}
-                onChange={(e) => setPrimaryColor(e.target.value)}
-                className="flex-1"
-              />
-            </div>
           </div>
 
           <Input

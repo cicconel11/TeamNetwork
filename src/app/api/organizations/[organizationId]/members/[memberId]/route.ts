@@ -74,13 +74,14 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
   const serviceSupabase = createServiceClient();
 
-  const updatePayload: Record<string, string> = {};
+  const updatePayload: { role?: string; status?: string } = {};
   if (body.role !== undefined) updatePayload.role = body.role;
   if (body.status !== undefined) updatePayload.status = body.status;
 
   const { error: updateError } = await serviceSupabase
     .from("user_organization_roles")
-    .update(updatePayload)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update(updatePayload as any)
     .eq("organization_id", organizationId)
     .eq("user_id", userId);
 

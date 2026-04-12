@@ -20,7 +20,7 @@ export async function removeEnterpriseAdmin(
     .select("id, role")
     .eq("enterprise_id", enterpriseId)
     .eq("user_id", targetUserId)
-    .single();
+    .maybeSingle();
 
   if (fetchError) {
     console.error("[removeEnterpriseAdmin] role fetch failed:", fetchError);

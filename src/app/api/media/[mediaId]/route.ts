@@ -168,11 +168,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // Build update payload
-    const updatePayload: Record<string, unknown> = {};
+    const updatePayload: {
+      title?: string;
+      description?: string;
+      tags?: string[];
+      taken_at?: string;
+    } = {};
     if (body.title !== undefined) updatePayload.title = body.title;
-    if (body.description !== undefined) updatePayload.description = body.description || null;
+    if (body.description !== undefined) updatePayload.description = body.description || "";
     if (body.tags !== undefined) updatePayload.tags = body.tags;
-    if (body.takenAt !== undefined) updatePayload.taken_at = body.takenAt;
+    if (body.takenAt !== undefined && body.takenAt !== null) updatePayload.taken_at = body.takenAt;
 
     if (Object.keys(updatePayload).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
@@ -180,7 +185,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { data: updated, error: updateError } = await serviceClient
       .from("media_items")
-      .update(updatePayload)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update(updatePayload as any)
       .eq("id", mediaId)
       .select("*")
       .single();

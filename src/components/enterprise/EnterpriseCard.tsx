@@ -27,6 +27,8 @@ interface EnterpriseCardProps {
   role: EnterpriseRole;
   subOrgCount: number;
   alumniCount: number;
+  adminCount?: number;
+  memberCount?: number;
 }
 
 function getRoleBadgeVariant(role: EnterpriseRole): "primary" | "success" | "warning" | "muted" {
@@ -62,43 +64,56 @@ export function EnterpriseCard({
   role,
   subOrgCount,
   alumniCount,
+  adminCount = 0,
+  memberCount = 0,
 }: EnterpriseCardProps) {
   return (
     <Link href={`/enterprise/${slug}`}>
       <Card interactive className="h-full">
-        <div className="flex items-start gap-4">
+        <div className="flex items-center gap-4">
           {logoUrl && isAllowedImageHost(logoUrl) ? (
-            <div className="relative h-12 w-12 rounded-xl overflow-hidden flex-shrink-0">
+            <div className="relative h-14 w-14 rounded-xl overflow-hidden flex-shrink-0">
               <Image
                 src={logoUrl}
                 alt={name}
                 fill
                 className="object-cover"
-                sizes="48px"
+                sizes="56px"
               />
             </div>
           ) : (
-            <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-purple-600 text-white font-bold text-xl flex-shrink-0">
+            <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-purple-600 text-white font-bold text-2xl flex-shrink-0">
               {name.charAt(0)}
             </div>
           )}
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-2">
               <h3 className="text-lg font-semibold text-foreground truncate">{name}</h3>
               <Badge variant={getRoleBadgeVariant(role)} className="flex-shrink-0">
                 {getRoleLabel(role)}
               </Badge>
             </div>
 
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-1.5" title="Organizations">
                 <BuildingIcon className="h-4 w-4" />
-                <span>{subOrgCount} {subOrgCount === 1 ? "org" : "orgs"}</span>
+                <span>{subOrgCount}</span>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="w-px h-3 bg-border" />
+              <div className="flex items-center gap-1.5" title="Admins">
+                <ShieldIcon className="h-4 w-4" />
+                <span>{adminCount}</span>
+              </div>
+              <div className="w-px h-3 bg-border" />
+              <div className="flex items-center gap-1.5" title="Members">
                 <UsersIcon className="h-4 w-4" />
-                <span>{alumniCount.toLocaleString()} alumni</span>
+                <span>{memberCount.toLocaleString()}</span>
+              </div>
+              <div className="w-px h-3 bg-border" />
+              <div className="flex items-center gap-1.5" title="Alumni">
+                <GraduationCapIcon className="h-4 w-4" />
+                <span>{alumniCount.toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -138,6 +153,30 @@ function ChevronRightIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  );
+}
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+      />
+    </svg>
+  );
+}
+
+function GraduationCapIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5"
+      />
     </svg>
   );
 }
