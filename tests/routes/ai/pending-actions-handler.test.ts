@@ -188,6 +188,7 @@ test("confirm executes send_chat_message and appends assistant message", async (
   assert.equal(updatedStatuses[1].resultEntityType, "chat_message");
   assert.equal(updatedStatuses[1].resultEntityId, "message-123");
   assert.equal(insertedMessages[0].thread_id, THREAD_ID);
+  assert.equal(insertedMessages[0].org_id, ORG_ID);
   assert.match(String(insertedMessages[0].content), /Sent chat message to/);
   assert.match(String(insertedMessages[0].content), /upenn-sprint-football\/messages\/chat\/chat-123/);
 });
