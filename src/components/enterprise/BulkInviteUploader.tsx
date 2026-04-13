@@ -70,10 +70,12 @@ export function BulkInviteUploader({
     setError(null);
 
     try {
-      const invites = parsedRows.map((row) => ({
-        organizationId: row.organizationId!,
-        role: row.role!,
-      }));
+      const invites = parsedRows
+        .filter((r) => !r.error)
+        .map((row) => ({
+          organizationId: row.organizationId || selectedOrg,
+          role: row.role || defaultRole,
+        }));
 
       const res = await fetch(`/api/enterprise/${enterpriseId}/invites/bulk`, {
         method: "POST",
@@ -87,9 +89,10 @@ export function BulkInviteUploader({
       }
 
       const data = await res.json();
-      setResults(data);
+      const { success, failed } = data.summary as { success: number; failed: number; total: number };
+      setResults({ success, failed });
 
-      if (data.failed === 0) {
+      if (failed === 0) {
         onUploaded();
       }
     } catch (err) {
@@ -127,7 +130,7 @@ export function BulkInviteUploader({
 
       <p className="text-sm text-muted-foreground mb-4">
         Upload a CSV file to create multiple invites at once. Each row creates one generic, shareable invite code.
-        Format: <code className="bg-muted px-1 rounded">role,organization_id</code> (both fields required). One row per invite.
+        Format: <code className="bg-muted px-1 rounded">role,organization_id</code> (both fields optional; defaults apply). One row per invite.
       </p>
 
       {error && (

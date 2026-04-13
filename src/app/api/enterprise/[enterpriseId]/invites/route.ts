@@ -31,9 +31,7 @@ interface RouteParams {
 interface EnterpriseInviteRow {
   id: string;
   organization_id: string | null;
-  email: string;
   role: string;
-  status: string;
   created_at: string;
   expires_at: string | null;
   code?: string;
@@ -95,7 +93,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let inviteQuery = (ctx.serviceSupabase as any)
     .from("enterprise_invites")
-    .select("id, organization_id, role, status, created_at, expires_at, code, token, uses_remaining, revoked_at")
+    .select("id, organization_id, role, created_at, expires_at, code, token, uses_remaining, revoked_at")
     .eq("enterprise_id", ctx.enterpriseId);
 
   if (!includeRevoked) {

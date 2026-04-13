@@ -34,12 +34,8 @@ export function parseCSV(text: string): BulkCSVParseResult {
     const parts = line.split(",").map((p) => p.trim().replace(/^["']|["']$/g, ""));
     const role = parts[0] || undefined;
     const organizationId = parts[1] || undefined;
-    // Flag partial rows (exactly one field populated)
-    if ((role && !organizationId) || (!role && organizationId)) {
-      return { role, organizationId, error: "Row must include both role and organization_id" };
-    }
     return { role, organizationId };
-  }).filter((row) => row.role || row.organizationId || row.error); // Keep errors, drop fully blank rows
+  }).filter((row) => row.role || row.organizationId); // Drop fully blank rows only
 
   // Apply 100-row limit
   const truncated = rows.length > 100;
