@@ -5179,6 +5179,7 @@ export type Database = {
       user_deletion_requests: {
         Row: {
           cancelled_at: string | null
+          completed_at: string | null
           created_at: string
           id: string
           requested_at: string
@@ -5189,6 +5190,7 @@ export type Database = {
         }
         Insert: {
           cancelled_at?: string | null
+          completed_at?: string | null
           created_at?: string
           id?: string
           requested_at?: string
@@ -5199,6 +5201,7 @@ export type Database = {
         }
         Update: {
           cancelled_at?: string | null
+          completed_at?: string | null
           created_at?: string
           id?: string
           requested_at?: string

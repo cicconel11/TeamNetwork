@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { Card } from "@/components/ui";
-import { CURRENT_TOS_VERSION } from "@/lib/compliance/user-agreements";
+import {
+  hasAcceptedCurrentAgreementVersions,
+  type UserAgreementVersion,
+} from "@/lib/compliance/user-agreements";
+import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 import { AcceptTermsClient } from "./AcceptTermsClient";
 
 interface AcceptTermsPageProps {
@@ -12,6 +15,7 @@ interface AcceptTermsPageProps {
 
 export default async function AcceptTermsPage({ searchParams }: AcceptTermsPageProps) {
   const { redirect: redirectTo } = await searchParams;
+  const safeRedirectTo = sanitizeRedirectPath(redirectTo ?? null);
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -19,19 +23,17 @@ export default async function AcceptTermsPage({ searchParams }: AcceptTermsPageP
     redirect("/auth/login");
   }
 
-  // Check if user has already accepted current ToS version
-  const serviceSupabase = createServiceClient();
+  // Skip the interstitial once both current agreement versions are present.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existing } = await (serviceSupabase as any)
+  const { data: agreements } = await (supabase as any)
     .from("user_agreements")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("agreement_type", "terms_of_service")
-    .eq("version", CURRENT_TOS_VERSION)
-    .limit(1);
+    .select("agreement_type, version")
+    .eq("user_id", user.id) as {
+    data: UserAgreementVersion[] | null;
+  };
 
-  if (existing && existing.length > 0) {
-    redirect(redirectTo || "/app");
+  if (hasAcceptedCurrentAgreementVersions(agreements ?? [])) {
+    redirect(safeRedirectTo);
   }
 
   return (
@@ -49,7 +51,7 @@ export default async function AcceptTermsPage({ searchParams }: AcceptTermsPageP
             </p>
           </div>
 
-          <AcceptTermsClient redirectTo={redirectTo || "/app"} />
+          <AcceptTermsClient redirectTo={safeRedirectTo} />
         </Card>
       </div>
     </div>

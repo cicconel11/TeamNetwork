@@ -28,6 +28,7 @@ interface DeletionRequest {
   requested_at: string;
   scheduled_deletion_at: string;
   cancelled_at: string | null;
+  completed_at?: string | null;
 }
 
 /**

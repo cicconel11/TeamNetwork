@@ -26,6 +26,7 @@ export function AcceptTermsClient({ redirectTo }: AcceptTermsClientProps) {
       const response = await fetch("/api/auth/accept-terms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accepted: true }),
       });
 
       if (!response.ok) {

@@ -4,8 +4,10 @@ import type { NextRequest } from "next/server";
 import { requireEnv } from "@/lib/env";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 import { buildErrorRedirect, runAgeValidationGate } from "@/lib/auth/callback-flow";
-import { recordBothAgreements } from "@/lib/compliance/user-agreements";
-import { hashIp, getClientIp } from "@/lib/compliance/audit-log";
+import {
+  hasAcceptedCurrentAgreementVersions,
+  type UserAgreementVersion,
+} from "@/lib/compliance/user-agreements";
 import { debugLog, maskPII } from "@/lib/debug";
 import { createServiceClient } from "@/lib/supabase/service";
 import { runLinkedInOidcSyncSafe } from "@/lib/linkedin/oidc-sync";
@@ -202,23 +204,24 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(ageGateResult.location);
       }
 
-      // Record ToS acceptance for email signups (they accepted via checkbox at signup).
-      // No creation-time guard needed: email users confirm hours/days later, so isNewOAuthAccount
-      // would always be false. The unique constraint in user_agreements deduplicates silently.
-      if (currentUser.app_metadata?.provider === "email") {
-        const clientIp = getClientIp(request);
-        const ipHash = clientIp ? hashIp(clientIp) : null;
-        // Fire-and-forget — don't block the redirect
-        void recordBothAgreements({ userId: currentUser.id, ipHash });
-      }
+      const serviceClient = createServiceClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: agreements } = await (serviceClient as any)
+        .from("user_agreements")
+        .select("agreement_type, version")
+        .eq("user_id", currentUser.id) as {
+        data: UserAgreementVersion[] | null;
+      };
 
-      // Redirect new OAuth signups to accept Terms of Service
-      if (isNewOAuthAccount && currentUser.app_metadata?.provider !== "email") {
+      // Force explicit acceptance whenever the current ToS/privacy versions
+      // are missing. This covers new OAuth signups, email confirmation, and
+      // future policy version bumps without trusting client-side signup state.
+      if (!hasAcceptedCurrentAgreementVersions(agreements ?? [])) {
         const acceptTermsUrl = new URL("/auth/accept-terms", siteUrl);
         if (redirect !== "/app") {
           acceptTermsUrl.searchParams.set("redirect", redirect);
         }
-        debugLog("auth-callback", "New OAuth account — redirecting to accept-terms");
+        debugLog("auth-callback", "Missing current agreement acceptance — redirecting to accept-terms");
         const tosRedirect = NextResponse.redirect(acceptTermsUrl);
         // Copy auth cookies from the session response to the new redirect
         for (const cookie of response.cookies.getAll()) {

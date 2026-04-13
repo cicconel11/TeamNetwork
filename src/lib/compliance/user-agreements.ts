@@ -3,11 +3,41 @@ import { createServiceClient } from "@/lib/supabase/service";
 export const CURRENT_TOS_VERSION = "2026-01-01";
 export const CURRENT_PRIVACY_VERSION = "2026-02-10";
 
-type AgreementType = "terms_of_service" | "privacy_policy";
+export type AgreementType = "terms_of_service" | "privacy_policy";
+
+export interface UserAgreementVersion {
+  agreement_type: AgreementType;
+  version: string;
+}
+
+export function hasAcceptedCurrentAgreementVersions(
+  agreements: UserAgreementVersion[],
+): boolean {
+  let hasCurrentTerms = false;
+  let hasCurrentPrivacy = false;
+
+  for (const agreement of agreements) {
+    if (
+      agreement.agreement_type === "terms_of_service" &&
+      agreement.version === CURRENT_TOS_VERSION
+    ) {
+      hasCurrentTerms = true;
+    }
+
+    if (
+      agreement.agreement_type === "privacy_policy" &&
+      agreement.version === CURRENT_PRIVACY_VERSION
+    ) {
+      hasCurrentPrivacy = true;
+    }
+  }
+
+  return hasCurrentTerms && hasCurrentPrivacy;
+}
 
 /**
  * Record a user's acceptance of a ToS or Privacy Policy version.
- * Fire-and-forget — logging errors should not block signups.
+ * Duplicate inserts are treated as success so users can safely retry.
  */
 export async function recordUserAgreement(params: {
   userId: string;
@@ -55,8 +85,8 @@ export async function recordUserAgreement(params: {
 export async function recordBothAgreements(params: {
   userId: string;
   ipHash: string | null;
-}): Promise<void> {
-  await Promise.all([
+}): Promise<boolean> {
+  const results = await Promise.all([
     recordUserAgreement({
       userId: params.userId,
       agreementType: "terms_of_service",
@@ -70,4 +100,6 @@ export async function recordBothAgreements(params: {
       ipHash: params.ipHash,
     }),
   ]);
+
+  return results.every((result) => result.success);
 }

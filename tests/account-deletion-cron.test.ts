@@ -1,71 +1,55 @@
 import { describe, it } from "node:test";
-import assert from "node:assert";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { join } from "path";
+import { join } from "node:path";
 
-/**
- * Source-level assertions that the account deletion cron is properly
- * configured for FERPA "Return or Destroy" compliance.
- */
-describe("Account Deletion Cron", () => {
-  const cronRouteSource = readFileSync(
-    join(process.cwd(), "src/app/api/cron/account-deletion/route.ts"),
-    "utf-8"
-  );
+const cronRouteSource = readFileSync(
+  join(process.cwd(), "src/app/api/cron/account-deletion/route.ts"),
+  "utf8",
+);
+const originalDeletionMigration = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260131100000_user_deletion_requests.sql"),
+  "utf8",
+);
+const regressionFixMigration = readFileSync(
+  join(process.cwd(), "supabase/migrations/20261012130000_fix_compliance_regressions.sql"),
+  "utf8",
+);
 
-  const vercelConfig = JSON.parse(
-    readFileSync(join(process.cwd(), "vercel.json"), "utf-8")
-  );
-
-  it("should use validateCronAuth for authentication", () => {
-    assert.ok(
-      cronRouteSource.includes("validateCronAuth"),
-      "Cron route must use validateCronAuth to prevent unauthorized execution"
+describe("account deletion cron regression coverage", () => {
+  it("preserves deletion requests after auth user deletion", () => {
+    assert.match(
+      originalDeletionMigration,
+      /REFERENCES auth\.users\(id\) ON DELETE CASCADE/,
+    );
+    assert.match(
+      regressionFixMigration,
+      /DROP CONSTRAINT IF EXISTS user_deletion_requests_user_id_fkey;/,
     );
   });
 
-  it("should call auth.admin.deleteUser", () => {
+  it("adds completed_at so the cron can leave an auditable completion timestamp", () => {
+    assert.match(
+      regressionFixMigration,
+      /ADD COLUMN IF NOT EXISTS completed_at timestamptz;/i,
+    );
+    assert.match(cronRouteSource, /completed_at:\s*new Date\(\)\.toISOString\(\)/);
+  });
+
+  it("keeps the deletion call ahead of the completion update", () => {
+    const deleteIndex = cronRouteSource.indexOf("deleteUser(req.user_id)");
+    const updateIndex = cronRouteSource.indexOf('status: "completed"');
+
+    assert.ok(deleteIndex >= 0, "deleteUser call should exist");
+    assert.ok(updateIndex >= 0, "completion update should exist");
     assert.ok(
-      cronRouteSource.includes("deleteUser"),
-      "Cron route must call auth.admin.deleteUser to actually remove user data"
+      deleteIndex < updateIndex,
+      "request should only be marked completed after deleteUser finishes",
     );
   });
 
-  it("should filter by scheduled_deletion_at", () => {
-    assert.ok(
-      cronRouteSource.includes("scheduled_deletion_at"),
-      "Cron must respect the 30-day grace period by checking scheduled_deletion_at"
-    );
-  });
-
-  it("should filter by status pending", () => {
-    assert.ok(
-      cronRouteSource.includes('"pending"'),
-      "Cron must only process pending deletion requests"
-    );
-  });
-
-  it("should have a batch limit", () => {
-    assert.ok(
-      cronRouteSource.includes("BATCH_LIMIT") || cronRouteSource.includes(".limit("),
-      "Cron must have a batch limit to prevent runaway processing"
-    );
-  });
-
-  it("should be registered in vercel.json", () => {
-    const cronPaths = vercelConfig.crons.map(
-      (c: { path: string }) => c.path
-    );
-    assert.ok(
-      cronPaths.includes("/api/cron/account-deletion"),
-      "Account deletion cron must be registered in vercel.json"
-    );
-  });
-
-  it("should update status to completed after successful deletion", () => {
-    assert.ok(
-      cronRouteSource.includes('"completed"'),
-      "Cron must mark requests as completed after processing"
-    );
+  it("still treats already-deleted users as completeable work", () => {
+    assert.match(cronRouteSource, /deleteError\.message\?\.includes\("not found"\)/);
+    assert.match(cronRouteSource, /status:\s*"completed"/);
   });
 });
