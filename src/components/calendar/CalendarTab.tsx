@@ -82,6 +82,9 @@ export function CalendarTab({
   const isGridActive = subview === "grid";
   const isListActive = subview === "list";
 
+  const currentParams = searchParams.toString();
+  const returnTo = `/${orgSlug}/calendar${currentParams ? `?${currentParams}` : ""}`;
+
   const viewToggleButtonClass =
     "p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const activeViewToggleButtonClass =
@@ -151,6 +154,7 @@ export function CalendarTab({
           initialEvents={initialEvents}
           timeZone={timeZone}
           timeframe={timeframe}
+          returnTo={returnTo}
         />
       </div>
     );
@@ -164,6 +168,7 @@ export function CalendarTab({
       initialEvents={initialEvents}
       timeZone={timeZone}
       rightSlot={rightSlot}
+      returnTo={returnTo}
     />
   );
 }

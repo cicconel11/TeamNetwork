@@ -8,14 +8,14 @@ describe("calendar navigation helpers", () => {
   it("routes team events to the event detail page", () => {
     assert.equal(
       getUnifiedEventHref("acme", { sourceType: "event", eventId: "event-1" }),
-      "/acme/events/event-1",
+      "/acme/calendar/events/event-1",
     );
   });
 
   it("falls back to the unified event id when the explicit eventId is missing", () => {
     assert.equal(
       getUnifiedEventHref("acme", { sourceType: "event", id: "event:event-1" }),
-      "/acme/events/event-1",
+      "/acme/calendar/events/event-1",
     );
   });
 
@@ -48,5 +48,19 @@ describe("calendar navigation helpers", () => {
   it("does not create bogus edit links for imported schedule rows", () => {
     assert.equal(getUnifiedEventHref("acme", { sourceType: "schedule" }), null);
     assert.equal(getUnifiedEventHref("acme", { sourceType: "feed" }), null);
+  });
+
+  it("appends from param when returnTo is provided", () => {
+    assert.equal(
+      getUnifiedEventHref("acme", { sourceType: "event", eventId: "event-1" }, "/acme/calendar?subview=list"),
+      "/acme/calendar/events/event-1?from=%2Facme%2Fcalendar%3Fsubview%3Dlist",
+    );
+  });
+
+  it("encodes returnTo parameter safely", () => {
+    assert.equal(
+      getUnifiedEventHref("acme", { sourceType: "event", eventId: "event-1" }, "/acme/calendar"),
+      "/acme/calendar/events/event-1?from=%2Facme%2Fcalendar",
+    );
   });
 });
