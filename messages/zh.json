@@ -531,7 +531,7 @@
   },
   "sidebar": {
     "switchOrg": "切换组织",
-    "accountSettings": "设置",
+    "userSettings": "用户设置",
     "poweredBy": "技术支持"
   },
   "app": {

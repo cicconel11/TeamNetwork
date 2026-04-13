@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { Card } from "@/components/ui";
 
 type DeletionStatus = "none" | "pending" | "completed";
@@ -96,12 +98,44 @@ export default function AccountPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Settings</p>
-        <h1 className="text-2xl font-bold text-foreground">Account</h1>
-        <p className="text-muted-foreground">
-          Manage your account settings and data.
-        </p>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Image
+            src="/TeamNetwor.png"
+            alt="TeamNetwork"
+            width={541}
+            height={303}
+            className="w-8 h-auto object-contain"
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">User Settings</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage your account, data, and privacy
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Links */}
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href="/settings/connected-accounts"
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          Connected Accounts
+        </Link>
+        <Link
+          href="/settings/notifications"
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          Notifications
+        </Link>
+        <Link
+          href="/settings/language"
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          Language
+        </Link>
       </div>
 
       {/* Data Export */}
@@ -115,8 +149,33 @@ export default function AccountPage() {
           href="/api/user/export-data"
           className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
           Download My Data
         </a>
+      </Card>
+
+      {/* Privacy */}
+      <Card className="p-5 space-y-3">
+        <p className="font-medium text-foreground">Privacy</p>
+        <p className="text-sm text-muted-foreground">
+          Review our policies on how we handle your data.
+        </p>
+        <div className="flex gap-3">
+          <Link
+            href="/terms"
+            className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+          >
+            Terms of Service
+          </Link>
+          <Link
+            href="/privacy"
+            className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+          >
+            Privacy Policy
+          </Link>
+        </div>
       </Card>
 
       {/* Delete Account */}

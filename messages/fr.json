@@ -531,7 +531,7 @@
   },
   "sidebar": {
     "switchOrg": "Changer d'organisation",
-    "accountSettings": "Parametres",
+    "userSettings": "Parametres utilisateur",
     "poweredBy": "Propulse par"
   },
   "app": {
