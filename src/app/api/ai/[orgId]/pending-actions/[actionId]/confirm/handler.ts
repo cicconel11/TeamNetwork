@@ -216,6 +216,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -283,6 +284,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -328,6 +330,15 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             resultEntityId: result.messageId,
           });
 
+          // Store recipient in thread metadata for follow-up messages
+          await ctx.serviceSupabase
+            .from("ai_threads")
+            .update({
+              metadata: { last_chat_recipient_member_id: payload.recipient_member_id },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", action.thread_id);
+
           if (canUseDraftSessions) {
             await clearDraftSessionFn(ctx.serviceSupabase, {
               organizationId: ctx.orgId,
@@ -348,6 +359,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -426,6 +438,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -495,6 +508,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -586,6 +600,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
