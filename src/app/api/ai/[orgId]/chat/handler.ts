@@ -25,7 +25,7 @@ import {
   executeToolCall,
   getToolAuthorizationMode,
 } from "@/lib/ai/tools/executor";
-import { resolveOwnThread } from "@/lib/ai/thread-resolver";
+import { resolveOwnThread, type AiThreadMetadata } from "@/lib/ai/thread-resolver";
 import {
   buildSemanticCacheKeyParts,
   checkCacheEligibility,
@@ -3200,6 +3200,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
     // 4. Validate provided thread ownership before any cleanup or writes
     let threadId = existingThreadId;
+    let threadMetadata: AiThreadMetadata = {};
     if (threadId) {
       const resolution = await runTimedStage(
         stageTimings,
@@ -3219,6 +3220,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           { status: resolution.status, headers: rateLimit.headers }
         );
       }
+      threadMetadata = resolution.thread.metadata;
 
       if (canUseDraftSessions) {
         try {
@@ -4442,6 +4444,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 getNonEmptyString(parsedArgs.person_query) == null
               ) {
                 parsedArgs.recipient_member_id = currentMemberRouteId;
+              } else if (
+                threadMetadata.last_chat_recipient_member_id &&
+                getNonEmptyString(parsedArgs.recipient_member_id) == null &&
+                getNonEmptyString(parsedArgs.person_query) == null
+              ) {
+                // Use the last chat recipient from thread metadata for follow-up messages
+                parsedArgs.recipient_member_id = threadMetadata.last_chat_recipient_member_id;
               }
             }
 
