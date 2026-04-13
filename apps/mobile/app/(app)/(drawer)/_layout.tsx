@@ -69,6 +69,13 @@ export default function DrawerStackLayout() {
             title: "Edit Profile",
           }}
         />
+        <Stack.Screen
+          name="delete-account"
+          options={{
+            headerShown: false,
+            title: "Delete Account",
+          }}
+        />
       </Stack>
     </Animated.View>
   );

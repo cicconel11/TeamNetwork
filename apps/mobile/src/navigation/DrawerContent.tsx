@@ -24,6 +24,7 @@ import {
   Receipt,
   Settings,
   SlidersHorizontal,
+  Trash2,
   Trophy,
   Users,
 } from "lucide-react-native";
@@ -48,9 +49,9 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Pinned footer items (Settings, Navigation, Organizations, Sign Out)
+// Pinned footer items (Settings, Navigation, Organizations, Delete Account, Sign Out)
 const PINNED_ITEM_HEIGHT = 44;
-const PINNED_FOOTER_COUNT = 4;
+const PINNED_FOOTER_COUNT = 5;
 const FOOTER_PADDING = 16;
 const FOOTER_HEIGHT = PINNED_ITEM_HEIGHT * PINNED_FOOTER_COUNT + FOOTER_PADDING;
 
@@ -198,9 +199,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     return false;
   };
 
-  const renderNavItem = (item: NavItem, isSignOut = false) => {
+  const renderNavItem = (
+    item: NavItem,
+    options: { isSignOut?: boolean; isDangerous?: boolean } = {}
+  ) => {
+    const { isSignOut = false, isDangerous = false } = options;
     const Icon = item.icon;
-    const isActive = !isSignOut && isRouteActive(item.href);
+    const isActive = !isSignOut && !isDangerous && isRouteActive(item.href);
 
     return (
       <Pressable
@@ -213,8 +218,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           pressed && styles.navItemPressed,
         ]}
       >
-        <Icon size={18} color={isSignOut ? SEMANTIC.error : NEUTRAL.placeholder} />
-        <Text style={[styles.navLabel, isSignOut && styles.signOutLabel]}>{item.label}</Text>
+        <Icon size={18} color={isDangerous ? SEMANTIC.error : NEUTRAL.placeholder} />
+        <Text style={[styles.navLabel, isDangerous && styles.signOutLabel]}>{item.label}</Text>
       </Pressable>
     );
   };
@@ -295,13 +300,15 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       </DrawerContentScrollView>
 
       {/* Pinned Footer */}
-      {slug ? (
-        <View style={[styles.pinnedFooter, { paddingBottom: bottomInset }]}>
-          <View style={styles.divider} />
-          {pinnedItems.map((item) => renderNavItem(item))}
-          {renderNavItem({ label: "Sign Out", href: "", icon: LogOut }, true)}
-        </View>
-      ) : null}
+      <View style={[styles.pinnedFooter, { paddingBottom: bottomInset }]}>
+        <View style={styles.divider} />
+        {slug ? pinnedItems.map((item) => renderNavItem(item)) : null}
+        {renderNavItem(
+          { label: "Delete My Account", href: "/(app)/(drawer)/delete-account", icon: Trash2 },
+          { isDangerous: true }
+        )}
+        {renderNavItem({ label: "Sign Out", href: "", icon: LogOut }, { isSignOut: true, isDangerous: true })}
+      </View>
     </View>
   );
 }
