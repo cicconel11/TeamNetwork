@@ -109,6 +109,89 @@ test("confirm executes create_job_posting and appends assistant message", async 
   assert.match(String(insertedMessages[0].content), /upenn-sprint-football\/jobs\/job-123/);
 });
 
+test("confirm executes send_chat_message and appends assistant message", async () => {
+  const insertedMessages: any[] = [];
+  const updatedStatuses: any[] = [];
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from(table: string) {
+            if (table === "ai_messages") {
+              return {
+                insert(payload: Record<string, unknown>) {
+                  insertedMessages.push(payload);
+                  return Promise.resolve({ error: null });
+                },
+              };
+            }
+            throw new Error(`unexpected table ${table}`);
+          },
+        },
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "send_chat_message",
+        payload: {
+          recipient_member_id: "11111111-1111-4111-8111-111111111111",
+          recipient_user_id: "22222222-2222-4222-8222-222222222222",
+          recipient_display_name: "Jason Leonard",
+          existing_chat_group_id: "chat-123",
+          body: "Can you join the alumni panel next Thursday?",
+          orgSlug: "upenn-sprint-football",
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    sendAiAssistedDirectChatMessage: async () =>
+      ({
+        ok: true,
+        chatGroupId: "chat-123",
+        messageId: "message-123",
+        reusedExistingChat: true,
+      }) as any,
+    clearDraftSession: async () => {},
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.equal(updatedStatuses[1].resultEntityType, "chat_message");
+  assert.equal(updatedStatuses[1].resultEntityId, "message-123");
+  assert.equal(insertedMessages[0].thread_id, THREAD_ID);
+  assert.match(String(insertedMessages[0].content), /Sent chat message to/);
+  assert.match(String(insertedMessages[0].content), /upenn-sprint-football\/messages\/chat\/chat-123/);
+});
+
 test("confirm executes create_discussion_thread and appends assistant message", async () => {
   const insertedMessages: any[] = [];
   const updatedStatuses: any[] = [];

@@ -271,6 +271,8 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
               ? '{"limit": 5}'
             : firstToolName === "prepare_announcement"
               ? '{"title":"Practice Update","body":"Practice starts at 6pm tomorrow.","audience":"all","send_notification":true}'
+            : firstToolName === "prepare_chat_message"
+              ? '{"person_query":"Jason Leonard","body":"Can you join the alumni panel next Thursday?"}'
             : firstToolName === "prepare_discussion_reply"
               ? '{"discussion_thread_id":"33333333-3333-4333-8333-333333333333","thread_title":"Spring Fundraising Volunteers","body":"I can take the Friday evening shift."}'
             : firstToolName === "suggest_connections"
@@ -380,6 +382,33 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
             summary: {
               title: "Review announcement",
               description: "Confirm the drafted announcement before it is published.",
+            },
+          },
+        });
+      }
+      if (call.name === "prepare_chat_message") {
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: {
+            person_query: "Jason Leonard",
+            recipient_member_id: "11111111-1111-4111-8111-111111111111",
+            body: "Can you join the alumni panel next Thursday?",
+          },
+          pending_action: {
+            id: "pending-chat-123",
+            action_type: "send_chat_message",
+            payload: {
+              recipient_member_id: "11111111-1111-4111-8111-111111111111",
+              recipient_user_id: "22222222-2222-4222-8222-222222222222",
+              recipient_display_name: "Jason Leonard",
+              existing_chat_group_id: "chat-123",
+              body: "Can you join the alumni panel next Thursday?",
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review chat message",
+              description: "Confirm the drafted chat message before it is sent.",
             },
           },
         });
@@ -555,6 +584,23 @@ test("hybrid greeting with events question uses routed events tool set", async (
   assert.equal(executeToolCallCalls[0].call.name, "list_events");
 });
 
+test("explicit message requests route to prepare_chat_message", async () => {
+  const response = await POST(makeRequest("Message Jason Leonard and ask if he can join the alumni panel next Thursday.") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(toolNamesForCall(0), ["prepare_chat_message"]);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_chat_message");
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    person_query: "Jason Leonard",
+    body: "Can you join the alumni panel next Thursday?",
+  });
+  assert.match(body, /I drafted the chat message/);
+  assert.match(body, /"type":"pending_action"/);
+});
+
 test("ambiguous queries keep fallback surface tool set", async () => {
   await (
     await POST(makeRequest("Compare members and events") as any, {
@@ -725,6 +771,33 @@ test("member count and alumni queries attach get_org_stats only and skip pass 2"
   assert.equal(composeResponseCalls.length, 1);
   assert.match(body, /Organization snapshot/);
   assert.match(body, /Alumni: 12/);
+});
+
+test("member detail route can trust 'message this person' and inject the current member id", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Message this person and ask if he can join the alumni panel next Thursday.",
+      surface: "members",
+      currentPath: "/acme/members/11111111-1111-4111-8111-111111111111",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(toolNamesForCall(0), ["prepare_chat_message"]);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_chat_message");
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    recipient_member_id: "11111111-1111-4111-8111-111111111111",
+    body: "Can you join the alumni panel next Thursday?",
+  });
+  assert.match(body, /I drafted the chat message/);
 });
 
 test("single-tool org stats requests use tool_first context and skip pass 2", async () => {

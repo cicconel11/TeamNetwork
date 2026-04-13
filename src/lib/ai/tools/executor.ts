@@ -28,6 +28,10 @@ import {
   assistantPreparedDiscussionSchema,
 } from "@/lib/schemas/discussion";
 import {
+  assistantChatMessageDraftSchema,
+  assistantPreparedChatMessageSchema,
+} from "@/lib/schemas/chat-ai";
+import {
   assistantEventDraftSchema,
   assistantPreparedEventSchema,
 } from "@/lib/schemas/events-ai";
@@ -38,6 +42,7 @@ import { isOwnedScheduleUploadPath } from "@/lib/ai/schedule-upload-path";
 import {
   buildPendingActionSummary,
   type CreateAnnouncementPendingPayload,
+  type SendChatMessagePendingPayload,
   type CreateDiscussionReplyPendingPayload,
   createPendingAction,
   type CreateDiscussionThreadPendingPayload,
@@ -46,6 +51,10 @@ import {
 } from "@/lib/ai/pending-actions";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
+import {
+  resolveChatMessageRecipient,
+  type DirectChatSupabase,
+} from "@/lib/chat/direct-chat";
 import type {
   ScheduleImageMimeType,
   ScheduleExtractionResult,
@@ -199,6 +208,14 @@ const prepareDiscussionReplySchema = z
   })
   .strict();
 
+const prepareChatMessageSchema = z
+  .object({
+    recipient_member_id: z.string().uuid().optional(),
+    person_query: z.string().trim().min(1).optional(),
+    body: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
 const prepareEventSchema = z
   .object({
     title: z.string().trim().optional(),
@@ -263,6 +280,7 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_philanthropy_events: listPhilanthropyEventsSchema,
   prepare_announcement: prepareAnnouncementSchema,
   prepare_job_posting: prepareJobPostingSchema,
+  prepare_chat_message: prepareChatMessageSchema,
   prepare_discussion_reply: prepareDiscussionReplySchema,
   prepare_discussion_thread: prepareDiscussionThreadSchema,
   prepare_event: prepareEventSchema,
@@ -1514,6 +1532,168 @@ async function prepareDiscussionReply(
   };
 }
 
+async function prepareChatMessage(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareChatMessageSchema>
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Chat message preparation requires a thread context");
+  }
+
+  const normalizedDraft = {
+    ...Object.fromEntries(
+      Object.entries({
+        recipient_member_id: args.recipient_member_id,
+        person_query: sanitizeDraftValue(args.person_query),
+        body: sanitizeDraftValue(args.body),
+      }).filter(([, value]) => value !== undefined)
+    ),
+  };
+
+  const parsedDraft = assistantChatMessageDraftSchema.safeParse(normalizedDraft);
+  if (!parsedDraft.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: parsedDraft.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: normalizedDraft,
+      },
+    };
+  }
+
+  const recipientResolution = await resolveChatMessageRecipient(sb as DirectChatSupabase, {
+    organizationId: ctx.orgId,
+    senderUserId: ctx.userId,
+    recipientMemberId: parsedDraft.data.recipient_member_id,
+    personQuery: parsedDraft.data.person_query,
+  });
+
+  if (recipientResolution.kind === "recipient_required") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: [
+          ...(parsedDraft.data.body ? [] : ["body"]),
+          "person_query",
+        ],
+        clarification_kind: "recipient_required",
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  if (recipientResolution.kind === "ambiguous") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: [
+          ...(parsedDraft.data.body ? [] : ["body"]),
+          "person_query",
+        ],
+        clarification_kind: "recipient_ambiguous",
+        requested_recipient: recipientResolution.requestedRecipient,
+        candidate_recipients: recipientResolution.candidateRecipients,
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  if (recipientResolution.kind === "unavailable") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: parsedDraft.data.body ? [] : ["body"],
+        clarification_kind: "recipient_unavailable",
+        requested_recipient: recipientResolution.requestedRecipient ?? null,
+        unavailable_reason: recipientResolution.reason,
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  const draftWithResolvedRecipient = {
+    ...parsedDraft.data,
+    recipient_member_id: recipientResolution.memberId,
+  };
+
+  if (!parsedDraft.data.body) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["body"],
+        draft: draftWithResolvedRecipient,
+      },
+    };
+  }
+
+  const prepared = assistantPreparedChatMessageSchema.safeParse({
+    recipient_member_id: recipientResolution.memberId,
+    recipient_user_id: recipientResolution.userId,
+    recipient_display_name: recipientResolution.displayName,
+    body: parsedDraft.data.body,
+    existing_chat_group_id: recipientResolution.existingChatGroupId ?? undefined,
+  });
+
+  if (!prepared.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: draftWithResolvedRecipient,
+      },
+    };
+  }
+
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_chat_message org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  const pendingPayload: SendChatMessagePendingPayload = {
+    ...prepared.data,
+    orgSlug: typeof org?.slug === "string" ? org.slug : null,
+  };
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "send_chat_message",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: draftWithResolvedRecipient,
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
 async function prepareEvent(
   sb: SB,
   ctx: ToolExecutionContext,
@@ -2325,6 +2505,12 @@ export async function executeToolCall(
             sb,
             ctx,
             args as z.infer<typeof prepareJobPostingSchema>
+          );
+        case "prepare_chat_message":
+          return prepareChatMessage(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareChatMessageSchema>
           );
         case "prepare_discussion_reply":
           return prepareDiscussionReply(

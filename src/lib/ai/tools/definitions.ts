@@ -43,6 +43,12 @@ export interface PrepareDiscussionReplyArgs {
   body?: string;
 }
 
+export interface PrepareChatMessageArgs {
+  recipient_member_id?: string;
+  person_query?: string;
+  body?: string;
+}
+
 export interface PrepareEventArgs {
   title?: string;
   description?: string;
@@ -325,6 +331,31 @@ const TOOL_BY_NAME = {
             type: "string" as const,
             description:
               "Optional thread title. Use this when the user names the thread but does not provide its UUID.",
+          },
+          body: { type: "string" as const },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_chat_message: {
+    type: "function" as const,
+    function: {
+      name: "prepare_chat_message" as const,
+      description:
+        "Prepare an in-app chat message to a specific organization member. Use this when the user wants you to message, DM, or send a direct chat message to someone. It resolves the recipient, validates the draft body, and creates a pending confirmation action when the message is ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          recipient_member_id: {
+            type: "string" as const,
+            description:
+              "UUID of the member who should receive the chat message. Use this when the current member page already identifies the person.",
+          },
+          person_query: {
+            type: "string" as const,
+            description:
+              "Recipient name or email when the user says who to message in natural language.",
           },
           body: { type: "string" as const },
         },
@@ -656,6 +687,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_philanthropy_events,
   TOOL_BY_NAME.prepare_announcement,
   TOOL_BY_NAME.prepare_job_posting,
+  TOOL_BY_NAME.prepare_chat_message,
   TOOL_BY_NAME.prepare_discussion_reply,
   TOOL_BY_NAME.prepare_discussion_thread,
   TOOL_BY_NAME.prepare_event,
