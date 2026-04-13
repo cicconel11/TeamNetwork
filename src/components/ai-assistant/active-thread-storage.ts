@@ -6,8 +6,12 @@ export interface StorageLike {
   removeItem(key: string): void;
 }
 
-export function buildActiveThreadStorageKey(orgId: string, surface: string): string {
+function buildLegacyActiveThreadStorageKey(orgId: string, surface: string): string {
   return `${ACTIVE_THREAD_STORAGE_PREFIX}:${orgId}:${surface}`;
+}
+
+export function buildActiveThreadStorageKey(orgId: string): string {
+  return `${ACTIVE_THREAD_STORAGE_PREFIX}:${orgId}`;
 }
 
 export function readPersistedActiveThreadId(
@@ -15,7 +19,10 @@ export function readPersistedActiveThreadId(
   orgId: string,
   surface: string
 ): string | null {
-  return storage.getItem(buildActiveThreadStorageKey(orgId, surface));
+  return (
+    storage.getItem(buildActiveThreadStorageKey(orgId)) ??
+    storage.getItem(buildLegacyActiveThreadStorageKey(orgId, surface))
+  );
 }
 
 export function writePersistedActiveThreadId(
@@ -24,7 +31,8 @@ export function writePersistedActiveThreadId(
   surface: string,
   threadId: string
 ): void {
-  storage.setItem(buildActiveThreadStorageKey(orgId, surface), threadId);
+  storage.setItem(buildActiveThreadStorageKey(orgId), threadId);
+  storage.removeItem(buildLegacyActiveThreadStorageKey(orgId, surface));
 }
 
 export function clearPersistedActiveThreadId(
@@ -32,5 +40,6 @@ export function clearPersistedActiveThreadId(
   orgId: string,
   surface: string
 ): void {
-  storage.removeItem(buildActiveThreadStorageKey(orgId, surface));
+  storage.removeItem(buildActiveThreadStorageKey(orgId));
+  storage.removeItem(buildLegacyActiveThreadStorageKey(orgId, surface));
 }
