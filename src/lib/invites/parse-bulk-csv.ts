@@ -3,8 +3,8 @@
  *
  * CSV format: two columns (role, organizationId) per row
  * - Supports optional header row (detected if first line contains "role")
- * - Filters empty lines and rows with missing required fields
- * - Returns parsed rows and truncation status (max 100 rows)
+ * - Both fields optional; form-level defaults are applied at upload time
+ * - Filters empty lines; returns parsed rows and truncation status (max 100 rows)
  */
 
 export interface ParsedBulkInviteRow {
@@ -35,7 +35,7 @@ export function parseCSV(text: string): BulkCSVParseResult {
       role: parts[0] || undefined,
       organizationId: parts[1] || undefined,
     };
-  }).filter((row) => row.role && row.organizationId); // Both fields required
+  }).filter((row) => row.role || row.organizationId); // At least one field required
 
   // Apply 100-row limit
   const truncated = rows.length > 100;

@@ -50,15 +50,17 @@ test("CSV parser — header-only file", () => {
   assert.equal(result.truncated, false);
 });
 
-test("CSV parser — filters rows with missing fields", () => {
+test("CSV parser — accepts rows with at least one field (form defaults fill the rest)", () => {
   const csv = `admin,org-123
 active_member
 ,org-456
 alumni,org-789`;
   const result = parseCSV(csv);
-  assert.equal(result.rows.length, 2);
+  assert.equal(result.rows.length, 4);
   assert.deepEqual(result.rows[0], { role: "admin", organizationId: "org-123" });
-  assert.deepEqual(result.rows[1], { role: "alumni", organizationId: "org-789" });
+  assert.deepEqual(result.rows[1], { role: "active_member", organizationId: undefined });
+  assert.deepEqual(result.rows[2], { role: undefined, organizationId: "org-456" });
+  assert.deepEqual(result.rows[3], { role: "alumni", organizationId: "org-789" });
 });
 
 test("CSV parser — 100-row limit with truncation flag", () => {

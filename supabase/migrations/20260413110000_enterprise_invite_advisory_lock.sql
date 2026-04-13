@@ -16,7 +16,7 @@ CREATE OR REPLACE FUNCTION public.create_enterprise_invite(
 RETURNS public.enterprise_invites
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_catalog
+SET search_path = ''
 AS $$
 DECLARE
   v_code text;
