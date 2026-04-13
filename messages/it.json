@@ -165,7 +165,8 @@
     "tabs": {
       "connectedAccounts": "Account collegati",
       "notifications": "Notifiche",
-      "language": "Lingua"
+      "language": "Lingua",
+      "account": "Account"
     },
     "language": {
       "title": "Lingua",
@@ -530,6 +531,7 @@
   },
   "sidebar": {
     "switchOrg": "Cambia organizzazione",
+    "accountSettings": "Impostazioni",
     "poweredBy": "Realizzato da"
   },
   "app": {

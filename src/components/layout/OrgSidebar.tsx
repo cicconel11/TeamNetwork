@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavGroupId, GridIcon, LogOutIcon, getConfigKey } from "@/lib/navigation/nav-items";
+import { SettingsIcon } from "@/components/icons/nav-icons";
 import { bucketItemsByGroup, buildSectionOrder, buildGlobalIndexMap, getActiveGroup, type VisibleNavItem } from "@/lib/navigation/sidebar-groups";
 import { NavGroupSection, NavItemLink } from "@/components/layout/NavGroupSection";
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
@@ -253,6 +254,14 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
 
       {/* User Section */}
       <div className="p-4 border-t border-border space-y-1">
+        <Link
+          href="/settings/account"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        >
+          <SettingsIcon className="h-5 w-5" />
+          {tSidebar("accountSettings")}
+        </Link>
+
         <Link
           href="/app"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
