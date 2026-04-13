@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, ToggleSwitch } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { EnterpriseInviteForm } from "@/components/enterprise/EnterpriseInviteForm";
 import type { CreatedInvite } from "@/components/enterprise/EnterpriseInviteForm";
@@ -53,11 +53,13 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [stats, setStats] = useState<{ total: number; active: number; enterpriseWide: number }>({ total: 0, active: 0, enterpriseWide: 0 });
+  const [includeRevoked, setIncludeRevoked] = useState(false);
 
-  const fetchInvites = useCallback(async (entId: string, cursor?: string | null) => {
+  const fetchInvites = useCallback(async (entId: string, cursor?: string | null, includeRevokedParam = false) => {
     try {
       const params = new URLSearchParams({ limit: "25" });
       if (cursor) params.set("cursor", cursor);
+      if (includeRevokedParam) params.set("include_revoked", "true");
       const res = await fetch(`/api/enterprise/${entId}/invites?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -85,7 +87,7 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
           const orgsData = await orgsRes.json();
           setOrganizations(orgsData.organizations || []);
         }
-        await fetchInvites(enterpriseId);
+        await fetchInvites(enterpriseId, null, includeRevoked);
       } catch {
         setError("Failed to load data");
       } finally {
@@ -94,7 +96,7 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
     };
 
     fetchData();
-  }, [enterpriseId, fetchInvites]);
+  }, [enterpriseId, fetchInvites, includeRevoked]);
 
   useEffect(() => {
     if (preselectedOrgId && organizations.some(o => o.id === preselectedOrgId)) {
@@ -105,8 +107,15 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
   const handleLoadMore = async () => {
     if (!nextCursor || isLoadingMore) return;
     setIsLoadingMore(true);
-    await fetchInvites(enterpriseId, nextCursor);
+    await fetchInvites(enterpriseId, nextCursor, includeRevoked);
     setIsLoadingMore(false);
+  };
+
+  const handleToggleRevoked = (next: boolean) => {
+    setIncludeRevoked(next);
+    setInvites([]);
+    setNextCursor(null);
+    fetchInvites(enterpriseId, null, next);
   };
 
   const handleInviteCreated = (invite?: CreatedInvite) => {
@@ -215,25 +224,34 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
         description={`Manage invite codes across ${organizations.length} organizations`}
       />
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        <Card className="p-5">
-          <p className="text-2xl font-bold text-foreground font-mono">{stats.total}</p>
-          <p className="text-sm text-muted-foreground">Total Invites</p>
-        </Card>
-        <Card className="p-5">
-          <p className="text-2xl font-bold text-foreground font-mono">{stats.active}</p>
-          <p className="text-sm text-muted-foreground">Active Invites</p>
-        </Card>
-        <Card className="p-5">
-          <p className="text-2xl font-bold text-foreground font-mono">{stats.enterpriseWide}</p>
-          <p className="text-sm text-muted-foreground">Enterprise-wide</p>
-        </Card>
-        <Card className="p-5">
-          <p className={`text-2xl font-bold font-mono ${adminCount >= adminLimit ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
-            {adminCount}/{adminLimit}
-          </p>
-          <p className="text-sm text-muted-foreground">Admins</p>
+      {/* Stats and Toggle */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 flex-1 mr-4">
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-foreground font-mono">{stats.total}</p>
+            <p className="text-sm text-muted-foreground">Total Invites</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-foreground font-mono">{stats.active}</p>
+            <p className="text-sm text-muted-foreground">Active Invites</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-foreground font-mono">{stats.enterpriseWide}</p>
+            <p className="text-sm text-muted-foreground">Enterprise-wide</p>
+          </Card>
+          <Card className="p-5">
+            <p className={`text-2xl font-bold font-mono ${adminCount >= adminLimit ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
+              {adminCount}/{adminLimit}
+            </p>
+            <p className="text-sm text-muted-foreground">Admins</p>
+          </Card>
+        </div>
+        <Card className="p-5 flex items-center gap-3 whitespace-nowrap">
+          <ToggleSwitch
+            checked={includeRevoked}
+            onChange={handleToggleRevoked}
+            label="Show revoked"
+          />
         </Card>
       </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Button, Card, Select } from "@/components/ui";
-import { parseCSV } from "@/lib/invites/parse-bulk-csv";
+import { parseCSV, type ParsedBulkInviteRow } from "@/lib/invites/parse-bulk-csv";
 
 interface Organization {
   id: string;
@@ -16,11 +16,6 @@ interface BulkInviteUploaderProps {
   onCancel: () => void;
 }
 
-interface ParsedRow {
-  role?: string;
-  organizationId?: string;
-}
-
 export function BulkInviteUploader({
   enterpriseId,
   organizations,
@@ -30,12 +25,14 @@ export function BulkInviteUploader({
   const [selectedOrg, setSelectedOrg] = useState<string>("");
   const [defaultRole, setDefaultRole] = useState<string>("active_member");
   const [file, setFile] = useState<File | null>(null);
-  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [parsedRows, setParsedRows] = useState<ParsedBulkInviteRow[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<{ success: number; failed: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hasValidationErrors = parsedRows.some((r) => r.error);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -74,8 +71,8 @@ export function BulkInviteUploader({
 
     try {
       const invites = parsedRows.map((row) => ({
-        organizationId: row.organizationId || selectedOrg,
-        role: row.role || defaultRole,
+        organizationId: row.organizationId!,
+        role: row.role!,
       }));
 
       const res = await fetch(`/api/enterprise/${enterpriseId}/invites/bulk`, {
@@ -196,7 +193,7 @@ export function BulkInviteUploader({
         </div>
         {parsedRows.length > 0 && (
           <p className="text-sm text-muted-foreground mt-2">
-            {parsedRows.length} rows found
+            {parsedRows.filter((r) => !r.error).length} valid, {parsedRows.filter((r) => r.error).length} with errors
           </p>
         )}
       </div>
@@ -209,19 +206,27 @@ export function BulkInviteUploader({
                 <th className="px-3 py-2 text-left text-muted-foreground">#</th>
                 <th className="px-3 py-2 text-left text-muted-foreground">Role</th>
                 <th className="px-3 py-2 text-left text-muted-foreground">Organization ID</th>
+                <th className="px-3 py-2 text-left text-muted-foreground">Status</th>
               </tr>
             </thead>
             <tbody>
               {parsedRows.slice(0, 10).map((row, idx) => (
                 <tr key={idx} className="border-t border-border">
                   <td className="px-3 py-2 text-muted-foreground">{idx + 1}</td>
-                  <td className="px-3 py-2">{row.role || defaultRole}</td>
-                  <td className="px-3 py-2 text-xs">{row.organizationId}</td>
+                  <td className="px-3 py-2">{row.role || ""}</td>
+                  <td className="px-3 py-2 text-xs">{row.organizationId || ""}</td>
+                  <td className="px-3 py-2">
+                    {row.error ? (
+                      <span className="text-red-600 dark:text-red-400 text-xs">{row.error}</span>
+                    ) : (
+                      <span className="text-green-600 dark:text-green-400 text-xs">✓</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {parsedRows.length > 10 && (
                 <tr className="border-t border-border">
-                  <td colSpan={3} className="px-3 py-2 text-center text-muted-foreground">
+                  <td colSpan={4} className="px-3 py-2 text-center text-muted-foreground">
                     ... and {parsedRows.length - 10} more
                   </td>
                 </tr>
@@ -235,9 +240,9 @@ export function BulkInviteUploader({
         <Button
           onClick={handleUpload}
           isLoading={isUploading}
-          disabled={parsedRows.length === 0 || !selectedOrg}
+          disabled={parsedRows.length === 0 || !selectedOrg || hasValidationErrors}
         >
-          Create {parsedRows.length} Invites
+          Create {parsedRows.filter((r) => !r.error).length} Invites
         </Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancel
