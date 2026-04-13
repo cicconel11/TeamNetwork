@@ -111,6 +111,13 @@ async function loadActiveLinkedMembers(
   return { data: (data as MemberRow[] | null) ?? null, error };
 }
 
+function isChatEligibleMember(
+  member: MemberRow,
+  senderUserId: string,
+): member is MemberRow & { user_id: string } {
+  return Boolean(member.user_id && member.user_id !== senderUserId);
+}
+
 async function loadMemberById(
   supabase: DirectChatSupabase,
   organizationId: string,
@@ -318,12 +325,15 @@ export async function resolveChatMessageRecipient(
 
   const query = normalizeMatchValue(requestedRecipient);
   const rows = (members ?? []).filter((member) => member.user_id !== input.senderUserId);
-  const exactMatches = rows.filter((member) => {
+  const eligibleRows = rows.filter((member): member is MemberRow & { user_id: string } =>
+    isChatEligibleMember(member, input.senderUserId)
+  );
+  const exactMatches = eligibleRows.filter((member) => {
     const displayName = normalizeMatchValue(formatMemberDisplayName(member));
     const email = normalizeMatchValue(member.email);
     return displayName === query || email === query;
   });
-  const partialMatches = rows.filter((member) => {
+  const partialMatches = eligibleRows.filter((member) => {
     const displayName = normalizeMatchValue(formatMemberDisplayName(member));
     const email = normalizeMatchValue(member.email);
     return displayName.includes(query) || email.includes(query);
@@ -331,6 +341,20 @@ export async function resolveChatMessageRecipient(
   const rankedMatches = exactMatches.length > 0 ? exactMatches : partialMatches;
 
   if (rankedMatches.length === 0) {
+    const unavailableMatches = rows.filter((member) => {
+      const displayName = normalizeMatchValue(formatMemberDisplayName(member));
+      const email = normalizeMatchValue(member.email);
+      return displayName.includes(query) || email.includes(query);
+    });
+
+    if (unavailableMatches.length > 0) {
+      return {
+        kind: "unavailable",
+        requestedRecipient,
+        reason: "recipient_unlinked",
+      };
+    }
+
     return {
       kind: "unavailable",
       requestedRecipient,

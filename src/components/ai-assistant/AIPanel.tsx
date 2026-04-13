@@ -206,7 +206,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const [pendingActions, setPendingActions] = useState<PendingActionState[]>([]);
   const [pendingActionBusyIds, setPendingActionBusyIds] = useState<Set<string>>(new Set());
   const [pendingActionErrors, setPendingActionErrors] = useState<Record<string, string>>({});
-  const panelScopeKey = `${orgId}:${surface}`;
+  const panelScopeKey = orgId;
   const {
     isStreaming,
     error,
@@ -271,9 +271,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const loadThreads = useCallback(async () => {
     setThreadsLoading(true);
     try {
-      const response = await fetch(
-        `/api/ai/${orgId}/threads?surface=${encodeURIComponent(surface)}`
-      );
+      const response = await fetch(`/api/ai/${orgId}/threads`);
       if (!response.ok) return;
       const data = await response.json();
       setThreads(data.data ?? []);
@@ -282,7 +280,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
     } finally {
       setThreadsLoading(false);
     }
-  }, [orgId, surface]);
+  }, [orgId]);
 
   const loadMessages = useCallback(
     async (threadId: string, options?: { silent?: boolean }): Promise<boolean> => {

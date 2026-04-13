@@ -235,6 +235,16 @@ test("AI panel uses generic schedule file defaults and shares capability disclos
     /capabilitySnapshot=\{capabilitySnapshot\}/,
     "AIPanel should pass capability metadata into the message list"
   );
+  assert.match(
+    panelSource,
+    /fetch\(`\/api\/ai\/\$\{orgId\}\/threads`\)/,
+    "AIPanel should load recent assistant threads across app surfaces"
+  );
+  assert.doesNotMatch(
+    panelSource,
+    /threads\?surface=/,
+    "AIPanel should not partition recent assistant threads by surface"
+  );
   assert.match(messageListSource, /What I can do here/);
   assert.match(
     messageListSource,

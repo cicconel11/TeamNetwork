@@ -4,6 +4,7 @@ import { createSupabaseStub } from "./utils/supabaseStub.ts";
 import {
   type DirectChatSupabase,
   findExactDirectChatGroup,
+  resolveChatMessageRecipient,
   sendAiAssistedDirectChatMessage,
 } from "../src/lib/chat/direct-chat.ts";
 
@@ -155,4 +156,44 @@ test("sendAiAssistedDirectChatMessage creates a new 1:1 chat and records ai_assi
   assert.equal(messages[0]?.author_id, SENDER_USER_ID);
   assert.equal(messages[0]?.status, "approved");
   assert.deepEqual(messages[0]?.metadata, { ai_assisted: true });
+});
+
+test("resolveChatMessageRecipient ignores duplicate org rows that are not chat-eligible", async () => {
+  const supabase = createSupabaseStub();
+  supabase.seed("members", [
+    {
+      id: "00000000-0000-4000-8000-000000000020",
+      organization_id: ORG_ID,
+      user_id: RECIPIENT_USER_ID,
+      status: "active",
+      deleted_at: null,
+      first_name: "Louis",
+      last_name: "Ciccone",
+      email: "cicconel@myteamnetwork.com",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000021",
+      organization_id: ORG_ID,
+      user_id: null,
+      status: "active",
+      deleted_at: null,
+      first_name: "Louis",
+      last_name: "Ciccone",
+      email: "lociccone11@gmail.com",
+    },
+  ]);
+
+  const result = await resolveChatMessageRecipient(supabase as DirectChatSupabase, {
+    organizationId: ORG_ID,
+    senderUserId: SENDER_USER_ID,
+    personQuery: "Louis Ciccone",
+  });
+
+  assert.deepEqual(result, {
+    kind: "resolved",
+    memberId: "00000000-0000-4000-8000-000000000020",
+    userId: RECIPIENT_USER_ID,
+    displayName: "Louis Ciccone",
+    existingChatGroupId: null,
+  });
 });
