@@ -292,13 +292,6 @@ interface AnnouncementDisplayRow {
   body_preview?: unknown;
 }
 
-interface MemberDisplayRow {
-  name?: unknown;
-  role?: unknown;
-  email?: unknown;
-  created_at?: unknown;
-}
-
 interface NavigationDisplayTarget {
   label?: unknown;
   href?: unknown;
@@ -404,92 +397,6 @@ function formatDisplayRow(row: { name?: unknown; subtitle?: unknown }): string |
 
   const subtitle = getNonEmptyString(row.subtitle);
   return subtitle ? `${name} - ${subtitle}` : name;
-}
-
-function formatMemberRole(value: unknown): string | null {
-  const role = getNonEmptyString(value);
-  if (!role) {
-    return null;
-  }
-
-  switch (role) {
-    case "active_member":
-      return "Active Member";
-    case "admin":
-      return "Admin";
-    case "alumni":
-      return "Alumni";
-    case "parent":
-      return "Parent";
-    default:
-      return role.replace(/_/g, " ");
-  }
-}
-
-function hasTrustworthyMemberName(value: unknown): value is string {
-  const name = getNonEmptyString(value);
-  return Boolean(name && name !== "Member" && !name.includes("@"));
-}
-
-function formatMembersResponse(data: unknown): string | null {
-  if (!Array.isArray(data)) {
-    return null;
-  }
-
-  if (data.length === 0) {
-    return "I couldn't find any active members for this organization.";
-  }
-
-  const rows = data
-    .map((row) => {
-      if (!row || typeof row !== "object") {
-        return null;
-      }
-
-      const member = row as MemberDisplayRow;
-      const name = hasTrustworthyMemberName(member.name)
-        ? member.name.trim()
-        : getNonEmptyString(member.email);
-
-      if (!name) {
-        return null;
-      }
-
-      return {
-        name,
-        role: formatMemberRole(member.role),
-        email: getNonEmptyString(member.email),
-        createdAt: formatIsoDate(member.created_at),
-      };
-    })
-    .filter(
-      (
-        row
-      ): row is {
-        name: string;
-        role: string | null;
-        email: string | null;
-        createdAt: string | null;
-      } => Boolean(row)
-    )
-    .slice(0, 5);
-
-  if (rows.length === 0) {
-    return null;
-  }
-
-  const lines = ["Recent active members"];
-  for (const row of rows) {
-    lines.push(`- ${row.name}${row.role ? ` (${row.role})` : ""}`);
-    if (row.createdAt) {
-      lines.push(`  Added: ${row.createdAt}`);
-    }
-    if (row.email) {
-      lines.push(`  Email: ${row.email}`);
-    }
-  }
-
-  return lines.join("\n");
 }
 
 function formatSuggestConnectionsResponse(data: unknown): string | null {
@@ -2114,49 +2021,6 @@ type DraftHistoryMessage = {
   role: "user" | "assistant";
   content: string;
 };
-
-function buildPromptHistoryMessages(rows: unknown): DraftHistoryMessage[] {
-  if (!Array.isArray(rows)) {
-    return [];
-  }
-
-  return rows
-    .filter(
-      (row): row is { role: "user" | "assistant"; content: string } =>
-        (row?.role === "user" || row?.role === "assistant") &&
-        typeof row?.content === "string" &&
-        row.content.trim().length > 0
-    )
-    .map((row) => ({
-      role: row.role,
-      content:
-        row.role === "user"
-          ? sanitizeHistoryMessageForPrompt(row.content).promptSafeMessage
-          : row.content,
-    }))
-    .filter((row) => row.content.length > 0);
-}
-
-function ensureCurrentPromptInHistory(
-  messages: DraftHistoryMessage[],
-  promptSafeMessage: string
-): DraftHistoryMessage[] {
-  const lastMessage = messages[messages.length - 1];
-  if (
-    lastMessage?.role === "user" &&
-    lastMessage.content === promptSafeMessage
-  ) {
-    return messages;
-  }
-
-  return [
-    ...messages,
-    {
-      role: "user",
-      content: promptSafeMessage,
-    },
-  ];
-}
 
 const DISCUSSION_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create a discussion thread|i can draft this discussion|i drafted the discussion thread)/i;
@@ -4921,7 +4785,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             successfulToolResults[0]?.name === "list_members" &&
             MEMBER_ROSTER_PROMPT_PATTERN.test(messageSafety.promptSafeMessage);
           const deterministicToolContent =
-            allowDeterministicToolResponse &&
             toolResults.length === 1 &&
             successfulToolResults.length === 1 &&
             toolResults[0].name === successfulToolResults[0].name &&
