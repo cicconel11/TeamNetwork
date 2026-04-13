@@ -55,6 +55,7 @@ export type SendAiAssistedGroupChatMessageResult =
       ok: true;
       chatGroupId: string;
       messageId: string;
+      messageStatus: "approved" | "pending";
     }
   | {
       ok: false;
@@ -337,5 +338,6 @@ export async function sendAiAssistedGroupChatMessage(
     ok: true,
     chatGroupId: input.chatGroupId,
     messageId: (message as { id: string }).id,
+    messageStatus: currentMessageStatus,
   };
 }

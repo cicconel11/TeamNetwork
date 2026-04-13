@@ -392,6 +392,7 @@ describe("sendAiAssistedGroupChatMessage", () => {
     if (result.ok) {
       assert.equal(result.chatGroupId, "g1");
       assert.equal(result.messageId, "msg123");
+      assert.equal(result.messageStatus, "approved");
     }
   });
 

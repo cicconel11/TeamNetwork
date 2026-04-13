@@ -432,7 +432,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               ? payload.orgSlug
               : null;
           const chatUrl = orgSlug ? `/${orgSlug}/messages/chat/${result.chatGroupId}` : null;
-          const statusNote = payload.message_status === "pending" ? " (pending approval)" : "";
+          const statusNote = result.messageStatus === "pending" ? " (pending approval)" : "";
           const content = chatUrl
             ? `Sent message to [${payload.group_name}](${chatUrl})${statusNote}`
             : `Sent message to ${payload.group_name}${statusNote}`;

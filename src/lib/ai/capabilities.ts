@@ -62,8 +62,10 @@ export function getAssistantCapabilitySnapshot(
     case "chat":
       return capabilitySnapshotForToolNames(
         [
+          "list_chat_groups",
           "list_discussions",
           "prepare_chat_message",
+          "prepare_group_message",
           "prepare_discussion_thread",
           "prepare_discussion_reply",
           "find_navigation_targets",
@@ -105,7 +107,9 @@ export function getAssistantCapabilitySnapshot(
           "list_members",
           "list_alumni",
           "list_parents",
+          "list_chat_groups",
           "prepare_chat_message",
+          "prepare_group_message",
           "suggest_connections",
           "get_org_stats",
           "find_navigation_targets",
@@ -132,10 +136,12 @@ export function getAssistantCapabilitySnapshot(
       return capabilitySnapshotForToolNames(
         [
           "list_announcements",
+          "list_chat_groups",
           "list_discussions",
           "list_job_postings",
           "prepare_announcement",
           "prepare_chat_message",
+          "prepare_group_message",
           "prepare_job_posting",
           "prepare_discussion_reply",
           "prepare_discussion_thread",
