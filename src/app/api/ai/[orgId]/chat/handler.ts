@@ -143,6 +143,10 @@ const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 const SEND_CHAT_MESSAGE_PROMPT_PATTERN =
   /(?:(?<!\w)(?:message|dm|direct\s+message|chat\s+message|write\s+to)(?!\w)[\s\S]{0,140}\b(?:someone|somebody|them|him|her|this person|that person|member|[a-z][\w.'-]*(?:\s+[a-z][\w.'-]*){0,3})(?!\w)|(?<!\w)send(?!\w)[\s\S]{0,80}\b(?:a\s+)?(?:dm|direct\s+message|chat\s+message)\b[\s\S]{0,80}\b(?:to|for)\b[\s\S]{0,80}\b(?:someone|somebody|them|him|her|this person|that person|member|[a-z][\w.'-]*(?:\s+[a-z][\w.'-]*){0,3})(?!\w))/i;
+const LIST_CHAT_GROUPS_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:list|show|what|which|tell\s+me)(?!\w)[\s\S]{0,80}\b(?:chat groups?|groups?|channels?|group chats?)(?!\w)|(?<!\w)(?:chat groups?|my groups?|channels?|group chats?)(?!\w)[\s\S]{0,60}\b(?:list|show|available|can\s+i\s+message|do\s+i\s+have)(?!\w))/i;
+const SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:message|write\s+to|send\s+(?:a\s+message\s+)?to|post\s+in)(?!\w)[\s\S]{0,140}\b(?:group|chat group|channel|group chat)\b|(?<!\w)(?:group|chat group|channel|group chat)(?!\w)[\s\S]{0,120}\b(?:message|write\s+to|send\s+(?:a\s+message\s+)?to|post\s+in)\b)/i;
 const CREATE_DISCUSSION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
 const DISCUSSION_REPLY_PROMPT_PATTERN =
@@ -174,6 +178,8 @@ const ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN =
   /\b(?:title|body|audience|pin(?:ned)?|notify|notification|all members|active members|alumni|parents|individuals)\b/i;
 const CHAT_MESSAGE_FALLBACK_PATTERN =
   /\b(?:message|dm|direct message|chat message|write to|send to|message this person)\b/i;
+const GROUP_CHAT_MESSAGE_FALLBACK_PATTERN =
+  /\b(?:message|write to|send to|post in)\b[\s\S]{0,80}\b(?:group|chat group|channel|group chat)\b/i;
 const DISCUSSION_REPLY_FALLBACK_PATTERN =
   /\b(?:reply|respond|response|comment|answer)\b/i;
 
@@ -319,6 +325,8 @@ interface PendingActionToolPayload {
   candidate_recipients?: unknown;
   requested_recipient?: unknown;
   unavailable_reason?: unknown;
+  candidate_groups?: unknown;
+  requested_group?: unknown;
   candidate_thread_titles?: unknown;
   requested_thread_title?: unknown;
 }
@@ -1110,6 +1118,14 @@ function getPass1Tools(
     return [AI_TOOL_MAP.prepare_job_posting];
   }
 
+  if (LIST_CHAT_GROUPS_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.list_chat_groups];
+  }
+
+  if (SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_group_message];
+  }
+
   if (SEND_CHAT_MESSAGE_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.prepare_chat_message];
   }
@@ -1208,6 +1224,15 @@ function getPass1Tools(
   }
 
   if (
+    currentFeatureSegment === "messages" &&
+    GROUP_CHAT_MESSAGE_FALLBACK_PATTERN.test(message) &&
+    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
+    !message.trim().endsWith("?")
+  ) {
+    return [AI_TOOL_MAP.prepare_group_message];
+  }
+
+  if (
     extractCurrentDiscussionThreadRouteId(currentPath) &&
     DISCUSSION_REPLY_FALLBACK_PATTERN.test(message) &&
     !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
@@ -1231,6 +1256,8 @@ function getForcedPass1ToolChoice(
     forcedToolName !== "prepare_announcement" &&
     forcedToolName !== "prepare_job_posting" &&
     forcedToolName !== "prepare_chat_message" &&
+    forcedToolName !== "list_chat_groups" &&
+    forcedToolName !== "prepare_group_message" &&
     forcedToolName !== "prepare_discussion_reply" &&
     forcedToolName !== "prepare_discussion_thread" &&
     forcedToolName !== "prepare_event" &&
@@ -1268,6 +1295,7 @@ function isToolFirstEligible(
     toolName === "get_org_stats" ||
     toolName === "find_navigation_targets" ||
     toolName === "list_announcements" ||
+    toolName === "list_chat_groups" ||
     toolName === "list_events" ||
     toolName === "list_discussions" ||
     toolName === "list_job_postings" ||
@@ -1275,7 +1303,8 @@ function isToolFirstEligible(
     toolName === "list_donations" ||
     toolName === "list_parents" ||
     toolName === "list_philanthropy_events" ||
-    toolName === "suggest_connections"
+    toolName === "suggest_connections" ||
+    toolName === "prepare_group_message"
   );
 }
 
@@ -1576,6 +1605,98 @@ function formatPrepareChatMessageResponse(data: unknown): string | null {
   return null;
 }
 
+function formatChatGroupsResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  const groups = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const name = getNonEmptyString((row as { name?: unknown }).name);
+      if (!name) {
+        return null;
+      }
+
+      const role = getNonEmptyString((row as { role?: unknown }).role);
+      return role ? `${name} (${role})` : name;
+    })
+    .filter((row): row is string => Boolean(row))
+    .slice(0, 8);
+
+  if (groups.length === 0) {
+    return "You do not have any active chat groups available right now.";
+  }
+
+  return `You can message these chat groups:\n- ${groups.join("\n- ")}`;
+}
+
+function formatPrepareGroupMessageResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const clarificationKind = getNonEmptyString(payload.clarification_kind);
+    const requestedGroup = getNonEmptyString(payload.requested_group);
+    const candidateGroups = Array.isArray(payload.candidate_groups)
+      ? payload.candidate_groups
+          .map((value) => {
+            if (!value || typeof value !== "object") {
+              return null;
+            }
+
+            return getNonEmptyString((value as { name?: unknown }).name);
+          })
+          .filter((value): value is string => Boolean(value))
+      : [];
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+
+    if (clarificationKind === "group_required") {
+      if (missingFields.includes("body")) {
+        return "I can draft that group message, but I still need which chat group it should go to and the message body.";
+      }
+      return "I can draft that group message, but I still need to know which chat group should receive it.";
+    }
+
+    if (clarificationKind === "group_ambiguous") {
+      const options =
+        candidateGroups.length > 0 ? candidateGroups.join("; ") : "the matching chat groups";
+      return `I found a few chat groups that match${
+        requestedGroup ? ` "${requestedGroup}"` : ""
+      }. Tell me which one you mean: ${options}.`;
+    }
+
+    if (clarificationKind === "group_unavailable") {
+      if (requestedGroup) {
+        return `I can't send an in-app group chat message to "${requestedGroup}" right now. Pick a different chat group or choose one you still belong to.`;
+      }
+      return "I can't send an in-app group chat message there right now. Pick a different chat group or choose one you still belong to.";
+    }
+
+    if (missingFields.length === 0) {
+      return "I still need the group chat message details before I can prepare it.";
+    }
+
+    const displayFields = missingFields.map((field) =>
+      field === "group_name_query" ? "chat group" : field
+    );
+    return `I can draft that group message, but I still need: ${displayFields.join(", ")}.`;
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I drafted the group message. Review the details below and confirm when you're ready to send it.";
+  }
+
+  return null;
+}
+
 function formatPrepareEventResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
@@ -1776,6 +1897,8 @@ function formatDeterministicToolResponse(
       return formatEventsResponse(data);
     case "list_announcements":
       return formatAnnouncementsResponse(data);
+    case "list_chat_groups":
+      return formatChatGroupsResponse(data);
     case "list_discussions":
       return formatDiscussionsResponse(data);
     case "list_job_postings":
@@ -1786,6 +1909,8 @@ function formatDeterministicToolResponse(
       return formatPrepareJobPostingResponse(data);
     case "prepare_chat_message":
       return formatPrepareChatMessageResponse(data);
+    case "prepare_group_message":
+      return formatPrepareGroupMessageResponse(data);
     case "prepare_discussion_reply":
       return formatPrepareDiscussionReplyResponse(data);
     case "prepare_discussion_thread":
@@ -1840,7 +1965,7 @@ const ACTIVE_DRAFT_CONTINUATION_INSTRUCTION = [
   "- A matching assistant draft may already be in progress for this thread.",
   "- When a matching prepare tool is attached, treat the user's latest message as a continuation of that draft unless they clearly changed topics.",
   "- Call the attached prepare tool with the updated draft details instead of replying with read-only prose.",
-  "- Do not say you lack the ability to create announcements, jobs, chat messages, discussion replies, discussion threads, or events when the matching prepare tool is attached.",
+  "- Do not say you lack the ability to create announcements, jobs, chat messages, group messages, discussion replies, discussion threads, or events when the matching prepare tool is attached.",
 ].join("\n");
 const DRAFT_CANCEL_PATTERN =
   /(?<!\w)(?:cancel|never\s+mind|nevermind|forget\s+(?:that|it)|scratch\s+that|stop\s+working\s+on\s+that)(?!\w)/i;
@@ -1863,6 +1988,8 @@ function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
       return "prepare_job_posting";
     case "send_chat_message":
       return "prepare_chat_message";
+    case "send_group_chat_message":
+      return "prepare_group_message";
     case "create_discussion_reply":
       return "prepare_discussion_reply";
     case "create_discussion_thread":
@@ -1903,6 +2030,8 @@ const JOB_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create a job posting|i can draft this job|i drafted the job posting)/i;
 const CHAT_MESSAGE_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you draft a chat message|i can draft that chat message|i drafted the chat message)/i;
+const GROUP_CHAT_MESSAGE_DRAFT_ASSISTANT_PATTERN =
+  /(?:happy to help you draft a group message|i can draft that group message|i drafted the group message)/i;
 const EVENT_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create an event|i can draft this event|i drafted the event)/i;
 
@@ -2400,10 +2529,57 @@ function extractChatMessageDraftFromHistory(messages: DraftHistoryMessage[]): Re
   return draft;
 }
 
+function extractGroupMessageDraftFromHistory(messages: DraftHistoryMessage[]): Record<string, unknown> {
+  const draft: Record<string, unknown> = {};
+
+  for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const fields = extractStructuredFieldMap(message.content);
+    const chatGroupId = getNonEmptyString(
+      fields.chat_group_id ?? fields["chat group id"] ?? fields["group id"]
+    );
+    const groupNameQuery = getNonEmptyString(
+      fields.group_name_query ?? fields.group ?? fields.channel ?? fields["chat group"]
+    );
+    const body = getNonEmptyString(fields.body ?? fields.message);
+
+    if (chatGroupId) {
+      draft.chat_group_id = chatGroupId;
+    }
+    if (groupNameQuery) {
+      draft.group_name_query = groupNameQuery;
+    }
+    if (body) {
+      draft.body = body;
+      continue;
+    }
+
+    const trimmed = message.content.trim();
+    if (
+      trimmed.length > 0 &&
+      !trimmed.endsWith("?") &&
+      !SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN.test(trimmed) &&
+      !LIST_CHAT_GROUPS_PROMPT_PATTERN.test(trimmed) &&
+      !CREATE_DISCUSSION_PROMPT_PATTERN.test(trimmed) &&
+      !DISCUSSION_REPLY_PROMPT_PATTERN.test(trimmed)
+    ) {
+      draft.body = trimmed;
+    }
+  }
+
+  return draft;
+}
+
 function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSessionType | null {
   if (message.role === "user") {
     if (CREATE_ANNOUNCEMENT_PROMPT_PATTERN.test(message.content)) {
       return "create_announcement";
+    }
+    if (SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN.test(message.content)) {
+      return "send_group_chat_message";
     }
     if (SEND_CHAT_MESSAGE_PROMPT_PATTERN.test(message.content)) {
       return "send_chat_message";
@@ -2431,6 +2607,9 @@ function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSessionTy
   }
   if (CHAT_MESSAGE_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
     return "send_chat_message";
+  }
+  if (GROUP_CHAT_MESSAGE_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
+    return "send_group_chat_message";
   }
   if (DISCUSSION_REPLY_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
     return "create_discussion_reply";
@@ -2475,6 +2654,18 @@ function inferDraftSessionFromHistory(input: {
             getNonEmptyString(draftPayload.recipient_member_id) == null &&
             getNonEmptyString(draftPayload.person_query) == null
               ? ["person_query"]
+              : []
+          ),
+        ];
+        break;
+      case "send_group_chat_message":
+        draftPayload = extractGroupMessageDraftFromHistory(relevantMessages);
+        missingFields = [
+          ...(["body"] as const).filter((field) => getNonEmptyString(draftPayload[field]) == null),
+          ...(
+            getNonEmptyString(draftPayload.chat_group_id) == null &&
+            getNonEmptyString(draftPayload.group_name_query) == null
+              ? ["group_name_query"]
               : []
           ),
         ];

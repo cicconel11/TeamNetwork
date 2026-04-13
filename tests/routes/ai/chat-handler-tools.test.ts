@@ -273,6 +273,10 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
               ? '{"title":"Practice Update","body":"Practice starts at 6pm tomorrow.","audience":"all","send_notification":true}'
             : firstToolName === "prepare_chat_message"
               ? '{"person_query":"Jason Leonard","body":"Can you join the alumni panel next Thursday?"}'
+            : firstToolName === "list_chat_groups"
+              ? '{"limit": 5}'
+            : firstToolName === "prepare_group_message"
+              ? '{"group_name_query":"CEO boss men","body":"Hey everyone, quick check-in."}'
             : firstToolName === "prepare_discussion_reply"
               ? '{"discussion_thread_id":"33333333-3333-4333-8333-333333333333","thread_title":"Spring Fundraising Volunteers","body":"I can take the Friday evening shift."}'
             : firstToolName === "suggest_connections"
@@ -409,6 +413,48 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
             summary: {
               title: "Review chat message",
               description: "Confirm the drafted chat message before it is sent.",
+            },
+          },
+        });
+      }
+      if (call.name === "list_chat_groups") {
+        return okToolResult([
+          {
+            id: "group-1",
+            name: "CEO boss men",
+            role: "admin",
+            updated_at: "2026-04-13T12:00:00.000Z",
+          },
+          {
+            id: "group-2",
+            name: "Louis Ciccone",
+            role: "member",
+            updated_at: "2026-04-12T12:00:00.000Z",
+          },
+        ]);
+      }
+      if (call.name === "prepare_group_message") {
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: {
+            chat_group_id: "group-1",
+            group_name_query: "CEO boss men",
+            body: "Hey everyone, quick check-in.",
+          },
+          pending_action: {
+            id: "pending-group-chat-123",
+            action_type: "send_group_chat_message",
+            payload: {
+              chat_group_id: "group-1",
+              group_name: "CEO boss men",
+              message_status: "approved",
+              body: "Hey everyone, quick check-in.",
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review group message",
+              description: "Confirm the drafted group message before it is sent.",
             },
           },
         });
@@ -599,6 +645,59 @@ test("explicit message requests route to prepare_chat_message", async () => {
   });
   assert.match(body, /I drafted the chat message/);
   assert.match(body, /"type":"pending_action"/);
+});
+
+test("list group chat requests route to list_chat_groups", async () => {
+  const response = await POST(makeRequest("What chat groups can I message right now?") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(toolNamesForCall(0), ["list_chat_groups"]);
+  assert.equal(executeToolCallCalls[0].call.name, "list_chat_groups");
+  assert.match(body, /You can message these chat groups/i);
+  assert.match(body, /CEO boss men \(admin\)/);
+});
+
+test("explicit group message requests route to prepare_group_message", async () => {
+  const response = await POST(makeRequest("Send a message to the CEO boss men group saying hey everyone, quick check-in.") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(toolNamesForCall(0), ["prepare_group_message"]);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_group_message");
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    group_name_query: "CEO boss men",
+    body: "Hey everyone, quick check-in.",
+  });
+  assert.match(body, /I drafted the group message/i);
+  assert.match(body, /"type":"pending_action"/);
+});
+
+test("messages-page follow-up routes group send requests to prepare_group_message", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Send a message to the CEO boss men group saying hey everyone, quick check-in.",
+      surface: "general",
+      currentPath: "/acme/messages/chat/group-1",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(toolNamesForCall(0), ["prepare_group_message"]);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_group_message");
+  assert.match(body, /I drafted the group message/i);
 });
 
 test("ambiguous queries keep fallback surface tool set", async () => {
