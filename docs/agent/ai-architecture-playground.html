@@ -859,7 +859,7 @@ const COMPONENTS = [
       'supabase/migrations/20260403120000_ai_schedule_uploads_auth_delete.sql'
     ],
     built: [
-      'AI_TOOLS defines 12 OpenAI function-calling tools: list_members, list_events, list_announcements, list_discussions, list_job_postings, prepare_job_posting, prepare_discussion_thread, get_org_stats, suggest_connections, find_navigation_targets, scrape_schedule_website, extract_schedule_pdf',
+      'AI_TOOLS defines 23 OpenAI function-calling tools: list_members, list_alumni, list_parents, list_events, list_announcements, list_discussions, list_job_postings, list_donations, list_philanthropy_events, list_chat_groups, prepare_announcement, prepare_job_posting, prepare_discussion_thread, prepare_discussion_reply, prepare_chat_message, prepare_group_message, prepare_event, prepare_events_batch, get_org_stats, suggest_connections, find_navigation_targets, scrape_schedule_website, extract_schedule_pdf',
       'Full Zod argument validation per tool (limit, upcoming, pinned_only, etc.) with fail-closed behavior',
       'list_members reads valid members columns only, prefers members first_name + last_name, and falls back to public.users.name for placeholder linked rows',
       'executeToolCall with safeToolQuery/safeToolCount error wrappers',
@@ -875,20 +875,26 @@ const COMPONENTS = [
       'Schedule ingestion tools: scrape_schedule_website (fetchUrlSafe with domain allowlist enforcement) and extract_schedule_pdf (PDF/image extraction with 2MB image size cap)',
       'Schedule upload API: private storage bucket with MIME+magic-byte validation, UUID orgId gating, shared path-ownership check (isOwnedScheduleUploadPath), authenticated DELETE RLS policy',
       'LLM-based schedule extraction pipeline: text/PDF/image → Zod-validated event drafts → pending_actions batch confirmation flow',
-      'Confirmation-gated write tools: prepare_job_posting and prepare_discussion_thread create pending actions (ai_pending_actions table) with 15-min expiry',
+      'Confirmation-gated write tools: prepare_announcement, prepare_job_posting, prepare_discussion_thread, prepare_discussion_reply, prepare_chat_message, prepare_group_message, prepare_event, and prepare_events_batch create pending actions (ai_pending_actions table) with 15-min expiry',
       'Pending action lifecycle: pending → confirmed → executed | failed | cancelled | expired (with rollback-safe CAS transitions)',
       'Confirm handler rolls back to pending on unknown action_type (no stuck confirmed rows)',
       'Cleanup endpoint recovers stranded confirmed actions by CAS-transitioning stale rows to failed',
       'Cancel handler returns 410 for already-expired actions instead of false 200',
       'prepare_job_posting validates draft, identifies missing fields, optionally enriches from application URL via fetchJobSourceDraft',
+      'prepare_announcement drafts org-wide or targeted announcements with audience selection (all, members, active_members, alumni, individuals) and optional notification flag',
+      'prepare_discussion_reply resolves threads by ID or title search and drafts replies',
+      'prepare_chat_message resolves recipients by member ID or name query and drafts direct messages',
+      'list_chat_groups returns chat groups the user belongs to with their role (admin/moderator/member)',
+      'prepare_group_message resolves groups by ID or name query and drafts group messages with moderation-aware status (approved/pending)',
+      'prepare_event and prepare_events_batch draft single or multiple calendar events with full event metadata (title, dates, times, location, type, philanthropy flag)',
       'find_navigation_targets resolves in-app pages for open/manage/create requests against org nav config',
-      'list_announcements supports pinned_only filter; list_discussions and list_job_postings are org-scoped read tools',
+      'list_announcements supports pinned_only filter; list_discussions and list_job_postings are org-scoped read tools; list_alumni supports graduation_year, industry, company, city filters; list_donations supports status and purpose filters; list_philanthropy_events supports upcoming filter',
       'Tool execution timeout guard (withStageTimeout) prevents hung tool calls'
     ],
     missing: [
       'No tool chaining (intentionally limited to single pass)',
       'No streaming tool execution (tools run synchronously between passes)',
-      'Write tools limited to job postings, discussion threads, and calendar events from schedule extraction (no send announcements, manage members yet)'
+      'Write tools cover announcements, job postings, discussion threads, discussion replies, direct chat messages, group chat messages, and calendar events (no member management or edit/delete operations yet)'
     ]
   },
   {

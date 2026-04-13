@@ -43,6 +43,22 @@ export interface PrepareDiscussionReplyArgs {
   body?: string;
 }
 
+export interface PrepareChatMessageArgs {
+  recipient_member_id?: string;
+  person_query?: string;
+  body?: string;
+}
+
+export interface ListChatGroupsArgs {
+  limit?: number;
+}
+
+export interface PrepareGroupMessageArgs {
+  chat_group_id?: string;
+  group_name_query?: string;
+  body?: string;
+}
+
 export interface PrepareEventArgs {
   title?: string;
   description?: string;
@@ -325,6 +341,76 @@ const TOOL_BY_NAME = {
             type: "string" as const,
             description:
               "Optional thread title. Use this when the user names the thread but does not provide its UUID.",
+          },
+          body: { type: "string" as const },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_chat_message: {
+    type: "function" as const,
+    function: {
+      name: "prepare_chat_message" as const,
+      description:
+        "Prepare an in-app chat message to a specific organization member. Use this when the user wants you to message, DM, or send a direct chat message to someone. It resolves the recipient, validates the draft body, and creates a pending confirmation action when the message is ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          recipient_member_id: {
+            type: "string" as const,
+            description:
+              "UUID of the member who should receive the chat message. Use this when the current member page already identifies the person.",
+          },
+          person_query: {
+            type: "string" as const,
+            description:
+              "Recipient name or email when the user says who to message in natural language.",
+          },
+          body: { type: "string" as const },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_chat_groups: {
+    type: "function" as const,
+    function: {
+      name: "list_chat_groups" as const,
+      description:
+        "List chat groups the current user belongs to. Returns group name, description, user role, and last activity. Use for questions about available chat groups or when the user wants to see which groups they can message.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 50,
+            description: "Max groups to return (default 25)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_group_message: {
+    type: "function" as const,
+    function: {
+      name: "prepare_group_message" as const,
+      description:
+        "Prepare a message to a chat group. Use this when the user wants to send a message to a group chat channel rather than a direct message to an individual. It resolves the group, validates the draft body, and creates a pending confirmation action when the message is ready. Messages may require moderator approval depending on group settings.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          chat_group_id: {
+            type: "string" as const,
+            description:
+              "UUID of the chat group to message. Use this when the group ID is already known.",
+          },
+          group_name_query: {
+            type: "string" as const,
+            description:
+              "Group name when the user says which group to message in natural language.",
           },
           body: { type: "string" as const },
         },
@@ -650,12 +736,15 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_announcements,
   TOOL_BY_NAME.list_discussions,
   TOOL_BY_NAME.list_job_postings,
+  TOOL_BY_NAME.list_chat_groups,
   TOOL_BY_NAME.list_alumni,
   TOOL_BY_NAME.list_donations,
   TOOL_BY_NAME.list_parents,
   TOOL_BY_NAME.list_philanthropy_events,
   TOOL_BY_NAME.prepare_announcement,
   TOOL_BY_NAME.prepare_job_posting,
+  TOOL_BY_NAME.prepare_chat_message,
+  TOOL_BY_NAME.prepare_group_message,
   TOOL_BY_NAME.prepare_discussion_reply,
   TOOL_BY_NAME.prepare_discussion_thread,
   TOOL_BY_NAME.prepare_event,

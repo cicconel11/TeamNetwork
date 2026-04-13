@@ -3,12 +3,15 @@ import type { AssistantPreparedDiscussion } from "@/lib/schemas/discussion";
 import type { AssistantPreparedDiscussionReply } from "@/lib/schemas/discussion";
 import type { AssistantPreparedEvent } from "@/lib/schemas/events-ai";
 import type { AssistantPreparedAnnouncement } from "@/lib/schemas/content";
+import type { AssistantPreparedChatMessage, AssistantPreparedGroupMessage } from "@/lib/schemas/chat-ai";
 
 export const AI_PENDING_ACTION_EXPIRY_MS = 15 * 60 * 1000;
 
 export type PendingActionType =
   | "create_announcement"
   | "create_job_posting"
+  | "send_chat_message"
+  | "send_group_chat_message"
   | "create_discussion_reply"
   | "create_discussion_thread"
   | "create_event";
@@ -36,6 +39,14 @@ export interface CreateDiscussionReplyPendingPayload extends AssistantPreparedDi
   orgSlug?: string | null;
 }
 
+export interface SendChatMessagePendingPayload extends AssistantPreparedChatMessage {
+  orgSlug?: string | null;
+}
+
+export interface SendGroupChatMessagePendingPayload extends AssistantPreparedGroupMessage {
+  orgSlug?: string | null;
+}
+
 export interface CreateEventPendingPayload extends AssistantPreparedEvent {
   orgSlug?: string | null;
 }
@@ -43,6 +54,8 @@ export interface CreateEventPendingPayload extends AssistantPreparedEvent {
 export interface PendingActionPayloadByType {
   create_announcement: CreateAnnouncementPendingPayload;
   create_job_posting: CreateJobPostingPendingPayload;
+  send_chat_message: SendChatMessagePendingPayload;
+  send_group_chat_message: SendGroupChatMessagePendingPayload;
   create_discussion_reply: CreateDiscussionReplyPendingPayload;
   create_discussion_thread: CreateDiscussionThreadPendingPayload;
   create_event: CreateEventPendingPayload;
@@ -274,6 +287,16 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       return {
         title: "Review job posting",
         description: "Confirm the drafted job before it is added to the jobs board.",
+      };
+    case "send_chat_message":
+      return {
+        title: "Review chat message",
+        description: "Confirm the drafted chat message before it is sent.",
+      };
+    case "send_group_chat_message":
+      return {
+        title: "Review group chat message",
+        description: "Confirm the drafted message before it is sent to the chat group.",
       };
     case "create_discussion_reply":
       return {

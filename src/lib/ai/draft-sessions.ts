@@ -5,6 +5,7 @@ import type {
 } from "@/lib/schemas/discussion";
 import type { AssistantEventDraft } from "@/lib/schemas/events-ai";
 import type { AssistantJobDraft } from "@/lib/schemas/jobs";
+import type { AssistantChatMessageDraft, AssistantGroupMessageDraft } from "@/lib/schemas/chat-ai";
 import { AI_PENDING_ACTION_EXPIRY_MS } from "@/lib/ai/pending-actions";
 
 export type DraftSessionStatus = "collecting_fields" | "ready_for_confirmation";
@@ -12,6 +13,8 @@ export type DraftSessionStatus = "collecting_fields" | "ready_for_confirmation";
 export interface DraftSessionPayloadByType {
   create_announcement: AssistantAnnouncementDraft;
   create_job_posting: AssistantJobDraft;
+  send_chat_message: AssistantChatMessageDraft;
+  send_group_chat_message: AssistantGroupMessageDraft;
   create_discussion_reply: AssistantDiscussionReplyDraft;
   create_discussion_thread: AssistantDiscussionDraft;
   create_event: AssistantEventDraft;

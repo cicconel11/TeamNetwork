@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 20 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 20);
+test("AI_TOOLS exports 21 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 21);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -33,6 +33,7 @@ test("TOOL_NAMES contains all tool names", () => {
     "list_philanthropy_events",
     "prepare_announcement",
     "prepare_job_posting",
+    "prepare_chat_message",
     "prepare_discussion_reply",
     "prepare_discussion_thread",
     "prepare_event",
@@ -101,6 +102,16 @@ test("prepare_discussion_reply requires a thread id and body fields", () => {
   const props = params.properties as ToolProperties;
 
   assert.ok(props.discussion_thread_id);
+  assert.ok(props.body);
+});
+
+test("prepare_chat_message supports member-id, query, and body fields", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "prepare_chat_message")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.recipient_member_id);
+  assert.ok(props.person_query);
   assert.ok(props.body);
 });
 

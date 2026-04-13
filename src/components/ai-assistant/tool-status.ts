@@ -10,6 +10,8 @@ export function formatToolStatusLabel(toolName: string): string {
       return "Looking up events...";
     case "list_announcements":
       return "Looking up announcements...";
+    case "list_chat_groups":
+      return "Looking up chat groups...";
     case "list_discussions":
       return "Looking up discussions...";
     case "list_job_postings":
@@ -18,6 +20,10 @@ export function formatToolStatusLabel(toolName: string): string {
       return "Preparing announcement...";
     case "prepare_job_posting":
       return "Preparing job posting...";
+    case "prepare_chat_message":
+      return "Preparing chat message...";
+    case "prepare_group_message":
+      return "Preparing group message...";
     case "prepare_discussion_reply":
       return "Preparing discussion reply...";
     case "prepare_discussion_thread":

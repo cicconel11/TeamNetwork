@@ -25,14 +25,10 @@ function createStorageStub() {
   };
 }
 
-test("buildActiveThreadStorageKey scopes persisted threads by org and surface", () => {
+test("buildActiveThreadStorageKey scopes persisted threads by org", () => {
   assert.equal(
-    buildActiveThreadStorageKey("org-1", "general"),
-    `${ACTIVE_THREAD_STORAGE_PREFIX}:org-1:general`
-  );
-  assert.notEqual(
-    buildActiveThreadStorageKey("org-1", "general"),
-    buildActiveThreadStorageKey("org-1", "members")
+    buildActiveThreadStorageKey("org-1"),
+    `${ACTIVE_THREAD_STORAGE_PREFIX}:org-1`
   );
 });
 
@@ -47,22 +43,43 @@ test("persisted active thread round-trips through storage", () => {
   );
 });
 
-test("persisted active thread does not bleed across surfaces", () => {
+test("persisted active thread follows the org across surfaces", () => {
   const storage = createStorageStub();
 
   writePersistedActiveThreadId(storage, "org-1", "general", "thread-1");
 
-  assert.equal(readPersistedActiveThreadId(storage, "org-1", "members"), null);
+  assert.equal(readPersistedActiveThreadId(storage, "org-1", "members"), "thread-1");
 });
 
-test("clearing a persisted active thread removes only that scoped key", () => {
+test("readPersistedActiveThreadId falls back to the legacy surface-scoped key", () => {
+  const storage = createStorageStub();
+  storage.setItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1:members`, "thread-legacy");
+
+  assert.equal(readPersistedActiveThreadId(storage, "org-1", "members"), "thread-legacy");
+});
+
+test("clearing a persisted active thread removes the org-wide and current legacy key", () => {
   const storage = createStorageStub();
 
-  writePersistedActiveThreadId(storage, "org-1", "general", "thread-1");
-  writePersistedActiveThreadId(storage, "org-1", "members", "thread-2");
+  storage.setItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1`, "thread-1");
+  storage.setItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1:general`, "thread-legacy-general");
+  storage.setItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1:members`, "thread-legacy-members");
 
   clearPersistedActiveThreadId(storage, "org-1", "general");
 
   assert.equal(readPersistedActiveThreadId(storage, "org-1", "general"), null);
-  assert.equal(readPersistedActiveThreadId(storage, "org-1", "members"), "thread-2");
+  assert.equal(storage.getItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1`), null);
+  assert.equal(storage.getItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1:general`), null);
+  assert.equal(storage.getItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1:members`), "thread-legacy-members");
+});
+
+test("writing a persisted active thread upgrades away the matching legacy key", () => {
+  const storage = createStorageStub();
+
+  storage.setItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1:general`, "thread-legacy");
+
+  writePersistedActiveThreadId(storage, "org-1", "general", "thread-1");
+
+  assert.equal(storage.getItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1`), "thread-1");
+  assert.equal(storage.getItem(`${ACTIVE_THREAD_STORAGE_PREFIX}:org-1:general`), null);
 });

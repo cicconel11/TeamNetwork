@@ -7,6 +7,8 @@ import {
   getPendingAction,
   isAuthorizedAction,
   isPendingActionExpired,
+  type SendChatMessagePendingPayload,
+  type SendGroupChatMessagePendingPayload,
   updatePendingActionStatus,
   type CreateDiscussionThreadPendingPayload,
   type CreateEventPendingPayload,
@@ -24,6 +26,14 @@ import {
   createAnnouncement,
   sendAnnouncementNotification,
 } from "@/lib/announcements/create-announcement";
+import {
+  sendAiAssistedDirectChatMessage,
+  type DirectChatSupabase,
+} from "@/lib/chat/direct-chat";
+import {
+  sendAiAssistedGroupChatMessage,
+  type GroupChatSupabase,
+} from "@/lib/chat/group-chat";
 import { calendarEventDetailPath } from "@/lib/calendar/routes";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
@@ -38,6 +48,8 @@ export interface AiPendingActionConfirmRouteDeps {
   createDiscussionReply?: typeof createDiscussionReply;
   createDiscussionThread?: typeof createDiscussionThread;
   createEvent?: typeof createEvent;
+  sendAiAssistedDirectChatMessage?: typeof sendAiAssistedDirectChatMessage;
+  sendAiAssistedGroupChatMessage?: typeof sendAiAssistedGroupChatMessage;
   clearDraftSession?: typeof clearDraftSession;
 }
 
@@ -51,6 +63,10 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const createDiscussionReplyFn = deps.createDiscussionReply ?? createDiscussionReply;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
   const createEventFn = deps.createEvent ?? createEvent;
+  const sendAiAssistedDirectChatMessageFn =
+    deps.sendAiAssistedDirectChatMessage ?? sendAiAssistedDirectChatMessage;
+  const sendAiAssistedGroupChatMessageFn =
+    deps.sendAiAssistedGroupChatMessage ?? sendAiAssistedGroupChatMessage;
   const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
 
   return async function POST(
@@ -208,6 +224,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -275,6 +292,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -292,6 +310,158 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           return NextResponse.json({ ok: true, job: result.job, actionId: action.id });
+        }
+        case "send_chat_message": {
+          const payload = action.payload as SendChatMessagePendingPayload;
+          const result = await sendAiAssistedDirectChatMessageFn(ctx.serviceSupabase as DirectChatSupabase, {
+            organizationId: ctx.orgId,
+            senderUserId: ctx.userId,
+            recipientMemberId: payload.recipient_member_id,
+            recipientUserId: payload.recipient_user_id,
+            recipientDisplayName: payload.recipient_display_name,
+            body: payload.body,
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "chat_message",
+            resultEntityId: result.messageId,
+          });
+
+          // Store recipient in thread metadata for follow-up messages
+          await ctx.serviceSupabase
+            .from("ai_threads")
+            .update({
+              metadata: { last_chat_recipient_member_id: payload.recipient_member_id },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", action.thread_id);
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const orgSlug =
+            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+              ? payload.orgSlug
+              : null;
+          const chatUrl = orgSlug ? `/${orgSlug}/messages/chat/${result.chatGroupId}` : null;
+          const content = chatUrl
+            ? `Sent chat message to [${payload.recipient_display_name}](${chatUrl})`
+            : `Sent chat message to ${payload.recipient_display_name}`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({
+            ok: true,
+            actionId: action.id,
+            chatGroupId: result.chatGroupId,
+            messageId: result.messageId,
+          });
+        }
+        case "send_group_chat_message": {
+          const payload = action.payload as SendGroupChatMessagePendingPayload;
+          const result = await sendAiAssistedGroupChatMessageFn(ctx.serviceSupabase as GroupChatSupabase, {
+            organizationId: ctx.orgId,
+            senderUserId: ctx.userId,
+            chatGroupId: payload.chat_group_id,
+            groupName: payload.group_name,
+            messageStatus: payload.message_status,
+            body: payload.body,
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "chat_message",
+            resultEntityId: result.messageId,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const orgSlug =
+            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+              ? payload.orgSlug
+              : null;
+          const chatUrl = orgSlug ? `/${orgSlug}/messages/chat/${result.chatGroupId}` : null;
+          const statusNote = result.messageStatus === "pending" ? " (pending approval)" : "";
+          const content = chatUrl
+            ? `Sent message to [${payload.group_name}](${chatUrl})${statusNote}`
+            : `Sent message to ${payload.group_name}${statusNote}`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({
+            ok: true,
+            actionId: action.id,
+            chatGroupId: result.chatGroupId,
+            messageId: result.messageId,
+          });
         }
         case "create_discussion_thread": {
           const payload = action.payload as CreateDiscussionThreadPendingPayload;
@@ -348,6 +518,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -417,6 +588,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
@@ -508,6 +680,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
+            org_id: ctx.orgId,
             role: "assistant",
             content,
             status: "complete",
