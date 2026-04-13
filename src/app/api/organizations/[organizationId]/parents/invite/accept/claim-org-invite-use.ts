@@ -113,21 +113,7 @@ export async function claimOrgInviteUse(
     }
   }
 
-  // All rollback attempts exhausted — log the failure so ops can manually restore
-  const { data: lastAttempt } = await serviceSupabase
-    .from("organization_invites")
-    .select("uses_remaining")
-    .eq("id", inviteId)
-    .eq("role", "parent")
-    .maybeSingle();
-
-  if (lastAttempt) {
-    console.error(
-      "[org/parents/invite/accept] Rollback exhausted — invite use permanently lost",
-      { inviteId, currentUsesRemaining: lastAttempt.uses_remaining }
-    );
-  }
-
+  // Claim loop exhausted due to contention — fetch current state to validate final response
   const { data: current, error: currentError } = await serviceSupabase
     .from("organization_invites")
     .select("organization_id,expires_at,revoked_at,uses_remaining")
