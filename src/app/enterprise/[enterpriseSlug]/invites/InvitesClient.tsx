@@ -80,22 +80,23 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchOrgs = async () => {
       try {
         const orgsRes = await fetch(`/api/enterprise/${enterpriseId}/organizations`);
         if (orgsRes.ok) {
           const orgsData = await orgsRes.json();
           setOrganizations(orgsData.organizations || []);
         }
-        await fetchInvites(enterpriseId, null, includeRevoked);
       } catch {
-        setError("Failed to load data");
-      } finally {
-        setIsLoading(false);
+        setError("Failed to load organizations");
       }
     };
+    fetchOrgs();
+  }, [enterpriseId]);
 
-    fetchData();
+  useEffect(() => {
+    setIsLoading(true);
+    fetchInvites(enterpriseId, null, includeRevoked).finally(() => setIsLoading(false));
   }, [enterpriseId, fetchInvites, includeRevoked]);
 
   useEffect(() => {
@@ -115,7 +116,6 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
     setIncludeRevoked(next);
     setInvites([]);
     setNextCursor(null);
-    fetchInvites(enterpriseId, null, next);
   };
 
   const handleInviteCreated = (invite?: CreatedInvite) => {
@@ -123,7 +123,7 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
     setShowCreateForm(false);
     setShowEnterpriseWideForm(false);
     setShowBulkUpload(false);
-    if (enterpriseId) fetchInvites(enterpriseId);
+    if (enterpriseId) fetchInvites(enterpriseId, null, includeRevoked);
   };
 
   const handleCloseSuccessModal = () => {

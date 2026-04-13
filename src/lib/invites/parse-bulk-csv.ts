@@ -29,12 +29,24 @@ export function parseCSV(text: string): BulkCSVParseResult {
   const hasHeader = firstLine.includes("role");
   const dataLines = hasHeader ? lines.slice(1) : lines;
 
-  // Parse data rows
+  // Parse data rows with validation
+  const VALID_ROLES = new Set(["admin", "active_member", "alumni"]);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   const rows = dataLines.map((line) => {
     const parts = line.split(",").map((p) => p.trim().replace(/^["']|["']$/g, ""));
     const role = parts[0] || undefined;
     const organizationId = parts[1] || undefined;
-    return { role, organizationId };
+
+    const errors: string[] = [];
+    if (role && !VALID_ROLES.has(role)) {
+      errors.push(`invalid role "${role}"`);
+    }
+    if (organizationId && !UUID_RE.test(organizationId)) {
+      errors.push("organization_id is not a valid UUID");
+    }
+
+    return { role, organizationId, error: errors.length ? errors.join("; ") : undefined };
   }).filter((row) => row.role || row.organizationId); // Drop fully blank rows only
 
   // Apply 100-row limit
