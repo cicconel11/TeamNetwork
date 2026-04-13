@@ -352,7 +352,7 @@ export type Database = {
       ai_indexing_exclusions: {
         Row: {
           created_at: string
-          excluded_by: string
+          excluded_by: string | null
           id: string
           org_id: string
           source_id: string
@@ -360,7 +360,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          excluded_by: string
+          excluded_by?: string | null
           id?: string
           org_id: string
           source_id: string
@@ -368,7 +368,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          excluded_by?: string
+          excluded_by?: string | null
           id?: string
           org_id?: string
           source_id?: string
@@ -574,6 +574,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           id: string
+          metadata: Json
           org_id: string
           surface: string
           title: string | null
@@ -584,6 +585,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          metadata?: Json
           org_id: string
           surface?: string
           title?: string | null
@@ -594,6 +596,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          metadata?: Json
           org_id?: string
           surface?: string
           title?: string | null
@@ -972,6 +975,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      breach_incidents: {
+        Row: {
+          affected_tables: string[]
+          created_at: string
+          description: string
+          discovered_at: string
+          district_notified_at: string | null
+          estimated_record_count: number | null
+          id: string
+          parents_notified_at: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          state_notified_at: string | null
+          tier: number
+        }
+        Insert: {
+          affected_tables?: string[]
+          created_at?: string
+          description: string
+          discovered_at?: string
+          district_notified_at?: string | null
+          estimated_record_count?: number | null
+          id?: string
+          parents_notified_at?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          state_notified_at?: string | null
+          tier: number
+        }
+        Update: {
+          affected_tables?: string[]
+          created_at?: string
+          description?: string
+          discovered_at?: string
+          district_notified_at?: string | null
+          estimated_record_count?: number | null
+          id?: string
+          parents_notified_at?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          state_notified_at?: string | null
+          tier?: number
+        }
+        Relationships: []
       }
       calendar_events: {
         Row: {
@@ -1620,11 +1668,52 @@ export type Database = {
         }
         Relationships: []
       }
+      data_access_log: {
+        Row: {
+          accessed_at: string
+          actor_user_id: string | null
+          id: string
+          ip_hash: string | null
+          organization_id: string | null
+          resource_id: string | null
+          resource_type: string
+          user_agent: string | null
+        }
+        Insert: {
+          accessed_at?: string
+          actor_user_id?: string | null
+          id?: string
+          ip_hash?: string | null
+          organization_id?: string | null
+          resource_id?: string | null
+          resource_type: string
+          user_agent?: string | null
+        }
+        Update: {
+          accessed_at?: string
+          actor_user_id?: string | null
+          id?: string
+          ip_hash?: string | null
+          organization_id?: string | null
+          resource_id?: string | null
+          resource_type?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_access_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dev_admin_audit_logs: {
         Row: {
           action: string
           admin_email_redacted: string
-          admin_user_id: string
+          admin_user_id: string | null
           created_at: string
           id: string
           ip_address: string | null
@@ -1639,7 +1728,7 @@ export type Database = {
         Insert: {
           action: string
           admin_email_redacted: string
-          admin_user_id: string
+          admin_user_id?: string | null
           created_at?: string
           id?: string
           ip_address?: string | null
@@ -1654,7 +1743,7 @@ export type Database = {
         Update: {
           action?: string
           admin_email_redacted?: string
-          admin_user_id?: string
+          admin_user_id?: string | null
           created_at?: string
           id?: string
           ip_address?: string | null
@@ -1892,7 +1981,7 @@ export type Database = {
         Row: {
           action: string
           actor_email_redacted: string
-          actor_user_id: string
+          actor_user_id: string | null
           created_at: string
           enterprise_id: string
           id: string
@@ -1908,7 +1997,7 @@ export type Database = {
         Insert: {
           action: string
           actor_email_redacted: string
-          actor_user_id: string
+          actor_user_id?: string | null
           created_at?: string
           enterprise_id: string
           id?: string
@@ -1924,7 +2013,7 @@ export type Database = {
         Update: {
           action?: string
           actor_email_redacted?: string
-          actor_user_id?: string
+          actor_user_id?: string | null
           created_at?: string
           enterprise_id?: string
           id?: string
@@ -3142,6 +3231,42 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      mcp_resources: {
+        Row: {
+          body: string
+          category: string
+          description: string
+          id: string
+          metadata: Json
+          mime_type: string
+          title: string
+          updated_at: string
+          uri: string
+        }
+        Insert: {
+          body: string
+          category: string
+          description: string
+          id?: string
+          metadata?: Json
+          mime_type?: string
+          title: string
+          updated_at?: string
+          uri: string
+        }
+        Update: {
+          body?: string
+          category?: string
+          description?: string
+          id?: string
+          metadata?: Json
+          mime_type?: string
+          title?: string
+          updated_at?: string
+          uri?: string
         }
         Relationships: []
       }
@@ -5072,6 +5197,33 @@ export type Database = {
           },
         ]
       }
+      user_agreements: {
+        Row: {
+          accepted_at: string
+          agreement_type: Database["public"]["Enums"]["agreement_type"]
+          id: string
+          ip_hash: string | null
+          user_id: string
+          version: string
+        }
+        Insert: {
+          accepted_at?: string
+          agreement_type: Database["public"]["Enums"]["agreement_type"]
+          id?: string
+          ip_hash?: string | null
+          user_id: string
+          version: string
+        }
+        Update: {
+          accepted_at?: string
+          agreement_type?: Database["public"]["Enums"]["agreement_type"]
+          id?: string
+          ip_hash?: string | null
+          user_id?: string
+          version?: string
+        }
+        Relationships: []
+      }
       user_calendar_connections: {
         Row: {
           access_token_encrypted: string
@@ -5497,6 +5649,13 @@ export type Database = {
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
       backfill_ai_embedding_queue: { Args: { p_org_id: string }; Returns: Json }
       backfill_graph_sync_queue: { Args: { p_org_id: string }; Returns: Json }
+      backfill_ip_hashes: {
+        Args: { salt: string }
+        Returns: {
+          table_name: string
+          updated_count: number
+        }[]
+      }
       bulk_import_alumni_rich: {
         Args: { p_organization_id: string; p_overwrite?: boolean; p_rows: Json }
         Returns: {
@@ -5548,6 +5707,14 @@ export type Database = {
         Returns: Json
       }
       claim_linkedin_resync: { Args: { p_user_id: string }; Returns: Json }
+      claim_microsoft_token_refresh_lock: {
+        Args: {
+          p_lock_expires_at: string
+          p_lock_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       claim_stale_stripe_event: {
         Args: { p_event_id: string }
         Returns: {
@@ -5731,6 +5898,13 @@ export type Database = {
       }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
+      get_enterprise_member_counts: {
+        Args: { enterprise_ids: string[] }
+        Returns: {
+          enterprise_id: string
+          member_count: number
+        }[]
+      }
       get_linkedin_manual_sync_status: {
         Args: { p_user_id: string }
         Returns: Json
@@ -5865,6 +6039,7 @@ export type Database = {
       purge_expired_ai_semantic_cache: { Args: never; Returns: number }
       purge_expired_usage_events: { Args: never; Returns: Json }
       purge_graph_sync_queue: { Args: never; Returns: number }
+      purge_old_data_access_logs: { Args: never; Returns: number }
       purge_old_enterprise_audit_logs: { Args: never; Returns: number }
       purge_ops_events: { Args: never; Returns: Json }
       redeem_enterprise_invite: {
@@ -5877,6 +6052,10 @@ export type Database = {
       release_linkedin_manual_sync: {
         Args: { p_attempt_id: string }
         Returns: Json
+      }
+      release_microsoft_token_refresh_lock: {
+        Args: { p_lock_id: string; p_user_id: string }
+        Returns: boolean
       }
       reorder_media_albums: {
         Args: { p_album_ids: string[]; p_org_id: string }
@@ -5980,6 +6159,7 @@ export type Database = {
       }
     }
     Enums: {
+      agreement_type: "terms_of_service" | "privacy_policy"
       analytics_consent_state: "opted_in" | "opted_out"
       analytics_event_name:
         | "app_open"
@@ -6154,6 +6334,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      agreement_type: ["terms_of_service", "privacy_policy"],
       analytics_consent_state: ["opted_in", "opted_out"],
       analytics_event_name: [
         "app_open",
