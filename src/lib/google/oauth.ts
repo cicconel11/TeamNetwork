@@ -240,7 +240,9 @@ export function getOAuthErrorMessage(error: string): string {
         temporarily_unavailable: "Google's servers are temporarily unavailable. Please try again later.",
     };
 
-    return errorMessages[error] || "An unexpected error occurred. Please try again.";
+    return Object.hasOwn(errorMessages, error)
+        ? errorMessages[error]
+        : "An unexpected error occurred. Please try again.";
 }
 
 
