@@ -248,6 +248,9 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       discussion_post_roles: string[];
       media_upload_roles: string[];
       linkedin_resync_enabled?: boolean;
+      require_invite_approval?: boolean;
+      timezone?: string;
+      default_language?: string;
     } | null;
 
     if (updateError) {

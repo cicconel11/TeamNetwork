@@ -1097,8 +1097,8 @@ export type Database = {
         Row: {
           connected_user_id: string | null
           created_at: string | null
+          external_calendar_id: string | null
           feed_url: string
-          google_calendar_id: string | null
           id: string
           last_error: string | null
           last_synced_at: string | null
@@ -1112,8 +1112,8 @@ export type Database = {
         Insert: {
           connected_user_id?: string | null
           created_at?: string | null
+          external_calendar_id?: string | null
           feed_url: string
-          google_calendar_id?: string | null
           id?: string
           last_error?: string | null
           last_synced_at?: string | null
@@ -1127,8 +1127,8 @@ export type Database = {
         Update: {
           connected_user_id?: string | null
           created_at?: string | null
+          external_calendar_id?: string | null
           feed_url?: string
-          google_calendar_id?: string | null
           id?: string
           last_error?: string | null
           last_synced_at?: string | null
@@ -2311,11 +2311,12 @@ export type Database = {
         Row: {
           created_at: string | null
           event_id: string
-          google_calendar_id: string
-          google_event_id: string
+          external_calendar_id: string
+          external_event_id: string
           id: string
           last_error: string | null
           organization_id: string
+          provider: string
           sync_status: string
           updated_at: string | null
           user_id: string
@@ -2323,11 +2324,12 @@ export type Database = {
         Insert: {
           created_at?: string | null
           event_id: string
-          google_calendar_id?: string
-          google_event_id: string
+          external_calendar_id?: string
+          external_event_id: string
           id?: string
           last_error?: string | null
           organization_id: string
+          provider?: string
           sync_status?: string
           updated_at?: string | null
           user_id: string
@@ -2335,11 +2337,12 @@ export type Database = {
         Update: {
           created_at?: string | null
           event_id?: string
-          google_calendar_id?: string
-          google_event_id?: string
+          external_calendar_id?: string
+          external_event_id?: string
           id?: string
           last_error?: string | null
           organization_id?: string
+          provider?: string
           sync_status?: string
           updated_at?: string | null
           user_id?: string
@@ -3386,6 +3389,7 @@ export type Database = {
           moderated_at: string | null
           moderated_by: string | null
           organization_id: string
+          preview_file_size_bytes: number | null
           preview_storage_path: string | null
           rejection_reason: string | null
           status: Database["public"]["Enums"]["media_status"]
@@ -3415,6 +3419,7 @@ export type Database = {
           moderated_at?: string | null
           moderated_by?: string | null
           organization_id: string
+          preview_file_size_bytes?: number | null
           preview_storage_path?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["media_status"]
@@ -3444,6 +3449,7 @@ export type Database = {
           moderated_at?: string | null
           moderated_by?: string | null
           organization_id?: string
+          preview_file_size_bytes?: number | null
           preview_storage_path?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["media_status"]
@@ -3486,6 +3492,7 @@ export type Database = {
           id: string
           mime_type: string
           organization_id: string
+          preview_file_size: number | null
           preview_storage_path: string | null
           status: Database["public"]["Enums"]["media_upload_status"]
           storage_path: string
@@ -3502,6 +3509,7 @@ export type Database = {
           id?: string
           mime_type: string
           organization_id: string
+          preview_file_size?: number | null
           preview_storage_path?: string | null
           status?: Database["public"]["Enums"]["media_upload_status"]
           storage_path: string
@@ -3518,6 +3526,7 @@ export type Database = {
           id?: string
           mime_type?: string
           organization_id?: string
+          preview_file_size?: number | null
           preview_storage_path?: string | null
           status?: Database["public"]["Enums"]["media_upload_status"]
           storage_path?: string
@@ -4963,7 +4972,7 @@ export type Database = {
           connected_user_id: string | null
           created_at: string | null
           created_by: string | null
-          google_calendar_id: string | null
+          external_calendar_id: string | null
           id: string
           last_cancelled: number | null
           last_error: string | null
@@ -4982,7 +4991,7 @@ export type Database = {
           connected_user_id?: string | null
           created_at?: string | null
           created_by?: string | null
-          google_calendar_id?: string | null
+          external_calendar_id?: string | null
           id?: string
           last_cancelled?: number | null
           last_error?: string | null
@@ -5001,7 +5010,7 @@ export type Database = {
           connected_user_id?: string | null
           created_at?: string | null
           created_by?: string | null
-          google_calendar_id?: string | null
+          external_calendar_id?: string | null
           id?: string
           last_cancelled?: number | null
           last_error?: string | null
@@ -5228,12 +5237,15 @@ export type Database = {
         Row: {
           access_token_encrypted: string
           created_at: string | null
-          google_email: string
           id: string
           last_sync_at: string | null
+          microsoft_refresh_lock_expires_at: string | null
+          microsoft_refresh_lock_id: string | null
+          provider: string
+          provider_email: string
           refresh_token_encrypted: string
           status: string
-          target_calendar_id: string
+          target_calendar_id: string | null
           token_expires_at: string
           updated_at: string | null
           user_id: string
@@ -5241,12 +5253,15 @@ export type Database = {
         Insert: {
           access_token_encrypted: string
           created_at?: string | null
-          google_email: string
           id?: string
           last_sync_at?: string | null
+          microsoft_refresh_lock_expires_at?: string | null
+          microsoft_refresh_lock_id?: string | null
+          provider?: string
+          provider_email: string
           refresh_token_encrypted: string
           status?: string
-          target_calendar_id?: string
+          target_calendar_id?: string | null
           token_expires_at: string
           updated_at?: string | null
           user_id: string
@@ -5254,12 +5269,15 @@ export type Database = {
         Update: {
           access_token_encrypted?: string
           created_at?: string | null
-          google_email?: string
           id?: string
           last_sync_at?: string | null
+          microsoft_refresh_lock_expires_at?: string | null
+          microsoft_refresh_lock_id?: string | null
+          provider?: string
+          provider_email?: string
           refresh_token_encrypted?: string
           status?: string
-          target_calendar_id?: string
+          target_calendar_id?: string | null
           token_expires_at?: string
           updated_at?: string | null
           user_id?: string
@@ -5268,7 +5286,7 @@ export type Database = {
           {
             foreignKeyName: "user_calendar_connections_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -5277,6 +5295,7 @@ export type Database = {
       user_deletion_requests: {
         Row: {
           cancelled_at: string | null
+          completed_at: string | null
           created_at: string
           id: string
           requested_at: string
@@ -5287,6 +5306,7 @@ export type Database = {
         }
         Insert: {
           cancelled_at?: string | null
+          completed_at?: string | null
           created_at?: string
           id?: string
           requested_at?: string
@@ -5297,6 +5317,7 @@ export type Database = {
         }
         Update: {
           cancelled_at?: string | null
+          completed_at?: string | null
           created_at?: string
           id?: string
           requested_at?: string
