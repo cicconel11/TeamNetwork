@@ -18,6 +18,7 @@ import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 import { AIPanelProvider } from "@/components/ai-assistant";
 import { JoinOrgGate } from "@/components/join/JoinOrgGate";
 import { MediaUploadManagerProvider } from "@/components/media/MediaUploadManagerContext";
+import { pickCurrentOrgProfile } from "@/lib/auth/current-org-profile";
 import dynamic from "next/dynamic";
 const AIPanel = dynamic(
   () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
@@ -187,24 +188,48 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
   const organization = orgContext.organization;
 
-  let currentMemberId: string | undefined;
-  let currentMemberName: string | undefined;
-  let currentMemberAvatar: string | undefined;
+  let currentProfileHref: string | undefined;
+  let currentProfileName: string | undefined;
+  let currentProfileAvatar: string | undefined;
   let pendingApprovalsCount = 0;
   if (orgContext.userId) {
     const supabase = await createClient();
-    const { data: memberRow } = await supabase
-      .from("members")
-      .select("id, first_name, last_name, photo_url")
-      .eq("organization_id", organization.id)
-      .eq("user_id", orgContext.userId)
-      .is("deleted_at", null)
-      .maybeSingle();
-    currentMemberId = memberRow?.id ?? undefined;
-    currentMemberName = memberRow
-      ? `${memberRow.first_name} ${memberRow.last_name}`
-      : undefined;
-    currentMemberAvatar = memberRow?.photo_url ?? undefined;
+    const [{ data: memberRow }, { data: alumniRow }, { data: parentRow }] = await Promise.all([
+      supabase
+        .from("members")
+        .select("id, first_name, last_name, photo_url")
+        .eq("organization_id", organization.id)
+        .eq("user_id", orgContext.userId)
+        .is("deleted_at", null)
+        .maybeSingle(),
+      supabase
+        .from("alumni")
+        .select("id, first_name, last_name, photo_url")
+        .eq("organization_id", organization.id)
+        .eq("user_id", orgContext.userId)
+        .is("deleted_at", null)
+        .maybeSingle(),
+      supabase
+        .from("parents")
+        .select("id, first_name, last_name, photo_url")
+        .eq("organization_id", organization.id)
+        .eq("user_id", orgContext.userId)
+        .is("deleted_at", null)
+        .maybeSingle(),
+    ]);
+    const currentProfile = pickCurrentOrgProfile({
+      orgSlug,
+      role: orgContext.role,
+      memberProfile: memberRow ?? undefined,
+      alumniProfile: alumniRow ?? undefined,
+      parentProfile: parentRow ?? undefined,
+    });
+    if (!currentProfile) {
+      console.warn("[layout] no profile row found for userId:", orgContext.userId, "orgId:", organization.id, "role:", orgContext.role);
+    }
+    currentProfileHref = currentProfile?.href;
+    currentProfileName = currentProfile?.name;
+    currentProfileAvatar = currentProfile?.avatarUrl ?? undefined;
 
     // Pending approvals count for admin sidebar badge (HEAD query, ~2ms)
     if (isAdmin) {
@@ -305,10 +330,10 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       )}
 
       <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
-        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} pendingApprovalsCount={pendingApprovalsCount} />
+        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentProfileHref={currentProfileHref} currentProfileName={currentProfileName} currentProfileAvatar={currentProfileAvatar} pendingApprovalsCount={pendingApprovalsCount} />
       </div>
 
-      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} pendingApprovalsCount={pendingApprovalsCount} />
+      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentProfileHref={currentProfileHref} currentProfileName={currentProfileName} currentProfileAvatar={currentProfileAvatar} pendingApprovalsCount={pendingApprovalsCount} />
       {!isDevAdmin && <ConsentModal />}
       {!isDevAdmin && <LinkedInUrlPrompt />}
 

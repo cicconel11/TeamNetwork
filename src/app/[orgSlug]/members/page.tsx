@@ -12,24 +12,16 @@ import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
 import { LinkedInBadge } from "@/components/shared";
+import {
+  buildMemberDirectoryEntries,
+  type LinkedMemberDirectoryRow,
+  type MemberDirectoryEntry,
+  type ParentDirectoryRow,
+} from "@/lib/members/directory";
 
 interface MembersPageProps {
   params: Promise<{ orgSlug: string }>;
   searchParams: Promise<{ status?: string; role?: string }>;
-}
-
-// Extended member type with admin flag
-interface MemberWithAdminFlag {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string | null;
-  photo_url: string | null;
-  role: string | null;
-  status: string | null;
-  graduation_year: number | null;
-  linkedin_url: string | null;
-  isAdmin: boolean;
 }
 
 export default async function MembersPage({ params, searchParams }: MembersPageProps) {
@@ -46,15 +38,18 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const devAdminEmails = getDevAdminEmails();
   const devAdminEmailFilter = `(${devAdminEmails.map((email) => `"${email}"`).join(",")})`;
 
-  // Step 1: Get user_ids with active_member or admin role
+  // Step 1: Get user_ids with active_member, admin, or parent role
   const { data: memberRoles } = await dataClient
     .from("user_organization_roles")
     .select("user_id, role")
     .eq("organization_id", org.id)
-    .in("role", ["active_member", "admin"])
+    .in("role", ["active_member", "admin", "parent"])
     .eq("status", "active");
 
   const memberUserIds = memberRoles?.map((r) => r.user_id) || [];
+  const parentUserIds = memberRoles
+    ?.filter((r) => r.role === "parent")
+    .map((r) => r.user_id) || [];
   const adminUserIds = new Set(
     memberRoles?.filter((r) => r.role === "admin").map((r) => r.user_id) || []
   );
@@ -86,11 +81,27 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     .not("email", "in", devAdminEmailFilter)
     .is("user_id", null);
 
+  let parentProfilesQuery = dataClient
+    .from("parents")
+    .select("id, first_name, last_name, email, photo_url, linkedin_url, relationship, student_name, user_id")
+    .eq("organization_id", org.id)
+    .is("deleted_at", null)
+    .not("user_id", "is", null);
+
+  if (parentUserIds.length > 0) {
+    parentProfilesQuery = parentProfilesQuery.in("user_id", parentUserIds);
+  } else {
+    parentProfilesQuery = parentProfilesQuery.in("user_id", ["__no_match__"]);
+  }
+
   // Apply filters to both queries
   // Default: show active members only unless explicitly filtered
   if (filters.status) {
     linkedMembersQuery = linkedMembersQuery.eq("status", filters.status);
     manualMembersQuery = manualMembersQuery.eq("status", filters.status);
+    if (filters.status !== "active") {
+      parentProfilesQuery = parentProfilesQuery.in("user_id", ["__no_match__"]);
+    }
   } else {
     linkedMembersQuery = linkedMembersQuery.eq("status", "active");
     manualMembersQuery = manualMembersQuery.eq("status", "active");
@@ -99,16 +110,19 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   if (filters.role) {
     linkedMembersQuery = linkedMembersQuery.eq("role", filters.role);
     manualMembersQuery = manualMembersQuery.eq("role", filters.role);
+    parentProfilesQuery = parentProfilesQuery.in("user_id", ["__no_match__"]);
   }
 
   // Apply ordering after all filters
   linkedMembersQuery = linkedMembersQuery.order("last_name");
   manualMembersQuery = manualMembersQuery.order("last_name");
+  parentProfilesQuery = parentProfilesQuery.order("last_name");
 
   // Run queries in parallel
-  const [{ data: linkedMembers }, { data: manualMembers }, { data: allMembers }] = await Promise.all([
+  const [{ data: linkedMembers }, { data: manualMembers }, { data: parentProfiles }, { data: allMembers }] = await Promise.all([
     linkedMembersQuery,
     manualMembersQuery,
+    parentProfilesQuery,
     dataClient
       .from("members")
       .select("role")
@@ -117,46 +131,13 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       .limit(1000),
   ]);
 
-  // Combine and add isAdmin flag
-  type MemberRow = {
-    id: string;
-    first_name: string;
-    last_name: string;
-    email: string | null;
-    photo_url: string | null;
-    role: string | null;
-    status: string | null;
-    graduation_year: number | null;
-    linkedin_url: string | null;
-    user_id: string | null;
-  };
-
-  const members: MemberWithAdminFlag[] = [
-    ...(linkedMembers || []).map((m: MemberRow) => ({
-      id: m.id,
-      first_name: m.first_name,
-      last_name: m.last_name,
-      email: m.email,
-      photo_url: m.photo_url,
-      role: m.role,
-      status: m.status,
-      graduation_year: m.graduation_year,
-      linkedin_url: m.linkedin_url,
-      isAdmin: m.user_id ? adminUserIds.has(m.user_id) : false,
-    })),
-    ...(manualMembers || []).map((m: MemberRow) => ({
-      id: m.id,
-      first_name: m.first_name,
-      last_name: m.last_name,
-      email: m.email,
-      photo_url: m.photo_url,
-      role: m.role,
-      status: m.status,
-      graduation_year: m.graduation_year,
-      linkedin_url: m.linkedin_url,
-      isAdmin: false,
-    })),
-  ].sort((a, b) => a.last_name.localeCompare(b.last_name));
+  const members: MemberDirectoryEntry[] = buildMemberDirectoryEntries({
+    orgSlug,
+    linkedMembers: ((linkedMembers || []) as LinkedMemberDirectoryRow[]),
+    manualMembers: ((manualMembers || []) as LinkedMemberDirectoryRow[]),
+    parentProfiles: ((parentProfiles || []) as ParentDirectoryRow[]),
+    adminUserIds,
+  });
 
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 
@@ -205,7 +186,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
             <Card key={member.id} interactive className="p-5">
               <div className="flex items-center gap-4">
                 <DirectoryCardLink
-                  href={`/${orgSlug}/members/${member.id}`}
+                  href={member.profileHref}
                   organizationId={org.id}
                   directoryType="active_members"
                   className="flex min-w-0 flex-1 items-center gap-4"
@@ -226,6 +207,9 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                       <Badge variant={member.status === "active" ? "success" : "muted"}>
                         {member.status}
                       </Badge>
+                      {member.isParent && (
+                        <Badge variant="primary">Parent</Badge>
+                      )}
                       {member.isAdmin && (
                         <Badge variant="warning">Admin</Badge>
                       )}
