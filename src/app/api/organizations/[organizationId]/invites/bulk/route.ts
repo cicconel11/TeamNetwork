@@ -8,6 +8,7 @@ import { validateJson, ValidationError, baseSchemas } from "@/lib/security/valid
 import { orgBulkInviteSchema } from "@/lib/schemas/invite";
 import { sendEmail } from "@/lib/notifications";
 import { buildInviteLink } from "@/lib/invites/buildInviteLink";
+import { getAppUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -102,7 +103,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const inviteLink = buildInviteLink({
     kind: role === "parent" ? "parent" : "org",
-    baseUrl: new URL(req.url).origin,
+    baseUrl: getAppUrl(),
     orgId: organizationId,
     code: invite.code,
     token: invite.token ?? undefined,
