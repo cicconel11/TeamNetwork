@@ -50,7 +50,18 @@ TeamNetwork is authorized to receive and process only the following student data
 | Profile Photo | Member directory display | Optional |
 | Organization Membership | Access control, role assignment | Required |
 
-### 3.1 Data NOT Collected
+### 3.1 Alumni Enrichment Data
+
+The following data elements may be collected for alumni members through optional enrichment features. These features are available to Districts only upon explicit opt-in and subject to prior written approval per Section 4:
+
+| Data Element | Purpose | Source |
+|---|---|---|
+| Phone Number | Alumni contact information | User-provided or enrichment |
+| City | Alumni geographic distribution | User-provided or enrichment |
+| LinkedIn URL | Professional networking | User-provided or enrichment |
+| Address Summary | Alumni contact information | User-provided or enrichment |
+
+### 3.2 Data NOT Collected
 
 TeamNetwork explicitly does NOT collect, store, or process:
 

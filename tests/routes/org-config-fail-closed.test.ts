@@ -64,6 +64,16 @@ describe("getAllowedOrgRoles", () => {
     assert.deepEqual(roles, DEFAULT_ORG_ROLE_CONFIG.feed_post_roles);
   });
 
+  it("uses the parent-enabled discussion default when org config is null", async () => {
+    const supabase = makeSupabase({
+      data: { discussion_post_roles: null },
+      error: null,
+    });
+
+    const roles = await getAllowedOrgRoles(supabase, "org-1", "discussion_post_roles", "discussions");
+    assert.deepEqual(roles, ["admin", "active_member", "alumni", "parent"]);
+  });
+
   it("preserves explicit configured roles", async () => {
     const supabase = makeSupabase({
       data: { discussion_post_roles: ["admin", "parent"] },

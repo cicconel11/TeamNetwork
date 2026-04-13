@@ -8,7 +8,7 @@ export type OrgRoleConfigColumn =
 
 export const DEFAULT_ORG_ROLE_CONFIG: Record<OrgRoleConfigColumn, string[]> = {
   feed_post_roles: ["admin", "active_member", "alumni"],
-  discussion_post_roles: ["admin", "active_member", "alumni"],
+  discussion_post_roles: ["admin", "active_member", "alumni", "parent"],
   job_post_roles: ["admin", "alumni"],
 };
 

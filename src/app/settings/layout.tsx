@@ -8,6 +8,7 @@ const TABS = [
   { href: "/settings/connected-accounts", i18nKey: "connectedAccounts" },
   { href: "/settings/notifications", i18nKey: "notifications" },
   { href: "/settings/language", i18nKey: "language" },
+  { href: "/settings/account", i18nKey: "account" },
 ] as const;
 
 export default function SettingsLayout({

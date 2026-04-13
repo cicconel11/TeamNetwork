@@ -90,7 +90,7 @@ function OrgSettingsContent() {
   const [jobSaving, setJobSaving] = useState(false);
   const [jobError, setJobError] = useState<string | null>(null);
   const [jobSuccess, setJobSuccess] = useState<string | null>(null);
-  const [discussionPostRoles, setDiscussionPostRoles] = useState<string[]>(["admin", "active_member", "alumni"]);
+  const [discussionPostRoles, setDiscussionPostRoles] = useState<string[]>(["admin", "active_member", "alumni", "parent"]);
   const [discussionSaving, setDiscussionSaving] = useState(false);
   const [discussionError, setDiscussionError] = useState<string | null>(null);
   const [discussionSuccess, setDiscussionSuccess] = useState<string | null>(null);
@@ -142,7 +142,7 @@ function OrgSettingsContent() {
       setInitialSecondaryColor(org.secondary_color || "#10b981");
       setFeedPostRoles((org as Record<string, unknown>).feed_post_roles as string[] || ["admin", "active_member", "alumni"]);
       setJobPostRoles((org as Record<string, unknown>).job_post_roles as string[] || ["admin", "alumni"]);
-      setDiscussionPostRoles((org as Record<string, unknown>).discussion_post_roles as string[] || ["admin", "active_member", "alumni"]);
+      setDiscussionPostRoles((org as Record<string, unknown>).discussion_post_roles as string[] || ["admin", "active_member", "alumni", "parent"]);
       setMediaUploadRoles((org as Record<string, unknown>).media_upload_roles as string[] || ["admin"]);
       setLinkedinResyncEnabled((org as Record<string, unknown>).linkedin_resync_enabled === true);
       setTimezone(((org as Record<string, unknown>).timezone as string) || "America/New_York");

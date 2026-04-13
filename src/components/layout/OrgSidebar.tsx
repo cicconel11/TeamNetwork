@@ -13,6 +13,7 @@ import { NavGroupSection, NavItemLink } from "@/components/layout/NavGroupSectio
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { getRoleLabel } from "@/lib/auth/role-display";
 
 
 interface OrgSidebarProps {
@@ -21,15 +22,15 @@ interface OrgSidebarProps {
   isDevAdmin?: boolean;
   hasAlumniAccess?: boolean;
   hasParentsAccess?: boolean;
-  currentMemberId?: string;
-  currentMemberName?: string;
-  currentMemberAvatar?: string | null;
+  currentProfileHref?: string;
+  currentProfileName?: string;
+  currentProfileAvatar?: string | null;
   pendingApprovalsCount?: number;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, pendingApprovalsCount, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentProfileHref, currentProfileName, currentProfileAvatar, pendingApprovalsCount, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
@@ -169,17 +170,17 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
       </div>
 
       {/* Profile Card */}
-      {currentMemberId && currentMemberName && (
+      {currentProfileHref && currentProfileName && (
         <div className="px-4 pt-3 pb-3 border-b border-border">
           <Link
-            href={`${basePath}/members/${currentMemberId}`}
+            href={currentProfileHref}
             className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 transition-all duration-200"
           >
-            <Avatar src={currentMemberAvatar} name={currentMemberName} size="md" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">{currentMemberName}</p>
+            <Avatar src={currentProfileAvatar} name={currentProfileName} size="md" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground truncate">{currentProfileName}</p>
               <Badge variant="muted" className="text-[11px] capitalize mt-0.5">
-                {role === "active_member" ? "Member" : role}
+                {role ? getRoleLabel(role) : "Profile"}
               </Badge>
             </div>
           </Link>

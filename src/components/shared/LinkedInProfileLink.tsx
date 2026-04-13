@@ -12,7 +12,7 @@ export function LinkedInProfileLink({ linkedinUrl }: LinkedInProfileLinkProps) {
       href={linkedinUrl}
       target="_blank"
       rel="noreferrer noopener"
-      className="inline-flex items-center gap-1.5 text-[#0A66C2] hover:text-[#004182] transition-colors font-medium"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-[#0A66C2] text-white hover:bg-[#004182] transition-colors font-medium"
     >
       <LinkedInIcon className="w-4 h-4" />
       View Profile

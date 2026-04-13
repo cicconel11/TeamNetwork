@@ -39,6 +39,9 @@ export const signupSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100, "Name is too long"),
   email: baseSchemas.email,
   password: strongPasswordSchema,
+  tosAccepted: z.boolean().refine((val) => val === true, {
+    message: "You must accept the Terms of Service and Privacy Policy",
+  }),
 });
 export type SignupForm = z.infer<typeof signupSchema>;
 

@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { redactEmail } from "@/lib/auth/dev-admin";
+import { hashIp } from "@/lib/compliance/audit-log";
 
 export interface EnterpriseAuditEntry {
   actorUserId: string;
@@ -78,7 +79,7 @@ async function logEnterpriseAuditActionAsync(
       organization_id: entry.organizationId ?? null,
       request_path: entry.requestPath ?? null,
       request_method: entry.requestMethod ?? null,
-      ip_address: entry.ipAddress ?? null,
+      ip_address: entry.ipAddress ? hashIp(entry.ipAddress) : null,
       user_agent: entry.userAgent?.slice(0, 500) ?? null,
       metadata: entry.metadata ?? {},
     });

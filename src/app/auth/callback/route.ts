@@ -4,6 +4,10 @@ import type { NextRequest } from "next/server";
 import { requireEnv } from "@/lib/env";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 import { buildErrorRedirect, runAgeValidationGate } from "@/lib/auth/callback-flow";
+import {
+  hasAcceptedCurrentAgreementVersions,
+  type UserAgreementVersion,
+} from "@/lib/compliance/user-agreements";
 import { debugLog, maskPII } from "@/lib/debug";
 import { createServiceClient } from "@/lib/supabase/service";
 import { runLinkedInOidcSyncSafe } from "@/lib/linkedin/oidc-sync";
@@ -79,19 +83,21 @@ export async function GET(request: NextRequest) {
     if (data.session) {
       debugLog("auth-callback", "Success! User:", maskPII(data.session.user.id));
 
+      // Detect new accounts (created within last 60s) — used for identity merge and ToS redirect
+      const currentUser = data.session.user;
+      const isNewOAuthAccount =
+        currentUser.created_at != null &&
+        Date.now() - new Date(currentUser.created_at).getTime() < 60_000;
+
       // --- Defensive OAuth identity merge ---
       // Guard: if Supabase created a fresh UUID for this sign-in but another UUID
       // with the same email already has org memberships, copy those memberships here.
       // This ensures continuity even if the Dashboard auto-link setting hasn't
       // yet prevented duplicate account creation.
       try {
-        const currentUser = data.session.user;
         const currentEmail = currentUser.email;
-        const isNewAccount =
-          currentUser.created_at != null &&
-          Date.now() - new Date(currentUser.created_at).getTime() < 60_000;
 
-        if (currentEmail && isNewAccount) {
+        if (currentEmail && isNewOAuthAccount) {
           const serviceClient = createServiceClient();
 
           const { data: duplicateUsers } = await serviceClient
@@ -196,6 +202,37 @@ export async function GET(request: NextRequest) {
       if (ageGateResult.kind === "redirect") {
         debugLog("auth-callback", "Age validation redirect:", ageGateResult.location);
         return NextResponse.redirect(ageGateResult.location);
+      }
+
+      const serviceClient = createServiceClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: agreements } = await (serviceClient as any)
+        .from("user_agreements")
+        .select("agreement_type, version")
+        .eq("user_id", currentUser.id) as {
+        data: UserAgreementVersion[] | null;
+      };
+
+      // Force explicit acceptance whenever the current ToS/privacy versions
+      // are missing. This covers new OAuth signups, email confirmation, and
+      // future policy version bumps without trusting client-side signup state.
+      if (!hasAcceptedCurrentAgreementVersions(agreements ?? [])) {
+        const acceptTermsUrl = new URL("/auth/accept-terms", siteUrl);
+        if (redirect !== "/app") {
+          acceptTermsUrl.searchParams.set("redirect", redirect);
+        }
+        debugLog("auth-callback", "Missing current agreement acceptance — redirecting to accept-terms");
+        const tosRedirect = NextResponse.redirect(acceptTermsUrl);
+        // Copy auth cookies from the session response to the new redirect
+        for (const cookie of response.cookies.getAll()) {
+          tosRedirect.cookies.set(cookie.name, cookie.value, {
+            path: "/",
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            domain: undefined,
+          });
+        }
+        return tosRedirect;
       }
 
       // Best-effort sync in the background so redirect latency stays off the login path.

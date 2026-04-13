@@ -1,9 +1,11 @@
 import { notFound, redirect } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
+import { logDataAccess } from "@/lib/audit/data-access-log";
 import type { Form, FormSubmission, FormField, User } from "@/types/database";
 
 interface SubmissionDetailPageProps {
@@ -17,6 +19,18 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
 
   if (!orgCtx.organization) return null;
   if (!orgCtx.isAdmin) redirect(`/${orgSlug}/forms`);
+
+  // Log admin access to form submission (FERPA audit trail)
+  if (orgCtx.userId) {
+    const reqHeaders = await headers();
+    void logDataAccess({
+      actorUserId: orgCtx.userId,
+      resourceType: "form_submission",
+      resourceId: submissionId,
+      organizationId: orgCtx.organization.id,
+      headers: reqHeaders,
+    });
+  }
 
   // Fetch form for field definitions
   const { data: form, error: formError } = await supabase

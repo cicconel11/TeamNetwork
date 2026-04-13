@@ -100,6 +100,7 @@ export function SignupClient({
       name: "",
       email: "",
       password: "",
+      tosAccepted: false,
     },
   });
 
@@ -371,6 +372,29 @@ export function SignupClient({
             error={errors.password?.message}
             {...register("password")}
           />
+
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="tosAccepted"
+              className="mt-1 h-4 w-4 rounded border-white/20 bg-white/5 text-[#22c55e] focus:ring-[#22c55e]"
+              data-testid="signup-tos"
+              {...register("tosAccepted")}
+            />
+            <label htmlFor="tosAccepted" className="text-sm text-white/50">
+              I agree to the{" "}
+              <Link href="/terms" target="_blank" className="text-white underline hover:text-white/80">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" target="_blank" className="text-white underline hover:text-white/80">
+                Privacy Policy
+              </Link>
+            </label>
+          </div>
+          {errors.tosAccepted && (
+            <p className="text-sm text-red-400">{errors.tosAccepted.message}</p>
+          )}
 
           <div className="flex justify-center">
             <HCaptcha

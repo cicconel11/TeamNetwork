@@ -12,9 +12,13 @@ export type AgeGateEventType =
  * Uses a salt to prevent rainbow table attacks.
  */
 export function hashIp(ip: string): string {
-  const salt = process.env.IP_HASH_SALT || "team-network-coppa";
+  const salt = process.env.IP_HASH_SALT;
+  if (!salt) {
+    console.warn("[compliance] IP_HASH_SALT not set — using fallback. Set this env var in production.");
+  }
+  const effectiveSalt = salt || "team-network-coppa";
   return createHash("sha256")
-    .update(`${salt}:${ip}`)
+    .update(`${effectiveSalt}:${ip}`)
     .digest("hex");
 }
 
