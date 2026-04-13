@@ -4,6 +4,8 @@ import type { NextRequest } from "next/server";
 import { requireEnv } from "@/lib/env";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 import { buildErrorRedirect, runAgeValidationGate } from "@/lib/auth/callback-flow";
+import { recordBothAgreements } from "@/lib/compliance/user-agreements";
+import { hashIp, getClientIp } from "@/lib/compliance/audit-log";
 import { debugLog, maskPII } from "@/lib/debug";
 import { createServiceClient } from "@/lib/supabase/service";
 import { runLinkedInOidcSyncSafe } from "@/lib/linkedin/oidc-sync";
@@ -79,19 +81,21 @@ export async function GET(request: NextRequest) {
     if (data.session) {
       debugLog("auth-callback", "Success! User:", maskPII(data.session.user.id));
 
+      // Detect new accounts (created within last 60s) — used for identity merge and ToS redirect
+      const currentUser = data.session.user;
+      const isNewOAuthAccount =
+        currentUser.created_at != null &&
+        Date.now() - new Date(currentUser.created_at).getTime() < 60_000;
+
       // --- Defensive OAuth identity merge ---
       // Guard: if Supabase created a fresh UUID for this sign-in but another UUID
       // with the same email already has org memberships, copy those memberships here.
       // This ensures continuity even if the Dashboard auto-link setting hasn't
       // yet prevented duplicate account creation.
       try {
-        const currentUser = data.session.user;
         const currentEmail = currentUser.email;
-        const isNewAccount =
-          currentUser.created_at != null &&
-          Date.now() - new Date(currentUser.created_at).getTime() < 60_000;
 
-        if (currentEmail && isNewAccount) {
+        if (currentEmail && isNewOAuthAccount) {
           const serviceClient = createServiceClient();
 
           const { data: duplicateUsers } = await serviceClient
@@ -196,6 +200,36 @@ export async function GET(request: NextRequest) {
       if (ageGateResult.kind === "redirect") {
         debugLog("auth-callback", "Age validation redirect:", ageGateResult.location);
         return NextResponse.redirect(ageGateResult.location);
+      }
+
+      // Record ToS acceptance for email signups (they accepted via checkbox at signup).
+      // No creation-time guard needed: email users confirm hours/days later, so isNewOAuthAccount
+      // would always be false. The unique constraint in user_agreements deduplicates silently.
+      if (currentUser.app_metadata?.provider === "email") {
+        const clientIp = getClientIp(request);
+        const ipHash = clientIp ? hashIp(clientIp) : null;
+        // Fire-and-forget — don't block the redirect
+        void recordBothAgreements({ userId: currentUser.id, ipHash });
+      }
+
+      // Redirect new OAuth signups to accept Terms of Service
+      if (isNewOAuthAccount && currentUser.app_metadata?.provider !== "email") {
+        const acceptTermsUrl = new URL("/auth/accept-terms", siteUrl);
+        if (redirect !== "/app") {
+          acceptTermsUrl.searchParams.set("redirect", redirect);
+        }
+        debugLog("auth-callback", "New OAuth account — redirecting to accept-terms");
+        const tosRedirect = NextResponse.redirect(acceptTermsUrl);
+        // Copy auth cookies from the session response to the new redirect
+        for (const cookie of response.cookies.getAll()) {
+          tosRedirect.cookies.set(cookie.name, cookie.value, {
+            path: "/",
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            domain: undefined,
+          });
+        }
+        return tosRedirect;
       }
 
       // Best-effort sync in the background so redirect latency stays off the login path.

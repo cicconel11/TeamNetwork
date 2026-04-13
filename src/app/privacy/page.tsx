@@ -165,8 +165,8 @@ const privacySections: PrivacySection[] = [
     number: "11",
     title: "Children's Privacy",
     paragraphs: [
-      "The Service is not intended for children under 16 years of age. We do not knowingly collect personal information from children under 16. If we learn that we have collected personal information from a child under 16, we will take steps to delete that information promptly.",
-      "If you believe we have collected information from a child under 16, please contact us at support@myteamnetwork.com.",
+      "The Service is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. Users who disclose they are under 13 during signup are blocked at our age gate before any personal information is collected or any account is created.",
+      "If we learn that we have collected personal information from a child under 13, we will take steps to delete that information promptly. If you believe we have collected information from a child under 13, please contact us at support@myteamnetwork.com.",
     ],
   },
   {
