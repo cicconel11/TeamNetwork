@@ -13,10 +13,17 @@ import { resolveOrgTimezone } from "@/lib/utils/timezone";
 
 interface EventDetailPageProps {
   params: Promise<{ orgSlug: string; eventId: string }>;
+  searchParams: Promise<{ from?: string }>;
 }
 
-export default async function CalendarEventDetailPage({ params }: EventDetailPageProps) {
+export default async function CalendarEventDetailPage({ params, searchParams }: EventDetailPageProps) {
   const { orgSlug, eventId } = await params;
+  const { from } = await searchParams;
+
+  const isRelative = (s: string) => s.startsWith("/") && !s.startsWith("//");
+  const backHref = (from && isRelative(decodeURIComponent(from)))
+    ? decodeURIComponent(from)
+    : calendarEventsPath(orgSlug);
 
   const { organization: org, isAdmin } = await getOrgContext(orgSlug);
   if (!org) return notFound();
@@ -79,7 +86,7 @@ export default async function CalendarEventDetailPage({ params }: EventDetailPag
       <EventOpenTracker organizationId={org.id} eventId={eventId} />
       <PageHeader
         title={event.title}
-        backHref={calendarEventsPath(orgSlug)}
+        backHref={backHref}
         actions={
           isAdmin && (
             <div className="flex items-center gap-2">

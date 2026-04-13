@@ -1,3 +1,5 @@
+import { calendarEventDetailPath } from "@/lib/calendar/routes";
+
 type UnifiedEventLinkTarget = {
   sourceType: "event" | "schedule" | "feed" | "class";
   id?: string;
@@ -29,6 +31,7 @@ function parsePrefixedId(value: string | undefined, prefix: "event" | "class"): 
 export function getUnifiedEventHref(
   orgSlug: string,
   event: UnifiedEventLinkTarget,
+  returnTo?: string,
 ): string | null {
   if (
     event.sourceType === "event"
@@ -42,7 +45,8 @@ export function getUnifiedEventHref(
   if (event.sourceType === "event") {
     const eventId = event.eventId ?? parsePrefixedId(event.id, "event");
     if (eventId) {
-      return `/${orgSlug}/events/${eventId}`;
+      const base = calendarEventDetailPath(orgSlug, eventId);
+      return returnTo ? `${base}?from=${encodeURIComponent(returnTo)}` : base;
     }
   }
 

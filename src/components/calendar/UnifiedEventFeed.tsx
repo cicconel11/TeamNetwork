@@ -19,6 +19,7 @@ type UnifiedEventFeedProps = {
   initialEvents?: UnifiedEvent[];
   timeZone?: string;
   timeframe?: CalendarEventTimeframe;
+  returnTo?: string;
 };
 
 type SourceFilterKey = "events" | "schedules" | "feeds" | "classes";
@@ -122,7 +123,7 @@ function getBadgeColor(badgeText: string): string {
   return "bg-muted text-muted-foreground";
 }
 
-export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone, timeframe = "upcoming" }: UnifiedEventFeedProps) {
+export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone, timeframe = "upcoming", returnTo }: UnifiedEventFeedProps) {
   const hasInitialData = initialEvents !== undefined;
   const [events, setEvents] = useState<UnifiedEvent[]>(initialEvents ?? []);
   const [loading, setLoading] = useState(!hasInitialData);
@@ -262,7 +263,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone, time
     );
 
     const className = "flex items-start gap-3 py-3.5";
-    const href = getUnifiedEventHref(orgSlug, event);
+    const href = getUnifiedEventHref(orgSlug, event, returnTo);
 
     if (href) {
       return (

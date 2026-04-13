@@ -18,6 +18,7 @@ type CalendarMonthViewProps = {
   initialEvents?: UnifiedEvent[];
   timeZone?: string;
   rightSlot?: React.ReactNode;
+  returnTo?: string;
 };
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -109,7 +110,7 @@ function getSourceColors(sourceType: string): { dot: string; text: string } {
   }
 }
 
-export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rightSlot }: CalendarMonthViewProps) {
+export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rightSlot, returnTo }: CalendarMonthViewProps) {
   const resolvedTimeZone = resolveOrgTimezone(timeZone);
   const mounted = useHasMounted();
   const [displayMonth, setDisplayMonth] = useState<CalendarMonthCursor>(() => getCalendarMonthCursor(new Date(), resolvedTimeZone));
@@ -320,7 +321,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
               <div className="flex-1 overflow-hidden space-y-0.5">
                 {visibleEvents.map((event) => {
                   const { dot, text } = getSourceColors(event.sourceType);
-                  const href = getUnifiedEventHref(orgSlug, event);
+                  const href = getUnifiedEventHref(orgSlug, event, returnTo);
 
                   if (href) {
                     return (
