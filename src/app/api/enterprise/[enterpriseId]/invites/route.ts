@@ -84,12 +84,20 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Invalid cursor" }, 400);
   }
 
-  // Get paginated invites for this enterprise
+  // Get paginated invites for this enterprise, excluding token field to prevent
+  // accidental leakage in logs/error reporting. Exclude revoked invites by default.
+  const includeRevoked = url.searchParams.get("include_revoked") === "true";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let inviteQuery = (ctx.serviceSupabase as any)
     .from("enterprise_invites")
-    .select("id, organization_id, email, role, status, created_at, expires_at, code, token, uses_remaining, revoked_at")
-    .eq("enterprise_id", ctx.enterpriseId)
+    .select("id, organization_id, role, status, created_at, expires_at, code, uses_remaining, revoked_at")
+    .eq("enterprise_id", ctx.enterpriseId);
+
+  if (!includeRevoked) {
+    inviteQuery = inviteQuery.is("revoked_at", null);
+  }
+
+  inviteQuery = inviteQuery
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit + 1);

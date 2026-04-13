@@ -73,8 +73,11 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const validInvites = invites.filter((i) => validOrgIds.has(i.organizationId));
 
-  // Process valid invites in batches of 10 to prevent connection pool exhaustion
-  const CONCURRENCY = 10;
+  // Process valid invites in batches of 5 to prevent connection pool exhaustion
+  // The advisory lock in the RPC serializes concurrent calls per enterprise anyway,
+  // so batching mainly reduces connection pressure from large bulk uploads.
+  const CONCURRENCY = 5;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results: PromiseSettledResult<any>[] = [];
   for (let i = 0; i < validInvites.length; i += CONCURRENCY) {
     const batch = validInvites.slice(i, i + CONCURRENCY);

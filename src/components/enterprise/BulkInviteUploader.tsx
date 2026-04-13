@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Button, Card, Select } from "@/components/ui";
+import { parseCSV } from "@/lib/invites/parse-bulk-csv";
 
 interface Organization {
   id: string;
@@ -16,7 +17,6 @@ interface BulkInviteUploaderProps {
 }
 
 interface ParsedRow {
-  email?: string;
   role?: string;
   organizationId?: string;
 }
@@ -31,6 +31,7 @@ export function BulkInviteUploader({
   const [defaultRole, setDefaultRole] = useState<string>("active_member");
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [truncated, setTruncated] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<{ success: number; failed: number } | null>(null);
@@ -47,32 +48,14 @@ export function BulkInviteUploader({
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      const rows = parseCSV(text);
-      setParsedRows(rows);
+      const result = parseCSV(text);
+      setParsedRows(result.rows);
+      setTruncated(result.truncated);
     };
     reader.onerror = () => {
       setError("Failed to read file");
     };
     reader.readAsText(file);
-  };
-
-  const parseCSV = (text: string): ParsedRow[] => {
-    const lines = text.split("\n").filter((line) => line.trim());
-    if (lines.length === 0) return [];
-
-    // Check if first line is a header
-    const firstLine = lines[0].toLowerCase();
-    const hasHeader = firstLine.includes("email") || firstLine.includes("role");
-    const dataLines = hasHeader ? lines.slice(1) : lines;
-
-    return dataLines.map((line) => {
-      const parts = line.split(",").map((p) => p.trim().replace(/^["']|["']$/g, ""));
-      return {
-        email: parts[0] || undefined,
-        role: parts[1] || undefined,
-        organizationId: parts[2] || undefined,
-      };
-    }).filter((row) => row.email);
   };
 
   const handleUpload = async () => {
@@ -93,7 +76,6 @@ export function BulkInviteUploader({
       const invites = parsedRows.map((row) => ({
         organizationId: row.organizationId || selectedOrg,
         role: row.role || defaultRole,
-        // Email is stored for tracking but invites are code-based
       }));
 
       const res = await fetch(`/api/enterprise/${enterpriseId}/invites/bulk`, {
@@ -123,6 +105,7 @@ export function BulkInviteUploader({
   const clearFile = () => {
     setFile(null);
     setParsedRows([]);
+    setTruncated(false);
     setResults(null);
     setError(null);
     if (fileInputRef.current) {
@@ -146,13 +129,19 @@ export function BulkInviteUploader({
       <h3 className="font-semibold text-foreground mb-4">Bulk Import Invites</h3>
 
       <p className="text-sm text-muted-foreground mb-4">
-        Upload a CSV file to create multiple invites at once. Each row creates one invite code.
-        Format: <code className="bg-muted px-1 rounded">email,role,organization_id</code> (role and org are optional).
+        Upload a CSV file to create multiple invites at once. Each row creates one generic, shareable invite code.
+        Format: <code className="bg-muted px-1 rounded">role,organization_id</code> (both fields required). One row per invite.
       </p>
 
       {error && (
         <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {error}
+        </div>
+      )}
+
+      {truncated && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
+          Only the first 100 rows will be uploaded. Split your file to upload more.
         </div>
       )}
 
@@ -218,16 +207,16 @@ export function BulkInviteUploader({
             <thead className="bg-muted">
               <tr>
                 <th className="px-3 py-2 text-left text-muted-foreground">#</th>
-                <th className="px-3 py-2 text-left text-muted-foreground">Email</th>
                 <th className="px-3 py-2 text-left text-muted-foreground">Role</th>
+                <th className="px-3 py-2 text-left text-muted-foreground">Organization ID</th>
               </tr>
             </thead>
             <tbody>
               {parsedRows.slice(0, 10).map((row, idx) => (
                 <tr key={idx} className="border-t border-border">
                   <td className="px-3 py-2 text-muted-foreground">{idx + 1}</td>
-                  <td className="px-3 py-2">{row.email}</td>
                   <td className="px-3 py-2">{row.role || defaultRole}</td>
+                  <td className="px-3 py-2 text-xs">{row.organizationId}</td>
                 </tr>
               ))}
               {parsedRows.length > 10 && (

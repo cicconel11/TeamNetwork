@@ -8,6 +8,12 @@
  *
  * This provides per-instance burst protection, not distributed rate limiting.
  * For strict enforcement, migrate to Vercel KV or an external Redis store.
+ *
+ * NOTE — Database-level correctness:
+ * For the enterprise invites system, database constraints (advisory locks,
+ * CHECK constraints) provide the real enforcement layer. The rate limiter
+ * slows down attack attempts per instance, but the database prevents
+ * exceeding the 12-admin cap and alumni quota even under parallel creation.
  */
 import { NextResponse, type NextRequest } from "next/server";
 
