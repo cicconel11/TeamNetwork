@@ -46,6 +46,13 @@ const SURFACE_KEYWORDS: Record<Exclude<AiSurface, "general">, readonly string[]>
     "graduated",
     "graduate",
     "grad",
+    "message",
+    "messaging",
+    "chat",
+    "dm",
+    "text",
+    "reach out",
+    "contact",
   ],
   analytics: ["analytics", "metric", "metrics", "donation", "donations", "fundraising", "revenue", "expense", "expenses", "budget", "budgets", "financial", "finance", "donor", "donors"],
   events: [
