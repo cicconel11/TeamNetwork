@@ -18,7 +18,7 @@ const canViewAnnouncement = (announcement: Announcement, ctx: ViewerContext) => 
       return true;
     case "members":
     case "active_members":
-      return ctx.role === "active_member";
+      return ctx.role === "active_member" || ctx.role === "parent";
     case "alumni":
       return ctx.role === "alumni" || ctx.role === "parent";
     case "individuals":

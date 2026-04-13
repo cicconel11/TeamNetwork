@@ -40,16 +40,16 @@ describe("filterAnnouncementsForUser — parent role", () => {
     assert.equal(result.length, 1);
   });
 
-  it("parent does NOT see 'members' audience announcements", () => {
+  it("parent sees 'members' audience announcements", () => {
     const announcements = [makeAnnouncement("3", "members")];
     const result = filterAnnouncementsForUser(announcements, parentCtx);
-    assert.equal(result.length, 0);
+    assert.equal(result.length, 1);
   });
 
-  it("parent does NOT see 'active_members' audience announcements", () => {
+  it("parent sees 'active_members' audience announcements", () => {
     const announcements = [makeAnnouncement("4", "active_members")];
     const result = filterAnnouncementsForUser(announcements, parentCtx);
-    assert.equal(result.length, 0);
+    assert.equal(result.length, 1);
   });
 
   it("parent sees 'individuals' announcement if their userId is in the list", () => {
