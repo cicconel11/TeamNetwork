@@ -151,7 +151,7 @@ export function DevPanel({
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div className="fixed bottom-4 left-4 z-50">
       {/* Toggle button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
@@ -164,7 +164,7 @@ export function DevPanel({
 
       {/* Expanded panel */}
       {isExpanded && (
-        <div className="absolute bottom-12 right-0 w-96 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl text-white text-xs overflow-hidden">
+        <div className="absolute bottom-12 left-0 w-96 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl text-white text-xs overflow-hidden">
           {/* Header */}
           <div className="bg-purple-600 px-4 py-2 flex items-center justify-between">
             <span className="font-semibold">Dev Admin Panel</span>
