@@ -25,11 +25,6 @@ DECLARE
   v_user_id uuid;
   v_admin_count integer;
 BEGIN
-  -- Serialize concurrent invite creation per enterprise to prevent race conditions
-  -- on admin cap and alumni quota checks. This lock is released automatically at
-  -- transaction end and ensures atomicity of count-check + insert operations.
-  PERFORM pg_advisory_xact_lock(hashtext(p_enterprise_id::text));
-
   -- Get current user
   v_user_id := auth.uid();
   IF v_user_id IS NULL THEN
@@ -66,6 +61,12 @@ BEGIN
   IF p_organization_id IS NULL AND p_role = 'active_member' THEN
     RAISE EXCEPTION 'Enterprise-wide invites require a specific role (admin or alumni). Members must join a specific organization.';
   END IF;
+
+  -- Serialize concurrent invite creation per enterprise to prevent race conditions
+  -- on admin cap and alumni quota checks. This lock is released automatically at
+  -- transaction end and ensures atomicity of count-check + insert operations.
+  -- Placed after auth/authz checks to avoid contention from unauthorized callers.
+  PERFORM pg_advisory_xact_lock(hashtext(p_enterprise_id::text));
 
   -- Enforce enterprise admin cap (12 max across all orgs)
   IF p_role = 'admin' THEN
