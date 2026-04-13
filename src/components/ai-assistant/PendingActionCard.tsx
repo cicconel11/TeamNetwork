@@ -44,6 +44,8 @@ export function PendingActionCard({
   const description = getValue(payload, "description");
   const body = getValue(payload, "body");
   const threadTitle = getValue(payload, "thread_title");
+  const recipientDisplayName = getValue(payload, "recipient_display_name");
+  const existingChatGroupId = getValue(payload, "existing_chat_group_id");
   const mediaCount = getArrayLength(payload, "mediaIds");
 
   return (
@@ -66,6 +68,22 @@ export function PendingActionCard({
               ) : null}
               {mediaCount > 0 ? (
                 <p><span className="font-medium">Attachments:</span> {mediaCount}</p>
+              ) : null}
+            </>
+          ) : action.actionType === "send_chat_message" ? (
+            <>
+              {recipientDisplayName ? (
+                <p><span className="font-medium">Recipient:</span> {recipientDisplayName}</p>
+              ) : null}
+              <p>
+                <span className="font-medium">Conversation:</span>{" "}
+                {existingChatGroupId ? "Reuse existing 1:1 chat" : "Create new 1:1 chat"}
+              </p>
+              {body ? (
+                <div>
+                  <p className="font-medium text-foreground">Message</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{body}</p>
+                </div>
               ) : null}
             </>
           ) : action.actionType === "create_discussion_reply" ? (

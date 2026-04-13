@@ -1025,6 +1025,173 @@ test("prepare_discussion_reply creates a pending confirmation action when comple
   });
 });
 
+test("prepare_chat_message returns missing_fields when the body is missing", async () => {
+  const recipientMemberId = "11111111-1111-4111-8111-111111111111";
+  const chatStub = createToolSupabaseStub({
+    members: {
+      select: {
+        data: [
+          {
+            id: recipientMemberId,
+            organization_id: ORG_ID,
+            user_id: "22222222-2222-4222-8222-222222222222",
+            status: "active",
+            deleted_at: null,
+            first_name: "Jason",
+            last_name: "Leonard",
+            email: "jason@example.com",
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  const chatCtx = { ...makeCtx(chatStub as any), threadId: "assistant-thread-chat" };
+
+  const result = expectOk(
+    await executeToolCall(chatCtx, {
+      name: "prepare_chat_message",
+      args: {
+        person_query: "Jason Leonard",
+      },
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "missing_fields",
+    missing_fields: ["body"],
+    draft: {
+      person_query: "Jason Leonard",
+      recipient_member_id: recipientMemberId,
+    },
+  });
+});
+
+test("prepare_chat_message creates a pending confirmation action when complete", async () => {
+  const recipientMemberId = "11111111-1111-4111-8111-111111111111";
+  const recipientUserId = "22222222-2222-4222-8222-222222222222";
+  const existingChatGroupId = "33333333-3333-4333-8333-333333333333";
+  const chatStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: { data: { slug: "upenn-sprint-football" }, error: null },
+    },
+    members: {
+      select: {
+        data: [
+          {
+            id: recipientMemberId,
+            organization_id: ORG_ID,
+            user_id: recipientUserId,
+            status: "active",
+            deleted_at: null,
+            first_name: "Jason",
+            last_name: "Leonard",
+            email: "jason@example.com",
+          },
+        ],
+        error: null,
+      },
+    },
+    chat_group_members: {
+      select: {
+        data: [
+          {
+            chat_group_id: existingChatGroupId,
+            organization_id: ORG_ID,
+            user_id: USER_ID,
+            removed_at: null,
+          },
+          {
+            chat_group_id: existingChatGroupId,
+            organization_id: ORG_ID,
+            user_id: recipientUserId,
+            removed_at: null,
+          },
+        ],
+        error: null,
+      },
+    },
+    chat_groups: {
+      select: {
+        data: [
+          {
+            id: existingChatGroupId,
+            organization_id: ORG_ID,
+            deleted_at: null,
+            updated_at: "2026-04-01T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    ai_pending_actions: {
+      single: {
+        data: {
+          id: "pending-chat-123",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "assistant-thread-chat",
+          action_type: "send_chat_message",
+          payload: {
+            recipient_member_id: recipientMemberId,
+            recipient_user_id: recipientUserId,
+            recipient_display_name: "Jason Leonard",
+            existing_chat_group_id: existingChatGroupId,
+            body: "Can you join the alumni panel next Thursday?",
+            orgSlug: "upenn-sprint-football",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+
+  const chatCtx = { ...makeCtx(chatStub as any), threadId: "assistant-thread-chat" };
+
+  const result = expectOk(
+    await executeToolCall(chatCtx, {
+      name: "prepare_chat_message",
+      args: {
+        person_query: "Jason Leonard",
+        body: "Can you join the alumni panel next Thursday?",
+      },
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "needs_confirmation",
+    draft: {
+      person_query: "Jason Leonard",
+      recipient_member_id: recipientMemberId,
+      body: "Can you join the alumni panel next Thursday?",
+    },
+    pending_action: {
+      id: "pending-chat-123",
+      action_type: "send_chat_message",
+      payload: {
+        recipient_member_id: recipientMemberId,
+        recipient_user_id: recipientUserId,
+        recipient_display_name: "Jason Leonard",
+        existing_chat_group_id: existingChatGroupId,
+        body: "Can you join the alumni panel next Thursday?",
+        orgSlug: "upenn-sprint-football",
+      },
+      expires_at: "2099-01-01T00:00:00.000Z",
+      summary: {
+        title: "Review chat message",
+        description: "Confirm the drafted chat message before it is sent.",
+      },
+    },
+  });
+});
+
 test("prepare_discussion_thread fails closed when organization slug lookup errors", async () => {
   const discussionStub = createToolSupabaseStub({
     organizations: {

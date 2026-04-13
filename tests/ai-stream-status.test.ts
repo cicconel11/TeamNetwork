@@ -43,6 +43,7 @@ test("formatToolStatusLabel maps known tools and falls back safely", () => {
   assert.equal(formatToolStatusLabel("list_job_postings"), "Looking up job postings...");
   assert.equal(formatToolStatusLabel("prepare_announcement"), "Preparing announcement...");
   assert.equal(formatToolStatusLabel("prepare_job_posting"), "Preparing job posting...");
+  assert.equal(formatToolStatusLabel("prepare_chat_message"), "Preparing chat message...");
   assert.equal(formatToolStatusLabel("prepare_discussion_reply"), "Preparing discussion reply...");
   assert.equal(formatToolStatusLabel("prepare_discussion_thread"), "Preparing discussion thread...");
   assert.equal(formatToolStatusLabel("get_org_stats"), "Checking organization stats...");
