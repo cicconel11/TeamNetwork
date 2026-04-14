@@ -37,7 +37,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     .from("mentorship_pairs")
     .select("mentor_user_id, mentee_user_id")
     .eq("id", pairId)
-    .eq("deleted_at", null)
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (pairError) {
@@ -72,7 +73,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     .from("mentorship_tasks")
     .select("*")
     .eq("pair_id", pairId)
-    .eq("deleted_at", null)
+    .is("deleted_at", null)
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 
@@ -122,7 +123,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     .from("mentorship_pairs")
     .select("id, mentor_user_id, organization_id")
     .eq("id", body.pair_id)
-    .eq("deleted_at", null)
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (pairError) {

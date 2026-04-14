@@ -36,6 +36,7 @@ interface MentorshipMeetingsTabProps {
   orgId: string;
   orgSlug: string;
   currentUserId: string;
+  orgTimezone: string;
 }
 
 function formatDateTime(dateTimeStr: string, orgTimezone?: string): string {
@@ -60,6 +61,7 @@ export function MentorshipMeetingsTab({
   isAdmin,
   orgId,
   orgSlug,
+  orgTimezone,
 }: MentorshipMeetingsTabProps) {
   const [upcoming, setUpcoming] = useState<MentorshipMeeting[]>(initialUpcoming);
   const [past, setPast] = useState<MentorshipMeeting[]>(initialPast);
@@ -185,7 +187,7 @@ export function MentorshipMeetingsTab({
               <MentorshipScheduleMeetingForm
                 pairId={selectedPairId}
                 orgId={orgId}
-                orgTimezone="UTC"
+                orgTimezone={orgTimezone}
                 onMeetingCreated={handleMeetingCreated}
                 onCancel={() => setShowForm(false)}
               />
@@ -228,7 +230,7 @@ export function MentorshipMeetingsTab({
                         </h4>
                         <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-2">
                           <span>📌</span>
-                          {formatDateTime(meeting.scheduled_at)}
+                          {formatDateTime(meeting.scheduled_at, orgTimezone)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
                           <span>⏱</span>

@@ -28,7 +28,7 @@ export function MentorshipTaskForm({
 
     // Validate title
     if (!title.trim()) {
-      showFeedback("error", "Title is required");
+      showFeedback("Title is required", "error");
       return;
     }
 
@@ -53,18 +53,18 @@ export function MentorshipTaskForm({
       const result = await response.json();
 
       if (!response.ok) {
-        showFeedback("error", result.error || "Failed to create task");
+        showFeedback(result.error || "Failed to create task", "error");
         setIsSubmitting(false);
         return;
       }
 
-      showFeedback("success", "Task created");
+      showFeedback("Task created", "success");
       onTaskCreated(result.task);
       setTitle("");
       setDescription("");
       setDueDate("");
     } catch {
-      showFeedback("error", "An unexpected error occurred");
+      showFeedback("An unexpected error occurred", "error");
       setIsSubmitting(false);
     }
   };

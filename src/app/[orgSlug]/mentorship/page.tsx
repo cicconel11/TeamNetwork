@@ -15,6 +15,7 @@ import type { NavConfig } from "@/lib/navigation/nav-items";
 import { getMentorshipSectionOrder } from "@/lib/mentorship/presentation";
 import { parseMentorshipTab } from "@/lib/mentorship/view-state";
 import { baseSchemas } from "@/lib/schemas";
+import { resolveOrgTimezone } from "@/lib/utils/timezone";
 
 interface MentorshipPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -317,6 +318,8 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
     />
   );
 
+  const orgTimezone = resolveOrgTimezone(orgCtx.organization.timezone);
+
   const meetingsContent = (
     <MentorshipMeetingsTab
       initialUpcoming={upcomingMeetings}
@@ -328,6 +331,7 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
       orgId={orgId}
       orgSlug={orgSlug}
       currentUserId={currentUserId}
+      orgTimezone={orgTimezone}
     />
   );
 

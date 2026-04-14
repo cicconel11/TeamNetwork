@@ -10,7 +10,7 @@ import { createMeetingSchema, type CreateMeeting } from "@/lib/mentorship/schema
 import { createZoomMeeting } from "@/lib/zoom";
 import { createMentorshipMeetingCalendarEvent } from "@/lib/mentorship/calendar";
 import { getValidAccessToken } from "@/lib/google/oauth";
-import { encryptToken } from "@/lib/crypto/token-encryption";
+import { encryptToken, decryptToken } from "@/lib/crypto/token-encryption";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -119,10 +119,25 @@ export async function GET(req: Request, { params }: RouteParams) {
     );
   }
 
-  const upcoming = (meetings || []).filter(
+  // Decrypt meeting links
+  const decryptionKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
+  const decryptedMeetings = (meetings || []).map((m) => ({
+    ...m,
+    meeting_link: m.meeting_link && decryptionKey
+      ? (() => {
+          try {
+            return decryptToken(m.meeting_link, decryptionKey);
+          } catch {
+            return null;
+          }
+        })()
+      : null,
+  }));
+
+  const upcoming = decryptedMeetings.filter(
     (m) => new Date(m.scheduled_end_at) > new Date(now)
   );
-  const past = (meetings || []).filter(
+  const past = decryptedMeetings.filter(
     (m) => new Date(m.scheduled_end_at) <= new Date(now)
   );
 

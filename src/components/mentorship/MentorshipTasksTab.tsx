@@ -94,9 +94,9 @@ export function MentorshipTasksTab({
 
   const [optimisticTasks, updateOptimistic] = useOptimistic(
     tasks,
-    (state, taskId: string, newStatus: "todo" | "in_progress" | "done") => {
+    (state, action: { taskId: string; newStatus: "todo" | "in_progress" | "done" }) => {
       return state.map((t) =>
-        t.id === taskId ? { ...t, status: newStatus } : t
+        t.id === action.taskId ? { ...t, status: action.newStatus } : t
       );
     }
   );
@@ -115,7 +115,7 @@ export function MentorshipTasksTab({
       );
 
       if (!res.ok) {
-        showFeedback("error", "Failed to load tasks");
+        showFeedback("Failed to load tasks", "error");
         return;
       }
 
@@ -123,7 +123,7 @@ export function MentorshipTasksTab({
       setTasks(Array.isArray(data) ? data : data.tasks || []);
     } catch (err) {
       if (!(err instanceof Error && err.name === "AbortError")) {
-        showFeedback("error", "An error occurred while loading tasks");
+        showFeedback("An error occurred while loading tasks", "error");
       }
     }
   }
@@ -145,7 +145,7 @@ export function MentorshipTasksTab({
     setPatchingIds((prev) => new Set(prev).add(taskId));
 
     startTransition(async () => {
-      updateOptimistic(taskId, newStatus);
+      updateOptimistic({ taskId, newStatus });
 
       try {
         const res = await fetch(
@@ -158,7 +158,7 @@ export function MentorshipTasksTab({
         );
 
         if (!res.ok) {
-          showFeedback("error", "Failed to update task status");
+          showFeedback("Failed to update task status", "error");
           // useOptimistic auto-reverts on error
           setTasks((prev) =>
             prev.map((t) =>
@@ -167,7 +167,7 @@ export function MentorshipTasksTab({
           );
         }
       } catch {
-        showFeedback("error", "An error occurred while updating the task");
+        showFeedback("An error occurred while updating the task", "error");
         setTasks((prev) =>
           prev.map((t) =>
             t.id === taskId ? { ...t, status: currentStatus } : t
@@ -196,14 +196,14 @@ export function MentorshipTasksTab({
       );
 
       if (!res.ok) {
-        showFeedback("error", "Failed to delete task");
+        showFeedback("Failed to delete task", "error");
         return;
       }
 
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      showFeedback("success", "Task deleted");
+      showFeedback("Task deleted", "success");
     } catch {
-      showFeedback("error", "An error occurred while deleting the task");
+      showFeedback("An error occurred while deleting the task", "error");
     }
   }
 
@@ -211,11 +211,12 @@ export function MentorshipTasksTab({
   function handleTaskCreated(newTask: MentorshipTask) {
     setTasks((prev) => [newTask, ...prev]);
     setShowTaskForm(false);
-    showFeedback("success", "Task created");
+    showFeedback("Task created", "success");
   }
 
-  // Filter tasks based on status filter
+  // Filter tasks based on pair and status
   const filteredTasks = optimisticTasks.filter((task) => {
+    if (task.pair_id !== selectedPairId) return false;
     if (statusFilter === "all") return true;
     return task.status === statusFilter;
   });

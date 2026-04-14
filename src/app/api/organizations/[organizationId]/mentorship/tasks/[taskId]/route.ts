@@ -60,7 +60,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     .from("mentorship_tasks")
     .select("id, pair_id, title, description, due_date, status, created_by, organization_id")
     .eq("id", taskId)
-    .eq("deleted_at", null)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (taskError) {
@@ -72,11 +72,17 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 
+  // Verify task belongs to the requested organization
+  if (task.organization_id !== organizationId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   // Fetch pair to determine mentor/mentee relationship
   const { data: pair, error: pairError } = await serviceSupabase
     .from("mentorship_pairs")
     .select("id, mentor_user_id, mentee_user_id, deleted_at")
     .eq("id", task.pair_id)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (pairError) {
@@ -200,9 +206,9 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   // Fetch existing task and associated pair
   const { data: task, error: taskError } = await serviceSupabase
     .from("mentorship_tasks")
-    .select("id, pair_id")
+    .select("id, pair_id, organization_id")
     .eq("id", taskId)
-    .eq("deleted_at", null)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (taskError) {
@@ -214,11 +220,17 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 
+  // Verify task belongs to the requested organization
+  if (task.organization_id !== organizationId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   // Fetch pair to verify caller is mentor
   const { data: pair, error: pairError } = await serviceSupabase
     .from("mentorship_pairs")
     .select("id, mentor_user_id")
     .eq("id", task.pair_id)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (pairError) {
