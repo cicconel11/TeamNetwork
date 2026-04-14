@@ -836,6 +836,10 @@
   "mentorship": {
     "noPairs": "No mentorship pairs yet",
     "pairsWillAppear": "Pairs will appear here once created.",
+    "noActivePair": "No active mentorship pair selected",
+    "selectOrCreatePair": "Select a mentorship pair or create one to start tracking tasks.",
+    "noTasks": "No tasks yet",
+    "tasksWillAppear": "Tasks will appear here once they are created.",
     "willingToHelp": "Willing to Help",
     "directoryDesc": "Connect with alumni who are available to mentor and share their expertise",
     "industry": "Industry",

@@ -26,6 +26,10 @@ function getNestedValue(record: Record<string, unknown>, keyPath: string): unkno
 
 test("all supported locales provide the mentorship translations used by the revamp", () => {
   const requiredKeys = [
+    "mentorship.noActivePair",
+    "mentorship.selectOrCreatePair",
+    "mentorship.noTasks",
+    "mentorship.tasksWillAppear",
     "mentorship.editorialStrapline",
     "mentorship.mentorSelectLabel",
     "mentorship.menteeSelectLabel",

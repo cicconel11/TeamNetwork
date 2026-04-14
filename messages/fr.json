@@ -836,6 +836,10 @@
   "mentorship": {
     "noPairs": "Aucun binome de mentorat pour le moment",
     "pairsWillAppear": "Les binomes apparaitront ici une fois crees.",
+    "noActivePair": "Aucun binome de mentorat actif selectionne",
+    "selectOrCreatePair": "Selectionnez un binome de mentorat ou creez-en un pour commencer a suivre des taches.",
+    "noTasks": "Aucune tache pour le moment",
+    "tasksWillAppear": "Les taches apparaitront ici une fois creees.",
     "willingToHelp": "Pret a aider",
     "directoryDesc": "Connectez-vous avec des anciens disponibles pour le mentorat et le partage de leur expertise",
     "industry": "Secteur",
