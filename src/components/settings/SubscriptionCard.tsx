@@ -31,13 +31,20 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
   const [isUpdatingPlan, setIsUpdatingPlan] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
   const [planSuccess, setPlanSuccess] = useState<string | null>(null);
+  const isEnterpriseManaged = quota?.isEnterpriseManaged === true || quota?.status === "enterprise_managed";
+  const currentPlanLabel = isEnterpriseManaged ? "Enterprise pooled quota" : (quota?.bucket || "none");
 
   // Sync bucket when quota loads
   useEffect(() => {
-    if (quota?.bucket) setSelectedBucket(quota.bucket);
-  }, [quota?.bucket]);
+    if (quota?.bucket && !isEnterpriseManaged) setSelectedBucket(quota.bucket);
+  }, [isEnterpriseManaged, quota?.bucket]);
 
   const handleUpdatePlan = async () => {
+    if (isEnterpriseManaged) {
+      setPlanError("This organization uses enterprise-managed billing. Update alumni capacity from the enterprise billing page.");
+      return;
+    }
+
     const targetLimit = ALUMNI_LIMITS[selectedBucket];
     if (
       quota &&
@@ -110,9 +117,9 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
         <div>
           <p className="text-sm text-muted-foreground">{tSettings("subscription.currentPlan")}</p>
           <p className="text-lg font-semibold text-foreground">
-            {isLoadingQuota ? tCommon("loading") : quota?.bucket || "none"}
+            {isLoadingQuota ? tCommon("loading") : currentPlanLabel}
           </p>
-          {!quota?.stripeSubscriptionId && (
+          {!isEnterpriseManaged && !quota?.stripeSubscriptionId && (
             <p className="text-xs text-amber-600">{tSettings("subscription.billingNotConnected")}</p>
           )}
         </div>
@@ -144,13 +151,19 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
         </div>
       )}
 
+      {isEnterpriseManaged && (
+        <div className="mt-4 p-3 rounded-xl bg-muted/60 text-sm text-muted-foreground">
+          Alumni capacity is pooled across the enterprise. Manage billing and bucket changes from the enterprise dashboard.
+        </div>
+      )}
+
       <div className="mt-4 grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
         <div className="space-y-2">
           <Select
             label={tSettings("subscription.alumniPlan")}
             value={selectedBucket}
             onChange={(e) => setSelectedBucket(e.target.value as AlumniBucket)}
-            disabled={isLoadingQuota}
+            disabled={isLoadingQuota || isEnterpriseManaged}
             options={BUCKET_OPTIONS.map((option) => ({
               ...option,
               disabled:
@@ -161,7 +174,9 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
             }))}
           />
           <p className="text-xs text-muted-foreground">
-            {quota?.stripeSubscriptionId && quota?.stripeCustomerId
+            {isEnterpriseManaged
+              ? "Enterprise-managed organizations inherit pooled alumni capacity."
+              : quota?.stripeSubscriptionId && quota?.stripeCustomerId
               ? tSettings("subscription.downgradeDisabled")
               : tSettings("subscription.selectPlan")}
           </p>
@@ -171,7 +186,7 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
             label={tSettings("subscription.billingInterval")}
             value={selectedInterval}
             onChange={(e) => setSelectedInterval(e.target.value as "month" | "year")}
-            disabled={isLoadingQuota}
+            disabled={isLoadingQuota || isEnterpriseManaged}
             options={[
               { value: "month", label: tSettings("subscription.monthly") },
               { value: "year", label: tSettings("subscription.yearly") },
@@ -182,7 +197,7 @@ export function SubscriptionCard({ orgId, quota, isLoadingQuota, onQuotaRefresh 
           <Button
             onClick={handleUpdatePlan}
             isLoading={isUpdatingPlan}
-            disabled={isLoadingQuota || !quota || (selectedBucket === quota.bucket && !!quota.stripeSubscriptionId)}
+            disabled={isLoadingQuota || !quota || isEnterpriseManaged || (selectedBucket === quota.bucket && !!quota.stripeSubscriptionId)}
           >
             {tSettings("subscription.updatePlan")}
           </Button>

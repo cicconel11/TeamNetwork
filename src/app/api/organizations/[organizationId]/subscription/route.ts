@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getAlumniLimit, normalizeBucket } from "@/lib/alumni-quota";
+import { getAlumniCapacitySnapshot } from "@/lib/alumni/capacity";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
@@ -271,6 +272,7 @@ function buildQuotaResponse(params: {
   alumniLimit: number | null;
   alumniCount: number;
   status: string;
+  isEnterpriseManaged?: boolean;
   stripeSubscriptionId: string | null;
   stripeCustomerId: string | null;
   currentPeriodEnd: string | null;
@@ -283,6 +285,7 @@ function buildQuotaResponse(params: {
     alumniCount: params.alumniCount,
     remaining,
     status: params.status,
+    isEnterpriseManaged: params.isEnterpriseManaged ?? false,
   };
   if (params.includeStripeDetails === true) {
     payload.stripeSubscriptionId = params.stripeSubscriptionId;
@@ -331,6 +334,29 @@ export async function GET(req: Request, { params }: RouteParams) {
   );
   const baseInterval: SubscriptionInterval =
     sub?.base_plan_interval === "year" ? "year" : "month";
+
+  // Enterprise-managed orgs pool capacity across the enterprise. Their
+  // organization_subscriptions.alumni_bucket is "none" (billing lives on the
+  // enterprise subscription), so return pooled limit + pooled count instead.
+  if ((sub?.status as string | undefined) === "enterprise_managed") {
+    try {
+      const snap = await getAlumniCapacitySnapshot(organizationId, serviceSupabase);
+      return buildQuotaResponse({
+        bucket,
+        alumniLimit: snap.alumniLimit,
+        alumniCount: snap.currentAlumniCount,
+        status: "enterprise_managed",
+        isEnterpriseManaged: true,
+        stripeSubscriptionId: null,
+        stripeCustomerId: null,
+        currentPeriodEnd: null,
+        includeStripeDetails: false,
+      }, respond);
+    } catch (e) {
+      console.error("[subscription] enterprise capacity snapshot failed", e);
+      return respond({ error: "Unable to load enterprise capacity" }, 500);
+    }
+  }
 
   // Non-admin callers: return cached DB state only (no Stripe API calls or backfill writes)
   if (!isAdmin) {

@@ -6,6 +6,7 @@ export interface SubscriptionInfo {
   alumniCount: number;
   remaining: number | null;
   status: string;
+  isEnterpriseManaged: boolean;
   stripeSubscriptionId: string | null;
   stripeCustomerId: string | null;
   currentPeriodEnd: string | null;

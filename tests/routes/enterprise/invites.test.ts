@@ -243,6 +243,31 @@ test("RPC 'Alumni quota reached' error is forwarded to client", () => {
   assert.strictEqual(result.body.error, "Alumni quota reached for this enterprise");
 });
 
+test("org-specific alumni invite succeeds for an enterprise-managed organization", () => {
+  const organizationId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+  const result = simulateCreateInvite({
+    organizationId,
+    role: "alumni",
+    orgBelongsToEnterprise: true,
+    rpcResult: {
+      data: {
+        id: "invite-1",
+        code: "AIM123",
+        token: "token-1",
+        organization_id: organizationId,
+        role: "alumni",
+      },
+      error: null,
+    },
+  });
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.body.role, "alumni");
+  assert.strictEqual(result.body.organization_id, organizationId);
+  assert.strictEqual(result.body.organization_name, "Test Org");
+  assert.strictEqual(result.body.is_enterprise_wide, false);
+});
+
 test("RPC 'Enterprise admin limit reached' error is forwarded to client", () => {
   const result = simulateCreateInvite({
     role: "admin",

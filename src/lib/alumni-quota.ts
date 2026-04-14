@@ -27,9 +27,21 @@ interface OrgWithEnterprise {
   enterprise_id: string | null;
 }
 
+interface OrgSubscriptionRow {
+  alumni_bucket: string | null;
+  status: string | null;
+}
+
 // Type for enterprise subscription (until types are regenerated)
 interface EnterpriseSubscriptionRow {
   alumni_bucket_quantity: number;
+}
+
+export function shouldUseEnterpriseAlumniQuota(
+  enterpriseId: string | null | undefined,
+  subscriptionStatus: string | null | undefined,
+) {
+  return Boolean(enterpriseId && subscriptionStatus === "enterprise_managed");
 }
 
 /**
@@ -40,14 +52,24 @@ interface EnterpriseSubscriptionRow {
 export async function isOrgEnterpriseManaged(orgId: string): Promise<boolean> {
   const supabase = createServiceClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org } = await (supabase as any)
-    .from("organizations")
-    .select("enterprise_id")
-    .eq("id", orgId)
-    .single() as { data: OrgWithEnterprise | null };
+  const [{ data: org }, { data: orgSub }] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("organizations")
+      .select("enterprise_id")
+      .eq("id", orgId)
+      .single() as Promise<{ data: OrgWithEnterprise | null }>,
+    supabase
+      .from("organization_subscriptions")
+      .select("status")
+      .eq("organization_id", orgId)
+      .maybeSingle() as Promise<{ data: Pick<OrgSubscriptionRow, "status"> | null }>,
+  ]);
 
-  return org?.enterprise_id != null;
+  return shouldUseEnterpriseAlumniQuota(
+    org?.enterprise_id ?? null,
+    orgSub?.status ?? null,
+  );
 }
 
 /**
@@ -60,20 +82,26 @@ export async function isOrgEnterpriseManaged(orgId: string): Promise<boolean> {
 export async function getAlumniLimitForOrg(orgId: string): Promise<number | null> {
   const supabase = createServiceClient();
 
-  // Get org with enterprise info
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org } = await (supabase as any)
-    .from("organizations")
-    .select("enterprise_id")
-    .eq("id", orgId)
-    .single() as { data: OrgWithEnterprise | null };
+  const [{ data: org }, { data: orgSub }] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("organizations")
+      .select("enterprise_id")
+      .eq("id", orgId)
+      .single() as Promise<{ data: OrgWithEnterprise | null }>,
+    supabase
+      .from("organization_subscriptions")
+      .select("alumni_bucket, status")
+      .eq("organization_id", orgId)
+      .maybeSingle() as Promise<{ data: OrgSubscriptionRow | null }>,
+  ]);
 
   if (!org) {
     return 0;
   }
 
-  // If org belongs to an enterprise, use enterprise pooled limit
-  if (org.enterprise_id) {
+  // If org is enterprise-managed, use enterprise pooled limit.
+  if (shouldUseEnterpriseAlumniQuota(org.enterprise_id, orgSub?.status ?? null)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: subscription } = await (supabase as any)
       .from("enterprise_subscriptions")
@@ -90,12 +118,6 @@ export async function getAlumniLimitForOrg(orgId: string): Promise<number | null
   }
 
   // Otherwise, use org's individual subscription
-  const { data: orgSub } = await supabase
-    .from("organization_subscriptions")
-    .select("alumni_bucket")
-    .eq("organization_id", orgId)
-    .maybeSingle() as { data: { alumni_bucket: string | null } | null };
-
   if (!orgSub) {
     return 0;
   }

@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { getAlumniLimitForOrg } from "@/lib/alumni-quota";
+import { getAlumniLimitForOrg, shouldUseEnterpriseAlumniQuota } from "@/lib/alumni-quota";
 import { getLinkedInImportCapacitySnapshot } from "@/lib/alumni/linkedin-import";
 
 interface EnterpriseAlumniCountsQuery {
@@ -24,17 +24,33 @@ export async function getAlumniCapacitySnapshot(
   return getLinkedInImportCapacitySnapshot(organizationId, {
     getAlumniLimitForOrg,
     async getEnterpriseIdForOrg(orgId) {
-      const { data: organization, error } = await serviceSupabase
-        .from("organizations")
-        .select("enterprise_id")
-        .eq("id", orgId)
-        .maybeSingle();
+      const [{ data: organization, error: orgError }, { data: subscription, error: subError }] = await Promise.all([
+        serviceSupabase
+          .from("organizations")
+          .select("enterprise_id")
+          .eq("id", orgId)
+          .maybeSingle(),
+        serviceSupabase
+          .from("organization_subscriptions")
+          .select("status")
+          .eq("organization_id", orgId)
+          .maybeSingle(),
+      ]);
 
-      if (error) {
-        throw error;
+      if (orgError) {
+        throw orgError;
       }
 
-      return organization?.enterprise_id ?? null;
+      if (subError) {
+        throw subError;
+      }
+
+      return shouldUseEnterpriseAlumniQuota(
+        organization?.enterprise_id ?? null,
+        subscription?.status ?? null,
+      )
+        ? (organization?.enterprise_id ?? null)
+        : null;
     },
     async countAlumniForOrg(orgId) {
       const { count, error } = await serviceSupabase

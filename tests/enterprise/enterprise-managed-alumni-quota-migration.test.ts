@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 
 const migrationFile = "../../supabase/migrations/20261014000000_fix_enterprise_managed_alumni_quota.sql";
 const migration = readFileSync(new URL(migrationFile, import.meta.url), "utf8");
+const alumniQuotaSource = readFileSync(new URL("../../src/lib/alumni-quota.ts", import.meta.url), "utf8");
+const alumniCapacitySource = readFileSync(new URL("../../src/lib/alumni/capacity.ts", import.meta.url), "utf8");
 
 test("enterprise-managed alumni quota migration uses pooled enterprise limit", () => {
   assert.match(
@@ -32,5 +34,16 @@ test("enterprise-managed alumni quota migration keeps security-definer hardening
   assert.equal(
     (migration.match(/SET search_path = ''/g) ?? []).length >= 3,
     true
+  );
+});
+
+test("app-side alumni quota readers require enterprise_managed status before using pooled enterprise quota", () => {
+  assert.match(
+    alumniQuotaSource,
+    /subscriptionStatus === "enterprise_managed"/
+  );
+  assert.match(
+    alumniCapacitySource,
+    /shouldUseEnterpriseAlumniQuota\(\s*organization\?\.enterprise_id \?\? null,\s*subscription\?\.status \?\? null,\s*\)/
   );
 });
