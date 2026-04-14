@@ -307,7 +307,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
       {/* Canceling banner - shown when subscription is scheduled to cancel at period end */}
       {orgContext.gracePeriod.isCanceling && orgContext.subscription?.currentPeriodEnd && (
-        <div className="fixed top-0 left-0 right-0 z-50 lg:left-64">
+        <div className="fixed top-0 left-0 right-0 z-50 lg:left-[var(--sidebar-offset,3.5rem)] transition-[left] duration-300 ease-in-out motion-reduce:transition-none">
           <CancelingBanner
             periodEndDate={orgContext.subscription.currentPeriodEnd}
             orgSlug={orgSlug}
@@ -319,7 +319,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
       {/* Grace period banner - shown when subscription is canceled but within 30-day grace */}
       {orgContext.gracePeriod.isInGracePeriod && (
-        <div className="fixed top-0 left-0 right-0 z-50 lg:left-64">
+        <div className="fixed top-0 left-0 right-0 z-50 lg:left-[var(--sidebar-offset,3.5rem)] transition-[left] duration-300 ease-in-out motion-reduce:transition-none">
           <GracePeriodBanner
             daysRemaining={orgContext.gracePeriod.daysRemaining}
             orgSlug={orgSlug}
@@ -329,7 +329,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         </div>
       )}
 
-      <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
+      <div className="hidden lg:block">
         <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentProfileHref={currentProfileHref} currentProfileName={currentProfileName} currentProfileAvatar={currentProfileAvatar} pendingApprovalsCount={pendingApprovalsCount} />
       </div>
 

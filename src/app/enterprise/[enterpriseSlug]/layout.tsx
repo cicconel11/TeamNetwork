@@ -20,7 +20,7 @@ export default async function EnterpriseLayout({ children, params }: EnterpriseL
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
+      <div className="hidden lg:block">
         <EnterpriseSidebar
           enterpriseSlug={enterprise.slug}
           enterpriseName={enterprise.name}
@@ -55,7 +55,7 @@ export default async function EnterpriseLayout({ children, params }: EnterpriseL
       </div>
 
       {/* Main Content */}
-      <main className="lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8">
+      <main className="lg:ml-[var(--sidebar-offset,3.5rem)] p-4 lg:p-8 pt-20 lg:pt-8 transition-[margin-left] duration-300 ease-in-out motion-reduce:transition-none">
         {children}
       </main>
     </div>

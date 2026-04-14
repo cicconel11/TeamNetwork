@@ -17,6 +17,7 @@ interface NavGroupSectionProps {
   globalIndexMap: Map<string, number>;
   onClose?: () => void;
   badgeCounts?: Record<string, number>;
+  isCollapsed?: boolean;
 }
 
 export function NavGroupSection({
@@ -31,8 +32,30 @@ export function NavGroupSection({
   globalIndexMap,
   onClose,
   badgeCounts,
+  isCollapsed = false,
 }: NavGroupSectionProps) {
   const panelId = `nav-group-${group.id}`;
+
+  if (isCollapsed) {
+    return (
+      <ul className="space-y-0.5">
+        {items.map((item) => (
+          <NavItemLink
+            key={item.href}
+            item={item}
+            basePath={basePath}
+            pathname={pathname}
+            visibleNav={visibleNav}
+            organizationId={organizationId}
+            globalIndex={globalIndexMap.get(item.href) ?? 0}
+            onClose={onClose}
+            badgeCounts={badgeCounts}
+            isCollapsed
+          />
+        ))}
+      </ul>
+    );
+  }
 
   return (
     <div>
@@ -93,6 +116,7 @@ interface NavItemLinkProps {
   globalIndex: number;
   onClose?: () => void;
   badgeCounts?: Record<string, number>;
+  isCollapsed?: boolean;
 }
 
 export function NavItemLink({
@@ -104,6 +128,7 @@ export function NavItemLink({
   globalIndex,
   onClose,
   badgeCounts,
+  isCollapsed = false,
 }: NavItemLinkProps) {
   const href = `${basePath}${item.href}`;
   let isActive = pathname === href;
@@ -118,11 +143,15 @@ export function NavItemLink({
     isActive = isPathMatch && !hasMoreSpecificMatch;
   }
   const Icon = item.icon;
+  const badgeCount = badgeCounts?.[item.href];
+  const hasBadge = badgeCount != null && badgeCount > 0;
 
   return (
     <li>
       <Link
         href={href}
+        title={isCollapsed ? item.label : undefined}
+        aria-label={isCollapsed ? item.label : undefined}
         onClick={() => {
           trackBehavioralEvent(
             "nav_click",
@@ -142,10 +171,21 @@ export function NavItemLink({
         }`}
       >
         <Icon className="h-5 w-5 flex-shrink-0" />
-        {item.label}
-        {badgeCounts?.[item.href] != null && badgeCounts[item.href] > 0 && (
-          <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-            {badgeCounts[item.href]}
+        <span
+          aria-hidden={isCollapsed || undefined}
+          className={`whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none ${
+            isCollapsed ? "opacity-0" : "opacity-100"
+          }`}
+        >
+          {item.label}
+        </span>
+        {hasBadge && (
+          <span
+            className={`ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 transition-opacity duration-200 motion-reduce:transition-none ${
+              isCollapsed ? "opacity-0" : "opacity-100"
+            }`}
+          >
+            {badgeCount}
           </span>
         )}
       </Link>

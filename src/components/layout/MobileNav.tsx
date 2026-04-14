@@ -116,8 +116,10 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
             currentProfileName={currentProfileName}
             currentProfileAvatar={currentProfileAvatar}
             pendingApprovalsCount={pendingApprovalsCount}
-            className="h-full border-r border-border"
+            className="h-full"
             onClose={closeMenu}
+            forceExpanded
+            layout="static"
           />
         )}
       </div>

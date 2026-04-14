@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { EnterpriseRole } from "@/types/enterprise";
 import { getEnterprisePermissions } from "@/types/enterprise";
+import { HoverSidebar, PinButton } from "@/components/layout/HoverSidebar";
 
 function HomeIcon({ className }: { className?: string }) {
   return (
@@ -123,6 +124,8 @@ interface EnterpriseSidebarProps {
   role: EnterpriseRole;
   className?: string;
   onClose?: () => void;
+  forceExpanded?: boolean;
+  layout?: "fixed" | "static";
 }
 
 interface NavItem {
@@ -150,6 +153,8 @@ export function EnterpriseSidebar({
   role,
   className = "",
   onClose,
+  forceExpanded = false,
+  layout = "fixed",
 }: EnterpriseSidebarProps) {
   const pathname = usePathname();
   const basePath = `/enterprise/${enterpriseSlug}`;
@@ -163,99 +168,152 @@ export function EnterpriseSidebar({
   });
 
   return (
-    <aside className={`flex flex-col bg-card border-r border-border h-full ${className}`}>
-      {/* Logo/Enterprise Header */}
-      <div className="p-6 border-b border-border">
-        <Link href={basePath} className="flex items-center gap-3">
-          {logoUrl ? (
-            <div className="relative h-10 w-10 rounded-xl overflow-hidden">
-              <Image
-                src={logoUrl}
-                alt={enterpriseName}
-                fill
-                className="object-cover"
-                sizes="40px"
-              />
-            </div>
-          ) : (
-            <div
-              className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"
-              style={{ backgroundColor: primaryColor || "#6B21A8" }}
-            >
-              {enterpriseName.charAt(0)}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-foreground truncate">{enterpriseName}</h2>
-            <p className="text-xs text-muted-foreground">Enterprise</p>
-          </div>
-        </Link>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-4">
-        <ul className="space-y-1">
-          {visibleNav.map((item) => {
-            const href = `${basePath}${item.href}`;
-            let isActive = pathname === href;
-            if (!isActive && item.href !== "") {
-              const isPathMatch = pathname.startsWith(href + "/") || pathname === href;
-              const hasMoreSpecificMatch = visibleNav.some(
-                (other) =>
-                  other.href !== item.href &&
-                  other.href.startsWith(item.href + "/") &&
-                  pathname.startsWith(`${basePath}${other.href}`)
-              );
-              isActive = isPathMatch && !hasMoreSpecificMatch;
-            }
-            const Icon = item.icon;
-
-            return (
-              <li key={item.href || "dashboard"}>
-                <Link
-                  href={href}
-                  onClick={onClose}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive ? "shadow-soft" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+    <HoverSidebar
+      storageKey="sidebar-pinned-enterprise"
+      forceExpanded={forceExpanded}
+      layout={layout}
+      className={className}
+    >
+      {({ isExpanded, isPinned, togglePin }) => {
+        const isCollapsed = !isExpanded;
+        return (
+          <>
+            {/* Logo/Enterprise Header */}
+            <div className="flex items-stretch border-b border-border">
+              <Link href={basePath} className="flex flex-1 min-w-0 items-center gap-3 py-4 pl-4">
+                {logoUrl ? (
+                  <div className="relative h-8 w-8 flex-shrink-0 rounded-xl overflow-hidden">
+                    <Image
+                      src={logoUrl}
+                      alt={enterpriseName}
+                      fill
+                      className="object-cover"
+                      sizes="32px"
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className="h-8 w-8 flex-shrink-0 rounded-xl flex items-center justify-center text-white font-bold"
+                    style={{ backgroundColor: primaryColor || "#6B21A8" }}
+                  >
+                    {enterpriseName.charAt(0)}
+                  </div>
+                )}
+                <div
+                  className={`flex-1 min-w-0 transition-opacity duration-200 motion-reduce:transition-none ${
+                    isCollapsed ? "opacity-0" : "opacity-100"
                   }`}
-                  style={
-                    isActive
-                      ? {
-                          backgroundColor: `${primaryColor || "#6B21A8"}1F`,
-                          color: primaryColor || "#6B21A8",
-                        }
-                      : {}
-                  }
+                  aria-hidden={isCollapsed || undefined}
                 >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+                  <h2 className="font-semibold text-foreground text-sm leading-tight break-words">{enterpriseName}</h2>
+                  <p className="text-xs text-muted-foreground">Enterprise</p>
+                </div>
+              </Link>
+              {!forceExpanded && (
+                <div className="flex items-start pt-2 pr-2 flex-shrink-0">
+                  <PinButton
+                    isPinned={isPinned}
+                    isExpanded={isExpanded}
+                    onToggle={togglePin}
+                  />
+                </div>
+              )}
+            </div>
 
-      {/* User Section */}
-      <div className="p-4 border-t border-border space-y-1">
-        <Link
-          href="/app"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
-        >
-          <GridIcon className="h-5 w-5" />
-          Back to App
-        </Link>
+            {/* Navigation */}
+            <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2">
+              <ul className="space-y-1">
+                {visibleNav.map((item) => {
+                  const href = `${basePath}${item.href}`;
+                  let isActive = pathname === href;
+                  if (!isActive && item.href !== "") {
+                    const isPathMatch = pathname.startsWith(href + "/") || pathname === href;
+                    const hasMoreSpecificMatch = visibleNav.some(
+                      (other) =>
+                        other.href !== item.href &&
+                        other.href.startsWith(item.href + "/") &&
+                        pathname.startsWith(`${basePath}${other.href}`)
+                    );
+                    isActive = isPathMatch && !hasMoreSpecificMatch;
+                  }
+                  const Icon = item.icon;
 
-        <form action="/auth/signout" method="POST">
-          <button
-            type="submit"
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
-          >
-            <LogOutIcon className="h-5 w-5" />
-            Sign Out
-          </button>
-        </form>
-      </div>
-    </aside>
+                  return (
+                    <li key={item.href || "dashboard"}>
+                      <Link
+                        href={href}
+                        onClick={onClose}
+                        title={isCollapsed ? item.label : undefined}
+                        aria-label={isCollapsed ? item.label : undefined}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                          isActive ? "shadow-soft" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: `${primaryColor || "#6B21A8"}1F`,
+                                color: primaryColor || "#6B21A8",
+                              }
+                            : {}
+                        }
+                      >
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        <span
+                          aria-hidden={isCollapsed || undefined}
+                          className={`whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none ${
+                            isCollapsed ? "opacity-0" : "opacity-100"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+
+            {/* User Section */}
+            <div className="p-2 border-t border-border space-y-1">
+              <Link
+                href="/app"
+                title={isCollapsed ? "Back to App" : undefined}
+                aria-label={isCollapsed ? "Back to App" : undefined}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              >
+                <GridIcon className="h-5 w-5 flex-shrink-0" />
+                <span
+                  aria-hidden={isCollapsed || undefined}
+                  className={`whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none ${
+                    isCollapsed ? "opacity-0" : "opacity-100"
+                  }`}
+                >
+                  Back to App
+                </span>
+              </Link>
+
+              <form action="/auth/signout" method="POST">
+                <button
+                  type="submit"
+                  title={isCollapsed ? "Sign Out" : undefined}
+                  aria-label={isCollapsed ? "Sign Out" : undefined}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                >
+                  <LogOutIcon className="h-5 w-5 flex-shrink-0" />
+                  <span
+                    aria-hidden={isCollapsed || undefined}
+                    className={`whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none ${
+                      isCollapsed ? "opacity-0" : "opacity-100"
+                    }`}
+                  >
+                    Sign Out
+                  </span>
+                </button>
+              </form>
+            </div>
+          </>
+        );
+      }}
+    </HoverSidebar>
   );
 }
