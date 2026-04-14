@@ -17,12 +17,16 @@ describe("sanitizeGoogleRedirectPath", () => {
       sanitizeGoogleRedirectPath("/alpha/calendar/events"),
       "/alpha/calendar/events",
     );
+    assert.equal(
+      sanitizeGoogleRedirectPath("/alpha/mentorship?tab=meetings&pair=pair-123"),
+      "/alpha/mentorship?tab=meetings&pair=pair-123",
+    );
   });
 
-  it("strips query params from valid org-scoped calendar routes", () => {
+  it("preserves query params for valid in-app routes", () => {
     assert.equal(
       sanitizeGoogleRedirectPath("/alpha/calendar?subview=list"),
-      "/alpha/calendar",
+      "/alpha/calendar?subview=list",
     );
   });
 

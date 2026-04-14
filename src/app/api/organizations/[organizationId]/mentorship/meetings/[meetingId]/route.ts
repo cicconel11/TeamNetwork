@@ -149,7 +149,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
 
   // Best-effort calendar cleanup (non-blocking)
   if (meeting.calendar_event_id) {
-    const accessToken = await getValidAccessToken(supabase, user.id);
+    const accessToken = await getValidAccessToken(supabase, meeting.created_by);
     if (accessToken) {
       try {
         await deleteMentorshipMeetingCalendarEvent(

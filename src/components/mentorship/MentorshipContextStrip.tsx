@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { Card, Button, Select, ToggleSwitch } from "@/components/ui";
+import { Button, Select, ToggleSwitch } from "@/components/ui";
 import { getMentorshipStatusTranslationKey } from "@/lib/mentorship/presentation";
 import {
   getPairableOrgMembers,
@@ -35,7 +35,7 @@ export function MentorshipContextStrip({
   }
 
   return (
-    <Card className="p-5 border-l-4 border-[color:var(--color-org-secondary)]">
+    <div className="py-3 px-0 mb-2">
       {role === "admin" && <AdminStrip orgId={orgId} orgSlug={orgSlug} />}
       {role === "alumni" && <AlumniStrip orgId={orgId} orgSlug={orgSlug} />}
       {role === "active_member" && (
@@ -45,7 +45,7 @@ export function MentorshipContextStrip({
           myLastLogDate={myLastLogDate}
         />
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -172,7 +172,7 @@ function AdminStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="font-display text-xl font-semibold text-foreground">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
             {tMentorship("pairMembers")}
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
@@ -194,9 +194,7 @@ function AdminStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
       {expanded && (
         <div className="space-y-3">
           {error && (
-            <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-              {error}
-            </div>
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
@@ -467,7 +465,7 @@ function AlumniStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   if (isLoading) {
     return (
       <div className="flex items-center gap-3 text-muted-foreground">
-        <div className="animate-spin h-5 w-5 border-4 border-org-primary border-t-transparent rounded-full" />
+        <div className="animate-spin h-5 w-5 border-4 border-current border-t-transparent rounded-full" />
         {tMentorship("loadingControls")}
       </div>
     );
@@ -476,7 +474,7 @@ function AlumniStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h3 className="font-display text-xl font-semibold text-foreground">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
           {tMentorship("yourMentee")}
         </h3>
         <p className="text-sm text-muted-foreground mt-1">
@@ -496,9 +494,7 @@ function AlumniStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
       {expanded && (
         <div className="w-full sm:basis-full space-y-3 pt-2">
           {error && (
-            <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-              {error}
-            </div>
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
 
           <Select
@@ -643,7 +639,7 @@ function ActiveMemberStrip({
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h3 className="font-display text-xl font-semibold text-foreground">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
           {myMentorName
             ? `${tMentorship("myMentor")}: ${myMentorName}`
             : tMentorship("lookingForMentor")}
@@ -662,7 +658,7 @@ function ActiveMemberStrip({
           {isSaving && (
             <div
               aria-hidden="true"
-              className="animate-spin h-4 w-4 border-2 border-org-primary border-t-transparent rounded-full"
+              className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"
             />
           )}
           <ToggleSwitch

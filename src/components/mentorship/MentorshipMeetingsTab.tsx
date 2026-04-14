@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Button, Card } from "@/components/ui";
-import { Badge } from "@/components/ui/Badge";
+import { Calendar, Clock } from "lucide-react";
+import { Button } from "@/components/ui";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 import { MentorshipPairPicker } from "./MentorshipPairPicker";
 import { MentorshipScheduleMeetingForm } from "./MentorshipScheduleMeetingForm";
@@ -187,13 +187,19 @@ export function MentorshipMeetingsTab({
               <MentorshipScheduleMeetingForm
                 pairId={selectedPairId}
                 orgId={orgId}
+                orgSlug={orgSlug}
                 orgTimezone={orgTimezone}
                 onMeetingCreated={handleMeetingCreated}
                 onCancel={() => setShowForm(false)}
               />
             </div>
           ) : (
-            <Button onClick={() => setShowForm(true)}>📅 Schedule Meeting</Button>
+            <button
+              onClick={() => setShowForm(true)}
+              className="text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            >
+              + Schedule
+            </button>
           )}
         </div>
       )}
@@ -204,112 +210,77 @@ export function MentorshipMeetingsTab({
         </div>
       ) : upcoming.length === 0 && past.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-4xl mb-3">📭</div>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {selectedPair
-              ? "No meetings scheduled yet. Schedule your first mentorship meeting!"
-              : "Select a pair to view meetings."}
+              ? "No meetings scheduled yet"
+              : "Select a pair to view meetings"}
           </p>
         </div>
       ) : (
         <>
           {/* Upcoming Meetings */}
           {upcoming.length > 0 && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">📅</span>
-                <h3 className="font-semibold text-foreground">Upcoming Meetings</h3>
-              </div>
-              <div className="grid gap-4">
+            <div className="animate-fade-in">
+              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-[var(--muted-foreground)] mb-2">Upcoming</h3>
+              <div>
                 {upcoming.map((meeting) => (
-                  <Card key={meeting.id} className="p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-foreground truncate">
-                          {meeting.title}
-                        </h4>
-                        <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-2">
-                          <span>📌</span>
-                          {formatDateTime(meeting.scheduled_at, orgTimezone)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                          <span>⏱</span>
-                          {meeting.duration_minutes} minutes
-                        </p>
-                        <div className="flex items-center gap-2 mt-3">
-                          <Badge
-                            variant={
-                              meeting.platform === "google_meet"
-                                ? "primary"
-                                : "muted"
-                            }
-                          >
-                            {meeting.platform === "google_meet"
-                              ? "Google Meet"
-                              : "Zoom"}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-2 flex-shrink-0">
-                        {meeting.meeting_link ? (
-                          <Link href={meeting.meeting_link} target="_blank">
-                            <Button size="sm" variant="primary">
-                              Join
-                            </Button>
-                          </Link>
-                        ) : meeting.calendar_sync_status === "failed" ? (
-                          <Badge variant="error">
-                            Link unavailable
-                          </Badge>
-                        ) : meeting.calendar_sync_status === "none" ? (
-                          <Badge variant="muted">
-                            No calendar
-                          </Badge>
-                        ) : null}
-
-                        {(isMentor || isAdmin) && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteMeeting(meeting.id)}
-                          >
-                            Delete
-                          </Button>
-                        )}
-                      </div>
+                  <div key={meeting.id} className="group flex items-center gap-3 py-2.5 border-b border-[var(--border)]/20 last:border-b-0 hover:bg-[var(--muted)]/40 transition-colors duration-150">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-foreground truncate block">
+                        {meeting.title}
+                      </span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                        <Calendar className="h-3 w-3" />
+                        {formatDateTime(meeting.scheduled_at, orgTimezone)}
+                        <span className="opacity-60">·</span>
+                        <Clock className="h-3 w-3" />
+                        {meeting.duration_minutes}m
+                        <span className="opacity-60">·</span>
+                        <span className="text-[var(--muted-foreground)]">
+                          {meeting.platform === "google_meet" ? "Meet" : "Zoom"}
+                        </span>
+                      </span>
                     </div>
-                  </Card>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {meeting.meeting_link ? (
+                        <Link href={meeting.meeting_link} target="_blank">
+                          <Button size="sm" variant="secondary">
+                            Join
+                          </Button>
+                        </Link>
+                      ) : meeting.calendar_sync_status === "failed" ? (
+                        <span className="text-xs text-[var(--muted-foreground)]">Link unavailable</span>
+                      ) : null}
+                      {(isMentor || isAdmin) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteMeeting(meeting.id)}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Divider */}
-          {upcoming.length > 0 && past.length > 0 && (
-            <div className="border-t border-muted/40 my-2"></div>
-          )}
-
           {/* Past Meetings */}
           {past.length > 0 && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">✓</span>
-                <h3 className="font-semibold text-foreground">Past Meetings</h3>
-              </div>
-              <div className="space-y-2">
+            <div className="animate-fade-in mt-4">
+              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-[var(--muted-foreground)] mb-2">History</h3>
+              <div>
                 {past.map((meeting) => (
                   <div
                     key={meeting.id}
-                    className="flex items-start justify-between gap-4 p-3 rounded-lg border border-muted/40 bg-muted/20 hover:bg-muted/30 transition-colors"
+                    className="group flex items-center gap-3 py-2 border-b border-[var(--border)]/20 last:border-b-0 hover:bg-[var(--muted)]/30 transition-colors duration-150"
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground/80">
-                        {meeting.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDateTime(meeting.scheduled_at)}
-                      </p>
-                    </div>
+                    <span className="flex-1 text-sm text-foreground/80 truncate">{meeting.title}</span>
+                    <span className="flex-shrink-0 text-xs text-muted-foreground">
+                      {formatDateTime(meeting.scheduled_at, orgTimezone)}
+                    </span>
                     {(isMentor || isAdmin) && (
                       <Button
                         size="sm"

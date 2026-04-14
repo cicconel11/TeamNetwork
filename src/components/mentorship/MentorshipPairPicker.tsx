@@ -17,20 +17,20 @@ export function MentorshipPairPicker({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {pairs.map((pair) => (
         <button
           key={pair.id}
           onClick={() => onPairChange(pair.id)}
-          className={`px-3.5 py-2 text-sm font-medium rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             selectedPairId === pair.id
-              ? "bg-foreground text-background shadow-md"
-              : "bg-muted/50 text-foreground hover:bg-muted border border-muted/60 hover:border-muted"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
           }`}
           aria-pressed={selectedPairId === pair.id}
         >
           <span className="font-medium">{pair.mentorName}</span>
-          <span className="mx-1.5 text-muted-foreground/60">↔</span>
+          <span className="mx-1 opacity-40">→</span>
           <span>{pair.menteeName}</span>
         </button>
       ))}

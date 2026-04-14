@@ -8,8 +8,7 @@ create table public.mentorship_meetings (
   scheduled_at         timestamptz not null,
   duration_minutes     integer not null default 60
                          check (duration_minutes between 15 and 480),
-  scheduled_end_at     timestamptz generated always as
-                         (scheduled_at + (duration_minutes * interval '1 minute')) stored,
+  scheduled_end_at     timestamptz,
   platform             text not null check (platform in ('google_meet', 'zoom')),
   meeting_link         text check (meeting_link is null or char_length(meeting_link) <= 2048),
   calendar_event_id    text,
@@ -28,6 +27,22 @@ create index mentorship_meetings_pair_id_idx on public.mentorship_meetings(pair_
 -- Index on scheduled_end_at for upcoming/past split (eliminates expression scan)
 create index mentorship_meetings_end_at_idx on public.mentorship_meetings(scheduled_end_at)
   where deleted_at is null;
+
+-- Trigger to compute scheduled_end_at from scheduled_at + duration
+CREATE OR REPLACE FUNCTION public.compute_meeting_end_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.scheduled_end_at := NEW.scheduled_at + (NEW.duration_minutes * interval '1 minute');
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER mentorship_meetings_compute_end
+  BEFORE INSERT OR UPDATE OF scheduled_at, duration_minutes ON public.mentorship_meetings
+  FOR EACH ROW
+  EXECUTE FUNCTION public.compute_meeting_end_at();
 
 alter table public.mentorship_meetings enable row level security;
 

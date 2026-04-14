@@ -21,6 +21,27 @@ export function resolveOrgTimezone(tz: string | null | undefined): string {
 }
 
 /**
+ * Format a Date into the YYYY-MM-DD value expected by input[type=date].
+ * Defaults to the viewer's local timezone; an explicit timezone may be passed for tests.
+ */
+export function getDateInputValue(
+  date: Date = new Date(),
+  timeZone?: string
+): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    ...(timeZone ? { timeZone } : {}),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const valueFor = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${valueFor("year")}-${valueFor("month")}-${valueFor("day")}`;
+}
+
+/**
  * Interpret a date + time as being in the given IANA timezone and return a UTC ISO string.
  *
  * Example: localToUtcIso("2026-06-09", "16:00", "America/New_York") → "2026-06-09T20:00:00.000Z"

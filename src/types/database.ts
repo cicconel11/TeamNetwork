@@ -3695,6 +3695,132 @@ export type Database = {
           },
         ]
       }
+      mentorship_meetings: {
+        Row: {
+          calendar_event_id: string | null
+          calendar_sync_status: string
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          duration_minutes: number
+          id: string
+          meeting_link: string | null
+          organization_id: string
+          pair_id: string
+          platform: string
+          scheduled_at: string
+          scheduled_end_at: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          calendar_event_id?: string | null
+          calendar_sync_status?: string
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          duration_minutes?: number
+          id?: string
+          meeting_link?: string | null
+          organization_id: string
+          pair_id: string
+          platform: string
+          scheduled_at: string
+          scheduled_end_at?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          calendar_event_id?: string | null
+          calendar_sync_status?: string
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          duration_minutes?: number
+          id?: string
+          meeting_link?: string | null
+          organization_id?: string
+          pair_id?: string
+          platform?: string
+          scheduled_at?: string
+          scheduled_end_at?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentorship_meetings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentorship_meetings_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "mentorship_pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentorship_tasks: {
+        Row: {
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          organization_id: string
+          pair_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          organization_id: string
+          pair_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          organization_id?: string
+          pair_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentorship_tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentorship_tasks_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "mentorship_pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_preferences: {
         Row: {
           announcement_emails_enabled: boolean

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Card, Badge, Button } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { MentorshipLogForm } from "./MentorshipLogForm";
 import { getMentorshipStatusTranslationKey } from "@/lib/mentorship/presentation";
@@ -45,6 +46,7 @@ export function MentorshipPairCard({
   onDelete,
   highlight = false,
 }: MentorshipPairCardProps) {
+  const router = useRouter();
   const tMentorship = useTranslations("mentorship");
   const tCommon = useTranslations("common");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -120,28 +122,25 @@ export function MentorshipPairCard({
   const lastLogDate =
     logs.length > 0 ? new Date(logs[0].entry_date).toLocaleDateString() : null;
 
-  const cardClassName = `relative p-6 space-y-4${
-    highlight ? " ring-2 ring-[color:var(--color-org-secondary)]/60" : ""
-  }`;
   const statusLabel = tMentorship(getMentorshipStatusTranslationKey(pair.status));
 
   return (
-    <Card className={cardClassName}>
+    <div className={`py-4 space-y-3${highlight ? " bg-[var(--muted)]/10" : ""}`}>
       {/* Row 1: mentor → mentee header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <h3 className="font-display font-semibold text-foreground truncate">
+          <h3 className="font-semibold text-foreground truncate">
             {mentorLabel}
           </h3>
           <span aria-hidden="true" className="text-muted-foreground">
             →
           </span>
-          <h3 className="font-display font-semibold text-foreground truncate">
+          <h3 className="font-semibold text-foreground truncate">
             {menteeLabel}
           </h3>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="primary">{statusLabel}</Badge>
+          <span className="text-[11px] font-medium text-[var(--muted-foreground)]">{statusLabel}</span>
           {isAdmin && (
             <div className="relative">
               <button
@@ -152,7 +151,7 @@ export function MentorshipPairCard({
                 aria-label={tMentorship("openPairMenu")}
                 aria-haspopup="menu"
                 aria-expanded={showMenu}
-                className="h-8 w-8 rounded-md inline-flex items-center justify-center text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-org-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-8 w-8 rounded-md inline-flex items-center justify-center text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg
                   className="h-5 w-5"
@@ -171,7 +170,7 @@ export function MentorshipPairCard({
               {showMenu && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full mt-1 min-w-[10rem] rounded-lg border border-border bg-[var(--card)] shadow-lg z-10 py-1"
+                  className="absolute right-0 top-full mt-1 min-w-[10rem] rounded-md border border-[var(--border)]/20 bg-[var(--background)] shadow-sm z-10 py-1"
                 >
                   <button
                     type="button"
@@ -201,18 +200,18 @@ export function MentorshipPairCard({
             : tMentorship("noSessionsYet")}
         </span>
         <span aria-hidden="true" className="h-1 w-1 rounded-full bg-border" />
-        <Badge variant="muted">
+        <span className="text-xs text-[var(--muted-foreground)]">
           {logs.length}{" "}
           {logs.length === 1
             ? tMentorship("sessionSingular")
             : tMentorship("sessionPlural")}
-        </Badge>
+        </span>
       </div>
 
       {/* Confirmation dialog */}
       {showConfirm && (
-        <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 space-y-3">
-          <p className="text-sm text-red-700 dark:text-red-300">
+        <div className="py-3 space-y-3">
+          <p className="text-sm text-[var(--muted-foreground)]">
             {tMentorship("archivePairConfirm")}
           </p>
           <div className="flex items-center gap-2">
@@ -238,16 +237,14 @@ export function MentorshipPairCard({
 
       {/* Error message */}
       {error && (
-        <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-          {error}
-        </div>
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
 
       {/* Activity logs */}
       {logs.length > 0 && (
-        <div className="space-y-3">
+        <div>
           {visibleLogs.map((log) => (
-            <div key={log.id} className="p-3 rounded-xl bg-muted/50 space-y-1">
+            <div key={log.id} className="py-2 space-y-1">
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>{new Date(log.entry_date).toLocaleDateString()}</span>
                 <span>
@@ -278,10 +275,10 @@ export function MentorshipPairCard({
 
       {/* Collapsible log form */}
       {canLogActivity && (
-        <div className="pt-2 border-t border-border">
+        <div className="pt-3 mt-1">
           {showLogForm ? (
             <div className="space-y-2">
-              <MentorshipLogForm orgId={orgId} pairId={pair.id} />
+              <MentorshipLogForm orgId={orgId} pairId={pair.id} onLogCreated={() => router.refresh()} />
               <Button
                 variant="ghost"
                 size="sm"
@@ -291,16 +288,15 @@ export function MentorshipPairCard({
               </Button>
             </div>
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={() => setShowLogForm(true)}
+              className="text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
             >
               + {tMentorship("logSession")}
-            </Button>
+            </button>
           )}
         </div>
       )}
-    </Card>
+    </div>
   );
 }

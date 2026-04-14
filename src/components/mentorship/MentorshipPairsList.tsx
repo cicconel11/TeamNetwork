@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Card, EmptyState } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
 import { MentorshipPairCard } from "./MentorshipPairCard";
 import {
   getVisibleMentorshipPairs,
@@ -76,18 +76,18 @@ export function MentorshipPairsList({
 
   if (visiblePairs.length === 0) {
     return (
-      <Card>
+      <div className="py-8">
         <EmptyState
           title={tMentorship("noPairs")}
           description={tMentorship("pairsWillAppear")}
           action={emptyStateAction}
         />
-      </Card>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div>
       {visiblePairs.map((pair) => {
         const pairLogs = logs.filter((l) => l.pair_id === pair.id);
         const isMine = isUserInMentorshipPair(pair, currentUserId);

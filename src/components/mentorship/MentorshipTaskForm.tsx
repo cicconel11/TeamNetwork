@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Input, Textarea } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { showFeedback } from "@/lib/feedback/show-feedback";
-import type { MentorshipTask } from "@/types/database";
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 interface MentorshipTaskFormProps {
   pairId: string;
   orgId: string;
-  onTaskCreated: (task: MentorshipTask) => void;
+  onTaskCreated: (task: any) => void;
   onCancel: () => void;
 }
 
@@ -19,14 +18,12 @@ export function MentorshipTaskForm({
   onCancel,
 }: MentorshipTaskFormProps) {
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate title
     if (!title.trim()) {
       showFeedback("Title is required", "error");
       return;
@@ -43,7 +40,6 @@ export function MentorshipTaskForm({
           body: JSON.stringify({
             pair_id: pairId,
             title: title.trim(),
-            description: description.trim() || undefined,
             due_date: dueDate || undefined,
             status: "todo",
           }),
@@ -61,7 +57,6 @@ export function MentorshipTaskForm({
       showFeedback("Task created", "success");
       onTaskCreated(result.task);
       setTitle("");
-      setDescription("");
       setDueDate("");
     } catch {
       showFeedback("An unexpected error occurred", "error");
@@ -69,44 +64,50 @@ export function MentorshipTaskForm({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 border-t pt-4 mt-4">
-      <Input
-        label="Title"
+    <form
+      onSubmit={handleSubmit}
+      className="flex items-center gap-3 px-4 py-2.5 bg-[var(--muted)]/5 rounded-md animate-fade-in"
+    >
+      {/* Placeholder status circle */}
+      <div className="flex-shrink-0 w-4 h-4 rounded-full border-[1.5px] border-[var(--muted-foreground)]/30" />
+
+      {/* Title input */}
+      <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Task title"
+        onKeyDown={handleKeyDown}
+        placeholder="Task title…"
+        autoFocus
         required
+        aria-label="Task title"
+        className="flex-1 min-w-0 bg-transparent text-sm font-medium text-[var(--foreground)] outline-none placeholder:text-[var(--muted-foreground)]/60"
       />
 
-      <Textarea
-        label="Description (optional)"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Add task details..."
-        rows={3}
-        maxLength={2000}
-      />
-
-      <Input
-        label="Due date (optional)"
+      {/* Due date */}
+      <input
         type="date"
         value={dueDate}
         onChange={(e) => setDueDate(e.target.value)}
+        aria-label="Due date"
+        className="flex-shrink-0 w-28 bg-transparent text-xs text-[var(--muted-foreground)] outline-none"
       />
 
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onCancel}
-          disabled={isSubmitting}
-        >
-          Cancel
+      {/* Actions */}
+      <div className="flex-shrink-0 flex items-center gap-1.5">
+        <Button type="submit" size="sm" disabled={isSubmitting} isLoading={isSubmitting}>
+          Create
         </Button>
-        <Button type="submit" disabled={isSubmitting} isLoading={isSubmitting}>
-          Create Task
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={isSubmitting}>
+          Cancel
         </Button>
       </div>
     </form>

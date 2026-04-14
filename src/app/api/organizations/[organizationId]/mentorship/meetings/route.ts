@@ -16,6 +16,11 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+type MentorshipMeetingErrorCode =
+  | "google_calendar_required"
+  | "google_calendar_reconnect_required"
+  | "google_meet_creation_failed";
+
 interface RouteParams {
   params: Promise<{ organizationId: string }>;
 }
@@ -106,7 +111,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     )
     .eq("pair_id", pairId)
     .is("deleted_at", null)
-    .order("scheduled_at", { ascending: false });
+    .order("scheduled_at", { ascending: true });
 
   if (meetingsError) {
     console.error(
@@ -135,11 +140,11 @@ export async function GET(req: Request, { params }: RouteParams) {
   }));
 
   const upcoming = decryptedMeetings.filter(
-    (m) => new Date(m.scheduled_end_at) > new Date(now)
+    (m) => m.scheduled_end_at && new Date(m.scheduled_end_at) > new Date(now)
   );
-  const past = decryptedMeetings.filter(
-    (m) => new Date(m.scheduled_end_at) <= new Date(now)
-  );
+  const past = decryptedMeetings
+    .filter((m) => m.scheduled_end_at && new Date(m.scheduled_end_at) <= new Date(now))
+    .reverse();
 
   return NextResponse.json({ upcoming, past });
 }
@@ -305,8 +310,49 @@ export async function POST(req: Request, { params }: RouteParams) {
     zoomPassword = zoomResult.password;
   }
 
-  // Fetch Google Calendar access token
+  let googleConnection: { id: string; status: string } | null = null;
+
+  if (body.platform === "google_meet") {
+    const { data: connection, error: googleConnectionError } =
+      await serviceSupabase
+        .from("user_calendar_connections")
+        .select("id, status")
+        .eq("user_id", user.id)
+        .eq("provider", "google")
+        .maybeSingle();
+
+    if (googleConnectionError) {
+      console.error(
+        "[mentorship-meetings POST] Failed to fetch Google Calendar connection:",
+        googleConnectionError
+      );
+      return NextResponse.json(
+        { error: "Unable to verify Google Calendar connection" },
+        { status: 500 }
+      );
+    }
+
+    googleConnection = connection;
+  }
+
+  // Best-effort for Zoom, required for Google Meet.
   const accessToken = await getValidAccessToken(supabase, user.id);
+
+  if (body.platform === "google_meet" && !accessToken) {
+    const errorCode: MentorshipMeetingErrorCode = googleConnection
+      ? "google_calendar_reconnect_required"
+      : "google_calendar_required";
+
+    const error =
+      errorCode === "google_calendar_required"
+        ? "Connect Google Calendar before scheduling a Google Meet meeting."
+        : "Reconnect Google Calendar before scheduling a Google Meet meeting.";
+
+    return NextResponse.json(
+      { error, errorCode },
+      { status: errorCode === "google_calendar_required" ? 400 : 403 }
+    );
+  }
 
   // Attempt Google Calendar event creation
   let googleEventId: string | null = null;
@@ -337,13 +383,21 @@ export async function POST(req: Request, { params }: RouteParams) {
       }
       calendarSyncStatus = "synced";
     } else {
+      if (body.platform === "google_meet") {
+        return NextResponse.json(
+          {
+            error:
+              calendarResult.error ||
+              "Google Meet link could not be created. Reconnect Google Calendar and try again.",
+            errorCode: calendarResult.code as MentorshipMeetingErrorCode,
+          },
+          { status: 503 }
+        );
+      }
+
       calendarError = calendarResult.error;
       calendarSyncStatus = "failed";
     }
-  } else if (body.platform === "google_meet") {
-    // Google Meet requested but no access token
-    calendarError = "Google Calendar not connected";
-    calendarSyncStatus = "failed";
   }
 
   // Determine final meeting_link and calendar_sync_status
@@ -425,8 +479,13 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
   }
 
+  const responseMeeting = {
+    ...(meeting as Record<string, unknown>),
+    meeting_link: finalMeetingLink,
+  };
+
   return NextResponse.json({
-    meeting,
+    meeting: responseMeeting,
     calendarInviteSent: calendarSyncStatus === "synced",
     calendarError: calendarError || undefined,
   });
