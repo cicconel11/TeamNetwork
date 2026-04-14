@@ -262,11 +262,13 @@ export function MentorshipTasksTab({
     <Card className="space-y-4">
       {/* Pair Picker */}
       {pairs.length > 1 && (
-        <MentorshipPairPicker
-          pairs={pairs}
-          selectedPairId={selectedPairId}
-          onPairChange={handlePairChange}
-        />
+        <div className="pb-2">
+          <MentorshipPairPicker
+            pairs={pairs}
+            selectedPairId={selectedPairId}
+            onPairChange={handlePairChange}
+          />
+        </div>
       )}
 
       {/* Status Filter */}
@@ -287,28 +289,31 @@ export function MentorshipTasksTab({
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b">
+          <thead className="border-b border-muted/40 bg-muted/20">
             <tr>
-              <th className="text-left font-medium py-2 px-3">Title</th>
-              <th className="text-left font-medium py-2 px-3">Status</th>
-              <th className="text-left font-medium py-2 px-3">Due Date</th>
+              <th className="text-left font-medium py-3 px-3">Title</th>
+              <th className="text-left font-medium py-3 px-3">Status</th>
+              <th className="text-left font-medium py-3 px-3">Due Date</th>
               {(isMentor || true) && (
-                <th className="text-right font-medium py-2 px-3">Actions</th>
+                <th className="text-right font-medium py-3 px-3">Actions</th>
               )}
             </tr>
           </thead>
           <tbody>
             {filteredTasks.map((task) => {
               const overdue = isOverdue(task.due_date, task.status);
-              const rowClass = overdue ? "bg-red-50 dark:bg-red-950" : "";
 
               return (
                 <tr
                   key={task.id}
-                  className={`border-b hover:bg-muted/50 transition-colors ${rowClass}`}
+                  className={`border-b border-muted/30 hover:bg-muted/40 transition-colors ${
+                    overdue ? "border-l-2 border-l-orange-400" : ""
+                  }`}
                 >
                   <td className="py-3 px-3">
-                    <div className="font-medium">{task.title}</div>
+                    <div className={`font-medium ${overdue ? "text-orange-600 dark:text-orange-400" : ""}`}>
+                      {task.title}
+                    </div>
                     {task.description && (
                       <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
                         {task.description}
@@ -321,30 +326,33 @@ export function MentorshipTasksTab({
                       <button
                         onClick={() => handleStatusCycle(task.id, task.status)}
                         disabled={patchingIds.has(task.id)}
-                        className="cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="cursor-pointer transition-all duration-200 hover:scale-105 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Badge variant={getStatusBadgeVariant(task.status)}>
                           {task.status === "todo"
-                            ? "To Do"
+                            ? "✓ To Do"
                             : task.status === "in_progress"
-                              ? "In Progress"
-                              : "Done"}
+                              ? "⟳ In Progress"
+                              : "✔ Done"}
                         </Badge>
                       </button>
                     ) : (
                       // Mentor: display-only badge
                       <Badge variant={getStatusBadgeVariant(task.status)}>
                         {task.status === "todo"
-                          ? "To Do"
+                          ? "✓ To Do"
                           : task.status === "in_progress"
-                            ? "In Progress"
-                            : "Done"}
+                            ? "⟳ In Progress"
+                            : "✔ Done"}
                       </Badge>
                     )}
                   </td>
                   <td className="py-3 px-3 text-muted-foreground">
                     {task.due_date ? (
-                      <span>{formatDate(task.due_date)}</span>
+                      <span className={overdue ? "text-orange-600 dark:text-orange-400 font-medium" : ""}>
+                        {formatDate(task.due_date)}
+                        {overdue && <span className="ml-1 text-xs">⚠</span>}
+                      </span>
                     ) : (
                       <span className="text-xs">—</span>
                     )}
@@ -371,29 +379,29 @@ export function MentorshipTasksTab({
 
       {/* Empty state for filtered view */}
       {filteredTasks.length === 0 && statusFilter !== "all" && (
-        <div className="py-8 text-center text-muted-foreground">
-          <p>No tasks with status &quot;{statusFilter.replace("_", " ")}&quot;</p>
+        <div className="py-8 text-center">
+          <p className="text-muted-foreground">No tasks with status &quot;{statusFilter.replace("_", " ")}&quot;</p>
         </div>
       )}
 
       {/* Add Task Form (Mentor only) */}
       {isMentor && (
-        <>
+        <div className="space-y-3">
           {!showTaskForm ? (
-            <div className="pt-2">
-              <Button onClick={() => setShowTaskForm(true)} size="sm">
-                Add Task
-              </Button>
-            </div>
+            <Button onClick={() => setShowTaskForm(true)} size="sm">
+              + Add Task
+            </Button>
           ) : (
-            <MentorshipTaskForm
-              pairId={selectedPairId}
-              orgId={orgId}
-              onTaskCreated={handleTaskCreated}
-              onCancel={() => setShowTaskForm(false)}
-            />
+            <div className="max-h-96 overflow-hidden opacity-100 animate-fade-in transition-all duration-200">
+              <MentorshipTaskForm
+                pairId={selectedPairId}
+                orgId={orgId}
+                onTaskCreated={handleTaskCreated}
+                onCancel={() => setShowTaskForm(false)}
+              />
+            </div>
           )}
-        </>
+        </div>
       )}
     </Card>
   );

@@ -276,9 +276,7 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
     isAdmin: orgCtx.isAdmin,
   });
 
-  const isMentor =
-    orgCtx.role === "alumni" ||
-    filteredPairs.some((p) => p.mentor_user_id === orgCtx.userId);
+  const isMentor = (pairs || []).some((p) => p.mentor_user_id === orgCtx.userId);
   const isAdmin = orgCtx.isAdmin;
   const currentUserId = orgCtx.userId ?? "";
 

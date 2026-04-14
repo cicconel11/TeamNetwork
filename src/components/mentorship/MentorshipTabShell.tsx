@@ -66,10 +66,10 @@ export function MentorshipTabShell({
   };
 
   const tabButtonClass = (tab: MentorshipTab) =>
-    `px-4 py-2 text-sm font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+    `px-4 py-2.5 text-sm font-medium transition-all duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
       activeTab === tab
-        ? "bg-foreground text-background"
-        : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+        ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-foreground"
+        : "text-muted-foreground hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-px hover:after:bg-border/50 transition-colors"
     }`;
 
   const contentMap: Record<MentorshipTab, React.ReactNode> = {
@@ -80,26 +80,28 @@ export function MentorshipTabShell({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Tab bar */}
-      <div className="flex gap-2 border-b border-muted">
-        {TAB_ORDER.map((tab) => (
-          <div key={tab} onKeyDown={(e) => handleKeyDown(e, tab)}>
-            <button
-              onClick={() => handleTabClick(tab)}
-              aria-label={TAB_LABELS[tab]}
-              aria-selected={activeTab === tab}
-              role="tab"
-              className={tabButtonClass(tab)}
-            >
-              {TAB_LABELS[tab]}
-            </button>
-          </div>
-        ))}
+    <div className="space-y-6 animate-fade-in">
+      {/* Tab bar with smooth underline */}
+      <div className="border-b border-muted/40">
+        <div className="flex gap-0">
+          {TAB_ORDER.map((tab) => (
+            <div key={tab} onKeyDown={(e) => handleKeyDown(e, tab)}>
+              <button
+                onClick={() => handleTabClick(tab)}
+                aria-label={TAB_LABELS[tab]}
+                aria-selected={activeTab === tab}
+                role="tab"
+                className={tabButtonClass(tab)}
+              >
+                {TAB_LABELS[tab]}
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Tab content */}
-      <div className="space-y-4">{contentMap[activeTab]}</div>
+      {/* Tab content with smooth transition */}
+      <div className="space-y-4 animate-fade-in">{contentMap[activeTab]}</div>
     </div>
   );
 }

@@ -168,36 +168,44 @@ export function MentorshipMeetingsTab({
   return (
     <div className="space-y-6">
       {pairs.length > 1 && (
-        <MentorshipPairPicker
-          pairs={pairs}
-          selectedPairId={selectedPairId}
-          onPairChange={handlePairChange}
-        />
+        <div className="pb-2">
+          <MentorshipPairPicker
+            pairs={pairs}
+            selectedPairId={selectedPairId}
+            onPairChange={handlePairChange}
+          />
+        </div>
       )}
 
-      {showForm && isMentor ? (
-        <MentorshipScheduleMeetingForm
-          pairId={selectedPairId}
-          orgId={orgId}
-          orgTimezone="UTC"
-          onMeetingCreated={handleMeetingCreated}
-          onCancel={() => setShowForm(false)}
-        />
-      ) : null}
-
-      {isMentor && !showForm && (
-        <Button onClick={() => setShowForm(true)}>Schedule Meeting</Button>
+      {/* Schedule Meeting Form */}
+      {isMentor && (
+        <div>
+          {showForm ? (
+            <div className="animate-fade-in">
+              <MentorshipScheduleMeetingForm
+                pairId={selectedPairId}
+                orgId={orgId}
+                orgTimezone="UTC"
+                onMeetingCreated={handleMeetingCreated}
+                onCancel={() => setShowForm(false)}
+              />
+            </div>
+          ) : (
+            <Button onClick={() => setShowForm(true)}>📅 Schedule Meeting</Button>
+          )}
+        </div>
       )}
 
       {isLoading ? (
-        <div className="text-center py-8">
+        <div className="text-center py-12">
           <p className="text-muted-foreground">Loading meetings...</p>
         </div>
       ) : upcoming.length === 0 && past.length === 0 ? (
-        <div className="text-center py-8">
+        <div className="text-center py-12">
+          <div className="text-4xl mb-3">📭</div>
           <p className="text-muted-foreground">
             {selectedPair
-              ? "No meetings scheduled yet."
+              ? "No meetings scheduled yet. Schedule your first mentorship meeting!"
               : "Select a pair to view meetings."}
           </p>
         </div>
@@ -205,23 +213,28 @@ export function MentorshipMeetingsTab({
         <>
           {/* Upcoming Meetings */}
           {upcoming.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="font-semibold text-foreground">Upcoming Meetings</h3>
+            <div className="space-y-4 animate-fade-in">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📅</span>
+                <h3 className="font-semibold text-foreground">Upcoming Meetings</h3>
+              </div>
               <div className="grid gap-4">
                 {upcoming.map((meeting) => (
-                  <Card key={meeting.id} className="p-4">
+                  <Card key={meeting.id} className="p-4 hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <h4 className="font-medium text-foreground truncate">
                           {meeting.title}
                         </h4>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-2">
+                          <span>📌</span>
                           {formatDateTime(meeting.scheduled_at)}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Duration: {meeting.duration_minutes} minutes
+                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                          <span>⏱</span>
+                          {meeting.duration_minutes} minutes
                         </p>
-                        <div className="flex items-center gap-2 mt-2">
+                        <div className="flex items-center gap-2 mt-3">
                           <Badge
                             variant={
                               meeting.platform === "google_meet"
@@ -235,27 +248,27 @@ export function MentorshipMeetingsTab({
                           </Badge>
                         </div>
                       </div>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2 flex-shrink-0">
                         {meeting.meeting_link ? (
                           <Link href={meeting.meeting_link} target="_blank">
                             <Button size="sm" variant="primary">
-                              Join Meeting
+                              Join
                             </Button>
                           </Link>
                         ) : meeting.calendar_sync_status === "failed" ? (
                           <Badge variant="error">
-                            Link unavailable — calendar invite failed
+                            Link unavailable
                           </Badge>
                         ) : meeting.calendar_sync_status === "none" ? (
                           <Badge variant="muted">
-                            No calendar connected
+                            No calendar
                           </Badge>
                         ) : null}
 
                         {(isMentor || isAdmin) && (
                           <Button
                             size="sm"
-                            variant="secondary"
+                            variant="ghost"
                             onClick={() => handleDeleteMeeting(meeting.id)}
                           >
                             Delete
@@ -271,31 +284,34 @@ export function MentorshipMeetingsTab({
 
           {/* Divider */}
           {upcoming.length > 0 && past.length > 0 && (
-            <div className="border-t border-border"></div>
+            <div className="border-t border-muted/40 my-2"></div>
           )}
 
           {/* Past Meetings */}
           {past.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="font-semibold text-foreground">Past Meetings</h3>
+            <div className="space-y-4 animate-fade-in">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">✓</span>
+                <h3 className="font-semibold text-foreground">Past Meetings</h3>
+              </div>
               <div className="space-y-2">
                 {past.map((meeting) => (
                   <div
                     key={meeting.id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30"
+                    className="flex items-start justify-between gap-4 p-3 rounded-lg border border-muted/40 bg-muted/20 hover:bg-muted/30 transition-colors"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground/80">
                         {meeting.title}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {formatDateTime(meeting.scheduled_at)}
                       </p>
                     </div>
                     {(isMentor || isAdmin) && (
                       <Button
                         size="sm"
-                        variant="secondary"
+                        variant="ghost"
                         onClick={() => handleDeleteMeeting(meeting.id)}
                       >
                         Delete

@@ -1,7 +1,5 @@
 "use client";
 
-import { Select } from "@/components/ui/select";
-
 interface MentorshipPairPickerProps {
   pairs: Array<{ id: string; mentorName: string; menteeName: string }>;
   selectedPairId: string;
@@ -18,16 +16,24 @@ export function MentorshipPairPicker({
     return null;
   }
 
-  const options = pairs.map((pair) => ({
-    value: pair.id,
-    label: `${pair.mentorName} → ${pair.menteeName}`,
-  }));
-
   return (
-    <Select
-      value={selectedPairId}
-      onChange={(e) => onPairChange(e.currentTarget.value)}
-      options={options}
-    />
+    <div className="flex flex-wrap gap-2">
+      {pairs.map((pair) => (
+        <button
+          key={pair.id}
+          onClick={() => onPairChange(pair.id)}
+          className={`px-3.5 py-2 text-sm font-medium rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+            selectedPairId === pair.id
+              ? "bg-foreground text-background shadow-md"
+              : "bg-muted/50 text-foreground hover:bg-muted border border-muted/60 hover:border-muted"
+          }`}
+          aria-pressed={selectedPairId === pair.id}
+        >
+          <span className="font-medium">{pair.mentorName}</span>
+          <span className="mx-1.5 text-muted-foreground/60">↔</span>
+          <span>{pair.menteeName}</span>
+        </button>
+      ))}
+    </div>
   );
 }
