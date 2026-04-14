@@ -836,6 +836,10 @@
   "mentorship": {
     "noPairs": "Nessuna coppia di mentoring ancora",
     "pairsWillAppear": "Le coppie appariranno qui una volta create.",
+    "noActivePair": "Nessuna coppia di mentoring attiva selezionata",
+    "selectOrCreatePair": "Seleziona una coppia di mentoring o creane una per iniziare a monitorare le attivita.",
+    "noTasks": "Nessuna attivita ancora",
+    "tasksWillAppear": "Le attivita appariranno qui una volta create.",
     "willingToHelp": "Disponibili ad aiutare",
     "directoryDesc": "Entra in contatto con ex studenti disponibili a fare da mentore e condividere la loro esperienza",
     "industry": "Settore",

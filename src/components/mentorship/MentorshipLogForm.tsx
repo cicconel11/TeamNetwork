@@ -7,9 +7,10 @@ import { Button, Input, Textarea } from "@/components/ui";
 interface MentorshipLogFormProps {
   orgId: string;
   pairId: string;
+  onLogCreated?: () => void;
 }
 
-export function MentorshipLogForm({ orgId, pairId }: MentorshipLogFormProps) {
+export function MentorshipLogForm({ orgId, pairId, onLogCreated }: MentorshipLogFormProps) {
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
   const [progressMetric, setProgressMetric] = useState<string>("");
@@ -50,14 +51,13 @@ export function MentorshipLogForm({ orgId, pairId }: MentorshipLogFormProps) {
     setNotes("");
     setProgressMetric("");
     setIsSaving(false);
+    onLogCreated?.();
   };
 
   return (
-    <form onSubmit={handleSave} className="space-y-3">
+    <form onSubmit={handleSave} className="space-y-2">
       {error && (
-        <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-          {error}
-        </div>
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
       <Input
         label="Date"

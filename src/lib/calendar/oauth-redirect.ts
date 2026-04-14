@@ -7,9 +7,11 @@ const ALLOWED_REDIRECT_PATHS = new Set([
 ]);
 
 const ORG_CALENDAR_REDIRECT_PATTERN = /^\/[^/]+\/calendar(?:\/[^?#]+(?:\/[^?#]+)*)?$/;
+const ORG_MENTORSHIP_REDIRECT_PATTERN = /^\/[^/]+\/mentorship(?:\/[^?#]+(?:\/[^?#]+)*)?$/;
 
 export function sanitizeCalendarOAuthRedirectPath(rawPath: string): string {
-  const basePath = rawPath.split("?")[0].trim();
+  const normalizedPath = rawPath.trim();
+  const basePath = normalizedPath.split("?")[0];
 
   if (!basePath.startsWith("/")) {
     return DEFAULT_CALENDAR_OAUTH_REDIRECT_PATH;
@@ -23,8 +25,12 @@ export function sanitizeCalendarOAuthRedirectPath(rawPath: string): string {
     return DEFAULT_CALENDAR_OAUTH_REDIRECT_PATH;
   }
 
-  if (ALLOWED_REDIRECT_PATHS.has(basePath) || ORG_CALENDAR_REDIRECT_PATTERN.test(basePath)) {
-    return basePath;
+  if (
+    ALLOWED_REDIRECT_PATHS.has(basePath) ||
+    ORG_CALENDAR_REDIRECT_PATTERN.test(basePath) ||
+    ORG_MENTORSHIP_REDIRECT_PATTERN.test(basePath)
+  ) {
+    return normalizedPath;
   }
 
   return DEFAULT_CALENDAR_OAUTH_REDIRECT_PATH;

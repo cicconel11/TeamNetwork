@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  canLogMentorshipActivity,
   getMentorshipSectionOrder,
   getMentorshipStatusTranslationKey,
   getVisibleMentorshipPairs,
@@ -44,6 +45,29 @@ test("isUserInMentorshipPair highlights both mentor and mentee identities", () =
   assert.equal(isUserInMentorshipPair(pair, "mentee-1"), true);
   assert.equal(isUserInMentorshipPair(pair, "someone-else"), false);
   assert.equal(isUserInMentorshipPair(pair), false);
+});
+
+test("canLogMentorshipActivity matches mentorship log RLS roles", () => {
+  assert.equal(
+    canLogMentorshipActivity({ role: "admin", status: "active" }),
+    true
+  );
+  assert.equal(
+    canLogMentorshipActivity({ role: "active_member", status: "active" }),
+    true
+  );
+  assert.equal(
+    canLogMentorshipActivity({ role: "alumni", status: "active" }),
+    false
+  );
+  assert.equal(
+    canLogMentorshipActivity({ role: "parent", status: "active" }),
+    false
+  );
+  assert.equal(
+    canLogMentorshipActivity({ role: "active_member", status: "revoked" }),
+    false
+  );
 });
 
 test("getMentorshipStatusTranslationKey normalizes mentorship status labels", () => {

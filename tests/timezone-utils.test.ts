@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  getDateInputValue,
   localToUtcIso,
   utcToLocalParts,
   resolveOrgTimezone,
@@ -23,6 +24,25 @@ describe("resolveOrgTimezone", () => {
   it("falls back to America/New_York for invalid timezone", () => {
     assert.equal(resolveOrgTimezone("Not/A/Timezone"), "America/New_York");
     assert.equal(resolveOrgTimezone(""), "America/New_York");
+  });
+});
+
+describe("getDateInputValue", () => {
+  it("formats a date for input[type=date]", () => {
+    assert.equal(
+      getDateInputValue(new Date("2026-04-15T12:30:00.000Z"), "UTC"),
+      "2026-04-15"
+    );
+  });
+
+  it("uses the local calendar day instead of the UTC day", () => {
+    assert.equal(
+      getDateInputValue(
+        new Date("2026-04-15T02:30:00.000Z"),
+        "America/Los_Angeles"
+      ),
+      "2026-04-14"
+    );
   });
 });
 

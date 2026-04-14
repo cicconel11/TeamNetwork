@@ -836,6 +836,10 @@
   "mentorship": {
     "noPairs": "Nenhum par de mentoria ainda",
     "pairsWillAppear": "Os pares aparecerao aqui apos serem criados.",
+    "noActivePair": "Nenhum par de mentoria ativo selecionado",
+    "selectOrCreatePair": "Selecione um par de mentoria ou crie um para comecar a acompanhar tarefas.",
+    "noTasks": "Nenhuma tarefa ainda",
+    "tasksWillAppear": "As tarefas aparecerao aqui apos serem criadas.",
     "willingToHelp": "Disponivel para ajudar",
     "directoryDesc": "Conecte-se com ex-alunos disponiveis para orientar e compartilhar sua experiencia",
     "industry": "Setor",

@@ -31,6 +31,16 @@ export function isUserInMentorshipPair(
   );
 }
 
+export function canLogMentorshipActivity(params: {
+  role: string | null | undefined;
+  status: string | null | undefined;
+}): boolean {
+  return (
+    params.status === "active" &&
+    (params.role === "admin" || params.role === "active_member")
+  );
+}
+
 export function getMentorshipStatusTranslationKey(status: string): string {
   switch (status) {
     case "completed":

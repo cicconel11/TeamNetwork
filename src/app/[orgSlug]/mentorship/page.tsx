@@ -1,26 +1,45 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
 import { MentorshipContextStrip } from "@/components/mentorship/MentorshipContextStrip";
-import { MentorshipPairsList } from "@/components/mentorship/MentorshipPairsList";
 import { MentorDirectory } from "@/components/mentorship/MentorDirectory";
+import { MentorshipTabShell } from "@/components/mentorship/MentorshipTabShell";
+import { MentorshipActivityTab } from "@/components/mentorship/MentorshipActivityTab";
+import { MentorshipPageSkeleton } from "@/components/skeletons/pages/MentorshipPageSkeleton";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import { getMentorshipSectionOrder } from "@/lib/mentorship/presentation";
+import { canLogMentorshipActivity } from "@/lib/mentorship/presentation";
+import { parseMentorshipTab } from "@/lib/mentorship/view-state";
+import { baseSchemas } from "@/lib/schemas";
+import { resolveOrgTimezone } from "@/lib/utils/timezone";
+import { decryptToken } from "@/lib/crypto/token-encryption";
 
 interface MentorshipPageProps {
   params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<{ tab?: string; pair?: string }>;
 }
 
-export default async function MentorshipPage({ params }: MentorshipPageProps) {
+export default async function MentorshipPage({ params, searchParams }: MentorshipPageProps) {
   const { orgSlug } = await params;
+  const { tab: tabParam, pair: pairParam } = await searchParams;
+
   const orgCtx = await getOrgContext(orgSlug);
   const supabase = await createClient();
 
   if (!orgCtx.organization) return null;
 
   const orgId = orgCtx.organization.id;
+
+  // Parse tab parameter
+  const activeTab = parseMentorshipTab(tabParam);
+
+  // Validate pair param as UUID
+  const pairIdParam =
+    pairParam && baseSchemas.uuid.safeParse(pairParam).success
+      ? pairParam
+      : null;
 
   // Stage 1: pairs + currentUserProfile + mentorProfiles in parallel (all independent)
   const [{ data: pairs }, { data: currentUserProfile }, { data: mentorProfiles }] = await Promise.all([
@@ -53,9 +72,9 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     userIds.add(p.mentee_user_id);
   });
 
-  // Stage 2: alumni data + logs + users in parallel (depend on mentorProfiles / pairs)
+  // Stage 2: alumni data + logs + users + tasks + meetings in parallel
   const mentorUserIds = mentorProfiles?.map((p) => p.user_id) || [];
-  const [{ data: mentorAlumni }, { data: logs }, { data: users }] = await Promise.all([
+  const [{ data: mentorAlumni }, { data: logs }, { data: users }, { data: tasks }, { data: meetings }] = await Promise.all([
     mentorUserIds.length > 0
       ? supabase
           .from("alumni")
@@ -77,6 +96,25 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     userIds.size > 0
       ? supabase.from("users").select("id,name,email").in("id", Array.from(userIds))
       : Promise.resolve({ data: [] as never[] }),
+    pairIds.length > 0
+      ? supabase
+          .from("mentorship_tasks")
+          .select("*")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .in("pair_id", pairIds)
+          .order("due_date", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] as never[] }),
+    pairIds.length > 0
+      ? supabase
+          .from("mentorship_meetings")
+          .select("*")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .in("pair_id", pairIds)
+          .order("scheduled_at", { ascending: true })
+      : Promise.resolve({ data: [] as never[] }),
   ]);
 
   const filteredPairs =
@@ -87,6 +125,31 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
             ? p.mentee_user_id === orgCtx.userId
             : p.mentor_user_id === orgCtx.userId
         );
+
+  // Determine initial pair
+  const visiblePairIds = filteredPairs.map((p) => p.id);
+  const initialPairId =
+    pairIdParam && visiblePairIds.includes(pairIdParam)
+      ? pairIdParam
+      : visiblePairIds[0] ?? null;
+
+  // Decrypt meeting links before passing to client
+  const decryptionKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
+  const decryptedMeetings = (meetings || []).map((m) => ({
+    ...m,
+    meeting_link: m.meeting_link && decryptionKey
+      ? (() => { try { return decryptToken(m.meeting_link, decryptionKey); } catch { return null; } })()
+      : null,
+  }));
+
+  // Split meetings into upcoming and past
+  const now = new Date();
+  const upcomingMeetings = decryptedMeetings.filter(
+    (m) => new Date(m.scheduled_end_at) > now && !m.deleted_at
+  );
+  const pastMeetings = decryptedMeetings.filter(
+    (m) => new Date(m.scheduled_end_at) <= now && !m.deleted_at
+  );
 
   // Prepare logs for the client component
   const logsForClient = (logs || []).map((log) => ({
@@ -132,7 +195,6 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     };
   });
 
-  // Extract unique industries and years for filters
   const industries = Array.from(
     new Set(
       mentorsForDirectory
@@ -158,9 +220,7 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/mentorship", navConfig, t, locale);
 
-  // Compute "my pair" context for the active member header strip.
-  const hasPairs = filteredPairs.length > 0;
-
+  // Compute "my pair" context for the active member header strip
   const myPair =
     orgCtx.role === "active_member"
       ? filteredPairs.find((p) => p.mentee_user_id === orgCtx.userId) ?? null
@@ -174,29 +234,57 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     ? logsForClient.find((l) => l.pair_id === myPair.id)?.entry_date ?? null
     : null;
 
-  const pairsList = (
-    <MentorshipPairsList
-      initialPairs={filteredPairs}
-      logs={logsForClient}
-      users={usersForClient}
-      isAdmin={orgCtx.isAdmin}
-      canLogActivity={orgCtx.isAdmin || orgCtx.isActiveMember}
-      orgId={orgId}
-      currentUserId={orgCtx.userId ?? undefined}
-      emptyStateAction={
-        orgCtx.role === "active_member" ? (
-          <a
-            href="#mentor-directory"
-            className="text-sm text-[color:var(--color-org-secondary)] hover:underline"
-          >
-            {tMentorship("browseMentors")} ↓
-          </a>
-        ) : undefined
-      }
-    />
+  // Format pairs for tab components
+  const pairsForTabs = filteredPairs.map((p) => ({
+    id: p.id,
+    mentorUserId: p.mentor_user_id,
+    mentorName:
+      usersForClient.find((u) => u.id === p.mentor_user_id)?.name || "Unknown",
+    menteeName:
+      usersForClient.find((u) => u.id === p.mentee_user_id)?.name || "Unknown",
+  }));
+  const isAdmin = orgCtx.isAdmin;
+  const canLogActivity = canLogMentorshipActivity({
+    role: orgCtx.role,
+    status: orgCtx.status,
+  });
+  const currentUserId = orgCtx.userId ?? "";
+  const orgTimezone = resolveOrgTimezone(orgCtx.organization.timezone);
+
+  // Build a serializable user map for the client
+  const userMap: Record<string, string> = Object.fromEntries(
+    usersForClient.map((u) => [u.id, u.name || u.email || "Unknown"])
   );
 
-  const directory = (
+  const activityContent = (
+    <>
+      <MentorshipContextStrip
+        role={orgCtx.role ?? ""}
+        orgId={orgId}
+        orgSlug={orgSlug}
+        myMentorName={myMentorName}
+        myLastLogDate={myLastLogDate}
+      />
+
+      <MentorshipActivityTab
+        initialTasks={tasks || []}
+        initialUpcoming={upcomingMeetings}
+        initialPast={pastMeetings}
+        initialLogs={logsForClient}
+        pairs={pairsForTabs}
+        initialPairId={initialPairId || ""}
+        isAdmin={isAdmin}
+        canLogActivity={canLogActivity}
+        orgId={orgId}
+        orgSlug={orgSlug}
+        currentUserId={currentUserId}
+        orgTimezone={orgTimezone}
+        userMap={userMap}
+      />
+    </>
+  );
+
+  const directoryContent = (
     <MentorDirectory
       mentors={mentorsForDirectory}
       industries={industries}
@@ -207,40 +295,21 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     />
   );
 
-  // Order: active members & alumni with a pair see their pairs first;
-  // admins always see the directory first (they scan while managing).
-  const sectionOrder = getMentorshipSectionOrder({
-    hasPairs,
-    isAdmin: orgCtx.isAdmin,
-  });
-
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={pageLabel}
         description={tMentorship("editorialStrapline")}
-        variant="editorial"
       />
 
-      <MentorshipContextStrip
-        role={orgCtx.role ?? ""}
-        orgId={orgId}
-        orgSlug={orgSlug}
-        myMentorName={myMentorName}
-        myLastLogDate={myLastLogDate}
-      />
-
-      {sectionOrder === "pairs-first" ? (
-        <>
-          {pairsList}
-          {directory}
-        </>
-      ) : (
-        <>
-          {directory}
-          {pairsList}
-        </>
-      )}
+      <Suspense fallback={<MentorshipPageSkeleton />}>
+        <MentorshipTabShell
+          initialTab={activeTab}
+          orgSlug={orgSlug}
+          activity={activityContent}
+          directory={directoryContent}
+        />
+      </Suspense>
     </div>
   );
 }

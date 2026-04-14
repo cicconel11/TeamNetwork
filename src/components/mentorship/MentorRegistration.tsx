@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardHeader, CardTitle, Input, Textarea, Button } from "@/components/ui";
+import { Input, Textarea, Button } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { createMentorProfileSchema } from "@/lib/schemas/mentorship";
 
@@ -85,13 +85,13 @@ export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps)
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Become a Mentor</CardTitle>
-        <p className="text-sm text-muted-foreground mt-1">
+    <div>
+      <div className="pb-3 mb-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Become a Mentor</h3>
+        <p className="text-sm text-[var(--muted-foreground)] mt-1">
           Fill out your profile to let current members know you&apos;re available to help
         </p>
-      </CardHeader>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <Textarea
@@ -110,8 +110,8 @@ export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps)
           onChange={(e) => setFormData({ ...formData, expertise_areas: e.target.value })}
         />
 
-        <div className="border-t border-border pt-4">
-          <h4 className="text-sm font-medium mb-3">Contact Information</h4>
+        <div className="pt-3">
+          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">Contact Information</h4>
           <div className="space-y-4">
             <Input
               label="Email"
@@ -140,12 +140,10 @@ export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps)
         </div>
 
         {error && (
-          <div className="p-3 bg-error/10 border border-error/20 rounded-md">
-            <p className="text-sm text-error">{error}</p>
-          </div>
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
 
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 pt-3">
           <Button
             type="button"
             variant="ghost"
@@ -162,6 +160,6 @@ export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps)
           </Button>
         </div>
       </form>
-    </Card>
+    </div>
   );
 }
