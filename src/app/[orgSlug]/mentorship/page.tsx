@@ -1,26 +1,45 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
 import { MentorshipContextStrip } from "@/components/mentorship/MentorshipContextStrip";
 import { MentorshipPairsList } from "@/components/mentorship/MentorshipPairsList";
 import { MentorDirectory } from "@/components/mentorship/MentorDirectory";
+import { MentorshipTabShell } from "@/components/mentorship/MentorshipTabShell";
+import { MentorshipTasksTab } from "@/components/mentorship/MentorshipTasksTab";
+import { MentorshipMeetingsTab } from "@/components/mentorship/MentorshipMeetingsTab";
+import { MentorshipPageSkeleton } from "@/components/skeletons/pages/MentorshipPageSkeleton";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { getMentorshipSectionOrder } from "@/lib/mentorship/presentation";
+import { parseMentorshipTab } from "@/lib/mentorship/view-state";
+import { baseSchemas } from "@/lib/schemas";
 
 interface MentorshipPageProps {
   params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<{ tab?: string; pair?: string }>;
 }
 
-export default async function MentorshipPage({ params }: MentorshipPageProps) {
+export default async function MentorshipPage({ params, searchParams }: MentorshipPageProps) {
   const { orgSlug } = await params;
+  const { tab: tabParam, pair: pairParam } = await searchParams;
+
   const orgCtx = await getOrgContext(orgSlug);
   const supabase = await createClient();
 
   if (!orgCtx.organization) return null;
 
   const orgId = orgCtx.organization.id;
+
+  // Parse tab parameter
+  const activeTab = parseMentorshipTab(tabParam);
+
+  // Validate pair param as UUID
+  const pairIdParam =
+    pairParam && baseSchemas.uuid.safeParse(pairParam).success
+      ? pairParam
+      : null;
 
   // Stage 1: pairs + currentUserProfile + mentorProfiles in parallel (all independent)
   const [{ data: pairs }, { data: currentUserProfile }, { data: mentorProfiles }] = await Promise.all([
@@ -53,9 +72,9 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     userIds.add(p.mentee_user_id);
   });
 
-  // Stage 2: alumni data + logs + users in parallel (depend on mentorProfiles / pairs)
+  // Stage 2: alumni data + logs + users + tasks + meetings in parallel (depend on mentorProfiles / pairs)
   const mentorUserIds = mentorProfiles?.map((p) => p.user_id) || [];
-  const [{ data: mentorAlumni }, { data: logs }, { data: users }] = await Promise.all([
+  const [{ data: mentorAlumni }, { data: logs }, { data: users }, { data: tasks }, { data: meetings }] = await Promise.all([
     mentorUserIds.length > 0
       ? supabase
           .from("alumni")
@@ -77,6 +96,24 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     userIds.size > 0
       ? supabase.from("users").select("id,name,email").in("id", Array.from(userIds))
       : Promise.resolve({ data: [] as never[] }),
+    pairIds.length > 0
+      ? supabase
+          .from("mentorship_tasks")
+          .select("*")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .in("pair_id", pairIds)
+          .order("due_date", { ascending: true, nullsLast: true })
+      : Promise.resolve({ data: [] as never[] }),
+    pairIds.length > 0
+      ? supabase
+          .from("mentorship_meetings")
+          .select("*")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .in("pair_id", pairIds)
+          .order("scheduled_at", { ascending: true })
+      : Promise.resolve({ data: [] as never[] }),
   ]);
 
   const filteredPairs =
@@ -87,6 +124,22 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
             ? p.mentee_user_id === orgCtx.userId
             : p.mentor_user_id === orgCtx.userId
         );
+
+  // Determine initial pair
+  const visiblePairIds = filteredPairs.map((p) => p.id);
+  const initialPairId =
+    pairIdParam && visiblePairIds.includes(pairIdParam)
+      ? pairIdParam
+      : visiblePairIds[0] ?? null;
+
+  // Split meetings into upcoming and past
+  const now = new Date();
+  const upcomingMeetings = (meetings || []).filter(
+    (m) => new Date(m.scheduled_end_at) > now && !m.deleted_at
+  );
+  const pastMeetings = (meetings || []).filter(
+    (m) => new Date(m.scheduled_end_at) <= now && !m.deleted_at
+  );
 
   // Prepare logs for the client component
   const logsForClient = (logs || []).map((log) => ({
@@ -174,6 +227,15 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     ? logsForClient.find((l) => l.pair_id === myPair.id)?.entry_date ?? null
     : null;
 
+  // Format pairs for tab components
+  const pairsForTabs = filteredPairs.map((p) => ({
+    id: p.id,
+    mentorName:
+      usersForClient.find((u) => u.id === p.mentor_user_id)?.name || "Unknown",
+    menteeName:
+      usersForClient.find((u) => u.id === p.mentee_user_id)?.name || "Unknown",
+  }));
+
   const pairsList = (
     <MentorshipPairsList
       initialPairs={filteredPairs}
@@ -214,14 +276,14 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     isAdmin: orgCtx.isAdmin,
   });
 
-  return (
-    <div className="space-y-8 animate-fade-in">
-      <PageHeader
-        title={pageLabel}
-        description={tMentorship("editorialStrapline")}
-        variant="editorial"
-      />
+  const isMentor =
+    orgCtx.role === "alumni" ||
+    filteredPairs.some((p) => p.mentor_user_id === orgCtx.userId);
+  const isAdmin = orgCtx.isAdmin;
+  const currentUserId = orgCtx.userId ?? "";
 
+  const overviewContent = (
+    <>
       <MentorshipContextStrip
         role={orgCtx.role ?? ""}
         orgId={orgId}
@@ -241,6 +303,56 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
           {pairsList}
         </>
       )}
+    </>
+  );
+
+  const tasksContent = (
+    <MentorshipTasksTab
+      initialTasks={tasks || []}
+      pairs={pairsForTabs}
+      initialPairId={initialPairId || ""}
+      isMentor={isMentor}
+      isAdmin={isAdmin}
+      orgId={orgId}
+      orgSlug={orgSlug}
+      currentUserId={currentUserId}
+    />
+  );
+
+  const meetingsContent = (
+    <MentorshipMeetingsTab
+      initialUpcoming={upcomingMeetings}
+      initialPast={pastMeetings}
+      pairs={pairsForTabs}
+      initialPairId={initialPairId || ""}
+      isMentor={isMentor}
+      isAdmin={isAdmin}
+      orgId={orgId}
+      orgSlug={orgSlug}
+      currentUserId={currentUserId}
+    />
+  );
+
+  const directoryContent = directory;
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <PageHeader
+        title={pageLabel}
+        description={tMentorship("editorialStrapline")}
+        variant="editorial"
+      />
+
+      <Suspense fallback={<MentorshipPageSkeleton />}>
+        <MentorshipTabShell
+          initialTab={activeTab}
+          orgSlug={orgSlug}
+          overview={overviewContent}
+          tasks={tasksContent}
+          meetings={meetingsContent}
+          directory={directoryContent}
+        />
+      </Suspense>
     </div>
   );
 }
