@@ -135,7 +135,7 @@ export function LandingHeader() {
             href="/auth/login"
             variant="custom"
             size="sm"
-            className="whitespace-nowrap px-2 py-2 text-sm text-landing-cream/80 hover:bg-landing-cream/10 hover:text-landing-cream sm:px-4 sm:py-2.5"
+            className="hidden whitespace-nowrap px-2 py-2 text-sm text-landing-cream/80 hover:bg-landing-cream/10 hover:text-landing-cream sm:inline-flex sm:px-4 sm:py-2.5"
           >
             Sign In
           </ButtonLink>

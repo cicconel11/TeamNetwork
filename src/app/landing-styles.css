@@ -295,6 +295,14 @@ noscript~.scroll-reveal {
   transform: none !important;
 }
 
+/* hero-animate: JS animates from 0 → 1. Before JS loads,
+   ensure content is visible so no flash-of-invisible-content. */
+.hero-animate {
+  opacity: 1;
+}
+/* JS will override inline styles directly; this baseline keeps
+   SSR/noscript/slow-JS environments readable. */
+
 /* Fallback visibility after page load - scroll-reveal elements need
    compositor promotion only during animation (handled by LandingAnimations.tsx),
    not permanently via will-change. */

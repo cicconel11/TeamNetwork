@@ -226,10 +226,10 @@ export async function fireAndForgetDevAdminAudit(
   try {
     await writer(entry);
   } catch (error) {
-    console.error("[dev-admin-audit] Failed to log:", {
-      action: entry.action,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    // Edge runtime cannot use Node crypto — audit writes from middleware silently skip.
+    if (message.includes("edge runtime does not support")) return;
+    console.error("[dev-admin-audit] Failed to log:", { action: entry.action, error: message });
   }
 }
 

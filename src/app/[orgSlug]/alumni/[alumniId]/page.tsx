@@ -433,6 +433,12 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
                 <dd className="text-foreground text-sm mt-0.5">{alum.graduation_year}</dd>
               </div>
             )}
+            {alum.birth_year && (
+              <div>
+                <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Year of Birth</dt>
+                <dd className="text-foreground text-sm mt-0.5">{alum.birth_year}</dd>
+              </div>
+            )}
             {alum.major && (
               <div>
                 <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Major</dt>

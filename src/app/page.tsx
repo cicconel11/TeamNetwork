@@ -5,9 +5,8 @@ import dynamic from "next/dynamic";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
-import { FEATURES, FAQ_ITEMS } from "@/lib/pricing";
+import { FAQ_ITEMS } from "@/lib/pricing";
 import { PricingSection } from "@/components/marketing/PricingSection";
-import { FeatureIcon } from "@/components/marketing/icons";
 import "./landing-styles.css";
 
 export const metadata: Metadata = {
@@ -68,6 +67,17 @@ const BackToTop = dynamic(
   { ssr: false }
 );
 
+const BackgroundPaths = dynamic(
+  () => import("@/components/marketing/BackgroundPaths").then((mod) => mod.BackgroundPaths),
+  { ssr: false }
+);
+
+const FeaturesGrid = dynamic(
+  () => import("@/components/marketing/FeaturesGrid").then((mod) => mod.FeaturesGrid),
+  { ssr: false }
+);
+
+
 
 export default async function LandingPage() {
   const supabase = await createClient();
@@ -91,11 +101,14 @@ export default async function LandingPage() {
       <LandingHeader />
 
       {/* Hero - "The Emergence" */}
-      <section className="relative z-10 px-6 pb-20 pt-12 sm:px-8 lg:px-6 lg:pt-20">
+      <section className="relative z-10 overflow-hidden px-6 pb-20 pt-12 sm:px-8 lg:px-6 lg:pt-20">
+        {/* Animated paths — atmospheric background */}
+        <BackgroundPaths />
+
         {/* Stadium Light Beams */}
         <StadiumLightBeams />
 
-        <div className="mx-auto max-w-6xl">
+        <div className="relative z-10 mx-auto max-w-6xl">
           <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
             {/* Left - Copy (centered on mobile/tablet, left-aligned on desktop) */}
             <div className="text-center lg:text-left">
@@ -108,7 +121,7 @@ export default async function LandingPage() {
                 </div>
               </div>
 
-              <h1 className="hero-animate mb-6 flex justify-center lg:justify-start">
+              <h1 className="hero-animate mb-3 flex justify-center lg:justify-start">
                 <span className="sr-only">TeamNetwork: The platform that keeps your organization connected, past and present</span>
                 <Image
                   src="/TeamNetwor.png"
@@ -121,8 +134,15 @@ export default async function LandingPage() {
                 />
               </h1>
 
-              <p className="hero-animate mx-auto mb-10 max-w-lg text-lg leading-relaxed text-landing-cream/70 sm:text-xl lg:mx-0">
-                Member directories, events, donations, philanthropy, and records — all in one place. Built for sports teams, Greek life, clubs, and organizations of all kinds.
+              <p className="hero-animate mb-3 text-center text-2xl font-semibold tracking-tight text-landing-cream sm:text-3xl lg:text-left lg:text-3xl">
+                One platform. Every member,<br className="hidden sm:block" /> past and present.
+              </p>
+
+              <p className="hero-animate mx-auto mb-10 max-w-lg text-base leading-relaxed text-landing-cream/80 sm:text-lg lg:mx-0">
+                Directories, events, donations, philanthropy, and records — all in one place. Built for{" "}
+                <span className="font-medium text-landing-cream">sports teams</span>,{" "}
+                <span className="font-medium text-landing-cream">Greek life</span>,{" "}
+                <span className="font-medium text-landing-cream">clubs</span>, and organizations of all kinds.
               </p>
 
               <div className="hero-animate flex flex-col items-stretch gap-4 sm:flex-row sm:justify-center lg:justify-start">
@@ -251,25 +271,7 @@ export default async function LandingPage() {
             </p>
           </div>
 
-          <div className="features-grid bento-grid">
-            {FEATURES.map((feature, i) => (
-              <div
-                key={feature.title}
-                className="trophy-card bg-landing-navy-light/50 backdrop-blur-sm rounded-2xl p-6 overflow-hidden"
-              >
-                {/* Trophy watermark */}
-                <svg className="trophy-watermark" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m3.044-1.35a6.726 6.726 0 01-2.748 1.35m0 0a6.772 6.772 0 01-3.044 0" />
-                </svg>
-
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-landing-cream/10 to-landing-cream/5 flex items-center justify-center mb-5">
-                  <FeatureIcon index={i} />
-                </div>
-                <h3 className="font-display font-semibold text-lg text-landing-cream mb-2">{feature.title}</h3>
-                <p className="text-sm text-landing-cream/50 leading-relaxed">{feature.description}</p>
-              </div>
-            ))}
-          </div>
+          <FeaturesGrid />
         </div>
       </section>
 
