@@ -10,6 +10,7 @@ import {
   LayoutChangeEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useRouter, useNavigation } from "expo-router";
@@ -67,7 +68,7 @@ type DiscussionThreadWithAuthor = DiscussionThread & {
 };
 
 export default function ChatGroupsScreen() {
-  const { orgId, orgSlug } = useOrg();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin } = useOrgRole();
   const router = useRouter();
   const navigation = useNavigation();
@@ -818,9 +819,20 @@ export default function ChatGroupsScreen() {
               style={styles.orgLogoButton}
               onPress={handleDrawerToggle}
               accessibilityRole="button"
-              accessibilityLabel="Open drawer"
+              accessibilityLabel={`Open navigation for ${orgName ?? "organization"}`}
             >
-              {/* Org logo or avatar */}
+              {orgLogoUrl ? (
+                <Image
+                  source={orgLogoUrl}
+                  style={styles.orgLogo}
+                  contentFit="contain"
+                  transition={200}
+                />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
+                </View>
+              )}
             </Pressable>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Chat</Text>

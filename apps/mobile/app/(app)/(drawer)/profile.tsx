@@ -12,7 +12,7 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Camera } from "lucide-react-native";
+import { ChevronLeft, Camera, Trash2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Database, Organization } from "@teammeet/types";
@@ -61,7 +61,7 @@ export default function ProfileScreen() {
   const routeSlug = getParamValue(currentSlug);
   const { user, isLoading: authLoading } = useAuth();
   const { organizations, loading: organizationsLoading } = useOrganizations();
-  const { neutral } = useAppColorScheme();
+  const { neutral, semantic } = useAppColorScheme();
   const [selectedOrgSlug, setSelectedOrgSlug] = useState<string | null>(null);
   const [profileRole, setProfileRole] = useState<EditableProfileRole | null>(null);
   const [profileRecordId, setProfileRecordId] = useState<string | null>(null);
@@ -302,6 +302,18 @@ export default function ProfileScreen() {
     },
     buttonDisabled: {
       opacity: 0.6,
+    },
+    deleteAccountRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: SPACING.sm,
+      paddingVertical: SPACING.md,
+      marginTop: SPACING.sm,
+    },
+    deleteAccountLabel: {
+      ...TYPOGRAPHY.labelLarge,
+      color: s.error,
     },
   }));
 
@@ -893,6 +905,24 @@ export default function ProfileScreen() {
                 ) : (
                   <Text style={styles.primaryButtonText}>Save Changes</Text>
                 )}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Delete My Account"
+                onPress={() => {
+                  router.push({
+                    pathname: "/(app)/(drawer)/delete-account",
+                    params: routeSlug ? { currentSlug: routeSlug } : undefined,
+                  } as any);
+                }}
+                style={({ pressed }) => [
+                  styles.deleteAccountRow,
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <Trash2 size={18} color={semantic.error} />
+                <Text style={styles.deleteAccountLabel}>Delete My Account</Text>
               </Pressable>
             </>
           ) : null}
