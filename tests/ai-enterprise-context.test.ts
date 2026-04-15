@@ -6,6 +6,8 @@ function createMockServiceSupabase(options: {
   membership?: { role: string; status: string } | null;
   organization?: { enterprise_id: string | null } | null;
   enterpriseRole?: { role: string } | null;
+  organizationError?: unknown;
+  enterpriseRoleError?: unknown;
 }) {
   return {
     from(table: string) {
@@ -24,9 +26,15 @@ function createMockServiceSupabase(options: {
           }
           if (table === "organizations") {
             assert.equal(filters.get("id"), "org-1");
+            if (options.organizationError) {
+              return { data: null, error: options.organizationError };
+            }
             return { data: options.organization ?? null, error: null };
           }
           if (table === "user_enterprise_roles") {
+            if (options.enterpriseRoleError) {
+              return { data: null, error: options.enterpriseRoleError };
+            }
             return { data: options.enterpriseRole ?? null, error: null };
           }
           return { data: null, error: null };
@@ -84,6 +92,47 @@ describe("enterprise AI org context", () => {
     if (result.ok) {
       assert.equal(result.enterpriseId, undefined);
       assert.equal(result.enterpriseRole, undefined);
+    }
+  });
+
+  it("fails closed with 503 when the organizations lookup errors", async () => {
+    const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
+    const result = await getAiOrgContext(
+      "org-1",
+      { id: "user-1", email: "admin@example.com" } as User,
+      rateLimit,
+      {
+        serviceSupabase: createMockServiceSupabase({
+          membership: { role: "admin", status: "active" },
+          organizationError: new Error("db down"),
+        }),
+      },
+    );
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.response.status, 503);
+    }
+  });
+
+  it("fails closed with 503 when the enterprise role lookup errors", async () => {
+    const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
+    const result = await getAiOrgContext(
+      "org-1",
+      { id: "user-1", email: "admin@example.com" } as User,
+      rateLimit,
+      {
+        serviceSupabase: createMockServiceSupabase({
+          membership: { role: "admin", status: "active" },
+          organization: { enterprise_id: "ent-1" },
+          enterpriseRoleError: new Error("replica lag"),
+        }),
+      },
+    );
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.response.status, 503);
     }
   });
 

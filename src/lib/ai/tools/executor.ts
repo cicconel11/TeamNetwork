@@ -6,6 +6,7 @@ import { listEnterpriseAlumni } from "./enterprise/list-alumni";
 import { getEnterpriseStats } from "./enterprise/stats";
 import { listManagedOrgs } from "./enterprise/managed-orgs";
 import { getEnterpriseQuota } from "./enterprise/quota";
+import { getEnterprisePermissions, type EnterpriseRole } from "@/types/enterprise";
 import {
   EXTRACTION_TOOL_TIMEOUT_MS,
   isStageTimeoutError,
@@ -80,7 +81,7 @@ export interface ToolExecutionContext {
   orgId: string;
   userId: string;
   enterpriseId?: string;
-  enterpriseRole?: string;
+  enterpriseRole?: EnterpriseRole;
   serviceSupabase: SupabaseClient;
   authorization: ToolExecutionAuthorization;
   threadId?: string;
@@ -347,6 +348,10 @@ const ENTERPRISE_TOOL_NAMES = new Set<ToolName>([
   "list_enterprise_alumni",
   "get_enterprise_stats",
   "list_managed_orgs",
+  "get_enterprise_quota",
+]);
+
+const BILLING_ONLY_ENTERPRISE_TOOLS = new Set<ToolName>([
   "get_enterprise_quota",
 ]);
 
@@ -2677,8 +2682,18 @@ export async function executeToolCall(
     }
   }
 
-  if (ENTERPRISE_TOOL_NAMES.has(toolName) && !ctx.enterpriseId) {
-    return toolError("This assistant does not have enterprise context for this thread.");
+  if (ENTERPRISE_TOOL_NAMES.has(toolName)) {
+    if (!ctx.enterpriseId || !ctx.enterpriseRole) {
+      return toolError("This assistant does not have enterprise context for this thread.");
+    }
+    if (BILLING_ONLY_ENTERPRISE_TOOLS.has(toolName)) {
+      const permissions = getEnterprisePermissions(ctx.enterpriseRole);
+      if (!permissions.canManageBilling) {
+        return toolError(
+          "This tool requires an enterprise owner or billing admin role.",
+        );
+      }
+    }
   }
 
   const sb = ctx.serviceSupabase;

@@ -281,4 +281,40 @@ describe("enterprise AI tools", () => {
       assert.equal((organizations.data as any).organizations[1].slug, "north-org");
     }
   });
+
+  it("blocks get_enterprise_quota for org_admin role", async () => {
+    const ctx = createContext({ enterpriseId: "ent-1", enterpriseRole: "org_admin" });
+    const result = await executeToolCall(ctx, { name: "get_enterprise_quota", args: {} });
+
+    assert.equal(result.kind, "tool_error");
+    if (result.kind === "tool_error") {
+      assert.match(result.error, /owner or billing admin/i);
+    }
+  });
+
+  it("allows get_enterprise_quota for billing_admin role", async () => {
+    const ctx = createContext({ enterpriseId: "ent-1", enterpriseRole: "billing_admin" });
+    const result = await executeToolCall(ctx, { name: "get_enterprise_quota", args: {} });
+    assert.equal(result.kind, "ok");
+  });
+
+  it("allows non-billing enterprise tools for org_admin role", async () => {
+    const ctx = createContext({ enterpriseId: "ent-1", enterpriseRole: "org_admin" });
+    const stats = await executeToolCall(ctx, { name: "get_enterprise_stats", args: {} });
+    const orgs = await executeToolCall(ctx, { name: "list_managed_orgs", args: {} });
+    const alumni = await executeToolCall(ctx, { name: "list_enterprise_alumni", args: {} });
+
+    assert.equal(stats.kind, "ok");
+    assert.equal(orgs.kind, "ok");
+    assert.equal(alumni.kind, "ok");
+  });
+
+  it("short-circuits when enterpriseId set but enterpriseRole missing", async () => {
+    const ctx = createContext({ enterpriseId: "ent-1" });
+    const result = await executeToolCall(ctx, { name: "list_managed_orgs", args: {} });
+    assert.equal(result.kind, "tool_error");
+    if (result.kind === "tool_error") {
+      assert.match(result.error, /does not have enterprise context/i);
+    }
+  });
 });

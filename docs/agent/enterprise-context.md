@@ -7,9 +7,11 @@ The assistant on enterprise pages is the same assistant that already powers org 
 `getAiOrgContext()` now keeps the existing org-admin check and, when that org belongs to an enterprise, also checks `user_enterprise_roles` for the same user. If both conditions hold, the AI request context carries:
 
 - `enterpriseId`
-- `enterpriseRole`
+- `enterpriseRole` (typed as `EnterpriseRole`: `owner | billing_admin | org_admin`)
 
 Org-only threads keep working unchanged because those fields stay `undefined`.
+
+Both enterprise lookups (`organizations.enterprise_id` and `user_enterprise_roles`) are fail-closed — a DB error on either query returns 503, matching the main org-role check. Transient lookup failures never silently strip enterprise capabilities.
 
 ## Prompt behavior
 
@@ -32,6 +34,11 @@ The existing tool registry now includes four read-only enterprise tools:
 - `get_enterprise_quota`
 
 All four tools short-circuit with a clear error when the current thread has no enterprise context. That lets the same tool registry stay attached without creating a parallel execution pipeline.
+
+Role gating in the executor:
+
+- `get_enterprise_quota` requires `canManageBilling` (owner or billing_admin) via `getEnterprisePermissions()`. Org-admin enterprise users receive a clear tool error.
+- The other three tools (`list_enterprise_alumni`, `get_enterprise_stats`, `list_managed_orgs`) are allowed for any enterprise role since all roles have `canViewDashboard`.
 
 ## UI behavior
 

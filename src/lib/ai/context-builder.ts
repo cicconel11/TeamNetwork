@@ -6,6 +6,7 @@ import { describeAttachedTools } from "./capabilities";
 import { aiLog, type AiLogContext } from "./logger";
 import { buildQuotaInfo } from "@/lib/enterprise/quota-logic";
 import { getFreeSubOrgCount } from "@/lib/enterprise/pricing";
+import type { EnterpriseRole } from "@/types/enterprise";
 
 export interface RagChunkInput {
   contentText: string;
@@ -18,7 +19,7 @@ interface BuildPromptInput {
   userId: string;
   role: string;
   enterpriseId?: string;
-  enterpriseRole?: string;
+  enterpriseRole?: EnterpriseRole;
   serviceSupabase: SupabaseClient;
   logContext?: AiLogContext;
   contextMode?: "full" | "shared_static" | "tool_first";

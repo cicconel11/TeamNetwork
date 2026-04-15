@@ -14,11 +14,17 @@ describe("getAiOrgContext", () => {
 
     return {
       eqCalls,
-      from: () => ({
+      from: (table: string) => ({
         select: () => ({
           eq: (column: string, value: unknown) => {
             eqCalls.push({ column, value });
             return {
+              maybeSingle: async () => {
+                if (table === "organizations") {
+                  return { data: { enterprise_id: null }, error: null };
+                }
+                return { data: null, error: null };
+              },
               eq: (innerColumn: string, innerValue: unknown) => {
                 eqCalls.push({ column: innerColumn, value: innerValue });
                 return {
