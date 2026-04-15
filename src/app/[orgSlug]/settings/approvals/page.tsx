@@ -57,17 +57,47 @@ export default function ApprovalsPage() {
           .order("created_at", { ascending: false })
           .range(offset, offset + PAGE_SIZE - 1);
 
+        const pendingUserIds = (memberships ?? []).map((m) => m.user_id);
+
+        const [{ data: memberRows }, { data: alumniRows }] = pendingUserIds.length
+          ? await Promise.all([
+              supabase
+                .from("members")
+                .select("user_id, first_name, last_name, email")
+                .eq("organization_id", org.id)
+                .in("user_id", pendingUserIds),
+              supabase
+                .from("alumni")
+                .select("user_id, first_name, last_name, email")
+                .eq("organization_id", org.id)
+                .in("user_id", pendingUserIds),
+            ])
+          : [{ data: [] }, { data: [] }];
+
+        const profileByUserId = new Map<string, { name: string | null; email: string | null }>();
+        for (const row of [...(alumniRows ?? []), ...(memberRows ?? [])]) {
+          if (!row.user_id) continue;
+          const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim();
+          if (!profileByUserId.has(row.user_id)) {
+            profileByUserId.set(row.user_id, {
+              name: fullName || null,
+              email: row.email ?? null,
+            });
+          }
+        }
+
         const normalizedMemberships: PendingMember[] =
           memberships?.map((m) => {
             const user = Array.isArray(m.users) ? m.users[0] : m.users;
+            const profile = profileByUserId.get(m.user_id);
             return {
               user_id: m.user_id,
               role: m.role,
               status: m.status,
               created_at: m.created_at,
               users: {
-                name: user?.name ?? null,
-                email: user?.email ?? null,
+                name: user?.name ?? profile?.name ?? null,
+                email: user?.email ?? profile?.email ?? null,
               },
             };
           }) || [];
