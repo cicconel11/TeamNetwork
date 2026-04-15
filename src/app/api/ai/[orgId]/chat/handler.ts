@@ -4940,6 +4940,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               timeZone: requestTimeZone,
               currentPath,
               availableTools: pass1Tools?.map((tool) => tool.function.name as ToolName),
+              threadTurnCount: existingThreadId ? 2 : 1,
             }).then((result: Awaited<ReturnType<typeof buildPromptContext>>) => {
               setStageStatus(
                 stageTimings,

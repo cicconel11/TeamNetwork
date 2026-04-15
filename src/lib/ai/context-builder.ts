@@ -29,6 +29,7 @@ interface BuildPromptInput {
   timeZone?: string;
   currentPath?: string;
   availableTools?: readonly ToolName[];
+  threadTurnCount?: number;
 }
 
 interface OrgInfo {
@@ -671,6 +672,29 @@ export async function buildPromptContext(
     }
     if (enterprise.freeSubOrgLimit != null) lines.push(`- Free sub-org slots included: ${enterprise.freeSubOrgLimit}`);
     if (enterprise.freeSubOrgRemaining != null) lines.push(`- Free sub-org slots remaining: ${enterprise.freeSubOrgRemaining}`);
+    if (input.threadTurnCount === 1) {
+      if (
+        enterprise.alumniLimit != null &&
+        enterprise.alumniLimit > 0 &&
+        enterprise.alumniCount != null &&
+        enterprise.alumniCount / enterprise.alumniLimit >= 0.8
+      ) {
+        const percent = Math.round((enterprise.alumniCount / enterprise.alumniLimit) * 100);
+        lines.push(
+          `- Capacity alert: alumni usage at ${percent}% — approaching your alumni limit.`
+        );
+      }
+      if (
+        enterprise.freeSubOrgLimit != null &&
+        enterprise.freeSubOrgLimit > 0 &&
+        enterprise.freeSubOrgRemaining != null &&
+        enterprise.freeSubOrgRemaining / enterprise.freeSubOrgLimit <= 0.2
+      ) {
+        lines.push(
+          `- Capacity alert: only ${enterprise.freeSubOrgRemaining} of ${enterprise.freeSubOrgLimit} free sub-org slots remaining.`
+        );
+      }
+    }
     if (enterprise.managedOrgs.length > 0) {
       lines.push("- Managed org list:");
       for (const managedOrg of enterprise.managedOrgs.slice(0, 12)) {

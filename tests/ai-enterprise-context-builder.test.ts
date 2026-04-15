@@ -2,7 +2,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-function createMockServiceSupabase() {
+interface MockOverrides {
+  alumniBucketQuantity?: number;
+  totalAlumniCount?: number;
+  subOrgCount?: number;
+  enterpriseManagedOrgCount?: number;
+}
+
+function createMockServiceSupabase(overrides: MockOverrides = {}) {
+  const alumniBucketQuantity = overrides.alumniBucketQuantity ?? 2;
+  const totalAlumniCount = overrides.totalAlumniCount ?? 180;
+  const subOrgCount = overrides.subOrgCount ?? 3;
+  const enterpriseManagedOrgCount = overrides.enterpriseManagedOrgCount ?? 2;
   return {
     from(table: string) {
       const filters = new Map<string, unknown>();
@@ -42,14 +53,14 @@ function createMockServiceSupabase() {
             return { data: { name: "Acme Enterprise", slug: "acme-ent" }, error: null };
           }
           if (table === "enterprise_subscriptions") {
-            return { data: { alumni_bucket_quantity: 2 }, error: null };
+            return { data: { alumni_bucket_quantity: alumniBucketQuantity }, error: null };
           }
           if (table === "enterprise_alumni_counts") {
             return {
               data: {
-                total_alumni_count: 180,
-                sub_org_count: 3,
-                enterprise_managed_org_count: 2,
+                total_alumni_count: totalAlumniCount,
+                sub_org_count: subOrgCount,
+                enterprise_managed_org_count: enterpriseManagedOrgCount,
               },
               error: null,
             };
@@ -145,5 +156,68 @@ describe("enterprise AI prompt context", () => {
       result.systemPrompt,
       /enterprise-wide data \(alumni, quota, managed orgs, cross-org stats\)/i
     );
+  });
+
+  it("includes alumni capacity alert on turn 1 when usage >= 80%", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "org-1",
+      userId: "user-1",
+      role: "admin",
+      enterpriseId: "ent-1",
+      enterpriseRole: "owner",
+      availableTools: ["get_enterprise_stats"],
+      threadTurnCount: 1,
+      serviceSupabase: createMockServiceSupabase({
+        alumniBucketQuantity: 1,
+        totalAlumniCount: 2125,
+        subOrgCount: 1,
+      }) as any,
+    });
+
+    assert.match(
+      result.orgContextMessage ?? "",
+      /Capacity alert: alumni usage at 85% — approaching your alumni limit\./
+    );
+  });
+
+  it("omits alumni capacity alert on turn 2 even when usage >= 80%", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "org-1",
+      userId: "user-1",
+      role: "admin",
+      enterpriseId: "ent-1",
+      enterpriseRole: "owner",
+      availableTools: ["get_enterprise_stats"],
+      threadTurnCount: 2,
+      serviceSupabase: createMockServiceSupabase({
+        alumniBucketQuantity: 1,
+        totalAlumniCount: 2125,
+        subOrgCount: 1,
+      }) as any,
+    });
+
+    assert.doesNotMatch(result.orgContextMessage ?? "", /Capacity alert:/);
+  });
+
+  it("omits capacity alert on turn 1 when usage is 50%", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "org-1",
+      userId: "user-1",
+      role: "admin",
+      enterpriseId: "ent-1",
+      enterpriseRole: "owner",
+      availableTools: ["get_enterprise_stats"],
+      threadTurnCount: 1,
+      serviceSupabase: createMockServiceSupabase({
+        alumniBucketQuantity: 1,
+        totalAlumniCount: 1250,
+        subOrgCount: 1,
+      }) as any,
+    });
+
+    assert.doesNotMatch(result.orgContextMessage ?? "", /Capacity alert:/);
   });
 });
