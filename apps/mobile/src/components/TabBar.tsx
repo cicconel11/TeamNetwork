@@ -16,7 +16,7 @@ const LEFT_TABS = [
 ] as const;
 
 const RIGHT_TABS = [
-  { route: "announcements", icon: Megaphone, label: "News" },
+  { route: "announcements", icon: Megaphone, label: "Announcements" },
   { route: "members", icon: Users, label: "Members" },
 ] as const;
 
@@ -55,14 +55,17 @@ export function TabBar({ state, descriptors, navigation, onActionPress, badges }
       alignItems: "center" as const,
       justifyContent: "center" as const,
       paddingVertical: 6,
-      paddingHorizontal: 12,
-      minWidth: 56,
+      paddingHorizontal: 2,
+      minWidth: 0,
       minHeight: 44,
+      flex: 1,
     },
     tabContent: {
       alignItems: "center" as const,
       justifyContent: "center" as const,
       gap: 3,
+      width: "100%" as const,
+      minWidth: 0,
     },
     iconContainer: {
       position: "relative" as const,
@@ -87,8 +90,16 @@ export function TabBar({ state, descriptors, navigation, onActionPress, badges }
     },
     tabLabel: {
       fontSize: 10,
+      lineHeight: 12,
       fontWeight: "500" as const,
       letterSpacing: 0.1,
+      textAlign: "center" as const,
+      width: "100%" as const,
+    },
+    tabLabelCompact: {
+      fontSize: 8,
+      lineHeight: 10,
+      letterSpacing: 0,
     },
     activeIndicator: {
       position: "absolute" as const,
@@ -173,7 +184,20 @@ export function TabBar({ state, descriptors, navigation, onActionPress, badges }
               </View>
             )}
           </View>
-          <Text style={[styles.tabLabel, { color }]}>{tabConfig.label}</Text>
+          <Text
+            style={[
+              styles.tabLabel,
+              { color },
+              tabConfig.label.length > 11
+                ? styles.tabLabelCompact
+                : null,
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+          >
+            {tabConfig.label}
+          </Text>
           {isFocused && <View style={styles.activeIndicator} />}
         </View>
       </Pressable>
