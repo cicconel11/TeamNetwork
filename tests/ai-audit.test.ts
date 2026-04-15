@@ -5,12 +5,24 @@ import assert from "node:assert/strict";
 describe("logAiRequest", () => {
   type InsertedAuditRow = Record<string, unknown>;
 
-  function createMockServiceSupabase(opts: { shouldError?: boolean } = {}) {
+  function createMockServiceSupabase(opts: {
+    shouldError?: boolean;
+    enterpriseShouldError?: boolean;
+  } = {}) {
     const insertedRows: InsertedAuditRow[] = [];
+    const enterpriseRows: InsertedAuditRow[] = [];
     return {
       insertedRows,
-      from: () => ({
+      enterpriseRows,
+      from: (table: string) => ({
         insert: (row: InsertedAuditRow) => {
+          if (table === "enterprise_audit_logs") {
+            enterpriseRows.push(row);
+            if (opts.enterpriseShouldError) {
+              return { error: { message: "Enterprise insert failed" } };
+            }
+            return { error: null };
+          }
           insertedRows.push(row);
           if (opts.shouldError) {
             return { error: { message: "Insert failed" } };
@@ -156,5 +168,90 @@ describe("logAiRequest", () => {
 
     assert.equal(mock.insertedRows[0].rag_chunk_count, 0);
     assert.equal(mock.insertedRows[0].rag_error, "embedding_api_timeout");
+  });
+
+  // ── Enterprise scope (Phase 1) ──
+
+  it("writes ai_audit_log row with enterprise_id and null org_id when scope is enterprise", async () => {
+    const { logAiRequest } = await import("../src/lib/ai/audit.ts");
+    const mock = createMockServiceSupabase();
+    await logAiRequest(mock as any, {
+      threadId: "t1",
+      messageId: "m1",
+      userId: "u1",
+      scope: { scope: "enterprise", enterpriseId: "ent-1" },
+      userEmail: "admin@acme.co",
+      toolCalls: [{ name: "get_enterprise_stats", args: {} }],
+    });
+    assert.equal(mock.insertedRows.length, 1);
+    assert.equal(mock.insertedRows[0].enterprise_id, "ent-1");
+    assert.equal(mock.insertedRows[0].org_id, null);
+  });
+
+  it("dual-writes mirror row to enterprise_audit_logs for enterprise scope", async () => {
+    const { logAiRequest } = await import("../src/lib/ai/audit.ts");
+    const mock = createMockServiceSupabase();
+    await logAiRequest(mock as any, {
+      threadId: "t1",
+      messageId: "m1",
+      userId: "u1",
+      scope: { scope: "enterprise", enterpriseId: "ent-1" },
+      userEmail: "admin@acme.co",
+      toolCalls: [{ name: "get_enterprise_stats", args: { foo: "bar" } }],
+    });
+    assert.equal(mock.enterpriseRows.length, 1);
+    const mirror = mock.enterpriseRows[0];
+    assert.equal(mirror.enterprise_id, "ent-1");
+    assert.equal(mirror.actor_user_id, "u1");
+    assert.equal(mirror.action, "ai.tool_invoked");
+    // metadata should include sanitized tool names
+    const metadata = mirror.metadata as Record<string, unknown>;
+    assert.ok(Array.isArray(metadata?.tools));
+  });
+
+  it("does NOT write enterprise_audit_logs row when scope is org", async () => {
+    const { logAiRequest } = await import("../src/lib/ai/audit.ts");
+    const mock = createMockServiceSupabase();
+    await logAiRequest(mock as any, {
+      threadId: "t1",
+      messageId: "m1",
+      userId: "u1",
+      orgId: "o1",
+      toolCalls: [{ name: "list_members", args: {} }],
+    });
+    assert.equal(mock.enterpriseRows.length, 0);
+    assert.equal(mock.insertedRows.length, 1);
+    assert.equal(mock.insertedRows[0].org_id, "o1");
+  });
+
+  it("does not throw when enterprise mirror insert fails (best-effort)", async () => {
+    const { logAiRequest } = await import("../src/lib/ai/audit.ts");
+    const mock = createMockServiceSupabase({ enterpriseShouldError: true });
+    await logAiRequest(mock as any, {
+      threadId: "t1",
+      messageId: "m1",
+      userId: "u1",
+      scope: { scope: "enterprise", enterpriseId: "ent-1" },
+      userEmail: "admin@acme.co",
+    });
+    // ai_audit_log should still have a row even though mirror failed
+    assert.equal(mock.insertedRows.length, 1);
+    assert.equal(mock.insertedRows[0].enterprise_id, "ent-1");
+  });
+
+  it("writes no tool_calls in enterprise_audit_logs metadata when none provided", async () => {
+    const { logAiRequest } = await import("../src/lib/ai/audit.ts");
+    const mock = createMockServiceSupabase();
+    await logAiRequest(mock as any, {
+      threadId: "t1",
+      messageId: "m1",
+      userId: "u1",
+      scope: { scope: "enterprise", enterpriseId: "ent-1" },
+      userEmail: "admin@acme.co",
+    });
+    assert.equal(mock.enterpriseRows.length, 1);
+    const meta = mock.enterpriseRows[0].metadata as Record<string, unknown>;
+    assert.ok(Array.isArray(meta?.tools));
+    assert.equal((meta.tools as unknown[]).length, 0);
   });
 });

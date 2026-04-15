@@ -2,7 +2,14 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 describe("resolveOwnThread", () => {
-  type MockThread = { id: string; user_id: string; org_id: string; surface: string; title: string | null };
+  type MockThread = {
+    id: string;
+    user_id: string;
+    org_id: string | null;
+    enterprise_id?: string | null;
+    surface: string;
+    title: string | null;
+  };
   type MockError = { message: string };
 
   function createMockSupabase(opts: { thread?: MockThread | null; error?: MockError }) {
@@ -24,7 +31,14 @@ describe("resolveOwnThread", () => {
 
   it("returns ok for valid thread ownership", async () => {
     const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
-    const thread = { id: "t1", user_id: "u1", org_id: "o1", surface: "general", title: "Test" };
+    const thread = {
+      id: "t1",
+      user_id: "u1",
+      org_id: "o1",
+      enterprise_id: null,
+      surface: "general",
+      title: "Test",
+    };
     const mock = createMockSupabase({ thread });
     const result = await resolveOwnThread("t1", "u1", "o1", mock);
     assert.equal(result.ok, true);
@@ -61,6 +75,93 @@ describe("resolveOwnThread", () => {
     const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
     const mock = createMockSupabase({ error: { message: "DB error" } });
     const result = await resolveOwnThread("t1", "u1", "o1", mock);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 404);
+  });
+
+  // ── Enterprise scope (Phase 1) ──
+
+  it("returns ok for valid enterprise thread ownership", async () => {
+    const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
+    const thread = {
+      id: "t1",
+      user_id: "u1",
+      org_id: null,
+      enterprise_id: "e1",
+      surface: "enterprise",
+      title: "Q1 stats",
+    };
+    const mock = createMockSupabase({ thread });
+    const result = await resolveOwnThread(
+      "t1",
+      "u1",
+      { scope: "enterprise", enterpriseId: "e1" },
+      mock
+    );
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.thread.enterprise_id, "e1");
+  });
+
+  it("returns 404 for wrong enterprise ownership", async () => {
+    const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
+    const thread = {
+      id: "t1",
+      user_id: "u1",
+      org_id: null,
+      enterprise_id: "other-ent",
+      surface: "enterprise",
+      title: null,
+    };
+    const mock = createMockSupabase({ thread });
+    const result = await resolveOwnThread(
+      "t1",
+      "u1",
+      { scope: "enterprise", enterpriseId: "e1" },
+      mock
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 404);
+  });
+
+  it("returns 404 when enterprise scope queries an org-scoped thread", async () => {
+    const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
+    // Cross-scope attack: thread belongs to org-scope, attacker tries enterprise lookup.
+    const thread = {
+      id: "t1",
+      user_id: "u1",
+      org_id: "o1",
+      enterprise_id: null,
+      surface: "general",
+      title: null,
+    };
+    const mock = createMockSupabase({ thread });
+    const result = await resolveOwnThread(
+      "t1",
+      "u1",
+      { scope: "enterprise", enterpriseId: "e1" },
+      mock
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 404);
+  });
+
+  it("returns 404 when org scope queries an enterprise-scoped thread", async () => {
+    const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
+    const thread = {
+      id: "t1",
+      user_id: "u1",
+      org_id: null,
+      enterprise_id: "e1",
+      surface: "enterprise",
+      title: null,
+    };
+    const mock = createMockSupabase({ thread });
+    const result = await resolveOwnThread(
+      "t1",
+      "u1",
+      { scope: "org", orgId: "o1" },
+      mock
+    );
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.status, 404);
   });

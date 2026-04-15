@@ -264,6 +264,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     .from("ai_messages")
     .select("id, status, thread_id")
     .eq("idempotency_key", idempotencyKey)
+    .eq("org_id", ctx.orgId)
+    .is("enterprise_id", null)
     .maybeSingle();
 
   if (idempError) {

@@ -34,6 +34,40 @@ export const sendMessageSchema = rawSendMessageSchema.transform(
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
+// ── Enterprise surface ──
+// Phase 1 enterprise AI uses a single fixed surface. Sibling schema avoids
+// polluting the org enum and the surface-routing tables that key off it.
+
+const rawSendEnterpriseMessageSchema = z.object({
+  threadId: z.string().uuid().optional(),
+  message: safeString(4000),
+  surface: z.literal("enterprise"),
+  idempotencyKey: z.string().uuid(),
+  bypassCache: z.boolean().optional(),
+  bypass_cache: z.boolean().optional(),
+}).superRefine((value, ctx) => {
+  if (
+    value.bypassCache !== undefined &&
+    value.bypass_cache !== undefined &&
+    value.bypassCache !== value.bypass_cache
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "bypassCache and bypass_cache must match when both are provided",
+      path: ["bypass_cache"],
+    });
+  }
+});
+
+export const sendEnterpriseMessageSchema = rawSendEnterpriseMessageSchema.transform(
+  ({ bypass_cache, bypassCache, ...rest }) => ({
+    ...rest,
+    bypassCache: bypassCache ?? bypass_cache,
+  })
+);
+
+export type SendEnterpriseMessageInput = z.infer<typeof sendEnterpriseMessageSchema>;
+
 export const listThreadsSchema = z.object({
   surface: aiSurfaceEnum.optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),

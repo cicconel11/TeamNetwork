@@ -1,6 +1,17 @@
 import { redirect } from "next/navigation";
+import dynamic from "next/dynamic";
 import { EnterpriseSidebar } from "@/components/enterprise/EnterpriseSidebar";
 import { getEnterpriseContext } from "@/lib/auth/enterprise-context";
+import { AIPanelProvider } from "@/components/ai-assistant";
+
+const AIPanel = dynamic(
+  () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
+  { ssr: false },
+);
+const AIEdgeTab = dynamic(
+  () => import("@/components/ai-assistant/AIEdgeTab").then((m) => m.AIEdgeTab),
+  { ssr: false },
+);
 
 interface EnterpriseLayoutProps {
   children: React.ReactNode;
@@ -18,6 +29,7 @@ export default async function EnterpriseLayout({ children, params }: EnterpriseL
   const { enterprise, role } = context;
 
   return (
+    <AIPanelProvider autoOpen={false}>
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
@@ -58,6 +70,11 @@ export default async function EnterpriseLayout({ children, params }: EnterpriseL
       <main className="lg:ml-[var(--sidebar-offset,3.5rem)] p-4 lg:p-8 pt-20 lg:pt-8 transition-[margin-left] duration-300 ease-in-out motion-reduce:transition-none">
         {children}
       </main>
+
+      {/* AI Assistant — enterprise scope */}
+      <AIPanel scope={{ scope: "enterprise", enterpriseId: enterprise.id }} />
+      <AIEdgeTab isAdmin={true} />
     </div>
+    </AIPanelProvider>
   );
 }

@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { X, MessageSquare, List, Sparkles } from "lucide-react";
-import { useAIStream } from "@/hooks/useAIStream";
+import {
+  useAIStream,
+  threadsUrlForScope,
+  threadUrlForScope,
+  messagesUrlForScope,
+  type AIScope,
+} from "@/hooks/useAIStream";
 import { useAIPanel } from "./AIPanelContext";
 import { routeToSurface } from "./route-surface";
 import { MessageList } from "./MessageList";
@@ -20,13 +26,14 @@ import {
 } from "./panel-state";
 
 interface AIPanelProps {
-  orgId: string;
+  scope: AIScope;
 }
 
-export function AIPanel({ orgId }: AIPanelProps) {
+export function AIPanel({ scope }: AIPanelProps) {
   const { isOpen, closePanel } = useAIPanel();
   const pathname = usePathname();
-  const surface = routeToSurface(pathname);
+  // Enterprise scope has a single fixed surface; org scope routes by path.
+  const surface = scope.scope === "enterprise" ? "enterprise" : routeToSurface(pathname);
   const [view, setView] = useState<"chat" | "threads">("chat");
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<AIPanelThread[]>([]);
@@ -41,23 +48,27 @@ export function AIPanel({ orgId }: AIPanelProps) {
     sendMessage,
     cancel,
     clearError,
-  } = useAIStream({ orgId });
+  } = useAIStream({ scope });
 
   const loadThreads = useCallback(async () => {
     setThreadsLoading(true);
     try {
-      const response = await fetch(
-        `/api/ai/${orgId}/threads?surface=${encodeURIComponent(surface)}`
-      );
+      const base = threadsUrlForScope(scope);
+      // Org scope filters threads by surface; enterprise scope is single-surface.
+      const url = scope.scope === "org"
+        ? `${base}?surface=${encodeURIComponent(surface)}`
+        : base;
+      const response = await fetch(url);
       if (!response.ok) return;
       const data = await response.json();
-      setThreads(data.data ?? []);
+      // Org returns { data: [...] }; enterprise returns { threads: [...] }.
+      setThreads(data.data ?? data.threads ?? []);
     } catch {
       // Leave the existing UI state intact on transient fetch errors.
     } finally {
       setThreadsLoading(false);
     }
-  }, [orgId, surface]);
+  }, [scope, surface]);
 
   const loadMessages = useCallback(
     async (threadId: string, options?: { silent?: boolean }): Promise<boolean> => {
@@ -65,7 +76,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         setMessagesLoading(true);
       }
       try {
-        const response = await fetch(`/api/ai/${orgId}/threads/${threadId}/messages`);
+        const response = await fetch(messagesUrlForScope(scope, threadId));
         if (response.status === 404) {
           setActiveThreadId(null);
           setMessages([]);
@@ -84,7 +95,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         setMessagesLoading(false);
       }
     },
-    [loadThreads, orgId]
+    [loadThreads, scope]
   );
 
   useEffect(() => {
@@ -190,7 +201,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
 
   const handleDeleteThread = useCallback(
     async (threadId: string) => {
-      const response = await fetch(`/api/ai/${orgId}/threads/${threadId}`, {
+      const response = await fetch(threadUrlForScope(scope, threadId), {
         method: "DELETE",
       });
       if (!response.ok) return;
@@ -201,7 +212,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
       setActiveThreadId(nextState.activeThreadId);
       setMessages(nextState.messages);
     },
-    [activeThreadId, messages, orgId, threads]
+    [activeThreadId, messages, scope, threads]
   );
 
   if (!isOpen) return null;

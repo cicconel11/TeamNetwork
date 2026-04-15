@@ -359,7 +359,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       )}
       {isAdmin && (
         <>
-          <AIPanel orgId={organization.id} />
+          <AIPanel scope={{ scope: "org", orgId: organization.id }} />
           <AIEdgeTab isAdmin={isAdmin} />
         </>
       )}

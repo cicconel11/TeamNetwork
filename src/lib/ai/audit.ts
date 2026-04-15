@@ -1,12 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CacheStatus } from "./sse";
 import type { CacheSurface } from "./semantic-cache-utils";
+import type { AiScope } from "./scope";
 
 interface AuditEntry {
   threadId: string | null;
   messageId: string | null;
   userId: string;
-  orgId: string;
+  /** Either pass `orgId` (legacy) or `scope` (new). When both are provided, scope wins. */
+  orgId?: string;
+  scope?: AiScope;
+  /** Required for enterprise scope so the enterprise_audit_logs mirror can record it. */
+  userEmail?: string;
   intent?: string;
   intentType?: string;
   toolCalls?: Array<{ name: string; args: Record<string, unknown> }>;
@@ -26,7 +31,7 @@ interface AuditEntry {
 }
 
 interface AuditInsertClient {
-  from(table: "ai_audit_log"): {
+  from(table: "ai_audit_log" | "enterprise_audit_logs"): {
     insert(row: Record<string, unknown>): Promise<{ error: unknown }> | { error: unknown };
   };
 }
@@ -41,11 +46,28 @@ function redactSensitive(value: string): string {
     .replace(/Bearer [a-zA-Z0-9._-]+/g, "Bearer [REDACTED]");  // Auth headers
 }
 
+/** Mask local-part of an email beyond the first character: `jane@acme.co` → `j***@acme.co`. */
+function redactEmail(email: string | undefined | null): string {
+  if (!email) return "unknown";
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "redacted";
+  const head = local.slice(0, 1);
+  return `${head}***@${domain}`;
+}
+
+function resolveScope(entry: AuditEntry): AiScope {
+  if (entry.scope) return entry.scope;
+  if (entry.orgId) return { scope: "org", orgId: entry.orgId };
+  throw new Error("logAiRequest: must provide either `scope` or `orgId`");
+}
+
 export async function logAiRequest(
   serviceSupabase: SupabaseClient,
   entry: AuditEntry
 ): Promise<void> {
   try {
+    const scope = resolveScope(entry);
+
     const toolCallsJson = entry.toolCalls
       ? JSON.parse(redactSensitive(JSON.stringify(entry.toolCalls)))
       : null;
@@ -54,7 +76,8 @@ export async function logAiRequest(
       thread_id: entry.threadId,
       message_id: entry.messageId,
       user_id: entry.userId,
-      org_id: entry.orgId,
+      org_id: scope.scope === "org" ? scope.orgId : null,
+      enterprise_id: scope.scope === "enterprise" ? scope.enterpriseId : null,
       intent: entry.intent ?? null,
       intent_type: entry.intentType ?? null,
       tool_calls: toolCallsJson,
@@ -79,6 +102,42 @@ export async function logAiRequest(
 
     if (error) {
       console.error("[ai-audit] insert failed:", error);
+    }
+
+    // Best-effort dual-write: enterprise scope also records to enterprise_audit_logs
+    // so the unified enterprise audit trail captures AI tool invocations.
+    if (scope.scope === "enterprise") {
+      try {
+        const tools = (entry.toolCalls ?? []).map((c) => c.name);
+        const enterpriseRow = {
+          actor_user_id: entry.userId,
+          actor_email_redacted: redactEmail(entry.userEmail),
+          action: "ai.tool_invoked",
+          target_type: "ai_message",
+          target_id: entry.messageId,
+          enterprise_id: scope.enterpriseId,
+          organization_id: null,
+          metadata: {
+            tools,
+            thread_id: entry.threadId,
+            intent: entry.intent ?? null,
+            model: entry.model ?? null,
+          },
+        };
+        const { error: mirrorError } = await (
+          serviceSupabase as unknown as AuditInsertClient
+        )
+          .from("enterprise_audit_logs")
+          .insert(enterpriseRow);
+        if (mirrorError) {
+          console.error(
+            "[ai-audit] enterprise_audit_logs mirror failed:",
+            mirrorError
+          );
+        }
+      } catch (mirrorErr) {
+        console.error("[ai-audit] enterprise mirror unexpected error:", mirrorErr);
+      }
     }
   } catch (err) {
     console.error("[ai-audit] unexpected error:", err);

@@ -15,6 +15,11 @@ let buildPromptContextCalls: any[] = [];
 let initChatCalls: any[] = [];
 let retrieveRelevantChunksCalls: any[] = [];
 let trackedOpsEvents: any[] = [];
+let recordedQueries: Array<{
+  table: string;
+  op: "select" | "insert" | "update";
+  filters: Array<{ kind: "eq" | "in" | "lt" | "is"; column: string; value: unknown }>;
+}> = [];
 
 function createSemanticCacheServiceSupabase(options: {
   rpc: (fn: string, params: any) => Promise<{ data: any; error: any }>;
@@ -81,9 +86,10 @@ function createSupabaseStub() {
       op: "select" as "select" | "insert" | "update",
       inserted: null as Record<string, unknown> | null,
       updated: null as Record<string, unknown> | null,
-      filters: [] as Array<{ kind: "eq" | "in" | "lt"; column: string; value: unknown }>,
+      filters: [] as Array<{ kind: "eq" | "in" | "lt" | "is"; column: string; value: unknown }>,
       orderBy: null as { column: string; ascending: boolean } | null,
       limitValue: null as number | null,
+      resultMode: "many" as "many" | "maybeSingle" | "single",
     };
 
     const builder: Record<string, any> = {
@@ -113,6 +119,10 @@ function createSupabaseStub() {
         query.filters.push({ kind: "lt", column, value });
         return builder;
       },
+      is(column: string, value: unknown) {
+        query.filters.push({ kind: "is", column, value });
+        return builder;
+      },
       order(column: string, opts?: { ascending?: boolean }) {
         query.orderBy = { column, ascending: opts?.ascending ?? true };
         return builder;
@@ -124,6 +134,12 @@ function createSupabaseStub() {
     };
 
     const resolve = () => {
+      recordedQueries.push({
+        table,
+        op: query.op,
+        filters: [...query.filters],
+      });
+
       if (table === "ai_threads" && query.op === "insert" && query.inserted) {
         const id = `thread-${++state.threadCount}`;
         state.threads.push({ id, ...query.inserted });
@@ -131,18 +147,13 @@ function createSupabaseStub() {
       }
 
       if (table === "ai_messages") {
-        if (
-          query.op === "select" &&
-          query.filters.some((filter) => filter.kind === "eq" && filter.column === "idempotency_key")
-        ) {
-          return { data: null, error: null };
-        }
-
         if (query.op === "select") {
           let rows = [...state.messages];
           for (const filter of query.filters) {
             if (filter.kind === "eq") {
               rows = rows.filter((row) => row[filter.column] === filter.value);
+            } else if (filter.kind === "is") {
+              rows = rows.filter((row) => (row[filter.column] ?? null) === filter.value);
             }
           }
           if (query.orderBy) {
@@ -156,6 +167,12 @@ function createSupabaseStub() {
           }
           if (query.limitValue !== null) {
             rows = rows.slice(0, query.limitValue);
+          }
+          if (query.resultMode === "maybeSingle") {
+            return { data: rows[0] ?? null, error: null };
+          }
+          if (query.resultMode === "single") {
+            return { data: rows[0] ?? null, error: rows.length === 1 ? null : null };
           }
           return { data: rows, error: null };
         }
@@ -199,8 +216,14 @@ function createSupabaseStub() {
       return { data: null, error: null };
     };
 
-    builder.maybeSingle = async () => resolve();
-    builder.single = async () => resolve();
+    builder.maybeSingle = async () => {
+      query.resultMode = "maybeSingle";
+      return resolve();
+    };
+    builder.single = async () => {
+      query.resultMode = "single";
+      return resolve();
+    };
     builder.then = (onFulfilled: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) =>
       Promise.resolve(resolve()).then(onFulfilled, onRejected);
 
@@ -229,6 +252,7 @@ beforeEach(() => {
   initChatCalls = [];
   retrieveRelevantChunksCalls = [];
   trackedOpsEvents = [];
+  recordedQueries = [];
   aiContext = {
     ok: true,
     orgId: ORG_ID,
@@ -971,4 +995,61 @@ test("POST /api/ai/[orgId]/chat returns 403 when org access is unauthorized", as
   assert.equal(response.status, 403);
   const body = await response.json();
   assert.deepEqual(body, { error: "AI assistant requires admin role" });
+});
+
+test("POST /api/ai/[orgId]/chat scopes idempotency lookup to the org path only", async () => {
+  supabaseStub.state.messages.push({
+    id: "ent-user-msg",
+    thread_id: "ent-thread-1",
+    enterprise_id: "ent-1",
+    org_id: null,
+    user_id: ADMIN_USER.id,
+    role: "user",
+    content: "Enterprise prompt",
+    status: "complete",
+    idempotency_key: VALID_IDEMPOTENCY_KEY,
+    created_at: "2026-03-23T00:00:00.000Z",
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Tell me about members",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  const idempotencyQuery = recordedQueries.find(
+    (query) =>
+      query.table === "ai_messages" &&
+      query.op === "select" &&
+      query.filters.some(
+        (filter) => filter.kind === "eq" && filter.column === "idempotency_key"
+      )
+  );
+
+  assert.ok(idempotencyQuery);
+  assert.ok(
+    idempotencyQuery.filters.some(
+      (filter) => filter.kind === "eq" && filter.column === "org_id" && filter.value === ORG_ID
+    )
+  );
+  assert.ok(
+    idempotencyQuery.filters.some(
+      (filter) =>
+        filter.kind === "is" &&
+        filter.column === "enterprise_id" &&
+        filter.value === null
+    )
+  );
+  assert.equal(initChatCalls.length, 1);
 });

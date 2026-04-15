@@ -3,8 +3,17 @@
 import { useState, useCallback, useRef } from "react";
 import type { SSEEvent } from "@/lib/ai/sse";
 
+/**
+ * Scope discriminated union — picks the AI API base URL.
+ * Org scope hits `/api/ai/[orgId]/...`. Enterprise scope hits
+ * `/api/enterprise/[enterpriseId]/ai/...`.
+ */
+export type AIScope =
+  | { scope: "org"; orgId: string }
+  | { scope: "enterprise"; enterpriseId: string };
+
 interface UseAIStreamOptions {
-  orgId: string;
+  scope: AIScope;
 }
 
 interface AIStreamState {
@@ -60,6 +69,33 @@ export function parseAIChatFailure(
     result: null,
     error: body.error || `HTTP ${status}`,
   };
+}
+
+/** Resolve the AI API base URL for a given scope. */
+export function aiBaseUrlForScope(scope: AIScope): string {
+  return scope.scope === "org"
+    ? `/api/ai/${scope.orgId}`
+    : `/api/enterprise/${scope.enterpriseId}/ai`;
+}
+
+/** Resolve the chat POST URL for a given scope. */
+export function chatUrlForScope(scope: AIScope): string {
+  return `${aiBaseUrlForScope(scope)}/chat`;
+}
+
+/** Resolve the threads list URL for a given scope. */
+export function threadsUrlForScope(scope: AIScope): string {
+  return `${aiBaseUrlForScope(scope)}/threads`;
+}
+
+/** Resolve the per-thread URL (DELETE) for a given scope. */
+export function threadUrlForScope(scope: AIScope, threadId: string): string {
+  return `${aiBaseUrlForScope(scope)}/threads/${threadId}`;
+}
+
+/** Resolve the messages-list URL for a given thread + scope. */
+export function messagesUrlForScope(scope: AIScope, threadId: string): string {
+  return `${aiBaseUrlForScope(scope)}/threads/${threadId}/messages`;
 }
 
 export async function consumeSSEStream(
@@ -120,7 +156,7 @@ export async function consumeSSEStream(
   return null;
 }
 
-export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
+export function useAIStream({ scope }: UseAIStreamOptions): UseAIStreamReturn {
   const [state, setState] = useState<AIStreamState>({
     isStreaming: false,
     error: null,
@@ -156,7 +192,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
     });
 
     try {
-      const response = await fetch(`/api/ai/${orgId}/chat`, {
+      const response = await fetch(chatUrlForScope(scope), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -225,7 +261,9 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
         abortRef.current = null;
       }
     }
-  }, [orgId]);
+    // Stable serialization: scope identity is captured via JSON dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope.scope === "org" ? scope.orgId : scope.enterpriseId, scope.scope]);
 
   return {
     ...state,

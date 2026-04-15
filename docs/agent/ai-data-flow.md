@@ -56,7 +56,7 @@ The LLM prompt sent to z.ai includes:
 | Table | Data Stored | Retention |
 |---|---|---|
 | `ai_threads` | Thread metadata (user_id, org_id, surface, title) | Until user deletes or account deletion cascade |
-| `ai_messages` | Full prompt and response text | Until thread deletion or account deletion cascade |
+| `ai_messages` | Full prompt and response text; idempotency keys are unique per user within a single logical scope (org or enterprise) | Until thread deletion or account deletion cascade |
 | `ai_audit_log` | Request metadata: user_id, org_id, latency_ms, token counts, cache status, model | Service-role only; no retention purge currently |
 | `ai_semantic_cache` | Hashed prompt + cached response text | 12-hour TTL, purged by hourly cron |
 | `ai_document_chunks` | Chunked org content with vector embeddings | Until re-indexed or org deletion |
@@ -69,6 +69,7 @@ The LLM prompt sent to z.ai includes:
 - **Org-scoped RLS:** All AI tables enforce organization scoping via RLS policies
 - **Thread ownership:** Users can only read/write their own threads (enforced by RLS on `ai_threads` and composite FK on `ai_messages`)
 - **Audit logging:** Every AI request is logged to `ai_audit_log` (service-role only table)
+- **Enterprise tool privacy:** Enterprise alumni search returns masked name initials rather than raw names in AI tool responses by default
 
 ---
 
