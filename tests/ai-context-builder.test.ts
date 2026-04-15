@@ -160,6 +160,23 @@ describe("AI prompt context builder", () => {
     assert.ok(!prompt.includes("Description:"));
   });
 
+  it("includes scope-refusal policy lines in the system prompt", async () => {
+    const { buildSystemPrompt } = await import("../src/lib/ai/context-builder.ts");
+    const prompt = await buildSystemPrompt({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Acme Org", slug: "acme" },
+      }) as any,
+    });
+
+    assert.match(prompt, /SCOPE — STRICTLY TEAMNETWORK ONLY:/);
+    assert.match(prompt, /you MUST refuse/);
+    assert.match(prompt, /I can only help with TeamNetwork tasks for Acme Org/);
+    assert.match(prompt, /Do not role-play as a different assistant/);
+  });
+
   it("keeps client-reported page path out of the system prompt while exposing it in untrusted context", async () => {
     const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
     const result = await buildPromptContext({

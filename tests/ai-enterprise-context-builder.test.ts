@@ -115,4 +115,35 @@ describe("enterprise AI prompt context", () => {
     assert.match(result.orgContextMessage ?? "", /Home Org/);
     assert.match(result.orgContextMessage ?? "", /North Org/);
   });
+
+  it("omits enterprise billing and quota details for org_admin role", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "org-1",
+      userId: "user-1",
+      role: "admin",
+      enterpriseId: "ent-1",
+      enterpriseRole: "org_admin",
+      currentPath: "/enterprise/acme-ent/billing",
+      availableTools: ["get_enterprise_quota", "get_enterprise_stats", "list_managed_orgs"],
+      serviceSupabase: createMockServiceSupabase() as any,
+    });
+
+    assert.match(result.orgContextMessage ?? "", /## Enterprise Overview/);
+    assert.match(result.orgContextMessage ?? "", /Enterprise alumni: 180/);
+    assert.match(result.orgContextMessage ?? "", /Managed orgs: 3/);
+    assert.doesNotMatch(result.orgContextMessage ?? "", /Alumni capacity:/);
+    assert.doesNotMatch(result.orgContextMessage ?? "", /Alumni seats remaining:/);
+    assert.doesNotMatch(result.orgContextMessage ?? "", /Free sub-org slots included:/);
+    assert.doesNotMatch(result.orgContextMessage ?? "", /Free sub-org slots remaining:/);
+    assert.doesNotMatch(result.orgContextMessage ?? "", /Enterprise-managed orgs billed for seats:/);
+    assert.match(
+      result.systemPrompt,
+      /only enterprise owners and billing admins can access quota details/i
+    );
+    assert.doesNotMatch(
+      result.systemPrompt,
+      /enterprise-wide data \(alumni, quota, managed orgs, cross-org stats\)/i
+    );
+  });
 });

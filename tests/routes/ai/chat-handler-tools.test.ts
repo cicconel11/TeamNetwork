@@ -265,6 +265,12 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
         const argsJson =
           firstToolName === "get_org_stats"
             ? "{}"
+            : firstToolName === "get_enterprise_stats"
+              ? "{}"
+            : firstToolName === "get_enterprise_quota"
+              ? "{}"
+            : firstToolName === "get_enterprise_org_capacity"
+              ? "{}"
             : firstToolName === "find_navigation_targets"
               ? '{"query":"open announcements"}'
             : firstToolName === "list_announcements"
@@ -742,6 +748,157 @@ test("analytics surface only attaches get_org_stats", async () => {
   assert.deepEqual(toolNamesForCall(0), ["get_org_stats"]);
   assert.equal(executeToolCallCalls[0].call.name, "get_org_stats");
   assert.deepEqual(executeToolCallCalls[0].call.args, {});
+});
+
+test("enterprise org_admin billing prompts force deterministic quota-access denial", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getAiOrgContext: async () => ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        enterpriseId: "ent-1",
+        enterpriseRole: "org_admin",
+        supabase: supabaseStub,
+        serviceSupabase: {
+          from: supabaseStub.from,
+          rpc: async (_fn: string, params: any) => ({
+            data: {
+              thread_id:
+                params.p_thread_id ??
+                buildThreadId(++supabaseStub.state.threadCount),
+              user_msg_id: "user-1",
+            },
+            error: null,
+          }),
+        },
+      }),
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return {
+          kind: "tool_error" as const,
+          error: "This tool requires an enterprise owner or billing admin role.",
+          code: "enterprise_billing_role_required" as const,
+        };
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "get_enterprise_quota",
+            argsJson: "{}",
+          };
+          return;
+        }
+        throw new Error("deterministic enterprise quota denial should skip pass 2");
+      },
+    })
+  );
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "How many seats are left?",
+      surface: "analytics",
+      currentPath: "/enterprise/acme-ent/billing",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const body = await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["get_enterprise_quota"]);
+  assert.equal(executeToolCallCalls[0].call.name, "get_enterprise_quota");
+  assert.match(body, /can’t access enterprise quota or billing details/i);
+  assert.doesNotMatch(body, /enterprise currently has/i);
+  assert.doesNotMatch(body, /\balumni\b.*across/i);
+  assert.equal(composeResponseCalls.length, 1);
+});
+
+test("enterprise org_admin free sub-org slot prompts route to enterprise capacity tool", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getAiOrgContext: async () => ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        enterpriseId: "ent-1",
+        enterpriseRole: "org_admin",
+        supabase: supabaseStub,
+        serviceSupabase: {
+          from: supabaseStub.from,
+          rpc: async (_fn: string, params: any) => ({
+            data: {
+              thread_id:
+                params.p_thread_id ??
+                buildThreadId(++supabaseStub.state.threadCount),
+              user_msg_id: "user-1",
+            },
+            error: null,
+          }),
+        },
+      }),
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        if (call.name === "get_enterprise_org_capacity") {
+          return okToolResult({
+            sub_orgs: {
+              total: 1,
+              enterprise_managed_total: 1,
+              free_limit: 6,
+              free_remaining: 5,
+            },
+          });
+        }
+        return okToolResult([]);
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "get_enterprise_org_capacity",
+            argsJson: "{}",
+          };
+          return;
+        }
+        throw new Error("deterministic enterprise org capacity response should skip pass 2");
+      },
+    })
+  );
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "How many free sub-org slots are left?",
+      surface: "analytics",
+      currentPath: "/enterprise/acme-ent",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const body = await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["get_enterprise_org_capacity"]);
+  assert.equal(executeToolCallCalls[0].call.name, "get_enterprise_org_capacity");
+  assert.match(body, /Enterprise managed-org capacity/);
+  assert.match(body, /Free sub-org slots remaining: 5/);
+  assert.equal(executeToolCallCalls.length, 1);
 });
 
 test("simple member roster requests use list_members tool_first and skip pass 2", async () => {
