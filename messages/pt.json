@@ -217,11 +217,26 @@
       "savePreferences": "Salvar preferencias",
       "turnOnOff": "Ative ou desative e-mails para esta organizacao.",
       "categories": {
-        "announcements": { "label": "Avisos", "desc": "Novos avisos da organizacao" },
-        "discussions": { "label": "Discussoes", "desc": "Novos topicos de discussao" },
-        "events": { "label": "Eventos", "desc": "Novos eventos e agendas" },
-        "workouts": { "label": "Treinos", "desc": "Novos planos de treino" },
-        "competitions": { "label": "Competicoes", "desc": "Novas atualizacoes de competicoes" }
+        "announcements": {
+          "label": "Avisos",
+          "desc": "Novos avisos da organizacao"
+        },
+        "discussions": {
+          "label": "Discussoes",
+          "desc": "Novos topicos de discussao"
+        },
+        "events": {
+          "label": "Eventos",
+          "desc": "Novos eventos e agendas"
+        },
+        "workouts": {
+          "label": "Treinos",
+          "desc": "Novos planos de treino"
+        },
+        "competitions": {
+          "label": "Competicoes",
+          "desc": "Novas atualizacoes de competicoes"
+        }
       }
     },
     "storage": {
@@ -409,7 +424,8 @@
       "accepted": "Solicitacao de adocao aceita! Sua organizacao agora faz parte da empresa.",
       "rejected": "Solicitacao de adocao rejeitada.",
       "confirmReject": "Tem certeza de que deseja rejeitar esta solicitacao de adocao?"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {Sem aprovações pendentes} one {# aprovação pendente} other {# aprovações pendentes}}"
   },
   "customization": {
     "title": "Personalizacao",
@@ -578,11 +594,11 @@
     "philanthropy": "Filantropia",
     "game": "Jogo",
     "meeting": "Reuniao",
-  "social": "Social",
-  "fundraiser": "Arrecadacao",
-  "practice": "Treino",
-  "class": "Aula",
-  "workout": "Exercicio",
+    "social": "Social",
+    "fundraiser": "Arrecadacao",
+    "practice": "Treino",
+    "class": "Aula",
+    "workout": "Exercicio",
     "recurringEvent": "Evento recorrente",
     "willAppear": "{label} aparecera aqui apos ser criado",
     "noUpcomingEvents": "Nenhum {label} proximo",
@@ -811,7 +827,16 @@
     "dragAlbums": "Arraste os albuns pela alca para alterar a ordem.",
     "arrangeAlbums": "Organize como os albuns aparecem nesta pagina.",
     "newAlbum": "Novo album",
-    "failedToLoadAlbums": "Falha ao carregar albuns"
+    "failedToLoadAlbums": "Falha ao carregar albuns",
+    "storage": {
+      "title": "Armazenamento de mídia",
+      "usedOf": "{used} de {quota} utilizados",
+      "usedUnlimited": "{used} utilizados",
+      "quotaExceeded": "Cota de armazenamento excedida",
+      "approachingLimit": "Aproximando-se do limite de armazenamento",
+      "ariaUsedOf": "Uso de armazenamento: {used} de {quota} ({percent}%)",
+      "ariaUsedUnlimited": "Uso de armazenamento: {used} utilizados (plano ilimitado)"
+    }
   },
   "mentorship": {
     "noPairs": "Nenhum par de mentoria ainda",
@@ -836,7 +861,22 @@
     "checkBackLater": "Volte mais tarde conforme ex-alunos se cadastram para ajudar",
     "expertise": "Especialidade",
     "phone": "Telefone",
-    "linkedin": "LinkedIn"
+    "linkedin": "LinkedIn",
+    "editorialStrapline": "Mentores e mentorados avançam juntos rumo a um progresso mensurável.",
+    "mentorSelectLabel": "Mentor",
+    "menteeSelectLabel": "Mentorado",
+    "selectMentor": "Selecione um mentor",
+    "selectMentee": "Selecione um mentorado",
+    "noMenteeAssignedYet": "Nenhum mentorado atribuído ainda.",
+    "openPairMenu": "Abrir menu do par",
+    "statusActive": "Ativo",
+    "statusPaused": "Pausado",
+    "statusCompleted": "Concluído",
+    "loggedBy": "Registado por {name}",
+    "progressMetric": "Progresso: {value}",
+    "loadingControls": "A carregar controlos de mentoria…",
+    "signInManagePair": "Inicia sessão para gerir este par de mentoria.",
+    "signInManageAvailability": "Inicia sessão para gerir a tua disponibilidade."
   },
   "linkedin": {
     "profileUrl": "URL do perfil do LinkedIn",
@@ -894,12 +934,30 @@
     "failedDisconnect": "Falha ao desconectar o Google Calendar",
     "failedSync": "Falha ao sincronizar o Google Calendar",
     "types": {
-      "general": { "label": "Eventos gerais", "desc": "Eventos e atividades gerais da organizacao" },
-      "game": { "label": "Jogos", "desc": "Jogos esportivos e competicoes" },
-      "meeting": { "label": "Reunioes", "desc": "Reunioes e encontros do grupo" },
-      "social": { "label": "Eventos sociais", "desc": "Encontros sociais e festas" },
-      "fundraiser": { "label": "Arrecadacoes", "desc": "Eventos e campanhas de arrecadacao" },
-      "philanthropy": { "label": "Filantropia", "desc": "Servico comunitario e eventos de filantropia" }
+      "general": {
+        "label": "Eventos gerais",
+        "desc": "Eventos e atividades gerais da organizacao"
+      },
+      "game": {
+        "label": "Jogos",
+        "desc": "Jogos esportivos e competicoes"
+      },
+      "meeting": {
+        "label": "Reunioes",
+        "desc": "Reunioes e encontros do grupo"
+      },
+      "social": {
+        "label": "Eventos sociais",
+        "desc": "Encontros sociais e festas"
+      },
+      "fundraiser": {
+        "label": "Arrecadacoes",
+        "desc": "Eventos e campanhas de arrecadacao"
+      },
+      "philanthropy": {
+        "label": "Filantropia",
+        "desc": "Servico comunitario e eventos de filantropia"
+      }
     }
   },
   "blackbaud": {
@@ -907,7 +965,7 @@
     "notConfigured": "A integracao do Blackbaud nao esta configurada neste ambiente. Entre em contato com seu administrador para configurar as credenciais de desenvolvedor do Blackbaud.",
     "connectDesc": "Conecte sua conta Blackbaud RE NXT para sincronizar automaticamente os dados de constituintes no seu diretorio de ex-alunos.",
     "connect": "Conectar Blackbaud",
-    "lastSyncedRecords": "Ultima sincronizacao: {time} \u00b7 {count} registros sincronizados",
+    "lastSyncedRecords": "Ultima sincronizacao: {time} · {count} registros sincronizados",
     "lastSyncDetails": "Detalhes da ultima sincronizacao",
     "created": "Criados",
     "updated": "Atualizados",

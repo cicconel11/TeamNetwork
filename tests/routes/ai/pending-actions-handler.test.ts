@@ -135,6 +135,17 @@ test("confirm executes send_chat_message and appends assistant message", async (
                 },
               };
             }
+            if (table === "ai_threads") {
+              return {
+                update() {
+                  return {
+                    eq() {
+                      return Promise.resolve({ error: null });
+                    },
+                  };
+                },
+              };
+            }
             throw new Error(`unexpected table ${table}`);
           },
         },

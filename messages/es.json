@@ -217,11 +217,26 @@
       "savePreferences": "Guardar preferencias",
       "turnOnOff": "Activa o desactiva correos para esta organizacion.",
       "categories": {
-        "announcements": { "label": "Anuncios", "desc": "Nuevos anuncios de la organizacion" },
-        "discussions": { "label": "Debates", "desc": "Nuevos hilos de debate" },
-        "events": { "label": "Eventos", "desc": "Nuevos eventos y horarios" },
-        "workouts": { "label": "Entrenamientos", "desc": "Nuevos planes de entrenamiento" },
-        "competitions": { "label": "Competencias", "desc": "Nuevas actualizaciones de competencias" }
+        "announcements": {
+          "label": "Anuncios",
+          "desc": "Nuevos anuncios de la organizacion"
+        },
+        "discussions": {
+          "label": "Debates",
+          "desc": "Nuevos hilos de debate"
+        },
+        "events": {
+          "label": "Eventos",
+          "desc": "Nuevos eventos y horarios"
+        },
+        "workouts": {
+          "label": "Entrenamientos",
+          "desc": "Nuevos planes de entrenamiento"
+        },
+        "competitions": {
+          "label": "Competencias",
+          "desc": "Nuevas actualizaciones de competencias"
+        }
       }
     },
     "storage": {
@@ -409,7 +424,8 @@
       "accepted": "Solicitud de adopcion aceptada! Tu organizacion ahora es parte de la empresa.",
       "rejected": "Solicitud de adopcion rechazada.",
       "confirmReject": "Estas seguro de que quieres rechazar esta solicitud de adopcion?"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {Sin aprobaciones pendientes} one {# aprobación pendiente} other {# aprobaciones pendientes}}"
   },
   "customization": {
     "title": "Personalizar",
@@ -578,11 +594,11 @@
     "philanthropy": "Filantropia",
     "game": "Juego",
     "meeting": "Reunion",
-  "social": "Social",
-  "fundraiser": "Recaudacion",
-  "practice": "Practica",
-  "class": "Clase",
-  "workout": "Entrenamiento",
+    "social": "Social",
+    "fundraiser": "Recaudacion",
+    "practice": "Practica",
+    "class": "Clase",
+    "workout": "Entrenamiento",
     "recurringEvent": "Evento recurrente",
     "willAppear": "{label} aparecera aqui una vez creado",
     "noUpcomingEvents": "No hay {label} proximos",
@@ -811,7 +827,16 @@
     "dragAlbums": "Arrastra los albumes por el control para cambiar el orden.",
     "arrangeAlbums": "Organiza como aparecen los albumes en esta pagina.",
     "newAlbum": "Nuevo album",
-    "failedToLoadAlbums": "No se pudieron cargar los albumes"
+    "failedToLoadAlbums": "No se pudieron cargar los albumes",
+    "storage": {
+      "title": "Almacenamiento de medios",
+      "usedOf": "{used} de {quota} utilizados",
+      "usedUnlimited": "{used} utilizados",
+      "quotaExceeded": "Cuota de almacenamiento superada",
+      "approachingLimit": "Acercándose al límite de almacenamiento",
+      "ariaUsedOf": "Uso de almacenamiento: {used} de {quota} ({percent}%)",
+      "ariaUsedUnlimited": "Uso de almacenamiento: {used} utilizados (plan ilimitado)"
+    }
   },
   "mentorship": {
     "noPairs": "Aun no hay pares de mentoria",
@@ -836,7 +861,22 @@
     "checkBackLater": "Vuelve mas tarde cuando los egresados se registren para ayudar",
     "expertise": "Experiencia",
     "phone": "Telefono",
-    "linkedin": "LinkedIn"
+    "linkedin": "LinkedIn",
+    "editorialStrapline": "Mentores y aprendices avanzando juntos hacia un progreso medible.",
+    "mentorSelectLabel": "Mentor",
+    "menteeSelectLabel": "Aprendiz",
+    "selectMentor": "Selecciona un mentor",
+    "selectMentee": "Selecciona un aprendiz",
+    "noMenteeAssignedYet": "Aún no hay aprendiz asignado.",
+    "openPairMenu": "Abrir menú del par",
+    "statusActive": "Activo",
+    "statusPaused": "En pausa",
+    "statusCompleted": "Completado",
+    "loggedBy": "Registrado por {name}",
+    "progressMetric": "Progreso: {value}",
+    "loadingControls": "Cargando controles de mentoría…",
+    "signInManagePair": "Inicia sesión para gestionar este par de mentoría.",
+    "signInManageAvailability": "Inicia sesión para gestionar tu disponibilidad."
   },
   "linkedin": {
     "profileUrl": "URL del perfil de LinkedIn",
@@ -851,7 +891,7 @@
     "experience": "Experiencia",
     "education": "Educacion",
     "headline": "Titulo",
-    "waitAfterChange": "Si acabas de cambiar esta configuracion, espera 24\u201348 horas para que LinkedIn se actualice",
+    "waitAfterChange": "Si acabas de cambiar esta configuracion, espera 24–48 horas para que LinkedIn se actualice",
     "comeBackSync": "Vuelve y haz clic en Sincronizar datos de LinkedIn",
     "connectedAccount": "Cuenta conectada",
     "lastSynced": "Ultima sincronizacion: {time}",
@@ -865,7 +905,7 @@
     "connectLinkedIn": "Conectar LinkedIn",
     "profileSync": "Sincronizacion de perfil",
     "missingDetails": "No pudimos encontrar tu cargo o datos de educacion. Para solucionarlo:",
-    "limitReached": "Limite alcanzado \u2014 se restablece el proximo mes",
+    "limitReached": "Limite alcanzado — se restablece el proximo mes",
     "syncsRemaining": "{remaining} de {max} sincronizaciones restantes",
     "resyncManaged": "La resincronizacion es gestionada por tu organizacion",
     "urlSaved": "URL de LinkedIn guardada.",
@@ -894,12 +934,30 @@
     "failedDisconnect": "No se pudo desconectar Google Calendar",
     "failedSync": "No se pudo sincronizar Google Calendar",
     "types": {
-      "general": { "label": "Eventos generales", "desc": "Eventos y actividades generales de la organizacion" },
-      "game": { "label": "Juegos", "desc": "Juegos deportivos y competencias" },
-      "meeting": { "label": "Reuniones", "desc": "Reuniones y encuentros del grupo" },
-      "social": { "label": "Eventos sociales", "desc": "Encuentros sociales y fiestas" },
-      "fundraiser": { "label": "Recaudaciones", "desc": "Eventos y campanas de recaudacion de fondos" },
-      "philanthropy": { "label": "Filantropia", "desc": "Eventos de servicio comunitario y filantropia" }
+      "general": {
+        "label": "Eventos generales",
+        "desc": "Eventos y actividades generales de la organizacion"
+      },
+      "game": {
+        "label": "Juegos",
+        "desc": "Juegos deportivos y competencias"
+      },
+      "meeting": {
+        "label": "Reuniones",
+        "desc": "Reuniones y encuentros del grupo"
+      },
+      "social": {
+        "label": "Eventos sociales",
+        "desc": "Encuentros sociales y fiestas"
+      },
+      "fundraiser": {
+        "label": "Recaudaciones",
+        "desc": "Eventos y campanas de recaudacion de fondos"
+      },
+      "philanthropy": {
+        "label": "Filantropia",
+        "desc": "Eventos de servicio comunitario y filantropia"
+      }
     }
   },
   "blackbaud": {
@@ -907,7 +965,7 @@
     "notConfigured": "La integracion con Blackbaud no esta configurada en este entorno. Contacta a tu administrador para configurar las credenciales de desarrollador de Blackbaud.",
     "connectDesc": "Conecta tu cuenta de Blackbaud RE NXT para sincronizar automaticamente datos de contribuyentes con tu directorio de egresados.",
     "connect": "Conectar Blackbaud",
-    "lastSyncedRecords": "Ultima sincronizacion: {time} \u00b7 {count} registros sincronizados",
+    "lastSyncedRecords": "Ultima sincronizacion: {time} · {count} registros sincronizados",
     "lastSyncDetails": "Detalles de la ultima sincronizacion",
     "created": "Creados",
     "updated": "Actualizados",

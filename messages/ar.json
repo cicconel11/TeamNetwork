@@ -217,11 +217,26 @@
       "savePreferences": "حفظ التفضيلات",
       "turnOnOff": "تفعيل أو تعطيل الرسائل لهذه المنظمة.",
       "categories": {
-        "announcements": { "label": "الإعلانات", "desc": "إعلانات جديدة من المنظمة" },
-        "discussions": { "label": "المناقشات", "desc": "مواضيع مناقشة جديدة" },
-        "events": { "label": "الفعاليات", "desc": "فعاليات وجداول جديدة" },
-        "workouts": { "label": "التمارين", "desc": "خطط تمارين جديدة" },
-        "competitions": { "label": "المنافسات", "desc": "تحديثات المنافسات الجديدة" }
+        "announcements": {
+          "label": "الإعلانات",
+          "desc": "إعلانات جديدة من المنظمة"
+        },
+        "discussions": {
+          "label": "المناقشات",
+          "desc": "مواضيع مناقشة جديدة"
+        },
+        "events": {
+          "label": "الفعاليات",
+          "desc": "فعاليات وجداول جديدة"
+        },
+        "workouts": {
+          "label": "التمارين",
+          "desc": "خطط تمارين جديدة"
+        },
+        "competitions": {
+          "label": "المنافسات",
+          "desc": "تحديثات المنافسات الجديدة"
+        }
       }
     },
     "storage": {
@@ -409,7 +424,8 @@
       "accepted": "تم قبول طلب التبني! منظمتك الآن جزء من المؤسسة.",
       "rejected": "تم رفض طلب التبني.",
       "confirmReject": "هل أنت متأكد من رغبتك في رفض طلب التبني هذا؟"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {لا توجد موافقات معلّقة} one {# موافقة معلّقة} other {# موافقات معلّقة}}"
   },
   "customization": {
     "title": "التخصيص",
@@ -578,11 +594,11 @@
     "philanthropy": "العمل الخيري",
     "game": "مباراة",
     "meeting": "اجتماع",
-  "social": "اجتماعي",
-  "fundraiser": "جمع تبرعات",
-  "practice": "تدريب",
-  "class": "صف",
-  "workout": "تمرين",
+    "social": "اجتماعي",
+    "fundraiser": "جمع تبرعات",
+    "practice": "تدريب",
+    "class": "صف",
+    "workout": "تمرين",
     "recurringEvent": "فعالية متكررة",
     "willAppear": "{label} ستظهر هنا بمجرد إنشائها",
     "noUpcomingEvents": "لا توجد {label} قادمة",
@@ -811,7 +827,16 @@
     "dragAlbums": "اسحب الألبومات من المقبض لتغيير الترتيب.",
     "arrangeAlbums": "رتّب كيفية ظهور الألبومات في هذه الصفحة.",
     "newAlbum": "ألبوم جديد",
-    "failedToLoadAlbums": "فشل في تحميل الألبومات"
+    "failedToLoadAlbums": "فشل في تحميل الألبومات",
+    "storage": {
+      "title": "تخزين الوسائط",
+      "usedOf": "تمّ استخدام {used} من أصل {quota}",
+      "usedUnlimited": "تمّ استخدام {used}",
+      "quotaExceeded": "تمّ تجاوز حصّة التخزين",
+      "approachingLimit": "الاقتراب من حدّ التخزين",
+      "ariaUsedOf": "استخدام التخزين: {used} من أصل {quota} ({percent}٪)",
+      "ariaUsedUnlimited": "استخدام التخزين: {used} (خطّة غير محدودة)"
+    }
   },
   "mentorship": {
     "noPairs": "لا توجد أزواج إرشاد بعد",
@@ -836,7 +861,22 @@
     "checkBackLater": "تحقق لاحقاً عندما يسجل الخريجون للمساعدة",
     "expertise": "الخبرة",
     "phone": "الهاتف",
-    "linkedin": "LinkedIn"
+    "linkedin": "LinkedIn",
+    "editorialStrapline": "الموجّهون والمتدرّبون يتقدّمون معًا نحو تقدّم قابل للقياس.",
+    "mentorSelectLabel": "موجّه",
+    "menteeSelectLabel": "متدرّب",
+    "selectMentor": "اختر موجّهًا",
+    "selectMentee": "اختر متدرّبًا",
+    "noMenteeAssignedYet": "لم يتمّ تعيين متدرّب بعد.",
+    "openPairMenu": "فتح قائمة الزوج",
+    "statusActive": "نشط",
+    "statusPaused": "مُوقّف مؤقتًا",
+    "statusCompleted": "مُكتمل",
+    "loggedBy": "سجّله {name}",
+    "progressMetric": "التقدّم: {value}",
+    "loadingControls": "جارٍ تحميل أدوات الإرشاد…",
+    "signInManagePair": "سجّل الدخول لإدارة زوج الإرشاد.",
+    "signInManageAvailability": "سجّل الدخول لإدارة توافرك."
   },
   "linkedin": {
     "profileUrl": "رابط ملف LinkedIn",
@@ -894,12 +934,30 @@
     "failedDisconnect": "فشل في قطع اتصال Google Calendar",
     "failedSync": "فشل في مزامنة Google Calendar",
     "types": {
-      "general": { "label": "فعاليات عامة", "desc": "فعاليات وأنشطة المنظمة العامة" },
-      "game": { "label": "مباريات", "desc": "المباريات الرياضية والمنافسات" },
-      "meeting": { "label": "اجتماعات", "desc": "اجتماعات وتجمعات الفرع" },
-      "social": { "label": "مناسبات اجتماعية", "desc": "التجمعات والحفلات الاجتماعية" },
-      "fundraiser": { "label": "جمع التبرعات", "desc": "فعاليات وحملات جمع التبرعات" },
-      "philanthropy": { "label": "العمل الخيري", "desc": "فعاليات الخدمة المجتمعية والعمل الخيري" }
+      "general": {
+        "label": "فعاليات عامة",
+        "desc": "فعاليات وأنشطة المنظمة العامة"
+      },
+      "game": {
+        "label": "مباريات",
+        "desc": "المباريات الرياضية والمنافسات"
+      },
+      "meeting": {
+        "label": "اجتماعات",
+        "desc": "اجتماعات وتجمعات الفرع"
+      },
+      "social": {
+        "label": "مناسبات اجتماعية",
+        "desc": "التجمعات والحفلات الاجتماعية"
+      },
+      "fundraiser": {
+        "label": "جمع التبرعات",
+        "desc": "فعاليات وحملات جمع التبرعات"
+      },
+      "philanthropy": {
+        "label": "العمل الخيري",
+        "desc": "فعاليات الخدمة المجتمعية والعمل الخيري"
+      }
     }
   },
   "blackbaud": {

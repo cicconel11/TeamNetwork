@@ -217,11 +217,26 @@
       "savePreferences": "Enregistrer les preferences",
       "turnOnOff": "Activez ou desactivez les e-mails pour cette organisation.",
       "categories": {
-        "announcements": { "label": "Annonces", "desc": "Nouvelles annonces de l'organisation" },
-        "discussions": { "label": "Discussions", "desc": "Nouveaux fils de discussion" },
-        "events": { "label": "Evenements", "desc": "Nouveaux evenements et horaires" },
-        "workouts": { "label": "Entrainements", "desc": "Nouveaux programmes d'entrainement" },
-        "competitions": { "label": "Competitions", "desc": "Nouvelles mises a jour des competitions" }
+        "announcements": {
+          "label": "Annonces",
+          "desc": "Nouvelles annonces de l'organisation"
+        },
+        "discussions": {
+          "label": "Discussions",
+          "desc": "Nouveaux fils de discussion"
+        },
+        "events": {
+          "label": "Evenements",
+          "desc": "Nouveaux evenements et horaires"
+        },
+        "workouts": {
+          "label": "Entrainements",
+          "desc": "Nouveaux programmes d'entrainement"
+        },
+        "competitions": {
+          "label": "Competitions",
+          "desc": "Nouvelles mises a jour des competitions"
+        }
       }
     },
     "storage": {
@@ -409,7 +424,8 @@
       "accepted": "Demande d'adoption acceptee ! Votre organisation fait desormais partie de l'entreprise.",
       "rejected": "Demande d'adoption rejetee.",
       "confirmReject": "Etes-vous sur de vouloir rejeter cette demande d'adoption ?"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {Aucune approbation en attente} one {# approbation en attente} other {# approbations en attente}}"
   },
   "customization": {
     "title": "Personnalisation",
@@ -578,11 +594,11 @@
     "philanthropy": "Philanthropie",
     "game": "Match",
     "meeting": "Reunion",
-  "social": "Social",
-  "fundraiser": "Collecte de fonds",
-  "practice": "Entrainement",
-  "class": "Cours",
-  "workout": "Exercice",
+    "social": "Social",
+    "fundraiser": "Collecte de fonds",
+    "practice": "Entrainement",
+    "class": "Cours",
+    "workout": "Exercice",
     "recurringEvent": "Evenement recurrent",
     "willAppear": "{label} apparaitra ici une fois cree",
     "noUpcomingEvents": "Aucun {label} a venir",
@@ -811,7 +827,16 @@
     "dragAlbums": "Faites glisser les albums par la poignee pour modifier l'ordre.",
     "arrangeAlbums": "Organisez l'affichage des albums sur cette page.",
     "newAlbum": "Nouvel album",
-    "failedToLoadAlbums": "Echec du chargement des albums"
+    "failedToLoadAlbums": "Echec du chargement des albums",
+    "storage": {
+      "title": "Stockage des médias",
+      "usedOf": "{used} sur {quota} utilisés",
+      "usedUnlimited": "{used} utilisés",
+      "quotaExceeded": "Quota de stockage dépassé",
+      "approachingLimit": "Limite de stockage bientôt atteinte",
+      "ariaUsedOf": "Utilisation du stockage : {used} sur {quota} ({percent}%)",
+      "ariaUsedUnlimited": "Utilisation du stockage : {used} utilisés (forfait illimité)"
+    }
   },
   "mentorship": {
     "noPairs": "Aucun binome de mentorat pour le moment",
@@ -836,7 +861,22 @@
     "checkBackLater": "Revenez plus tard lorsque des anciens se seront inscrits pour aider",
     "expertise": "Expertise",
     "phone": "Telephone",
-    "linkedin": "LinkedIn"
+    "linkedin": "LinkedIn",
+    "editorialStrapline": "Mentors et mentorés avancent ensemble vers des progrès mesurables.",
+    "mentorSelectLabel": "Mentor",
+    "menteeSelectLabel": "Mentoré",
+    "selectMentor": "Sélectionnez un mentor",
+    "selectMentee": "Sélectionnez un mentoré",
+    "noMenteeAssignedYet": "Aucun mentoré assigné pour le moment.",
+    "openPairMenu": "Ouvrir le menu de la paire",
+    "statusActive": "Actif",
+    "statusPaused": "En pause",
+    "statusCompleted": "Terminé",
+    "loggedBy": "Enregistré par {name}",
+    "progressMetric": "Progression : {value}",
+    "loadingControls": "Chargement des contrôles de mentorat…",
+    "signInManagePair": "Connectez-vous pour gérer cette paire de mentorat.",
+    "signInManageAvailability": "Connectez-vous pour gérer votre disponibilité."
   },
   "linkedin": {
     "profileUrl": "URL du profil LinkedIn",
@@ -894,12 +934,30 @@
     "failedDisconnect": "Echec de la deconnexion de Google Calendar",
     "failedSync": "Echec de la synchronisation de Google Calendar",
     "types": {
-      "general": { "label": "Evenements generaux", "desc": "Evenements et activites generales de l'organisation" },
-      "game": { "label": "Matchs", "desc": "Matchs sportifs et competitions" },
-      "meeting": { "label": "Reunions", "desc": "Reunions et rassemblements" },
-      "social": { "label": "Evenements sociaux", "desc": "Rassemblements sociaux et fetes" },
-      "fundraiser": { "label": "Collectes de fonds", "desc": "Evenements et campagnes de collecte de fonds" },
-      "philanthropy": { "label": "Philanthropie", "desc": "Evenements de service communautaire et de philanthropie" }
+      "general": {
+        "label": "Evenements generaux",
+        "desc": "Evenements et activites generales de l'organisation"
+      },
+      "game": {
+        "label": "Matchs",
+        "desc": "Matchs sportifs et competitions"
+      },
+      "meeting": {
+        "label": "Reunions",
+        "desc": "Reunions et rassemblements"
+      },
+      "social": {
+        "label": "Evenements sociaux",
+        "desc": "Rassemblements sociaux et fetes"
+      },
+      "fundraiser": {
+        "label": "Collectes de fonds",
+        "desc": "Evenements et campagnes de collecte de fonds"
+      },
+      "philanthropy": {
+        "label": "Philanthropie",
+        "desc": "Evenements de service communautaire et de philanthropie"
+      }
     }
   },
   "blackbaud": {
@@ -907,7 +965,7 @@
     "notConfigured": "L'integration Blackbaud n'est pas configuree dans cet environnement. Contactez votre administrateur pour configurer les identifiants de developpeur Blackbaud.",
     "connectDesc": "Connectez votre compte Blackbaud RE NXT pour synchroniser automatiquement les donnees des constituants dans votre annuaire d'anciens.",
     "connect": "Connecter Blackbaud",
-    "lastSyncedRecords": "Derniere synchronisation : {time} \u00b7 {count} enregistrements synchronises",
+    "lastSyncedRecords": "Derniere synchronisation : {time} · {count} enregistrements synchronises",
     "lastSyncDetails": "Details de la derniere synchronisation",
     "created": "Crees",
     "updated": "Mis a jour",

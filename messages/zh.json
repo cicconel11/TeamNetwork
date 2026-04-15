@@ -217,11 +217,26 @@
       "savePreferences": "保存偏好",
       "turnOnOff": "为此组织开启或关闭邮件。",
       "categories": {
-        "announcements": { "label": "公告", "desc": "来自组织的新公告" },
-        "discussions": { "label": "讨论", "desc": "新的讨论主题" },
-        "events": { "label": "活动", "desc": "新的活动和日程" },
-        "workouts": { "label": "训练", "desc": "新的训练计划" },
-        "competitions": { "label": "比赛", "desc": "新的比赛动态" }
+        "announcements": {
+          "label": "公告",
+          "desc": "来自组织的新公告"
+        },
+        "discussions": {
+          "label": "讨论",
+          "desc": "新的讨论主题"
+        },
+        "events": {
+          "label": "活动",
+          "desc": "新的活动和日程"
+        },
+        "workouts": {
+          "label": "训练",
+          "desc": "新的训练计划"
+        },
+        "competitions": {
+          "label": "比赛",
+          "desc": "新的比赛动态"
+        }
       }
     },
     "storage": {
@@ -409,7 +424,8 @@
       "accepted": "接管请求已接受！您的组织现在是企业的一部分。",
       "rejected": "接管请求已拒绝。",
       "confirmReject": "您确定要拒绝此接管请求吗？"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {没有待审批项} other {# 项待审批}}"
   },
   "customization": {
     "title": "自定义",
@@ -578,11 +594,11 @@
     "philanthropy": "慈善",
     "game": "比赛",
     "meeting": "会议",
-  "social": "社交",
-  "fundraiser": "筹款",
-  "practice": "训练",
-  "class": "课程",
-  "workout": "锻炼",
+    "social": "社交",
+    "fundraiser": "筹款",
+    "practice": "训练",
+    "class": "课程",
+    "workout": "锻炼",
     "recurringEvent": "周期性活动",
     "willAppear": "{label}创建后将显示在此处",
     "noUpcomingEvents": "没有即将举行的{label}",
@@ -811,7 +827,16 @@
     "dragAlbums": "拖动手柄以更改相册顺序。",
     "arrangeAlbums": "安排相册在此页面上的显示方式。",
     "newAlbum": "新建相册",
-    "failedToLoadAlbums": "加载相册失败"
+    "failedToLoadAlbums": "加载相册失败",
+    "storage": {
+      "title": "媒体存储",
+      "usedOf": "已使用 {used} / {quota}",
+      "usedUnlimited": "已使用 {used}",
+      "quotaExceeded": "存储配额已超出",
+      "approachingLimit": "接近存储上限",
+      "ariaUsedOf": "存储使用：已使用 {used} / {quota}（{percent}%）",
+      "ariaUsedUnlimited": "存储使用：已使用 {used}（无限量方案）"
+    }
   },
   "mentorship": {
     "noPairs": "暂无导师配对",
@@ -836,7 +861,22 @@
     "checkBackLater": "稍后再来查看注册帮助的校友",
     "expertise": "专业领域",
     "phone": "电话",
-    "linkedin": "LinkedIn"
+    "linkedin": "LinkedIn",
+    "editorialStrapline": "导师与学员携手迈向可量化的进展。",
+    "mentorSelectLabel": "导师",
+    "menteeSelectLabel": "学员",
+    "selectMentor": "选择导师",
+    "selectMentee": "选择学员",
+    "noMenteeAssignedYet": "尚未分配学员。",
+    "openPairMenu": "打开配对菜单",
+    "statusActive": "活跃",
+    "statusPaused": "已暂停",
+    "statusCompleted": "已完成",
+    "loggedBy": "由 {name} 记录",
+    "progressMetric": "进展：{value}",
+    "loadingControls": "正在加载导师指导控件…",
+    "signInManagePair": "登录以管理此导师配对。",
+    "signInManageAvailability": "登录以管理您的可用性。"
   },
   "linkedin": {
     "profileUrl": "LinkedIn 个人资料 URL",
@@ -894,12 +934,30 @@
     "failedDisconnect": "断开 Google Calendar 连接失败",
     "failedSync": "同步 Google Calendar 失败",
     "types": {
-      "general": { "label": "常规活动", "desc": "组织的一般活动" },
-      "game": { "label": "比赛", "desc": "体育比赛和竞赛" },
-      "meeting": { "label": "会议", "desc": "分会会议和聚会" },
-      "social": { "label": "社交活动", "desc": "社交聚会和派对" },
-      "fundraiser": { "label": "筹款活动", "desc": "筹款活动和募捐" },
-      "philanthropy": { "label": "慈善", "desc": "社区服务和慈善活动" }
+      "general": {
+        "label": "常规活动",
+        "desc": "组织的一般活动"
+      },
+      "game": {
+        "label": "比赛",
+        "desc": "体育比赛和竞赛"
+      },
+      "meeting": {
+        "label": "会议",
+        "desc": "分会会议和聚会"
+      },
+      "social": {
+        "label": "社交活动",
+        "desc": "社交聚会和派对"
+      },
+      "fundraiser": {
+        "label": "筹款活动",
+        "desc": "筹款活动和募捐"
+      },
+      "philanthropy": {
+        "label": "慈善",
+        "desc": "社区服务和慈善活动"
+      }
     }
   },
   "blackbaud": {

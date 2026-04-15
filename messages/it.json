@@ -217,11 +217,26 @@
       "savePreferences": "Salva preferenze",
       "turnOnOff": "Attiva o disattiva le e-mail per questa organizzazione.",
       "categories": {
-        "announcements": { "label": "Annunci", "desc": "Nuovi annunci dall'organizzazione" },
-        "discussions": { "label": "Discussioni", "desc": "Nuove discussioni" },
-        "events": { "label": "Eventi", "desc": "Nuovi eventi e programmi" },
-        "workouts": { "label": "Allenamenti", "desc": "Nuovi piani di allenamento" },
-        "competitions": { "label": "Competizioni", "desc": "Aggiornamenti sulle competizioni" }
+        "announcements": {
+          "label": "Annunci",
+          "desc": "Nuovi annunci dall'organizzazione"
+        },
+        "discussions": {
+          "label": "Discussioni",
+          "desc": "Nuove discussioni"
+        },
+        "events": {
+          "label": "Eventi",
+          "desc": "Nuovi eventi e programmi"
+        },
+        "workouts": {
+          "label": "Allenamenti",
+          "desc": "Nuovi piani di allenamento"
+        },
+        "competitions": {
+          "label": "Competizioni",
+          "desc": "Aggiornamenti sulle competizioni"
+        }
       }
     },
     "storage": {
@@ -409,7 +424,8 @@
       "accepted": "Richiesta di adozione accettata! La tua organizzazione fa ora parte dell'azienda.",
       "rejected": "Richiesta di adozione rifiutata.",
       "confirmReject": "Sei sicuro di voler rifiutare questa richiesta di adozione?"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {Nessuna approvazione in sospeso} one {# approvazione in sospeso} other {# approvazioni in sospeso}}"
   },
   "customization": {
     "title": "Personalizzazione",
@@ -578,11 +594,11 @@
     "philanthropy": "Filantropia",
     "game": "Partita",
     "meeting": "Riunione",
-  "social": "Sociale",
-  "fundraiser": "Raccolta fondi",
-  "practice": "Allenamento",
-  "class": "Lezione",
-  "workout": "Esercizio",
+    "social": "Sociale",
+    "fundraiser": "Raccolta fondi",
+    "practice": "Allenamento",
+    "class": "Lezione",
+    "workout": "Esercizio",
     "recurringEvent": "Evento ricorrente",
     "willAppear": "{label} apparirà qui una volta creato",
     "noUpcomingEvents": "Nessun {label} in programma",
@@ -811,7 +827,16 @@
     "dragAlbums": "Trascina gli album dalla maniglia per cambiare l'ordine.",
     "arrangeAlbums": "Organizza come appaiono gli album in questa pagina.",
     "newAlbum": "Nuovo album",
-    "failedToLoadAlbums": "Caricamento album non riuscito"
+    "failedToLoadAlbums": "Caricamento album non riuscito",
+    "storage": {
+      "title": "Archiviazione dei media",
+      "usedOf": "{used} di {quota} utilizzati",
+      "usedUnlimited": "{used} utilizzati",
+      "quotaExceeded": "Quota di archiviazione superata",
+      "approachingLimit": "Limite di archiviazione in avvicinamento",
+      "ariaUsedOf": "Utilizzo archiviazione: {used} di {quota} ({percent}%)",
+      "ariaUsedUnlimited": "Utilizzo archiviazione: {used} utilizzati (piano illimitato)"
+    }
   },
   "mentorship": {
     "noPairs": "Nessuna coppia di mentoring ancora",
@@ -836,7 +861,22 @@
     "checkBackLater": "Torna più tardi man mano che gli ex studenti si registrano per aiutare",
     "expertise": "Competenza",
     "phone": "Telefono",
-    "linkedin": "LinkedIn"
+    "linkedin": "LinkedIn",
+    "editorialStrapline": "Mentor e allievi avanzano insieme verso progressi misurabili.",
+    "mentorSelectLabel": "Mentor",
+    "menteeSelectLabel": "Allievo",
+    "selectMentor": "Seleziona un mentor",
+    "selectMentee": "Seleziona un allievo",
+    "noMenteeAssignedYet": "Nessun allievo assegnato finora.",
+    "openPairMenu": "Apri menu della coppia",
+    "statusActive": "Attivo",
+    "statusPaused": "In pausa",
+    "statusCompleted": "Completato",
+    "loggedBy": "Registrato da {name}",
+    "progressMetric": "Progresso: {value}",
+    "loadingControls": "Caricamento dei controlli di mentorship…",
+    "signInManagePair": "Accedi per gestire questa coppia di mentorship.",
+    "signInManageAvailability": "Accedi per gestire la tua disponibilità."
   },
   "linkedin": {
     "profileUrl": "URL del profilo LinkedIn",
@@ -851,7 +891,7 @@
     "experience": "Esperienza",
     "education": "Formazione",
     "headline": "Titolo",
-    "waitAfterChange": "Se hai appena cambiato queste impostazioni, aspetta 24\u201348 ore per l'aggiornamento di LinkedIn",
+    "waitAfterChange": "Se hai appena cambiato queste impostazioni, aspetta 24–48 ore per l'aggiornamento di LinkedIn",
     "comeBackSync": "Torna e premi Sincronizza dati LinkedIn",
     "connectedAccount": "Account collegato",
     "lastSynced": "Ultima sincronizzazione: {time}",
@@ -894,12 +934,30 @@
     "failedDisconnect": "Disconnessione di Google Calendar non riuscita",
     "failedSync": "Sincronizzazione di Google Calendar non riuscita",
     "types": {
-      "general": { "label": "Eventi generali", "desc": "Eventi e attività generali dell'organizzazione" },
-      "game": { "label": "Partite", "desc": "Partite sportive e competizioni" },
-      "meeting": { "label": "Riunioni", "desc": "Riunioni e incontri del gruppo" },
-      "social": { "label": "Eventi sociali", "desc": "Incontri sociali e feste" },
-      "fundraiser": { "label": "Raccolte fondi", "desc": "Eventi e campagne di raccolta fondi" },
-      "philanthropy": { "label": "Filantropia", "desc": "Servizio comunitario ed eventi di filantropia" }
+      "general": {
+        "label": "Eventi generali",
+        "desc": "Eventi e attività generali dell'organizzazione"
+      },
+      "game": {
+        "label": "Partite",
+        "desc": "Partite sportive e competizioni"
+      },
+      "meeting": {
+        "label": "Riunioni",
+        "desc": "Riunioni e incontri del gruppo"
+      },
+      "social": {
+        "label": "Eventi sociali",
+        "desc": "Incontri sociali e feste"
+      },
+      "fundraiser": {
+        "label": "Raccolte fondi",
+        "desc": "Eventi e campagne di raccolta fondi"
+      },
+      "philanthropy": {
+        "label": "Filantropia",
+        "desc": "Servizio comunitario ed eventi di filantropia"
+      }
     }
   },
   "blackbaud": {
