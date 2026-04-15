@@ -1,54 +1,63 @@
 # Enterprise-Aware AI Context
 
-The assistant on enterprise pages is the same assistant that already powers org admin pages. It still uses `AIPanel` and the existing `/api/ai/[orgId]/chat` route. There is no separate enterprise agent, no new persistence path, and no schema change.
+The enterprise assistant experience is an extension of the existing org assistant. It uses the same `AIPanel`, the same `/api/ai/[orgId]/chat` route, and the same org-scoped thread/message/audit persistence.
 
-## How context attaches
+Enterprise behavior is not global across the app. It should only activate for organizations on the enterprise plan where the current admin context is enterprise-linked and the caller has an enterprise role.
 
-`getAiOrgContext()` now keeps the existing org-admin check and, when that org belongs to an enterprise, also checks `user_enterprise_roles` for the same user. If both conditions hold, the AI request context carries:
+## Activation Criteria
 
-- `enterpriseId`
-- `enterpriseRole` (typed as `EnterpriseRole`: `owner | billing_admin | org_admin`)
+Enterprise context is attached only when all of the following are true:
 
-Org-only threads keep working unchanged because those fields stay `undefined`.
+- The caller is an org admin for the `orgId` on the request.
+- `organizations.enterprise_id` is set for that org.
+- `user_enterprise_roles` contains a matching role for this user + enterprise.
 
-Both enterprise lookups (`organizations.enterprise_id` and `user_enterprise_roles`) are fail-closed — a DB error on either query returns 503, matching the main org-role check. Transient lookup failures never silently strip enterprise capabilities.
+If any enterprise lookup fails, the request fails closed (503). If enterprise linkage or role is missing, the assistant remains org-scoped.
 
-## Prompt behavior
+## Prompt Context Visibility
 
-`buildPromptContext()` still builds org context first. When `enterpriseId` is present, it also loads lightweight enterprise grounding:
+`buildPromptContext()` always builds org context. When enterprise context is active, enterprise fields are split by sensitivity:
 
-- enterprise name and slug
-- enterprise alumni totals from `enterprise_alumni_counts`
-- quota snapshot derived from `enterprise_subscriptions` plus `buildQuotaInfo()`
-- managed org names and slugs
+- Enterprise non-billing context (all enterprise roles):
+  - enterprise name and slug
+  - enterprise alumni totals from `enterprise_alumni_counts`
+  - managed org names and slugs
+  - operational sub-org slot usage (`free_limit`, `free_remaining`) where role policy allows
+- Enterprise billing context (owner and billing_admin only):
+  - bucket quantity
+  - alumni capacity/remaining
+  - billing-derived quota and seat-allocation values
 
-This data is injected as untrusted prompt context. Per-alumni rows are not preloaded into the prompt.
+Per-alumni rows are never preloaded into the prompt and remain tool-backed.
 
-## Enterprise tools
+## Enterprise Capability Matrix
 
-The existing tool registry now includes four read-only enterprise tools:
+- `list_enterprise_alumni`: `owner`, `billing_admin`, `org_admin`
+- `get_enterprise_stats`: `owner`, `billing_admin`, `org_admin`
+- `list_managed_orgs`: `owner`, `billing_admin`, `org_admin`
+- Operational free sub-org slot counts: `owner`, `billing_admin`, `org_admin`
+- Billing quota/allocation details (`get_enterprise_quota` and equivalent billing-derived fields): `owner`, `billing_admin`
 
-- `list_enterprise_alumni`
-- `get_enterprise_stats`
-- `list_managed_orgs`
-- `get_enterprise_quota`
+Rationale: `org_admin` can create sub-orgs and the enterprise dashboard already surfaces free-slot operational data. Billing quota/allocation details remain billing-only.
 
-All four tools short-circuit with a clear error when the current thread has no enterprise context. That lets the same tool registry stay attached without creating a parallel execution pipeline.
+## Response Policy
 
-Role gating in the executor:
+- The default answer scope is org-only.
+- Enterprise-wide answers are valid only when enterprise context is active.
+- Billing-restricted asks for non-billing roles should use deterministic deny behavior, not model improvisation.
+- Deny responses should not include restricted derived values.
+- Mixed prompts should answer allowed portions and deny restricted portions in the same response.
+- Non-enterprise organizations should not receive enterprise answers even when prompts include terms like `enterprise`, `quota`, or `managed orgs`.
 
-- `get_enterprise_quota` requires `canManageBilling` (owner or billing_admin) via `getEnterprisePermissions()`. Org-admin enterprise users receive a clear tool error.
-- The other three tools (`list_enterprise_alumni`, `get_enterprise_stats`, `list_managed_orgs`) are allowed for any enterprise role since all roles have `canViewDashboard`.
+## UI Behavior
 
-## UI behavior
+Enterprise pages mount the same `AIPanel` and `AIEdgeTab` used on org pages. The enterprise layout resolves an admin org id and still talks to `/api/ai/[orgId]/chat`, so existing AI tables stay org-scoped.
 
-Enterprise pages now mount the same `AIPanel` and `AIEdgeTab` used on org pages. The panel still talks to `/api/ai/[orgId]/chat`; on enterprise pages the `orgId` passed in is the first active admin org the current enterprise user has inside that enterprise. Threads, messages, and audit rows therefore remain stored under the existing org-scoped AI tables.
+Starter prompts and enterprise capability hints should only surface in enterprise-eligible contexts.
 
-## Extending this path
-
-When adding more enterprise-aware tools:
+## Extending This Path
 
 1. Keep the route and persistence layer unchanged.
-2. Reuse `enterpriseId` from `AiOrgContext`.
+2. Reuse `enterpriseId` and `enterpriseRole` from `AiOrgContext`.
 3. Prefer enterprise views/RPCs over custom aggregation logic.
-4. Keep enterprise detail behind tool calls, not in the base prompt.
+4. Keep enterprise detail behind tool calls instead of expanding base prompt payloads.

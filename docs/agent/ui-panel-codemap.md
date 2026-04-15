@@ -2,7 +2,9 @@
 
 ## Overview
 
-The AI assistant UI is a slide-out panel anchored to the right edge of the screen, available to org admins. It supports chat with streaming responses, thread management, markdown rendering, route-aware scope hints, starter prompts, one attached schedule file per draft (`PDF`, `PNG`, `JPEG`, `JPG`), persisted open/close preference, persisted active-thread selection per org and surface, live tool-status labels, and review/confirm UI for assistant pending actions. All state is local to the panel and hook layer. The panel communicates with the backend via `fetch` and consumes Server-Sent Events for streaming responses.
+The AI assistant UI is a slide-out panel anchored to the right edge of the screen, available to admins. It supports chat with streaming responses, thread management, markdown rendering, route-aware scope hints, starter prompts, one attached schedule file per draft (`PDF`, `PNG`, `JPEG`, `JPG`), persisted open/close preference, persisted active-thread selection per org and surface, live tool-status labels, and review/confirm UI for assistant pending actions. All state is local to the panel and hook layer. The panel communicates with the backend via `fetch` and consumes Server-Sent Events for streaming responses.
+
+The same panel is mounted on org layouts and enterprise layouts. Enterprise behavior is conditional: enterprise-oriented starter prompts and capability hints should appear only when the current context is enterprise-eligible. Non-enterprise organizations should not advertise enterprise-only questions in panel copy.
 
 ## File Map
 
@@ -65,6 +67,8 @@ The AI assistant UI is a slide-out panel anchored to the right edge of the scree
                           ├── "New conversation" button
                           └── Thread rows (title, date, delete button)
 ```
+
+Enterprise layouts follow the same structure and still provide an `orgId` persistence anchor to `AIPanel`, so thread/message storage remains in the existing org-scoped AI tables.
 
 ## State Management
 
