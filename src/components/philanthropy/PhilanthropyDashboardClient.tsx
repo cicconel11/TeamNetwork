@@ -6,6 +6,7 @@ import { Card, Button, Badge, ToggleSwitch } from "@/components/ui";
 import { RecentDuesTable } from "./RecentDuesTable";
 import { PurposeDotLeaders } from "./PurposeDotLeaders";
 import { DonationDrawer } from "./DonationDrawer";
+import { buildDonationPurposeTotals } from "@/lib/payments/donation-purpose-totals";
 import type { OrganizationDonation } from "@/types/database";
 
 interface PhilanthropyDashboardClientProps {
@@ -33,6 +34,13 @@ export function PhilanthropyDashboardClient({
   const [isSimulatingPublic, setIsSimulatingPublic] = useState(false);
   const tDonations = useTranslations("donations");
 
+  const activePurposeTotals = isSimulatingPublic
+    ? buildDonationPurposeTotals(
+        donations.filter((d) => (d.visibility || "public") === "public"),
+        tDonations("generalSupport"),
+      )
+    : purposeTotals;
+
   return (
     <>
       {/* Admin controls bar */}
@@ -48,7 +56,10 @@ export function PhilanthropyDashboardClient({
             <span className="text-sm text-muted-foreground">{tDonations("simulatePublic")}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant={isStripeConnected ? "success" : "warning"}>
+            <Badge
+              variant={isStripeConnected ? "success" : "warning"}
+              className={isStripeConnected ? "badge-success-muted" : ""}
+            >
               {isStripeConnected ? tDonations("stripeConnected") : tDonations("setupRequired")}
             </Badge>
           </div>
@@ -66,6 +77,19 @@ export function PhilanthropyDashboardClient({
             donations={donations}
             isAdmin={isAdmin}
             isPublicView={isSimulatingPublic}
+            translations={{
+              noDonationsYet: tDonations("noDonationsYet"),
+              donor: tDonations("donor"),
+              purpose: tDonations("purpose"),
+              date: tDonations("date"),
+              amount: tDonations("amount"),
+              status: tDonations("status"),
+              visibility: tDonations("visibility"),
+              anonymous: tDonations("anonymous"),
+              generalSupport: tDonations("generalSupport"),
+              visibilitySupporterOnly: tDonations("visibilitySupporterOnly"),
+              visibilityPrivate: tDonations("visibilityPrivate"),
+            }}
           />
         </Card>
 
@@ -75,7 +99,7 @@ export function PhilanthropyDashboardClient({
             {tDonations("byPurpose")}
           </h3>
           <PurposeDotLeaders
-            purposeTotals={purposeTotals}
+            purposeTotals={activePurposeTotals}
             emptyMessage={purposeEmptyMessage}
           />
         </Card>

@@ -644,7 +644,13 @@
     "recentDues": "Recent Dues",
     "visibilityPublic": "Public",
     "visibilitySupporterOnly": "Supporter Only",
-    "visibilityPrivate": "Private"
+    "visibilityPrivate": "Private",
+    "noDonationsYet": "No donations recorded yet.",
+    "date": "Date",
+    "amount": "Amount",
+    "status": "Status",
+    "visibility": "Visibility",
+    "anonymous": "Anonymous"
   },
   "forms": {
     "manage": "Manage organization {label}",

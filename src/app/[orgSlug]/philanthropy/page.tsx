@@ -70,7 +70,15 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   ]);
 
   const donationStat = (donationStats || null) as OrganizationDonationStat | null;
-  const donationRows = (donations || []) as OrganizationDonation[];
+  const allDonationRows = (donations || []) as OrganizationDonation[];
+
+  // Server-side privacy gate: non-admins only see public donations, no donor emails
+  const donationRows = orgCtx.isAdmin
+    ? allDonationRows
+    : allDonationRows
+        .filter((d) => (d.visibility || "public") === "public")
+        .map((d) => ({ ...d, donor_email: null }));
+
   const totalRaised = (donationStat?.total_amount_cents ?? 0) / 100;
   const donationCount = donationStat?.donation_count ?? donationRows.length;
   const avgDonation = donationCount > 0 ? totalRaised / donationCount : 0;
@@ -112,7 +120,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
               )}
               {canEdit && (
                 <Link href={`/${orgSlug}/philanthropy/new`}>
-                  <Button>
+                  <Button size="sm">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
@@ -161,7 +169,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
               {tPhilanthropy("totalRaisedLabel")}
             </p>
-            <p className="text-4xl font-bold font-mono tabular-nums text-foreground">
+            <p className="text-2xl font-medium font-mono tabular-nums text-foreground">
               ${totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>
@@ -169,7 +177,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
               {tPhilanthropy("averageGiftLabel")}
             </p>
-            <p className="text-4xl font-bold font-mono tabular-nums text-foreground">
+            <p className="text-2xl font-medium font-mono tabular-nums text-foreground">
               ${avgDonation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>
@@ -200,48 +208,41 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         <div className="space-y-4 stagger-children">
           {events.map((event) => (
             <Link key={event.id} href={`/${orgSlug}/calendar/events/${event.id}`}>
-              <Card interactive className="p-5">
-                <div className="flex items-start gap-4">
-                  <div className="h-16 w-16 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex flex-col items-center justify-center text-center flex-shrink-0">
-                    <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300 uppercase">
-                      {new Date(event.start_date).toLocaleDateString("en-US", { month: "short" })}
-                    </span>
-                    <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 leading-none">
-                      {new Date(event.start_date).getDate()}
-                    </span>
+              <Card interactive className="p-5 border-l-4 border-l-[var(--color-org-primary)]">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-foreground">{event.title}</h3>
+                  <Badge variant="muted">Philanthropy</Badge>
+                </div>
+                {event.description && (
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    {event.description}
+                  </p>
+                )}
+                <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                    </svg>
+                    {new Date(event.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold text-foreground">{event.title}</h3>
-                      <Badge variant="success">Philanthropy</Badge>
-                    </div>
-                    {event.description && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {event.description}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1.5">
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {new Date(event.start_date).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                      {event.location && (
-                        <div className="flex items-center gap-1.5">
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                          </svg>
-                          {event.location}
-                        </div>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {new Date(event.start_date).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
                   </div>
+                  {event.location && (
+                    <div className="flex items-center gap-1.5">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                      </svg>
+                      {event.location}
+                    </div>
+                  )}
                 </div>
               </Card>
             </Link>

@@ -19,9 +19,9 @@
 
   /* Base theme */
   --background: #fafbfc;
-  --foreground: #0f172a;
+  --foreground: #1A1F36;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #1A1F36;
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
   --border: #e2e8f0;
@@ -157,6 +157,11 @@ body {
 
 .badge-success {
   @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400;
+}
+
+.badge-success-muted {
+  background: color-mix(in srgb, var(--color-org-primary) 10%, transparent);
+  color: var(--color-org-primary);
 }
 
 .badge-warning {

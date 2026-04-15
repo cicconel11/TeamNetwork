@@ -42,6 +42,9 @@ export async function upsertDonationRecord(
 
   // anonymous column added via migration but not yet in generated types
   (payload as Record<string, unknown>).anonymous = params.anonymous ?? false;
+  if (params.anonymous) {
+    (payload as Record<string, unknown>).visibility = "private";
+  }
 
   const conflictTarget = payload.stripe_payment_intent_id
     ? "stripe_payment_intent_id"
