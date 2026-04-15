@@ -18,10 +18,10 @@ describe("sanitizeMicrosoftRedirectPath", () => {
     );
   });
 
-  it("strips query params from valid org-scoped calendar routes", () => {
+  it("preserves query params on valid org-scoped calendar routes", () => {
     assert.equal(
       sanitizeMicrosoftRedirectPath("/alpha/calendar?subview=list"),
-      "/alpha/calendar",
+      "/alpha/calendar?subview=list",
     );
   });
 

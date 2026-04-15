@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
-import { createMiddlewareAuditEntry, fireAndForgetDevAdminAudit, isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
+import { requireEnv, validateAuthTestMode } from "./lib/env";
+import { createMiddlewareAuditEntry, fireAndForgetDevAdminAudit, isDevAdminEmail } from "./lib/auth/dev-admin";
 import { validateSiteUrl } from "./lib/supabase/config";
 import {
   shouldBypassAuth,
@@ -92,8 +92,6 @@ function fireMiddlewareAudit(params: {
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const host = request.headers.get("host");
-  const shouldLog = shouldLogAuth();
-  const logFailures = shouldLogAuthFailures();
 
   // Browser/devtools probes should bypass auth and org logic entirely.
   if (pathname.startsWith("/.well-known/")) {
@@ -146,24 +144,6 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        if (shouldLog) {
-          console.log("[AUTH-MW] setAll", {
-            host,
-            pathname,
-            cookieCount: cookiesToSet.length,
-            cookies: cookiesToSet.map(({ name, value, options }) => ({
-              name,
-              valueLen: value?.length ?? 0,
-              options: {
-                path: options.path ?? "/",
-                domain: options.domain,
-                secure: options.secure,
-                sameSite: options.sameSite,
-                maxAge: options.maxAge,
-              },
-            })),
-          });
-        }
         if (cookiesToSet.length === 0) {
           return;
         }
@@ -200,7 +180,6 @@ export async function middleware(request: NextRequest) {
     throw new Error("AUTH_TEST_MODE cannot be enabled in production");
   }
   let user = null;
-  let authError: Error | null = null;
   if (isTestMode) {
     console.warn("[SECURITY] AUTH_TEST_MODE active - bypassing JWT validation", {
       pathname,
@@ -211,41 +190,6 @@ export async function middleware(request: NextRequest) {
   } else {
     const res = await supabase.auth.getUser();
     user = res.data.user;
-    authError = res.error;
-  }
-
-  // For compatibility, create a session-like object
-  const session = user ? { user, expires_at: null } : null;
-
-
-  const sbCookies = cookiesAll.map((c) => c.name).filter((n) => n.startsWith("sb-"));
-
-  // Always log auth failures in production for debugging user-specific issues
-  const isAuthFailure = !user && hasAuthCookies;
-  if (shouldLog || (isAuthFailure && logFailures)) {
-    console.log("[AUTH-MW]", {
-      host,
-      pathname,
-      origin: request.headers.get("origin"),
-      referer: request.headers.get("referer"),
-      userAgent: request.headers.get("user-agent")?.slice(0, 100),
-      sbCookies,
-      allCookieNames: cookiesAll.map((c) => c.name),
-      hasAuthCookies,
-      sessionUserHash: user ? hashForLogging(user.id) : null,
-      sessionNull: !session,
-      authError: authError ? { message: authError.message, name: authError.name } : null,
-      isAuthFailure,
-    });
-    if (pathname.startsWith("/testing123")) {
-      console.log("[AUTH-MW-testing123]", {
-        pathname,
-        sbCookies,
-        sessionPresent: !!session,
-        userHash: user ? hashForLogging(user.id) : null,
-        authError: authError?.message || null,
-      });
-    }
   }
 
   // Redirect authenticated users away from auth-only pages
@@ -284,14 +228,6 @@ export async function middleware(request: NextRequest) {
     const redirectResponse = NextResponse.redirect(redirectUrl);
 
     if (hasAuthCookies) {
-      // SECURITY FIX: Clear stale/invalid auth cookies instead of allowing pass-through
-      // This prevents unauthorized access while avoiding redirect loops (cookies cleared = no loop)
-      if (logFailures) {
-        console.log("[AUTH-MW] Clearing stale auth cookies and redirecting to login", {
-          pathname,
-          sbCookies,
-        });
-      }
       // Clear all Supabase auth cookies
       cookiesAll
         .filter((c) => c.name.startsWith("sb-") || c.name.includes("auth-token"))
@@ -358,10 +294,7 @@ export async function middleware(request: NextRequest) {
           response.headers.set("x-enterprise-id", enterprise.id);
           response.headers.set("x-enterprise-role", role.role);
         } catch (e) {
-          // Log error but redirect to app with error
-          if (shouldLog) {
-            console.error("[AUTH-MW] Error checking enterprise access:", e);
-          }
+          console.error("[AUTH-MW] Error checking enterprise access:", e);
           return NextResponse.redirect(new URL("/app?error=enterprise_error", request.url));
         }
       } else {
@@ -375,13 +308,6 @@ export async function middleware(request: NextRequest) {
           method: request.method,
           request,
         });
-        if (shouldLog) {
-          console.log("[AUTH-MW] Dev-admin bypassing enterprise membership check", {
-            email: userEmail ? redactEmail(userEmail) : null,
-            enterpriseSlug,
-            pathname,
-          });
-        }
       }
     }
   }
@@ -410,11 +336,6 @@ export async function middleware(request: NextRequest) {
           let membershipStatus: string | null | undefined;
 
           if (rpcError) {
-            // RPC failed — try sequential queries before failing closed
-            if (shouldLog) {
-              console.error("[AUTH-MW] get_org_context_by_slug RPC failed, falling back:", rpcError);
-            }
-
             const { data: org, error: orgError } = await supabase
               .from("organizations")
               .select("id")
@@ -479,13 +400,6 @@ export async function middleware(request: NextRequest) {
           method: request.method,
           request,
         });
-        if (shouldLog) {
-          console.log("[AUTH-MW] Dev-admin bypassing membership check", {
-            email: userEmail ? redactEmail(userEmail) : null,
-            orgSlug,
-            pathname,
-          });
-        }
       }
     }
   }
