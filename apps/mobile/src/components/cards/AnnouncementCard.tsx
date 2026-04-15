@@ -4,13 +4,13 @@
  */
 
 import React, { useCallback } from "react";
-import { View, Text, Pressable, ViewStyle } from "react-native";
+import { View, Text, Pressable, ViewStyle, TextStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
-import { Pin, MessageCircle } from "lucide-react-native";
+import { Pin, MessageCircle, Megaphone } from "lucide-react-native";
 import { RADIUS, SPACING, SHADOWS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatRelativeTime } from "@/lib/date-format";
@@ -20,6 +20,14 @@ import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+function feedAccentIndex(id: string, bucketCount: number): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = id.charCodeAt(i) + ((h << 5) - h);
+  }
+  return Math.abs(h) % bucketCount;
+}
 
 export interface AnnouncementCardAnnouncement {
   id: string;
@@ -44,6 +52,8 @@ interface AnnouncementCardProps {
   onReactionPress?: (emoji: string) => void;
   style?: ViewStyle;
   maxBodyLines?: number;
+  /** `feed` = list row with icon + separators (notifications-style); `card` = bordered card */
+  variant?: "card" | "feed";
 }
 
 export const AnnouncementCard = React.memo(function AnnouncementCard({
@@ -52,9 +62,10 @@ export const AnnouncementCard = React.memo(function AnnouncementCard({
   onReactionPress,
   style,
   maxBodyLines = 3,
+  variant = "card",
 }: AnnouncementCardProps) {
-  const { neutral } = useAppColorScheme();
-  const styles = useThemedStyles((n) => ({
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
     container: {
       backgroundColor: n.surface,
       borderRadius: RADIUS.lg,
@@ -178,6 +189,51 @@ export const AnnouncementCard = React.memo(function AnnouncementCard({
       ...TYPOGRAPHY.caption,
       color: n.muted,
     },
+
+    // Feed list row (notifications-style — no card chrome)
+    feedRow: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      gap: SPACING.md,
+    },
+    feedIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    feedMain: {
+      flex: 1,
+      minWidth: 0,
+    },
+    feedTitleRow: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.xs / 2,
+    },
+    feedTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+      flex: 1,
+    },
+    feedTime: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+      fontVariant: ["tabular-nums"] as TextStyle["fontVariant"],
+    },
+    feedMetaRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    feedMeta: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      flex: 1,
+    },
   }));
 
   const scale = useSharedValue(1);
@@ -198,6 +254,62 @@ export const AnnouncementCard = React.memo(function AnnouncementCard({
   const hasReplies = announcement.reply_count && announcement.reply_count > 0;
   const hasFooter = hasReactions || hasReplies;
 
+  const displayAuthor =
+    announcement.author?.name?.trim() || "Team Admin";
+
+  const feedAccentIdx = feedAccentIndex(announcement.id, 4);
+  const feedIconBg = [
+    semantic.infoLight,
+    semantic.warningLight,
+    semantic.successLight,
+    semantic.errorLight,
+  ][feedAccentIdx];
+  const feedIconFg = [
+    semantic.info,
+    semantic.warning,
+    semantic.success,
+    semantic.error,
+  ][feedAccentIdx];
+
+  if (variant === "feed") {
+    const timeLabel = formatRelativeTime(announcement.created_at);
+    const a11yLabel = announcement.body?.trim()
+      ? `${announcement.title}. ${displayAuthor}. ${timeLabel}. ${announcement.body}`
+      : `${announcement.title}. ${displayAuthor}. ${timeLabel}`;
+
+    return (
+      <AnimatedPressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={[styles.feedRow, animatedStyle, style]}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel}
+        accessibilityHint="Opens the full announcement"
+      >
+        <View style={[styles.feedIconWrap, { backgroundColor: feedIconBg }]}>
+          <Megaphone size={22} color={feedIconFg} strokeWidth={2.25} />
+        </View>
+        <View style={styles.feedMain}>
+          <View style={styles.feedTitleRow}>
+            <Text style={styles.feedTitle} numberOfLines={2}>
+              {announcement.title}
+            </Text>
+            <Text style={styles.feedTime}>{timeLabel}</Text>
+          </View>
+          <View style={styles.feedMetaRow}>
+            <Text style={styles.feedMeta} numberOfLines={1}>
+              {displayAuthor}
+            </Text>
+            {announcement.is_pinned ? (
+              <Pin size={13} color={semantic.warning} accessibilityLabel="Pinned" />
+            ) : null}
+          </View>
+        </View>
+      </AnimatedPressable>
+    );
+  }
+
   return (
     <AnimatedPressable
       onPress={onPress}
@@ -209,7 +321,7 @@ export const AnnouncementCard = React.memo(function AnnouncementCard({
       <View style={styles.header}>
         <Avatar
           uri={announcement.author?.avatar_url}
-          name={announcement.author?.name}
+          name={displayAuthor}
           size="sm"
           squircle
         />
@@ -217,7 +329,7 @@ export const AnnouncementCard = React.memo(function AnnouncementCard({
         <View style={styles.headerText}>
           <View style={styles.headerRow}>
             <Text style={styles.authorName} numberOfLines={1}>
-              {announcement.author?.name || "Team Admin"}
+              {displayAuthor}
             </Text>
             <Text style={styles.timestamp}>
               {formatRelativeTime(announcement.created_at)}
