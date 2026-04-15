@@ -147,7 +147,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
           <>
             {/* Logo/Org Header */}
             <div className="flex items-stretch border-b border-border">
-              <Link href={basePath} className="flex flex-1 min-w-0 items-center gap-3 py-4 pl-4">
+              <Link href={basePath} className={`flex flex-1 min-w-0 items-center py-4 transition-[padding,gap] duration-300 ease-in-out motion-reduce:transition-none ${isCollapsed ? "justify-center px-0 gap-0" : "pl-4 gap-3"}`}>
                 {organization.logo_url ? (
                   <div className="relative h-8 w-8 flex-shrink-0 rounded-xl overflow-hidden">
                     <Image
@@ -167,8 +167,8 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                   </div>
                 )}
                 <div
-                  className={`flex-1 min-w-0 transition-opacity duration-200 motion-reduce:transition-none ${
-                    isCollapsed ? "opacity-0" : "opacity-100"
+                  className={`min-w-0 transition-[opacity,flex,width] duration-300 ease-in-out motion-reduce:transition-none ${
+                    isCollapsed ? "opacity-0 w-0 overflow-hidden flex-none" : "opacity-100 flex-1"
                   }`}
                   aria-hidden={isCollapsed || undefined}
                 >
@@ -180,7 +180,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                 </div>
               </Link>
               {!forceExpanded && (
-                <div className="flex items-start pt-2 pr-2 flex-shrink-0">
+                <div className={`flex items-start flex-shrink-0 transition-[width,padding,opacity] duration-300 ease-in-out ${isCollapsed ? "w-0 overflow-hidden opacity-0 p-0" : "pt-2 pr-2 opacity-100"}`}>
                   <PinButton
                     isPinned={isPinned}
                     isExpanded={isExpanded}
@@ -282,13 +282,13 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                 href="/app"
                 title={isCollapsed ? tSidebar("switchOrg") : undefined}
                 aria-label={isCollapsed ? tSidebar("switchOrg") : undefined}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                className={`flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color,padding,gap] duration-300 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isCollapsed ? "justify-center px-0 py-2.5 gap-0" : "px-3 py-2.5 gap-3"}`}
               >
                 <GridIcon className="h-5 w-5 flex-shrink-0" />
                 <span
                   aria-hidden={isCollapsed || undefined}
-                  className={`whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none ${
-                    isCollapsed ? "opacity-0" : "opacity-100"
+                  className={`whitespace-nowrap transition-[opacity,width] duration-300 ease-in-out motion-reduce:transition-none ${
+                    isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
                   }`}
                 >
                   {tSidebar("switchOrg")}
@@ -300,13 +300,13 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                   type="submit"
                   title={isCollapsed ? tAuth("signOut") : undefined}
                   aria-label={isCollapsed ? tAuth("signOut") : undefined}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                  className={`w-full flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color,padding,gap] duration-300 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isCollapsed ? "justify-center px-0 py-2.5 gap-0" : "px-3 py-2.5 gap-3"}`}
                 >
                   <LogOutIcon className="h-5 w-5 flex-shrink-0" />
                   <span
                     aria-hidden={isCollapsed || undefined}
-                    className={`whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none ${
-                      isCollapsed ? "opacity-0" : "opacity-100"
+                    className={`whitespace-nowrap transition-[opacity,width] duration-300 ease-in-out motion-reduce:transition-none ${
+                      isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
                     }`}
                   >
                     {tAuth("signOut")}

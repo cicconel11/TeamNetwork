@@ -654,3 +654,51 @@ body {
 .trophy-bounce {
   animation: trophyBounce 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
+
+/* ========================================
+   Philanthropy Dashboard - Stripe-Inspired
+   ======================================== */
+
+/* High-density table */
+.table-dense th {
+  @apply text-xs font-medium uppercase tracking-wider text-muted-foreground;
+  padding: 0.5rem 1rem;
+}
+
+.table-dense td {
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+}
+
+.table-dense tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+
+.table-dense tbody tr:hover {
+  background: var(--muted);
+}
+
+/* Tabular numbers for financial data */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Slide-in-right drawer animation (promoted from inline styles) */
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInFromRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in-right {
+    animation: fadeIn 200ms ease-out;
+  }
+}

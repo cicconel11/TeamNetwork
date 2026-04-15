@@ -638,7 +638,13 @@
     "eventDonation": "Philanthropy event donation",
     "directedDonation": "Directed donation",
     "intentCreated": "Donation intent created. Complete payment via Stripe.",
-    "unableToStart": "Unable to start Stripe Checkout"
+    "unableToStart": "Unable to start Stripe Checkout",
+    "simulatePublic": "Simulate Public View",
+    "makeADonation": "Make a Donation",
+    "recentDues": "Recent Dues",
+    "visibilityPublic": "Public",
+    "visibilitySupporterOnly": "Supporter Only",
+    "visibilityPrivate": "Private"
   },
   "forms": {
     "manage": "Manage organization {label}",
@@ -697,7 +703,9 @@
     "noPastEvents": "No past {label} events",
     "noUpcomingEvents": "No upcoming {label} events",
     "completedWillAppear": "Completed events will appear here.",
-    "addNewEvent": "Add a new philanthropy event to get started."
+    "addNewEvent": "Add a new philanthropy event to get started.",
+    "totalRaisedLabel": "Total Raised",
+    "averageGiftLabel": "Average Gift"
   },
   "records": {
     "record": "Record",
