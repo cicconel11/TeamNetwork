@@ -1,18 +1,17 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { DonationForm, ConnectSetup } from "@/components/donations";
+import { ConnectSetup } from "@/components/donations";
 import { DonationResultTracker } from "@/components/analytics/DonationResultTracker";
+import { PhilanthropyDashboardClient } from "@/components/philanthropy/PhilanthropyDashboardClient";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { buildDonationPurposeTotals } from "@/lib/payments/donation-purpose-totals";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ExportCsvButton } from "@/components/shared";
-import { buildDonationPurposeTotals } from "@/lib/payments/donation-purpose-totals";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { OrganizationDonation, OrganizationDonationStat } from "@/types/database";
+import type { OrganizationDonationStat, OrganizationDonation } from "@/types/database";
 
 interface DonationsPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -27,7 +26,6 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const canEdit = canEditNavItem(org.nav_config as NavConfig, "/donations", orgCtx.role, ["admin"]);
   const supabase = await createClient();
 
-  // Include Stripe Connect status check in the parallel fetch
   const [{ data: donationStats }, { data: donations }, { data: philanthropyEvents }, connectStatus] = await Promise.all([
     supabase
       .from("organization_donation_stats")
@@ -60,17 +58,16 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const totalAmount = (stats?.total_amount_cents ?? 0) / 100;
   const donationCount = stats?.donation_count ?? donationRows.length;
   const avgDonation = donationCount > 0 ? totalAmount / donationCount : 0;
+  const purposeTotals = buildDonationPurposeTotals(donationRows, "General support");
 
   const navConfig = org.nav_config as NavConfig | null;
-  const [tNav, locale, tDonations, tCommon] = await Promise.all([
+  const [tNav, locale, tDonations] = await Promise.all([
     getTranslations("nav.items"),
     getLocale(),
     getTranslations("donations"),
-    getTranslations("common"),
   ]);
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/donations", navConfig, t, locale);
-  const purposeTotals = buildDonationPurposeTotals(donationRows, tDonations("generalSupport"));
   const exportStamp = new Date().toISOString().slice(0, 10);
 
   return (
@@ -78,10 +75,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
       <DonationResultTracker organizationId={org.id} />
       <PageHeader
         title={pageLabel}
-        description={`${donationCount} contributions totaling ${totalAmount.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`}
+        description={`${donationCount} ${tDonations("contributions").toLowerCase()} totaling $${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         actions={
           orgCtx.isAdmin ? (
             <ExportCsvButton
@@ -98,126 +92,47 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2">
-          <DonationForm
-            organizationId={org.id}
-            organizationSlug={org.slug}
-            philanthropyEventsForForm={eventsForForm}
-            isStripeConnected={isConnected}
-          />
-        </div>
-
-        <div className="space-y-3">
-          <Card className="p-5">
-            <p className="text-sm text-muted-foreground mb-1">{tDonations("totalRaised")}</p>
-            <p className="text-3xl font-bold text-foreground font-mono">
+      {/* Stat strip — large numbers, no colored boxes */}
+      <div className="mb-8">
+        <div className="grid grid-cols-3 gap-8 mb-3">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+              {tDonations("totalRaised")}
+            </p>
+            <p className="text-4xl font-bold font-mono tabular-nums text-foreground">
               ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-          </Card>
-          <Card className="p-5">
-            <p className="text-sm text-muted-foreground mb-1">{tDonations("contributions")}</p>
-            <p className="text-3xl font-bold text-foreground font-mono">{donationCount}</p>
-          </Card>
-          <Card className="p-5">
-            <p className="text-sm text-muted-foreground mb-1">{tDonations("averageGift")}</p>
-            <p className="text-3xl font-bold text-foreground font-mono">
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+              {tDonations("contributions")}
+            </p>
+            <p className="text-4xl font-bold font-mono tabular-nums text-foreground">
+              {donationCount}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+              {tDonations("averageGift")}
+            </p>
+            <p className="text-4xl font-bold font-mono tabular-nums text-foreground">
               ${avgDonation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-          </Card>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-6 lg:col-span-1">
-          <h3 className="font-semibold text-foreground mb-4">{tDonations("byPurpose")}</h3>
-          <div className="space-y-3">
-            {Object.entries(purposeTotals).length > 0 ? (
-              Object.entries(purposeTotals)
-                .sort(([, a], [, b]) => b - a)
-                .map(([purpose, cents]) => (
-                  <div key={purpose} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
-                    <span className="text-foreground">{purpose}</span>
-                    <span className="font-mono font-medium text-foreground">
-                      ${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                ))
-            ) : (
-              <p className="text-sm text-muted-foreground">{tDonations("willGroupHere", { label: pageLabel })}</p>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-0 lg:col-span-2 overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <h3 className="font-semibold text-foreground">Recent {pageLabel}</h3>
-            {canEdit && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {isConnected ? tDonations("fundsSettle") : tDonations("stripeNotConnected")}
-              </div>
-            )}
-          </div>
-
-          {donationRows.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{tDonations("donor")}</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{tDonations("purpose")}</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{tCommon("date")}</th>
-                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">{tCommon("amount")}</th>
-                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">{tCommon("status")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {donationRows.map((donation) => {
-                    const isAnonymous = (donation as Record<string, unknown>).anonymous === true;
-                    return (
-                    <tr key={donation.id} className="hover:bg-muted/50 transition-colors">
-                      <td className="p-4">
-                        <p className="font-medium text-foreground">{isAnonymous ? tCommon("anonymous") : (donation.donor_name || tCommon("anonymous"))}</p>
-                        {!isAnonymous && donation.donor_email && (
-                          <p className="text-sm text-muted-foreground">{donation.donor_email}</p>
-                        )}
-                      </td>
-                      <td className="p-4 text-muted-foreground">{donation.purpose || tDonations("generalSupport")}</td>
-                      <td className="p-4 text-muted-foreground">
-                        {donation.created_at
-                          ? new Date(donation.created_at).toLocaleDateString()
-                          : "—"}
-                      </td>
-                      <td className="p-4 text-right font-mono font-medium text-foreground">
-                        ${(donation.amount_cents / 100).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </td>
-                      <td className="p-4 text-right">
-                        <Badge variant={donation.status === "succeeded" ? "success" : donation.status === "failed" ? "error" : "muted"}>
-                          {donation.status}
-                        </Badge>
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState
-              title={`No ${pageLabel.toLowerCase()} yet`}
-              description={tDonations("willAppear", { label: pageLabel })}
-              action={
-                <Link href={`/${orgSlug}/philanthropy`} className="text-sm text-muted-foreground hover:text-foreground">
-                  View philanthropy events →
-                </Link>
-              }
-            />
-          )}
-        </Card>
-      </div>
+      {/* Dashboard — admin controls, table, purpose breakdown, drawer */}
+      <PhilanthropyDashboardClient
+        organizationId={org.id}
+        organizationSlug={org.slug}
+        isAdmin={orgCtx.isAdmin}
+        isStripeConnected={isConnected}
+        donations={donationRows}
+        purposeTotals={purposeTotals}
+        philanthropyEventsForForm={eventsForForm}
+        purposeEmptyMessage={tDonations("willGroupHere", { label: pageLabel })}
+      />
     </div>
   );
 }

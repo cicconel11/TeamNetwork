@@ -110,12 +110,6 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
                   fileName={`${org.slug}-philanthropy-${exportStamp}.csv`}
                 />
               )}
-              {orgCtx.isAdmin && (
-                <ExportCsvButton
-                  endpoint={`/api/organizations/${org.id}/exports/donations`}
-                  fileName={`${org.slug}-donations-${exportStamp}.csv`}
-                />
-              )}
               {canEdit && (
                 <Link href={`/${orgSlug}/philanthropy/new`}>
                   <Button>
