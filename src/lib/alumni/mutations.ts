@@ -71,6 +71,7 @@ export function buildAlumniWritePayload(data: AlumniWriteInput) {
     last_name: data.last_name,
     email: data.email || null,
     graduation_year: data.graduation_year ? parseInt(data.graduation_year, 10) : null,
+    birth_year: data.birth_year ? parseInt(data.birth_year, 10) : null,
     major: data.major || null,
     job_title: data.job_title || null,
     photo_url: data.photo_url || null,

@@ -62,6 +62,7 @@ const alumniExportSchema = z.object({
   position: z.string().max(200).optional(),
   hasEmail: z.enum(["true", "false"]).optional(),
   hasPhone: z.enum(["true", "false"]).optional(),
+  birthYear: z.coerce.number().int().min(1900).max(new Date().getFullYear()).optional(),
 });
 
 export const dynamic = "force-dynamic";
@@ -145,6 +146,9 @@ export async function GET(req: Request, { params }: RouteParams) {
   }
   if (filters.year !== undefined) {
     query = query.eq("graduation_year", filters.year);
+  }
+  if (filters.birthYear !== undefined) {
+    query = query.eq("birth_year", filters.birthYear);
   }
   if (filters.industry) {
     query = query.ilike("industry", `%${sanitizeIlikeInput(filters.industry)}%`);

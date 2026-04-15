@@ -87,6 +87,7 @@ interface EnterpriseAlumniStatsRpc {
   top_industries: Array<{ name: string; count: number }>;
   filter_options: {
     years: number[];
+    birthYears: number[];
     industries: string[];
     companies: string[];
     cities: string[];

@@ -103,6 +103,19 @@ export const graduationYearSchema = z
   )
   .optional();
 
+// Birth year validation (1900 to current year) - keeps as string for form handling
+export const birthYearSchema = z
+  .string()
+  .refine(
+    (val) => {
+      if (!val) return true;
+      const num = parseInt(val, 10);
+      return !isNaN(num) && num >= 1900 && num <= new Date().getFullYear();
+    },
+    { message: "Birth year must be between 1900 and the current year" }
+  )
+  .optional();
+
 // Target user IDs (array of UUIDs for specific audience)
 export const targetUserIdsSchema = z
   .array(z.string().uuid())

@@ -11,6 +11,7 @@ import { sanitizeIlikeInput } from "@/lib/security/validation";
 const alumniSearchSchema = z.object({
   org: z.string().uuid().optional(),
   year: z.coerce.number().int().min(1900).max(2100).optional(),
+  birthYear: z.coerce.number().int().min(1900).max(new Date().getFullYear()).optional(),
   industry: z.string().max(200).optional(),
   company: z.string().max(200).optional(),
   city: z.string().max(200).optional(),
@@ -96,6 +97,9 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Apply filters with sanitized ilike values
   if (filters.year !== undefined) {
     query = query.eq("graduation_year", filters.year);
+  }
+  if (filters.birthYear !== undefined) {
+    query = query.eq("birth_year", filters.birthYear);
   }
   if (filters.industry) {
     query = query.ilike("industry", `%${sanitizeIlikeInput(filters.industry)}%`);

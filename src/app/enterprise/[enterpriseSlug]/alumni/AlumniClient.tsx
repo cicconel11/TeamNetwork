@@ -74,6 +74,7 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
   const currentFilters = {
     org: searchParams.get("org") || "",
     year: searchParams.get("year") || "",
+    birthYear: searchParams.get("birthYear") || "",
     industry: searchParams.get("industry") || "",
     company: searchParams.get("company") || "",
     city: searchParams.get("city") || "",
@@ -91,14 +92,7 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
           const statsData = await statsRes.json();
           setStats(statsData);
           setOrganizations(statsData.organizations || []);
-          setFilterOptions(statsData.filterOptions || {
-            years: [],
-            birthYears: [],
-            industries: [],
-            companies: [],
-            cities: [],
-            positions: [],
-          });
+          setFilterOptions(prev => ({ ...prev, ...(statsData.filterOptions || {}) }));
         } else {
           setStatsError(true);
         }
@@ -116,7 +110,7 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
       setIsLoading(true);
       try {
         const params = new URLSearchParams();
-        const filterKeys = ["org", "year", "industry", "company", "city", "position", "hasEmail", "hasPhone"];
+        const filterKeys = ["org", "year", "birthYear", "industry", "company", "city", "position", "hasEmail", "hasPhone"];
         filterKeys.forEach((key) => {
           const value = searchParams.get(key);
           if (value) params.set(key, value);
