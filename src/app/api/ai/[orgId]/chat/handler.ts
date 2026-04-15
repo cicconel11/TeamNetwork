@@ -65,6 +65,7 @@ import {
   updatePendingActionStatus,
   type PendingActionRecord,
 } from "@/lib/ai/pending-actions";
+import { getEnterprisePermissions, type EnterpriseRole } from "@/types/enterprise";
 import {
   createStageAbortSignal,
   isStageTimeoutError,
@@ -177,8 +178,12 @@ const ENTERPRISE_SCOPE_PROMPT_PATTERN =
   /(?<!\w)(?:enterprise|across all orgs?|across all organizations|managed orgs?|sub[-\s]?orgs?)(?!\w)/i;
 const ENTERPRISE_QUOTA_PROMPT_PATTERN =
   /(?<!\w)(?:quota|capacity|seat|seats|slot|slots|billing|bucket|limit|remaining)(?!\w)/i;
+const ENTERPRISE_SUB_ORG_CAPACITY_PROMPT_PATTERN =
+  /(?<!\w)(?:sub[-\s]?orgs?|managed orgs?|managed organizations?|free orgs?|free organizations?)(?!\w)/i;
 const MANAGED_ORGS_PROMPT_PATTERN =
   /(?<!\w)(?:managed orgs?|managed organizations?|sub[-\s]?orgs?|which orgs?|list orgs?|organizations?)(?!\w)/i;
+const ENTERPRISE_AUDIT_PROMPT_PATTERN =
+  /(?:who\s+(?:added|adopted|approved|invited|removed|revoked)\b|\baudit\b|\badoption\s+(?:history|requests?|log)\b|\bwhen\s+was\b[\s\S]{0,40}\badopted\b|\bhistory\s+of\s+adoptions?\b)/i;
 const HTTPS_URL_PATTERN = /https?:\/\//i;
 const ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN =
   /\b(?:title|body|audience|pin(?:ned)?|notify|notification|all members|active members|alumni|parents|individuals)\b/i;
@@ -1120,6 +1125,54 @@ function formatEnterpriseQuotaResponse(data: unknown): string | null {
   return lines.length > 1 ? lines.join("\n") : null;
 }
 
+function formatEnterpriseOrgCapacityResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as {
+    sub_orgs?: {
+      total?: unknown;
+      enterprise_managed_total?: unknown;
+      free_limit?: unknown;
+      free_remaining?: unknown;
+    } | null;
+  };
+
+  if (!payload.sub_orgs || typeof payload.sub_orgs !== "object") {
+    return null;
+  }
+
+  const total =
+    typeof payload.sub_orgs.total === "number" ? payload.sub_orgs.total : null;
+  const enterpriseManagedTotal =
+    typeof payload.sub_orgs.enterprise_managed_total === "number"
+      ? payload.sub_orgs.enterprise_managed_total
+      : null;
+  const freeLimit =
+    typeof payload.sub_orgs.free_limit === "number" ? payload.sub_orgs.free_limit : null;
+  const freeRemaining =
+    typeof payload.sub_orgs.free_remaining === "number"
+      ? payload.sub_orgs.free_remaining
+      : null;
+
+  const lines = ["Enterprise managed-org capacity"];
+  if (total != null) {
+    lines.push(`- Managed orgs: ${total}`);
+  }
+  if (enterpriseManagedTotal != null) {
+    lines.push(`- Enterprise-managed org seats in use: ${enterpriseManagedTotal}`);
+  }
+  if (freeLimit != null) {
+    lines.push(`- Free sub-org slots included: ${freeLimit}`);
+  }
+  if (freeRemaining != null) {
+    lines.push(`- Free sub-org slots remaining: ${freeRemaining}`);
+  }
+
+  return lines.length > 1 ? lines.join("\n") : null;
+}
+
 function formatManagedOrgsResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
@@ -1170,6 +1223,56 @@ function formatManagedOrgsResponse(data: unknown): string | null {
     typeof payload.total === "number" ? ` (${payload.total} total)` : "";
 
   return [`Managed organizations${total}`, ...rows].join("\n");
+}
+
+function formatAuditEventsResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as { events?: unknown; total?: unknown };
+  if (!Array.isArray(payload.events)) {
+    return null;
+  }
+
+  if (payload.events.length === 0) {
+    return "I couldn't find any recent enterprise audit events.";
+  }
+
+  const rows = payload.events
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const source = getNonEmptyString((row as { source?: unknown }).source);
+      const action = getNonEmptyString((row as { action?: unknown }).action);
+      const when = formatIsoDate((row as { created_at?: unknown }).created_at);
+      const actor = getNonEmptyString(
+        (row as { actor_email_redacted?: unknown }).actor_email_redacted,
+      );
+      const targetType = getNonEmptyString((row as { target_type?: unknown }).target_type);
+      const status = getNonEmptyString((row as { status?: unknown }).status);
+
+      const parts = [action ?? source ?? "event"];
+      if (when) parts.push(when);
+      if (actor) parts.push(`by ${actor}`);
+      if (targetType) parts.push(`target: ${targetType}`);
+      if (status) parts.push(`status: ${status}`);
+
+      return `- ${parts.join(" - ")}`;
+    })
+    .filter((row): row is string => Boolean(row))
+    .slice(0, 25);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const total =
+    typeof payload.total === "number" ? ` (${payload.total} total)` : "";
+
+  return [`Recent enterprise audit events${total}`, ...rows].join("\n");
 }
 
 function formatDonationsResponse(data: unknown): string | null {
@@ -1379,6 +1482,7 @@ function getPass1Tools(
   attachment?: ChatAttachment,
   currentPath?: string,
   enterpriseEnabled?: boolean,
+  enterpriseRole?: EnterpriseRole,
 ) {
   if (toolPolicy !== "surface_read_tools") {
     return undefined;
@@ -1450,12 +1554,26 @@ function getPass1Tools(
   const isEnterpriseScopedRequest =
     enterpriseEnabled === true &&
     (isEnterprisePortal || ENTERPRISE_SCOPE_PROMPT_PATTERN.test(message));
+  const canManageEnterpriseBilling =
+    enterpriseRole != null && getEnterprisePermissions(enterpriseRole).canManageBilling;
 
   if (isEnterpriseScopedRequest) {
+    if (ENTERPRISE_AUDIT_PROMPT_PATTERN.test(message)) {
+      return [AI_TOOL_MAP.list_enterprise_audit_events];
+    }
+
     if (
       currentFeatureSegment === "billing" ||
       ENTERPRISE_QUOTA_PROMPT_PATTERN.test(message)
     ) {
+      if (canManageEnterpriseBilling) {
+        return [AI_TOOL_MAP.get_enterprise_quota];
+      }
+
+      if (ENTERPRISE_SUB_ORG_CAPACITY_PROMPT_PATTERN.test(message)) {
+        return [AI_TOOL_MAP.get_enterprise_org_capacity];
+      }
+
       return [AI_TOOL_MAP.get_enterprise_quota];
     }
 
@@ -1572,11 +1690,13 @@ function getForcedPass1ToolChoice(
     forcedToolName !== "get_org_stats" &&
     forcedToolName !== "get_enterprise_stats" &&
     forcedToolName !== "get_enterprise_quota" &&
+    forcedToolName !== "get_enterprise_org_capacity" &&
     forcedToolName !== "list_events" &&
     forcedToolName !== "list_alumni" &&
     forcedToolName !== "list_enterprise_alumni" &&
     forcedToolName !== "list_donations" &&
     forcedToolName !== "list_managed_orgs" &&
+    forcedToolName !== "list_enterprise_audit_events" &&
     forcedToolName !== "list_parents" &&
     forcedToolName !== "list_philanthropy_events" &&
     forcedToolName !== "scrape_schedule_website" &&
@@ -1614,10 +1734,12 @@ function isToolFirstEligible(
     toolName === "list_enterprise_alumni" ||
     toolName === "list_donations" ||
     toolName === "list_managed_orgs" ||
+    toolName === "list_enterprise_audit_events" ||
     toolName === "list_parents" ||
     toolName === "list_philanthropy_events" ||
     toolName === "get_enterprise_stats" ||
     toolName === "get_enterprise_quota" ||
+    toolName === "get_enterprise_org_capacity" ||
     toolName === "suggest_connections" ||
     toolName === "prepare_group_message"
   );
@@ -2147,6 +2269,14 @@ function formatDeterministicToolErrorResponse(
   errorCode?: string | null
 ): string | null {
   if (name !== "extract_schedule_pdf") {
+    if (
+      name === "get_enterprise_quota" &&
+      (errorCode === "enterprise_billing_role_required" ||
+        /enterprise owner or billing admin role/i.test(error))
+    ) {
+      return "I can’t access enterprise quota or billing details for your role. Enterprise owners and billing admins can view alumni seat limits and billing quotas.";
+    }
+
     return null;
   }
 
@@ -2242,6 +2372,8 @@ function formatDeterministicToolResponse(
       return formatEnterpriseStatsResponse(data);
     case "get_enterprise_quota":
       return formatEnterpriseQuotaResponse(data);
+    case "get_enterprise_org_capacity":
+      return formatEnterpriseOrgCapacityResponse(data);
     case "list_members":
       return formatMembersResponse(data);
     case "list_alumni":
@@ -2252,6 +2384,8 @@ function formatDeterministicToolResponse(
       return formatDonationsResponse(data);
     case "list_managed_orgs":
       return formatManagedOrgsResponse(data);
+    case "list_enterprise_audit_events":
+      return formatAuditEventsResponse(data);
     case "list_parents":
       return formatParentsResponse(data);
     case "list_philanthropy_events":
@@ -2267,6 +2401,11 @@ function formatDeterministicToolResponse(
 
 const MESSAGE_SAFETY_FALLBACK =
   "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
+
+const SCOPE_REFUSAL_FALLBACK =
+  "I can only help with TeamNetwork tasks for your organization — like members, events, announcements, discussions, jobs, donations, or finding the right page. That request is outside what I do.";
+
+export const SCOPE_REFUSAL_CANONICAL_PREFIX = "I can only help with TeamNetwork tasks";
 
 const TOOL_GROUNDING_FALLBACK =
   "I couldn’t verify that answer against your organization’s data, so I’m not returning it. Please try rephrasing or ask a narrower question.";
@@ -3540,9 +3679,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               ? "casual_turn"
               : executionPolicy.profile === "out_of_scope"
                 ? "out_of_scope_request"
-                : eligibility.eligible
-                  ? executionPolicy.reasons[0]
-                  : eligibility.reason;
+                : executionPolicy.profile === "out_of_scope_unrelated"
+                  ? "scope_refusal"
+                  : eligibility.eligible
+                    ? executionPolicy.reasons[0]
+                    : eligibility.reason;
         } else if (!eligibility.eligible) {
           cacheBypassReason = eligibility.reason;
         }
@@ -3555,6 +3696,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           attachment,
           currentPath,
           Boolean(ctx.enterpriseId),
+          ctx.enterpriseRole,
         );
       });
     } catch (err) {
@@ -4041,6 +4183,85 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             cache: {
               status: cacheStatus,
               ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
+            },
+          });
+        }),
+        { ...SSE_HEADERS, ...rateLimit.headers },
+        threadId!
+      );
+    }
+
+    if (executionPolicy.profile === "out_of_scope_unrelated") {
+      const refusalReason =
+        executionPolicy.reasons[0]?.replace(/^out_of_scope_/, "") ??
+        "unrelated_pattern";
+      cacheStatus = "bypass";
+      cacheBypassReason = "scope_refusal";
+      stageTimings.retrieval = {
+        decision: "skip",
+        reason: "out_of_scope_request",
+      };
+      skipRemainingStages(stageTimings, "cache_lookup");
+
+      const { data: scopeAssistantMsg, error: scopeAssistantError } =
+        await insertAssistantMessage({
+          content: SCOPE_REFUSAL_FALLBACK,
+          status: "complete",
+        });
+
+      if (scopeAssistantError || !scopeAssistantMsg) {
+        aiLog("error", "ai-chat", "scope refusal assistant message failed", {
+          ...requestLogContext,
+          threadId: threadId!,
+        }, { error: scopeAssistantError });
+        return NextResponse.json(
+          { error: "Failed to create response" },
+          { status: 500, headers: rateLimit.headers }
+        );
+      }
+
+      void trackOpsEventServerFn(
+        "api_error",
+        {
+          endpoint_group: "ai-scope",
+          http_status: 200,
+          error_code: `scope_refusal_${refusalReason}`,
+          retryable: false,
+        },
+        ctx.orgId
+      );
+
+      await logAiRequestFn(ctx.serviceSupabase, {
+        threadId: threadId!,
+        messageId: scopeAssistantMsg.id,
+        userId: ctx.userId,
+        orgId: ctx.orgId,
+        intent: resolvedIntent,
+        intentType: resolvedIntentType,
+        latencyMs: Date.now() - startTime,
+        error: `scope_refusal:${refusalReason}`,
+        cacheStatus,
+        cacheBypassReason,
+        contextSurface: effectiveSurface,
+        stageTimings: finalizeStageTimings(
+          stageTimings,
+          "out_of_scope_request",
+          Date.now() - startTime
+        ),
+      }, {
+        ...requestLogContext,
+        threadId: threadId!,
+      });
+
+      return buildSseResponse(
+        createSSEStream(async (enqueue) => {
+          enqueue({ type: "chunk", content: SCOPE_REFUSAL_FALLBACK });
+          enqueue({
+            type: "done",
+            threadId: threadId!,
+            cache: {
+              status: cacheStatus,
+              bypassReason: cacheBypassReason,
             },
           });
         }),
@@ -5397,6 +5618,15 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               ? "timed_out"
               : "error";
 
+        const modelRefusalDetected =
+          fullContent.trim().startsWith(SCOPE_REFUSAL_CANONICAL_PREFIX);
+        const finalBypassReason = modelRefusalDetected
+          ? cacheBypassReason ?? "scope_refusal"
+          : cacheBypassReason;
+        const finalAuditError = modelRefusalDetected
+          ? auditErrorMessage ?? "scope_refusal:model_refusal_detected"
+          : auditErrorMessage;
+
         await logAiRequestFn(ctx.serviceSupabase, {
           threadId: threadId!,
           messageId: assistantMessageId,
@@ -5409,10 +5639,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           model: process.env.ZAI_API_KEY ? getZaiModelFn() : undefined,
           inputTokens: usageRef.current?.inputTokens,
           outputTokens: usageRef.current?.outputTokens,
-          error: auditErrorMessage,
+          error: finalAuditError,
           cacheStatus,
           cacheEntryId,
-          cacheBypassReason,
+          cacheBypassReason: finalBypassReason,
           contextSurface: (contextMetadata?.surface ?? effectiveSurface) as CacheSurface,
           contextTokenEstimate: contextMetadata?.estimatedTokens,
           ragChunkCount: ragChunkCount > 0 ? ragChunkCount : undefined,
