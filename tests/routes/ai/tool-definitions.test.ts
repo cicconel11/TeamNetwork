@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 27 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 27);
+test("AI_TOOLS exports 31 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 31);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -45,8 +45,12 @@ test("TOOL_NAMES contains all tool names", () => {
     "get_org_stats",
     "get_enterprise_stats",
     "get_enterprise_quota",
+    "get_enterprise_org_capacity",
     "list_enterprise_alumni",
+    "list_enterprise_audit_events",
     "list_managed_orgs",
+    "prepare_enterprise_invite",
+    "revoke_enterprise_invite",
     "suggest_connections",
     "find_navigation_targets",
   ];
