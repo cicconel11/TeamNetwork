@@ -135,6 +135,24 @@ export interface ListEnterpriseAlumniArgs {
   offset?: number;
 }
 
+export interface ListEnterpriseAuditEventsArgs {
+  organization_id?: string;
+  limit?: number;
+}
+
+export interface PrepareEnterpriseInviteArgs {
+  role?: "admin" | "active_member" | "alumni";
+  organization_id?: string;
+  organization_query?: string;
+  uses_remaining?: number;
+  expires_at?: string;
+}
+
+export interface RevokeEnterpriseInviteArgs {
+  invite_id?: string;
+  invite_code?: string;
+}
+
 const TOOL_BY_NAME = {
   list_members: {
     type: "function" as const,
@@ -594,6 +612,19 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  get_enterprise_org_capacity: {
+    type: "function" as const,
+    function: {
+      name: "get_enterprise_org_capacity" as const,
+      description:
+        "Get enterprise managed-organization capacity details available to all enterprise roles. Returns total managed orgs, enterprise-managed org seats in use, and free sub-org slots remaining.",
+      parameters: {
+        type: "object" as const,
+        properties: {},
+        additionalProperties: false as const,
+      },
+    },
+  },
   suggest_connections: {
     type: "function" as const,
     function: {
@@ -817,6 +848,90 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  list_enterprise_audit_events: {
+    type: "function" as const,
+    function: {
+      name: "list_enterprise_audit_events" as const,
+      description:
+        "List recent enterprise audit events and adoption requests. Returns who performed each action, what was targeted, when, and the current status. Use for questions like who added an org, when was an org adopted, or show the adoption history.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          organization_id: {
+            type: "string" as const,
+            description: "Optional managed organization id to restrict audit events.",
+          },
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 100,
+            description: "Max events to return (default 25)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_enterprise_invite: {
+    type: "function" as const,
+    function: {
+      name: "prepare_enterprise_invite" as const,
+      description:
+        "Prepare a new enterprise invite draft for admins, active members, or alumni. Use this when the user wants to invite someone to their enterprise or a managed organization. Validates the draft and creates a pending confirmation action when ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          role: {
+            type: "string" as const,
+            enum: ["admin", "active_member", "alumni"],
+            description:
+              "The role the invited user will receive. Admins and alumni can be enterprise-wide; active_member invites require an organization_id.",
+          },
+          organization_id: {
+            type: "string" as const,
+            description: "Optional managed organization id to scope the invite to a single org.",
+          },
+          organization_query: {
+            type: "string" as const,
+            description:
+              "Optional managed organization name or slug when the user names the org instead of providing an id.",
+          },
+          uses_remaining: {
+            type: "integer" as const,
+            minimum: 1,
+            description: "Maximum number of times this invite can be used.",
+          },
+          expires_at: {
+            type: "string" as const,
+            description: "Optional ISO timestamp for when the invite expires.",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  revoke_enterprise_invite: {
+    type: "function" as const,
+    function: {
+      name: "revoke_enterprise_invite" as const,
+      description:
+        "Revoke an existing enterprise invite. Provide either the invite id (UUID) or the invite code. Validates the invite and creates a pending confirmation action when ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          invite_id: {
+            type: "string" as const,
+            description: "UUID of the invite to revoke.",
+          },
+          invite_code: {
+            type: "string" as const,
+            description: "Invite code string when the UUID is not known.",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   find_navigation_targets: {
     type: "function" as const,
     function: {
@@ -858,6 +973,9 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_parents,
   TOOL_BY_NAME.list_philanthropy_events,
   TOOL_BY_NAME.list_managed_orgs,
+  TOOL_BY_NAME.list_enterprise_audit_events,
+  TOOL_BY_NAME.prepare_enterprise_invite,
+  TOOL_BY_NAME.revoke_enterprise_invite,
   TOOL_BY_NAME.prepare_announcement,
   TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.prepare_chat_message,
@@ -871,6 +989,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.get_enterprise_stats,
   TOOL_BY_NAME.get_enterprise_quota,
+  TOOL_BY_NAME.get_enterprise_org_capacity,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.find_navigation_targets,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];

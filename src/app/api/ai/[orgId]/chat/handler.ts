@@ -184,6 +184,10 @@ const MANAGED_ORGS_PROMPT_PATTERN =
   /(?<!\w)(?:managed orgs?|managed organizations?|sub[-\s]?orgs?|which orgs?|list orgs?|organizations?)(?!\w)/i;
 const ENTERPRISE_AUDIT_PROMPT_PATTERN =
   /(?:who\s+(?:added|adopted|approved|invited|removed|revoked)\b|\baudit\b|\badoption\s+(?:history|requests?|log)\b|\bwhen\s+was\b[\s\S]{0,40}\badopted\b|\bhistory\s+of\s+adoptions?\b)/i;
+const ENTERPRISE_INVITE_CREATE_PROMPT_PATTERN =
+  /(?:invite\s+(?:a\s+|an\s+)?(?:new\s+)?(?:admin|member|alumni|active\s+member|user|person)\b[\s\S]{0,80}\b(?:to\s+)?(?:enterprise|org|organization)?|create\s+(?:an?\s+)?enterprise\s+invite|enterprise\s+invite\s+(?:for|to))/i;
+const ENTERPRISE_INVITE_REVOKE_PROMPT_PATTERN =
+  /(?:revoke\s+(?:an?\s+|the\s+)?(?:enterprise\s+)?invite|cancel\s+(?:an?\s+|the\s+)?(?:enterprise\s+)?invite|kill\s+(?:an?\s+|the\s+)?(?:enterprise\s+)?invite)/i;
 const HTTPS_URL_PATTERN = /https?:\/\//i;
 const ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN =
   /\b(?:title|body|audience|pin(?:ned)?|notify|notification|all members|active members|alumni|parents|individuals)\b/i;
@@ -1558,6 +1562,14 @@ function getPass1Tools(
     enterpriseRole != null && getEnterprisePermissions(enterpriseRole).canManageBilling;
 
   if (isEnterpriseScopedRequest) {
+    if (ENTERPRISE_INVITE_REVOKE_PROMPT_PATTERN.test(message)) {
+      return [AI_TOOL_MAP.revoke_enterprise_invite];
+    }
+
+    if (ENTERPRISE_INVITE_CREATE_PROMPT_PATTERN.test(message)) {
+      return [AI_TOOL_MAP.prepare_enterprise_invite];
+    }
+
     if (ENTERPRISE_AUDIT_PROMPT_PATTERN.test(message)) {
       return [AI_TOOL_MAP.list_enterprise_audit_events];
     }
@@ -1697,6 +1709,8 @@ function getForcedPass1ToolChoice(
     forcedToolName !== "list_donations" &&
     forcedToolName !== "list_managed_orgs" &&
     forcedToolName !== "list_enterprise_audit_events" &&
+    forcedToolName !== "prepare_enterprise_invite" &&
+    forcedToolName !== "revoke_enterprise_invite" &&
     forcedToolName !== "list_parents" &&
     forcedToolName !== "list_philanthropy_events" &&
     forcedToolName !== "scrape_schedule_website" &&
@@ -1896,6 +1910,39 @@ function formatPrepareAnnouncementResponse(data: unknown): string | null {
     return "I drafted the announcement. Review the details below and confirm when you're ready to publish it.";
   }
 
+  return null;
+}
+
+function formatPrepareEnterpriseInviteResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter(
+          (field): field is string => typeof field === "string" && field.length > 0,
+        )
+      : [];
+    if (missingFields.length === 0) {
+      return "I can draft this enterprise invite, but I still need more details before I can prepare it.";
+    }
+    return `I can draft this enterprise invite, but I still need: ${missingFields.join(", ")}.`;
+  }
+  if (payload.state === "needs_confirmation") {
+    return "I drafted the enterprise invite. Review the details below and confirm when you're ready to create it.";
+  }
+  return null;
+}
+
+function formatRevokeEnterpriseInviteResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "needs_confirmation") {
+    return "I found that enterprise invite. Confirm below to revoke it.";
+  }
   return null;
 }
 
@@ -2386,6 +2433,10 @@ function formatDeterministicToolResponse(
       return formatManagedOrgsResponse(data);
     case "list_enterprise_audit_events":
       return formatAuditEventsResponse(data);
+    case "prepare_enterprise_invite":
+      return formatPrepareEnterpriseInviteResponse(data);
+    case "revoke_enterprise_invite":
+      return formatRevokeEnterpriseInviteResponse(data);
     case "list_parents":
       return formatParentsResponse(data);
     case "list_philanthropy_events":

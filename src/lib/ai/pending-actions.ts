@@ -14,7 +14,9 @@ export type PendingActionType =
   | "send_group_chat_message"
   | "create_discussion_reply"
   | "create_discussion_thread"
-  | "create_event";
+  | "create_event"
+  | "create_enterprise_invite"
+  | "revoke_enterprise_invite";
 export type PendingActionStatus =
   | "pending"
   | "confirmed"
@@ -51,6 +53,25 @@ export interface CreateEventPendingPayload extends AssistantPreparedEvent {
   orgSlug?: string | null;
 }
 
+export interface CreateEnterpriseInvitePendingPayload {
+  enterpriseId: string;
+  enterpriseSlug: string;
+  role: "admin" | "active_member" | "alumni";
+  organizationId?: string | null;
+  organizationName?: string | null;
+  usesRemaining?: number | null;
+  expiresAt?: string | null;
+}
+
+export interface RevokeEnterpriseInvitePendingPayload {
+  enterpriseId: string;
+  enterpriseSlug: string;
+  inviteId: string;
+  inviteCode: string;
+  role?: string | null;
+  organizationId?: string | null;
+}
+
 export interface PendingActionPayloadByType {
   create_announcement: CreateAnnouncementPendingPayload;
   create_job_posting: CreateJobPostingPendingPayload;
@@ -59,6 +80,8 @@ export interface PendingActionPayloadByType {
   create_discussion_reply: CreateDiscussionReplyPendingPayload;
   create_discussion_thread: CreateDiscussionThreadPendingPayload;
   create_event: CreateEventPendingPayload;
+  create_enterprise_invite: CreateEnterpriseInvitePendingPayload;
+  revoke_enterprise_invite: RevokeEnterpriseInvitePendingPayload;
 }
 
 export type PendingActionPayload = PendingActionPayloadByType[PendingActionType];
@@ -312,6 +335,16 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       return {
         title: "Review event",
         description: "Confirm the drafted event before it is added to the calendar.",
+      };
+    case "create_enterprise_invite":
+      return {
+        title: "Review enterprise invite",
+        description: "Confirm the drafted enterprise invite before it is created.",
+      };
+    case "revoke_enterprise_invite":
+      return {
+        title: "Revoke enterprise invite",
+        description: "Confirm that this enterprise invite should be revoked.",
       };
     default:
       return {

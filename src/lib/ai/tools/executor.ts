@@ -5,7 +5,8 @@ import { TOOL_NAMES } from "./definitions";
 import { listEnterpriseAlumni } from "./enterprise/list-alumni";
 import { getEnterpriseStats } from "./enterprise/stats";
 import { listManagedOrgs } from "./enterprise/managed-orgs";
-import { getEnterpriseQuota } from "./enterprise/quota";
+import { getEnterpriseOrgCapacity, getEnterpriseQuota } from "./enterprise/quota";
+import { listEnterpriseAuditEvents } from "./enterprise/audit-visibility";
 import { getEnterprisePermissions, type EnterpriseRole } from "@/types/enterprise";
 import {
   EXTRACTION_TOOL_TIMEOUT_MS,
@@ -56,6 +57,8 @@ import {
   type CreateDiscussionThreadPendingPayload,
   type CreateEventPendingPayload,
   type CreateJobPostingPendingPayload,
+  type CreateEnterpriseInvitePendingPayload,
+  type RevokeEnterpriseInvitePendingPayload,
 } from "@/lib/ai/pending-actions";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
@@ -105,11 +108,16 @@ export type ScheduleFileToolErrorCode =
   | "pdf_unreadable"
   | "pdf_timeout";
 
+export type ToolExecutionErrorCode =
+  | ScheduleFileToolErrorCode
+  | "enterprise_billing_role_required"
+  | "enterprise_invite_role_required";
+
 export type ToolExecutionResult =
   | { kind: "ok"; data: unknown }
   | { kind: "forbidden"; error: "Forbidden" }
   | { kind: "auth_error"; error: "Auth check failed" }
-  | { kind: "tool_error"; error: string; code?: ScheduleFileToolErrorCode }
+  | { kind: "tool_error"; error: string; code?: ToolExecutionErrorCode }
   | { kind: "timeout"; error: "Tool timed out" };
 
 type CountResult =
@@ -276,7 +284,35 @@ const extractSchedulePdfSchema = z.object({}).strict();
 const getOrgStatsSchema = z.object({}).strict();
 const getEnterpriseStatsSchema = z.object({}).strict();
 const getEnterpriseQuotaSchema = z.object({}).strict();
+const getEnterpriseOrgCapacitySchema = z.object({}).strict();
 const listManagedOrgsSchema = z.object({}).strict();
+const listEnterpriseAuditEventsSchema = z
+  .object({
+    organization_id: z.string().trim().min(1).optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+const prepareEnterpriseInviteSchema = z
+  .object({
+    role: z.enum(["admin", "active_member", "alumni"]).optional(),
+    organization_id: z.string().trim().min(1).optional(),
+    organization_query: z.string().trim().min(1).optional(),
+    uses_remaining: z.number().int().min(1).max(1000).optional(),
+    expires_at: z.string().datetime().optional(),
+  })
+  .strict();
+const revokeEnterpriseInviteSchema = z
+  .object({
+    invite_id: z.string().trim().min(1).optional(),
+    invite_code: z.string().trim().min(1).optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      (typeof value.invite_id === "string" && value.invite_id.length > 0) ||
+      (typeof value.invite_code === "string" && value.invite_code.length > 0),
+    { message: "Expected invite_id or invite_code" },
+  );
 const listEnterpriseAlumniSchema = z
   .object({
     org: z.string().trim().min(1).optional(),
@@ -327,6 +363,9 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_parents: listParentsSchema,
   list_philanthropy_events: listPhilanthropyEventsSchema,
   list_managed_orgs: listManagedOrgsSchema,
+  list_enterprise_audit_events: listEnterpriseAuditEventsSchema,
+  prepare_enterprise_invite: prepareEnterpriseInviteSchema,
+  revoke_enterprise_invite: revokeEnterpriseInviteSchema,
   prepare_announcement: prepareAnnouncementSchema,
   prepare_job_posting: prepareJobPostingSchema,
   prepare_chat_message: prepareChatMessageSchema,
@@ -340,6 +379,7 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   get_org_stats: getOrgStatsSchema,
   get_enterprise_stats: getEnterpriseStatsSchema,
   get_enterprise_quota: getEnterpriseQuotaSchema,
+  get_enterprise_org_capacity: getEnterpriseOrgCapacitySchema,
   suggest_connections: suggestConnectionsSchema,
   find_navigation_targets: findNavigationTargetsSchema,
 };
@@ -349,10 +389,19 @@ const ENTERPRISE_TOOL_NAMES = new Set<ToolName>([
   "get_enterprise_stats",
   "list_managed_orgs",
   "get_enterprise_quota",
+  "get_enterprise_org_capacity",
+  "list_enterprise_audit_events",
+  "prepare_enterprise_invite",
+  "revoke_enterprise_invite",
 ]);
 
 const BILLING_ONLY_ENTERPRISE_TOOLS = new Set<ToolName>([
   "get_enterprise_quota",
+]);
+
+const ENTERPRISE_INVITE_TOOLS = new Set<ToolName>([
+  "prepare_enterprise_invite",
+  "revoke_enterprise_invite",
 ]);
 
 function validateArgs(
@@ -385,7 +434,7 @@ function getSafeErrorMessage(error: unknown): string {
   return "unknown_error";
 }
 
-function toolError(error: string, code?: ScheduleFileToolErrorCode): ToolExecutionResult {
+function toolError(error: string, code?: ToolExecutionErrorCode): ToolExecutionResult {
   return code ? { kind: "tool_error", error, code } : { kind: "tool_error", error };
 }
 
@@ -1393,6 +1442,218 @@ async function prepareAnnouncement(
     data: {
       state: "needs_confirmation",
       draft: prepared.data,
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
+async function prepareEnterpriseInvite(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareEnterpriseInviteSchema>,
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Enterprise invite preparation requires a thread context");
+  }
+  if (!ctx.enterpriseId) {
+    return toolError("This assistant does not have enterprise context for this thread.");
+  }
+
+  const missingFields: string[] = [];
+  if (!args.role) {
+    missingFields.push("role");
+  }
+
+  if (args.role === "active_member" && !args.organization_id && !args.organization_query) {
+    missingFields.push("organization_id");
+  }
+
+  if (missingFields.length > 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: missingFields,
+        draft: args,
+      },
+    };
+  }
+
+  let organizationId: string | null = args.organization_id ?? null;
+  let organizationName: string | null = null;
+
+  if (organizationId) {
+    const { data: org, error: orgError } = await sb
+      .from("organizations")
+      .select("id, name")
+      .eq("id", organizationId)
+      .eq("enterprise_id", ctx.enterpriseId)
+      .maybeSingle();
+    if (orgError) {
+      aiLog("warn", "ai-tools", "prepare_enterprise_invite org lookup failed", logContext, {
+        error: getSafeErrorMessage(orgError),
+      });
+      return toolError("Failed to resolve managed organization");
+    }
+    if (!org) {
+      return toolError("Managed organization not found for this enterprise.");
+    }
+    organizationName = typeof org.name === "string" ? org.name : null;
+  } else if (args.organization_query) {
+    const sanitized = sanitizeIlikeInput(args.organization_query);
+    const { data: orgs, error: orgError } = await sb
+      .from("organizations")
+      .select("id, name, slug")
+      .eq("enterprise_id", ctx.enterpriseId)
+      .or(`name.ilike.%${sanitized}%,slug.ilike.%${sanitized}%`)
+      .limit(2);
+    if (orgError) {
+      return toolError("Failed to search managed organizations");
+    }
+    const rows = Array.isArray(orgs) ? orgs : [];
+    if (rows.length === 0) {
+      return toolError("No managed organization matched that name or slug.");
+    }
+    if (rows.length > 1) {
+      return {
+        kind: "ok",
+        data: {
+          state: "missing_fields",
+          missing_fields: ["organization_id"],
+          draft: args,
+          candidates: rows.map((row: { id: string; name: string; slug: string }) => ({
+            id: row.id,
+            name: row.name,
+            slug: row.slug,
+          })),
+        },
+      };
+    }
+    organizationId = rows[0].id as string;
+    organizationName = rows[0].name as string;
+  }
+
+  const { data: enterprise, error: entError } = await sb
+    .from("enterprises")
+    .select("slug")
+    .eq("id", ctx.enterpriseId)
+    .maybeSingle();
+  if (entError || !enterprise?.slug) {
+    return toolError("Failed to load enterprise context");
+  }
+
+  const pendingPayload: CreateEnterpriseInvitePendingPayload = {
+    enterpriseId: ctx.enterpriseId,
+    enterpriseSlug: String(enterprise.slug),
+    role: args.role as "admin" | "active_member" | "alumni",
+    organizationId,
+    organizationName,
+    usesRemaining: args.uses_remaining ?? null,
+    expiresAt: args.expires_at ?? null,
+  };
+
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "create_enterprise_invite",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: pendingPayload,
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
+async function revokeEnterpriseInvite(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof revokeEnterpriseInviteSchema>,
+): Promise<ToolExecutionResult> {
+  if (!ctx.threadId) {
+    return toolError("Enterprise invite revocation requires a thread context");
+  }
+  if (!ctx.enterpriseId) {
+    return toolError("This assistant does not have enterprise context for this thread.");
+  }
+
+  const inviteIdInput = typeof args.invite_id === "string" ? args.invite_id : null;
+  const inviteCodeInput = typeof args.invite_code === "string" ? args.invite_code : null;
+
+  let query = sb
+    .from("enterprise_invites")
+    .select("id, code, role, organization_id, revoked_at")
+    .eq("enterprise_id", ctx.enterpriseId);
+  if (inviteIdInput) {
+    query = query.eq("id", inviteIdInput);
+  } else if (inviteCodeInput) {
+    query = query.eq("code", inviteCodeInput);
+  } else {
+    return toolError("Provide invite_id or invite_code to revoke an invite.");
+  }
+
+  const { data: invite, error: inviteError } = await query.maybeSingle();
+  if (inviteError) {
+    return toolError("Failed to look up enterprise invite");
+  }
+  if (!invite) {
+    return toolError("Enterprise invite not found.");
+  }
+  if (invite.revoked_at) {
+    return toolError("This enterprise invite is already revoked.");
+  }
+
+  const { data: enterprise, error: entError } = await sb
+    .from("enterprises")
+    .select("slug")
+    .eq("id", ctx.enterpriseId)
+    .maybeSingle();
+  if (entError || !enterprise?.slug) {
+    return toolError("Failed to load enterprise context");
+  }
+
+  const pendingPayload: RevokeEnterpriseInvitePendingPayload = {
+    enterpriseId: ctx.enterpriseId,
+    enterpriseSlug: String(enterprise.slug),
+    inviteId: String(invite.id),
+    inviteCode: typeof invite.code === "string" ? invite.code : "",
+    role: typeof invite.role === "string" ? invite.role : null,
+    organizationId: typeof invite.organization_id === "string" ? invite.organization_id : null,
+  };
+
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "revoke_enterprise_invite",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: pendingPayload,
       pending_action: {
         id: pendingAction.id,
         action_type: pendingAction.action_type,
@@ -2691,6 +2952,15 @@ export async function executeToolCall(
       if (!permissions.canManageBilling) {
         return toolError(
           "This tool requires an enterprise owner or billing admin role.",
+          "enterprise_billing_role_required",
+        );
+      }
+    }
+    if (ENTERPRISE_INVITE_TOOLS.has(toolName)) {
+      if (ctx.enterpriseRole !== "owner" && ctx.enterpriseRole !== "org_admin") {
+        return toolError(
+          "This tool requires an enterprise owner or org admin role.",
+          "enterprise_invite_role_required",
         );
       }
     }
@@ -2781,6 +3051,26 @@ export async function executeToolCall(
           );
         case "list_managed_orgs":
           return safeToolQuery(logContext, () => listManagedOrgs(sb, ctx.enterpriseId!));
+        case "list_enterprise_audit_events":
+          return safeToolQuery(logContext, () =>
+            listEnterpriseAuditEvents(
+              sb,
+              ctx.enterpriseId!,
+              args as z.infer<typeof listEnterpriseAuditEventsSchema>,
+            )
+          );
+        case "prepare_enterprise_invite":
+          return prepareEnterpriseInvite(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareEnterpriseInviteSchema>,
+          );
+        case "revoke_enterprise_invite":
+          return revokeEnterpriseInvite(
+            sb,
+            ctx,
+            args as z.infer<typeof revokeEnterpriseInviteSchema>,
+          );
         case "prepare_announcement":
           return prepareAnnouncement(
             sb,
@@ -2847,6 +3137,8 @@ export async function executeToolCall(
           return safeToolQuery(logContext, () => getEnterpriseStats(sb, ctx.enterpriseId!));
         case "get_enterprise_quota":
           return safeToolQuery(logContext, () => getEnterpriseQuota(sb, ctx.enterpriseId!));
+        case "get_enterprise_org_capacity":
+          return safeToolQuery(logContext, () => getEnterpriseOrgCapacity(sb, ctx.enterpriseId!));
         case "suggest_connections":
           return runSuggestConnections(
             sb,

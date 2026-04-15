@@ -61,6 +61,45 @@ function createEnterpriseToolSupabaseStub() {
       enterprise_adopted_at: "2026-01-10T00:00:00Z",
     },
   ];
+  const auditLogRows = [
+    {
+      id: "audit-1",
+      action: "enterprise.org_invite_created",
+      actor_user_id: "user-owner",
+      actor_email_redacted: "o***@example.com",
+      enterprise_id: "ent-1",
+      organization_id: "org-1",
+      target_type: "invite",
+      target_id: "inv-1",
+      metadata: { role: "admin" },
+      created_at: "2026-04-01T12:00:00Z",
+    },
+    {
+      id: "audit-2",
+      action: "enterprise.alumni_added",
+      actor_user_id: "user-owner",
+      actor_email_redacted: "o***@example.com",
+      enterprise_id: "ent-1",
+      organization_id: "org-2",
+      target_type: "alumni",
+      target_id: "alum-9",
+      metadata: null,
+      created_at: "2026-03-15T12:00:00Z",
+    },
+  ];
+  const adoptionRows = [
+    {
+      id: "adopt-1",
+      enterprise_id: "ent-1",
+      organization_id: "org-2",
+      requested_by: "user-owner",
+      requested_at: "2026-02-01T12:00:00Z",
+      status: "approved",
+      responded_by: "user-target",
+      responded_at: "2026-02-02T12:00:00Z",
+      expires_at: null,
+    },
+  ];
 
   const applyFilters = (rows: any[], filters: Array<{ type: string; column: string; value?: unknown }>) =>
     rows.filter((row) =>
@@ -92,6 +131,9 @@ function createEnterpriseToolSupabaseStub() {
       const filters: Array<{ type: string; column: string; value?: unknown }> = [];
       let limitStart = 0;
       let limitEnd: number | null = null;
+      let limitMax: number | null = null;
+      let orderColumn: string | null = null;
+      let orderAscending = true;
       const builder: Record<string, any> = {
         select() {
           return builder;
@@ -126,7 +168,13 @@ function createEnterpriseToolSupabaseStub() {
           }
           return builder;
         },
-        order() {
+        order(column: string, opts?: { ascending?: boolean }) {
+          orderColumn = column;
+          orderAscending = opts?.ascending !== false;
+          return builder;
+        },
+        limit(count: number) {
+          limitMax = count;
           return builder;
         },
         range(start: number, end: number) {
@@ -178,6 +226,26 @@ function createEnterpriseToolSupabaseStub() {
             count: filtered.length,
             error: null,
           });
+          return;
+        }
+
+        if (table === "enterprise_audit_logs" || table === "enterprise_adoption_requests") {
+          const source = table === "enterprise_audit_logs" ? auditLogRows : adoptionRows;
+          let rows = applyFilters(source, filters);
+          if (orderColumn) {
+            const col = orderColumn;
+            rows = [...rows].sort((a, b) => {
+              const av = String(a[col] ?? "");
+              const bv = String(b[col] ?? "");
+              if (av === bv) return 0;
+              if (orderAscending) return av < bv ? -1 : 1;
+              return av < bv ? 1 : -1;
+            });
+          }
+          if (limitMax != null) {
+            rows = rows.slice(0, limitMax);
+          }
+          resolve({ data: rows, error: null });
           return;
         }
 
@@ -316,5 +384,48 @@ describe("enterprise AI tools", () => {
     if (result.kind === "tool_error") {
       assert.match(result.error, /does not have enterprise context/i);
     }
+  });
+
+  it("lists enterprise audit events merged and sorted desc", async () => {
+    const ctx = createContext({ enterpriseId: "ent-1", enterpriseRole: "org_admin" });
+    const result = await executeToolCall(ctx, {
+      name: "list_enterprise_audit_events",
+      args: { limit: 10 },
+    });
+
+    assert.equal(result.kind, "ok");
+    if (result.kind === "ok") {
+      const payload = result.data as any;
+      assert.equal(payload.total, 3);
+      assert.equal(payload.events[0].id, "audit-1");
+      assert.equal(payload.events[0].source, "audit_log");
+      assert.equal(payload.events[1].id, "audit-2");
+      assert.equal(payload.events[2].source, "adoption_request");
+      assert.equal(payload.events[2].status, "approved");
+    }
+  });
+
+  it("filters audit events by organization_id", async () => {
+    const ctx = createContext({ enterpriseId: "ent-1", enterpriseRole: "owner" });
+    const result = await executeToolCall(ctx, {
+      name: "list_enterprise_audit_events",
+      args: { organization_id: "org-1", limit: 10 },
+    });
+
+    assert.equal(result.kind, "ok");
+    if (result.kind === "ok") {
+      const payload = result.data as any;
+      assert.equal(payload.total, 1);
+      assert.equal(payload.events[0].organization_id, "org-1");
+    }
+  });
+
+  it("allows audit events for billing_admin role", async () => {
+    const ctx = createContext({ enterpriseId: "ent-1", enterpriseRole: "billing_admin" });
+    const result = await executeToolCall(ctx, {
+      name: "list_enterprise_audit_events",
+      args: {},
+    });
+    assert.equal(result.kind, "ok");
   });
 });

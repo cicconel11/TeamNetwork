@@ -66,3 +66,44 @@ export async function getEnterpriseQuota(
     error: null,
   };
 }
+
+export async function getEnterpriseOrgCapacity(
+  serviceSupabase: EnterpriseToolSupabase,
+  enterpriseId: string,
+) {
+  const quotaResult = await getEnterpriseQuota(serviceSupabase, enterpriseId);
+  if (quotaResult.error || !quotaResult.data) {
+    return quotaResult;
+  }
+
+  const payload = quotaResult.data as {
+    sub_orgs?: {
+      total?: unknown;
+      enterprise_managed_total?: unknown;
+      free_limit?: unknown;
+      free_remaining?: unknown;
+    } | null;
+  };
+
+  return {
+    data: {
+      sub_orgs: {
+        total:
+          typeof payload.sub_orgs?.total === "number" ? payload.sub_orgs.total : 0,
+        enterprise_managed_total:
+          typeof payload.sub_orgs?.enterprise_managed_total === "number"
+            ? payload.sub_orgs.enterprise_managed_total
+            : 0,
+        free_limit:
+          typeof payload.sub_orgs?.free_limit === "number"
+            ? payload.sub_orgs.free_limit
+            : null,
+        free_remaining:
+          typeof payload.sub_orgs?.free_remaining === "number"
+            ? payload.sub_orgs.free_remaining
+            : null,
+      },
+    },
+    error: null,
+  };
+}
