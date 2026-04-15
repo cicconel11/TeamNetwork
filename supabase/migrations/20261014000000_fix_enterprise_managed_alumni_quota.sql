@@ -52,7 +52,10 @@ BEGIN
     FROM public.alumni a
     INNER JOIN public.organizations o
       ON o.id = a.organization_id
+    INNER JOIN public.organization_subscriptions os
+      ON os.organization_id = o.id
     WHERE o.enterprise_id = v_enterprise_id
+      AND os.status = 'enterprise_managed'
       AND a.deleted_at IS NULL;
 
     RETURN jsonb_build_object(
@@ -122,7 +125,10 @@ BEGIN
     FROM public.alumni a
     INNER JOIN public.organizations o
       ON o.id = a.organization_id
+    INNER JOIN public.organization_subscriptions os
+      ON os.organization_id = o.id
     WHERE o.enterprise_id = v_enterprise_id
+      AND os.status = 'enterprise_managed'
       AND a.deleted_at IS NULL;
 
     RETURN v_count < COALESCE(v_limit, 0);

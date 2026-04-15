@@ -33,6 +33,7 @@ const importRowSchema = z.object({
   current_company: z.string().trim().max(200).optional().nullable(),
   current_city: z.string().trim().max(200).optional().nullable(),
   position_title: z.string().trim().max(200).optional().nullable(),
+  birth_year: z.number().int().min(1900).max(new Date().getFullYear()).optional().nullable(),
 });
 
 const importBodySchema = z.object({
@@ -70,6 +71,7 @@ interface BulkImportAlumniRichRpc {
         current_company?: string | null;
         current_city?: string | null;
         position_title?: string | null;
+        birth_year?: number | null;
       }>;
       p_overwrite: boolean;
     },
@@ -132,7 +134,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     const orFilter = emailsInRequest.map((e) => `email.ilike.${e}`).join(",");
     const { data: alumniData, error: alumniError } = await serviceSupabase
       .from("alumni")
-      .select("id, email, first_name, last_name, graduation_year, major, job_title, notes, linkedin_url, phone_number, industry, current_company, current_city, position_title")
+      .select("id, email, first_name, last_name, graduation_year, major, job_title, notes, linkedin_url, phone_number, industry, current_company, current_city, position_title, birth_year")
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .or(orFilter);
@@ -148,7 +150,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           alum.first_name || alum.last_name || alum.graduation_year ||
           alum.major || alum.job_title || alum.notes || alum.linkedin_url ||
           alum.phone_number || alum.industry || alum.current_company ||
-          alum.current_city || alum.position_title
+          alum.current_city || alum.position_title || alum.birth_year
         );
         alumniByEmail.set(alum.email.toLowerCase(), { id: alum.id, hasData });
       }
@@ -162,14 +164,14 @@ export async function POST(req: Request, { params }: RouteParams) {
       organizationId,
       serviceSupabase,
       existingKeys: new Set(alumniByEmail.keys()),
-      selectColumns: "id, user_id, first_name, last_name, graduation_year, major, job_title, notes, linkedin_url, phone_number, industry, current_company, current_city, position_title",
+      selectColumns: "id, user_id, first_name, last_name, graduation_year, major, job_title, notes, linkedin_url, phone_number, industry, current_company, current_city, position_title, birth_year",
       buildValue: (alum) => ({
         id: alum.id as string,
         hasData: !!(
           alum.first_name || alum.last_name || alum.graduation_year ||
           alum.major || alum.job_title || alum.notes || alum.linkedin_url ||
           alum.phone_number || alum.industry || alum.current_company ||
-          alum.current_city || alum.position_title
+          alum.current_city || alum.position_title || alum.birth_year
         ),
       }),
     });

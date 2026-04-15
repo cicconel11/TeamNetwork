@@ -13,6 +13,7 @@ export interface CsvImportRow {
   current_company?: string | null;
   current_city?: string | null;
   position_title?: string | null;
+  birth_year?: number | null;
 }
 
 export type CsvImportPreviewStatus =
@@ -76,6 +77,7 @@ export function buildUpdateData(row: CsvImportRow): Partial<CsvImportRow> {
   if (row.last_name) data.last_name = row.last_name;
   if (row.email) data.email = row.email;
   if (row.graduation_year != null) data.graduation_year = row.graduation_year;
+  if (row.birth_year != null) data.birth_year = row.birth_year;
   if (row.major) data.major = row.major;
   if (row.job_title) data.job_title = row.job_title;
   if (row.notes) data.notes = row.notes;
@@ -201,6 +203,11 @@ const FIELD_MAP: Record<string, keyof CsvImportRow> = {
   "position title": "position_title",
   "position": "position_title",
   "title": "position_title",
+  // birth_year
+  "birth_year": "birth_year",
+  "birth year": "birth_year",
+  "year of birth": "birth_year",
+  "birthyear": "birth_year",
 };
 
 function normalizeHeaderKey(header: string): string {
@@ -332,6 +339,7 @@ export function parseCsvData(text: string): CsvImportRow[] {
       last_name: lastName,
       email: raw["email"] ?? null,
       graduation_year: raw["graduation_year"] ? (Number.isNaN(Number(raw["graduation_year"])) ? null : Number(raw["graduation_year"])) : null,
+      birth_year: raw["birth_year"] ? (Number.isNaN(Number(raw["birth_year"])) ? null : Number(raw["birth_year"])) : null,
       major: raw["major"] ?? null,
       job_title: raw["job_title"] ?? null,
       notes: raw["notes"] ?? null,
@@ -364,6 +372,7 @@ export function generateCsvTemplate(): string {
     "current_company",
     "current_city",
     "position_title",
+    "birth_year",
   ];
 
   const exampleRow = [
@@ -380,6 +389,7 @@ export function generateCsvTemplate(): string {
     "Acme Corp",
     "San Francisco",
     "Senior Engineer",
+    "1995",
   ];
 
   return [headers.join(","), exampleRow.join(",")].join("\r\n");

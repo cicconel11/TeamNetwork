@@ -16,6 +16,7 @@ const EXPORT_FIELDS: ExportField[] = [
   { key: "phone_number", label: "Phone", default: true },
   { key: "organization_name", label: "Organization", default: true },
   { key: "graduation_year", label: "Graduation Year", default: true },
+  { key: "birth_year", label: "Year of Birth", default: false },
   { key: "major", label: "Major", default: false },
   { key: "industry", label: "Industry", default: true },
   { key: "current_company", label: "Company", default: true },

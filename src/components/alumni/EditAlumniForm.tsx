@@ -147,7 +147,7 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
                 type="number"
                 placeholder="1998"
                 min={1900}
-                max={2100}
+                max={new Date().getFullYear()}
                 data-testid="alumni-birth-year"
                 error={errors.birth_year?.message}
                 {...register("birth_year")}

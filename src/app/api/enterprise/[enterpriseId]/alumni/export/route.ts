@@ -25,6 +25,7 @@ const FIELD_LABELS: Record<string, string> = {
   current_city: "City",
   linkedin_url: "LinkedIn URL",
   notes: "Notes",
+  birth_year: "Year of Birth",
 };
 
 const alumniExportSchema = z.object({
@@ -130,7 +131,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Build query
   let query = ctx.serviceSupabase
     .from("alumni")
-    .select("id, organization_id, first_name, last_name, email, phone_number, photo_url, linkedin_url, notes, graduation_year, major, industry, current_company, current_city, position_title, job_title")
+    .select("id, organization_id, first_name, last_name, email, phone_number, photo_url, linkedin_url, notes, graduation_year, birth_year, major, industry, current_company, current_city, position_title, job_title")
     .in("organization_id", orgIds)
     .is("deleted_at", null);
 
@@ -198,6 +199,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     linkedin_url: alum.linkedin_url,
     notes: alum.notes,
     graduation_year: alum.graduation_year,
+    birth_year: alum.birth_year,
     major: alum.major,
     industry: alum.industry,
     current_company: alum.current_company,
