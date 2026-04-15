@@ -1114,3 +1114,177 @@ test("cancel returns 410 for expired pending action without cancel message", asy
   assert.equal(body.error, "Pending action has expired");
   assert.equal(insertedMessages.length, 0);
 });
+
+test("confirm executes create_enterprise_invite via RPC and posts invite code", async () => {
+  const insertedMessages: any[] = [];
+  const updatedStatuses: any[] = [];
+  const rpcCalls: any[] = [];
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+        rpc: async (name: string, params: unknown) => {
+          rpcCalls.push({ name, params });
+          return {
+            data: { id: "invite-999", code: "XYZ123", role: "admin" },
+            error: null,
+          };
+        },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from() {
+            return {
+              insert(payload: Record<string, unknown>) {
+                insertedMessages.push(payload);
+                return Promise.resolve({ error: null });
+              },
+            };
+          },
+        },
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "create_enterprise_invite",
+        payload: {
+          enterpriseId: "ent-1",
+          enterpriseSlug: "acme-ent",
+          role: "admin",
+          organizationId: null,
+          organizationName: null,
+          usesRemaining: null,
+          expiresAt: null,
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    clearDraftSession: async () => {},
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.invite.id, "invite-999");
+  assert.equal(rpcCalls[0].name, "create_enterprise_invite");
+  assert.equal((rpcCalls[0].params as any).p_role, "admin");
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.match(String(insertedMessages[0].content), /XYZ123/);
+  assert.match(String(insertedMessages[0].content), /acme-ent\/invites/);
+});
+
+test("confirm executes revoke_enterprise_invite and posts revocation message", async () => {
+  const insertedMessages: any[] = [];
+  const updatedStatuses: any[] = [];
+  const updatedInvites: any[] = [];
+
+  const serviceFrom = (table: string) => {
+    if (table === "ai_messages") {
+      return {
+        insert(payload: Record<string, unknown>) {
+          insertedMessages.push(payload);
+          return Promise.resolve({ error: null });
+        },
+      };
+    }
+    if (table === "enterprise_invites") {
+      const builder: any = {
+        update(update: Record<string, unknown>) {
+          updatedInvites.push({ update });
+          return builder;
+        },
+        eq() {
+          return builder;
+        },
+        is() {
+          return builder;
+        },
+        select() {
+          return Promise.resolve({ data: [{ id: "inv-1" }], error: null });
+        },
+      };
+      return builder;
+    }
+    throw new Error(`unexpected table ${table}`);
+  };
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: { from: serviceFrom },
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "revoke_enterprise_invite",
+        payload: {
+          enterpriseId: "ent-1",
+          enterpriseSlug: "acme-ent",
+          inviteId: "inv-1",
+          inviteCode: "CODE1",
+          role: "admin",
+          organizationId: null,
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    clearDraftSession: async () => {},
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(updatedInvites.length, 1);
+  assert.ok(typeof updatedInvites[0].update.revoked_at === "string");
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.match(String(insertedMessages[0].content), /Revoked enterprise invite/);
+  assert.match(String(insertedMessages[0].content), /CODE1/);
+});

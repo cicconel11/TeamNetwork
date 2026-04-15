@@ -87,6 +87,24 @@ function createEnterpriseToolSupabaseStub() {
       created_at: "2026-03-15T12:00:00Z",
     },
   ];
+  const inviteRows = [
+    {
+      id: "inv-1",
+      enterprise_id: "ent-1",
+      organization_id: null,
+      role: "admin",
+      code: "CODE1",
+      revoked_at: null,
+    },
+    {
+      id: "inv-2",
+      enterprise_id: "ent-1",
+      organization_id: "org-1",
+      role: "active_member",
+      code: "CODE2",
+      revoked_at: "2026-04-01T00:00:00Z",
+    },
+  ];
   const adoptionRows = [
     {
       id: "adopt-1",
@@ -137,6 +155,37 @@ function createEnterpriseToolSupabaseStub() {
       const builder: Record<string, any> = {
         select() {
           return builder;
+        },
+        insert(payload: Record<string, unknown>) {
+          return {
+            select() {
+              return {
+                async single() {
+                  if (table === "ai_pending_actions") {
+                    return {
+                      data: {
+                        id: `pending-${Math.random().toString(36).slice(2, 10)}`,
+                        organization_id: payload.organization_id ?? null,
+                        user_id: payload.user_id ?? null,
+                        thread_id: payload.thread_id ?? null,
+                        action_type: payload.action_type ?? null,
+                        payload: payload.payload ?? {},
+                        status: payload.status ?? "pending",
+                        expires_at: payload.expires_at ?? new Date().toISOString(),
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                        executed_at: null,
+                        result_entity_type: null,
+                        result_entity_id: null,
+                      },
+                      error: null,
+                    };
+                  }
+                  return { data: null, error: null };
+                },
+              };
+            },
+          };
         },
         eq(column: string, value: unknown) {
           filters.push({ type: "eq", column, value });
@@ -203,6 +252,24 @@ function createEnterpriseToolSupabaseStub() {
               },
               error: null,
             };
+          }
+          if (table === "enterprises") {
+            return { data: { slug: "acme-ent" }, error: null };
+          }
+          if (table === "organizations") {
+            const idFilter = filters.find((f) => f.type === "eq" && f.column === "id");
+            const match = idFilter
+              ? managedOrganizations.find((org) => org.id === idFilter.value)
+              : null;
+            return { data: match ?? null, error: null };
+          }
+          if (table === "enterprise_invites") {
+            const idFilter = filters.find((f) => f.type === "eq" && f.column === "id");
+            const codeFilter = filters.find((f) => f.type === "eq" && f.column === "code");
+            const match = inviteRows.find((row) =>
+              idFilter ? row.id === idFilter.value : codeFilter ? row.code === codeFilter.value : false,
+            );
+            return { data: match ?? null, error: null };
           }
           return { data: null, error: null };
         },
@@ -427,5 +494,95 @@ describe("enterprise AI tools", () => {
       args: {},
     });
     assert.equal(result.kind, "ok");
+  });
+
+  it("blocks prepare_enterprise_invite for billing_admin role", async () => {
+    const ctx = createContext({
+      enterpriseId: "ent-1",
+      enterpriseRole: "billing_admin",
+      threadId: "thread-1",
+    });
+    const result = await executeToolCall(ctx, {
+      name: "prepare_enterprise_invite",
+      args: { role: "admin" },
+    });
+    assert.equal(result.kind, "tool_error");
+    if (result.kind === "tool_error") {
+      assert.equal(result.code, "enterprise_invite_role_required");
+    }
+  });
+
+  it("returns missing_fields when prepare_enterprise_invite has no role", async () => {
+    const ctx = createContext({
+      enterpriseId: "ent-1",
+      enterpriseRole: "owner",
+      threadId: "thread-1",
+    });
+    const result = await executeToolCall(ctx, {
+      name: "prepare_enterprise_invite",
+      args: {},
+    });
+    assert.equal(result.kind, "ok");
+    if (result.kind === "ok") {
+      const payload = result.data as any;
+      assert.equal(payload.state, "missing_fields");
+      assert.ok(payload.missing_fields.includes("role"));
+    }
+  });
+
+  it("prepares an enterprise invite needs_confirmation for owner", async () => {
+    const ctx = createContext({
+      enterpriseId: "ent-1",
+      enterpriseRole: "owner",
+      threadId: "thread-1",
+    });
+    const result = await executeToolCall(ctx, {
+      name: "prepare_enterprise_invite",
+      args: { role: "admin" },
+    });
+    assert.equal(result.kind, "ok");
+    if (result.kind === "ok") {
+      const payload = result.data as any;
+      assert.equal(payload.state, "needs_confirmation");
+      assert.equal(payload.pending_action.action_type, "create_enterprise_invite");
+      assert.equal(payload.pending_action.payload.role, "admin");
+      assert.equal(payload.pending_action.payload.enterpriseSlug, "acme-ent");
+    }
+  });
+
+  it("revokes an active enterprise invite as org_admin", async () => {
+    const ctx = createContext({
+      enterpriseId: "ent-1",
+      enterpriseRole: "org_admin",
+      threadId: "thread-1",
+    });
+    const result = await executeToolCall(ctx, {
+      name: "revoke_enterprise_invite",
+      args: { invite_id: "inv-1" },
+    });
+    assert.equal(result.kind, "ok");
+    if (result.kind === "ok") {
+      const payload = result.data as any;
+      assert.equal(payload.state, "needs_confirmation");
+      assert.equal(payload.pending_action.action_type, "revoke_enterprise_invite");
+      assert.equal(payload.pending_action.payload.inviteId, "inv-1");
+      assert.equal(payload.pending_action.payload.inviteCode, "CODE1");
+    }
+  });
+
+  it("rejects revoke_enterprise_invite for already-revoked invite", async () => {
+    const ctx = createContext({
+      enterpriseId: "ent-1",
+      enterpriseRole: "owner",
+      threadId: "thread-1",
+    });
+    const result = await executeToolCall(ctx, {
+      name: "revoke_enterprise_invite",
+      args: { invite_code: "CODE2" },
+    });
+    assert.equal(result.kind, "tool_error");
+    if (result.kind === "tool_error") {
+      assert.match(result.error, /already revoked/i);
+    }
   });
 });
