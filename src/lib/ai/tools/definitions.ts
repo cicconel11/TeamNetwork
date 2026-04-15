@@ -82,6 +82,9 @@ export interface ScrapeScheduleWebsiteArgs {
 export type ExtractSchedulePdfArgs = Record<string, never>;
 
 export type GetOrgStatsArgs = Record<string, never>;
+export type GetEnterpriseStatsArgs = Record<string, never>;
+export type GetEnterpriseQuotaArgs = Record<string, never>;
+export type ListManagedOrgsArgs = Record<string, never>;
 
 export interface SuggestConnectionsArgs {
   person_type?: "member" | "alumni";
@@ -117,6 +120,19 @@ export interface ListPhilanthropyEventsArgs {
 export interface FindNavigationTargetsArgs {
   query: string;
   limit?: number;
+}
+
+export interface ListEnterpriseAlumniArgs {
+  org?: string;
+  graduation_year?: number;
+  industry?: string;
+  company?: string;
+  city?: string;
+  position?: string;
+  has_email?: boolean;
+  has_phone?: boolean;
+  limit?: number;
+  offset?: number;
 }
 
 const TOOL_BY_NAME = {
@@ -552,6 +568,32 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  get_enterprise_stats: {
+    type: "function" as const,
+    function: {
+      name: "get_enterprise_stats" as const,
+      description:
+        "Get enterprise-wide alumni statistics across all managed organizations. Returns total alumni, per-organization counts, top industries, and filter options. Use for questions about totals across orgs or enterprise alumni analytics.",
+      parameters: {
+        type: "object" as const,
+        properties: {},
+        additionalProperties: false as const,
+      },
+    },
+  },
+  get_enterprise_quota: {
+    type: "function" as const,
+    function: {
+      name: "get_enterprise_quota" as const,
+      description:
+        "Get enterprise quota usage: alumni capacity used and remaining, managed organization counts, and free sub-org slots remaining. Use for quota, billing, capacity, or seat questions.",
+      parameters: {
+        type: "object" as const,
+        properties: {},
+        additionalProperties: false as const,
+      },
+    },
+  },
   suggest_connections: {
     type: "function" as const,
     function: {
@@ -618,6 +660,66 @@ const TOOL_BY_NAME = {
           city: {
             type: "string" as const,
             description: "Filter by city (partial match)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_enterprise_alumni: {
+    type: "function" as const,
+    function: {
+      name: "list_enterprise_alumni" as const,
+      description:
+        "List alumni across all organizations in the current enterprise. Returns the alumni name plus organization, graduation year, company, industry, city, title, and contact fields when available. Use for enterprise alumni directory and cross-org filtering questions.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          org: {
+            type: "string" as const,
+            description: "Optional managed organization id, slug, or name filter.",
+          },
+          graduation_year: {
+            type: "integer" as const,
+            minimum: 1900,
+            maximum: 2100,
+            description: "Filter by graduation year",
+          },
+          industry: {
+            type: "string" as const,
+            description: "Filter by industry (partial match)",
+          },
+          company: {
+            type: "string" as const,
+            description: "Filter by company name (partial match)",
+          },
+          city: {
+            type: "string" as const,
+            description: "Filter by city (partial match)",
+          },
+          position: {
+            type: "string" as const,
+            description: "Filter by title or position (partial match)",
+          },
+          has_email: {
+            type: "boolean" as const,
+            description: "If true, only return alumni with email. If false, only alumni without email.",
+          },
+          has_phone: {
+            type: "boolean" as const,
+            description: "If true, only return alumni with phone. If false, only alumni without phone.",
+          },
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 100,
+            description: "Max results to return (default 25)",
+          },
+          offset: {
+            type: "integer" as const,
+            minimum: 0,
+            maximum: 5000,
+            description: "Pagination offset (default 0)",
           },
         },
         additionalProperties: false as const,
@@ -702,6 +804,19 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  list_managed_orgs: {
+    type: "function" as const,
+    function: {
+      name: "list_managed_orgs" as const,
+      description:
+        "List the organizations managed by the current enterprise. Returns organization id, name, slug, relationship type, and adoption timestamp. Use for managed-org and sub-org questions.",
+      parameters: {
+        type: "object" as const,
+        properties: {},
+        additionalProperties: false as const,
+      },
+    },
+  },
   find_navigation_targets: {
     type: "function" as const,
     function: {
@@ -738,9 +853,11 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_job_postings,
   TOOL_BY_NAME.list_chat_groups,
   TOOL_BY_NAME.list_alumni,
+  TOOL_BY_NAME.list_enterprise_alumni,
   TOOL_BY_NAME.list_donations,
   TOOL_BY_NAME.list_parents,
   TOOL_BY_NAME.list_philanthropy_events,
+  TOOL_BY_NAME.list_managed_orgs,
   TOOL_BY_NAME.prepare_announcement,
   TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.prepare_chat_message,
@@ -752,6 +869,8 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.scrape_schedule_website,
   TOOL_BY_NAME.extract_schedule_pdf,
   TOOL_BY_NAME.get_org_stats,
+  TOOL_BY_NAME.get_enterprise_stats,
+  TOOL_BY_NAME.get_enterprise_quota,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.find_navigation_targets,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];

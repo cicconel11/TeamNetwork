@@ -10,7 +10,11 @@ export interface AssistantCapabilitySnapshot {
 }
 
 function getFeatureSegment(pathname: string): string {
-  return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? "";
+  return (
+    pathname.match(/^\/enterprise\/[^/]+\/([^/?#]+)/)?.[1] ??
+    pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ??
+    ""
+  );
 }
 
 function summarizeToolDescription(toolName: ToolName): string {
@@ -45,8 +49,33 @@ export function getAssistantCapabilitySnapshot(
   surface: AiSurface,
 ): AssistantCapabilitySnapshot {
   const segment = getFeatureSegment(pathname);
+  const isEnterprisePath = pathname.startsWith("/enterprise/");
 
   switch (segment) {
+    case "alumni":
+      if (isEnterprisePath) {
+        return capabilitySnapshotForToolNames(
+          ["list_enterprise_alumni", "get_enterprise_stats", "list_managed_orgs"],
+          ["Edit alumni records or export the full enterprise directory"],
+        );
+      }
+      break;
+    case "billing":
+      if (isEnterprisePath) {
+        return capabilitySnapshotForToolNames(
+          ["get_enterprise_quota", "get_enterprise_stats", "list_managed_orgs"],
+          ["Change enterprise billing settings or subscription quantities"],
+        );
+      }
+      break;
+    case "organizations":
+      if (isEnterprisePath) {
+        return capabilitySnapshotForToolNames(
+          ["list_managed_orgs", "get_enterprise_quota", "get_enterprise_stats"],
+          ["Create, adopt, or remove managed organizations from chat"],
+        );
+      }
+      break;
     case "announcements":
       return capabilitySnapshotForToolNames(
         ["list_announcements", "prepare_announcement", "find_navigation_targets"],
@@ -98,6 +127,13 @@ export function getAssistantCapabilitySnapshot(
         ["get_org_stats", "list_donations", "list_philanthropy_events", "find_navigation_targets"],
         ["Export analytics or change financial settings"],
       );
+  }
+
+  if (isEnterprisePath) {
+    return capabilitySnapshotForToolNames(
+      ["get_enterprise_stats", "get_enterprise_quota", "list_managed_orgs", "list_enterprise_alumni"],
+      ["Create or change enterprise settings from chat"],
+    );
   }
 
   switch (surface) {

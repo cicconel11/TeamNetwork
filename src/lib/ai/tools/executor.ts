@@ -2,6 +2,10 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PrepareEventArgs, ToolName } from "./definitions";
 import { TOOL_NAMES } from "./definitions";
+import { listEnterpriseAlumni } from "./enterprise/list-alumni";
+import { getEnterpriseStats } from "./enterprise/stats";
+import { listManagedOrgs } from "./enterprise/managed-orgs";
+import { getEnterpriseQuota } from "./enterprise/quota";
 import {
   EXTRACTION_TOOL_TIMEOUT_MS,
   isStageTimeoutError,
@@ -75,6 +79,8 @@ export type ToolExecutionAuthorization =
 export interface ToolExecutionContext {
   orgId: string;
   userId: string;
+  enterpriseId?: string;
+  enterpriseRole?: string;
   serviceSupabase: SupabaseClient;
   authorization: ToolExecutionAuthorization;
   threadId?: string;
@@ -267,6 +273,23 @@ const scrapeScheduleWebsiteSchema = z
 const extractSchedulePdfSchema = z.object({}).strict();
 
 const getOrgStatsSchema = z.object({}).strict();
+const getEnterpriseStatsSchema = z.object({}).strict();
+const getEnterpriseQuotaSchema = z.object({}).strict();
+const listManagedOrgsSchema = z.object({}).strict();
+const listEnterpriseAlumniSchema = z
+  .object({
+    org: z.string().trim().min(1).optional(),
+    graduation_year: z.number().int().min(1900).max(2100).optional(),
+    industry: z.string().trim().min(1).optional(),
+    company: z.string().trim().min(1).optional(),
+    city: z.string().trim().min(1).optional(),
+    position: z.string().trim().min(1).optional(),
+    has_email: z.boolean().optional(),
+    has_phone: z.boolean().optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    offset: z.number().int().min(0).max(5000).optional(),
+  })
+  .strict();
 const suggestConnectionsSchema = z
   .object({
     person_type: z.enum(["member", "alumni"]).optional(),
@@ -298,9 +321,11 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_job_postings: listJobPostingsSchema,
   list_chat_groups: listChatGroupsSchema,
   list_alumni: listAlumniSchema,
+  list_enterprise_alumni: listEnterpriseAlumniSchema,
   list_donations: listDonationsSchema,
   list_parents: listParentsSchema,
   list_philanthropy_events: listPhilanthropyEventsSchema,
+  list_managed_orgs: listManagedOrgsSchema,
   prepare_announcement: prepareAnnouncementSchema,
   prepare_job_posting: prepareJobPostingSchema,
   prepare_chat_message: prepareChatMessageSchema,
@@ -312,9 +337,18 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   scrape_schedule_website: scrapeScheduleWebsiteSchema,
   extract_schedule_pdf: extractSchedulePdfSchema,
   get_org_stats: getOrgStatsSchema,
+  get_enterprise_stats: getEnterpriseStatsSchema,
+  get_enterprise_quota: getEnterpriseQuotaSchema,
   suggest_connections: suggestConnectionsSchema,
   find_navigation_targets: findNavigationTargetsSchema,
 };
+
+const ENTERPRISE_TOOL_NAMES = new Set<ToolName>([
+  "list_enterprise_alumni",
+  "get_enterprise_stats",
+  "list_managed_orgs",
+  "get_enterprise_quota",
+]);
 
 function validateArgs(
   name: ToolName,
@@ -2643,6 +2677,10 @@ export async function executeToolCall(
     }
   }
 
+  if (ENTERPRISE_TOOL_NAMES.has(toolName) && !ctx.enterpriseId) {
+    return toolError("This assistant does not have enterprise context for this thread.");
+  }
+
   const sb = ctx.serviceSupabase;
 
   try {
@@ -2697,6 +2735,14 @@ export async function executeToolCall(
             args as z.infer<typeof listAlumniSchema>,
             logContext
           );
+        case "list_enterprise_alumni":
+          return safeToolQuery(logContext, () =>
+            listEnterpriseAlumni(
+              sb,
+              ctx.enterpriseId!,
+              args as z.infer<typeof listEnterpriseAlumniSchema>,
+            )
+          );
         case "list_donations":
           return listDonations(
             sb,
@@ -2718,6 +2764,8 @@ export async function executeToolCall(
             args as z.infer<typeof listPhilanthropyEventsSchema>,
             logContext
           );
+        case "list_managed_orgs":
+          return safeToolQuery(logContext, () => listManagedOrgs(sb, ctx.enterpriseId!));
         case "prepare_announcement":
           return prepareAnnouncement(
             sb,
@@ -2780,6 +2828,10 @@ export async function executeToolCall(
           );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId, logContext);
+        case "get_enterprise_stats":
+          return safeToolQuery(logContext, () => getEnterpriseStats(sb, ctx.enterpriseId!));
+        case "get_enterprise_quota":
+          return safeToolQuery(logContext, () => getEnterpriseQuota(sb, ctx.enterpriseId!));
         case "suggest_connections":
           return runSuggestConnections(
             sb,

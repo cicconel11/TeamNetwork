@@ -4,6 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import type { RateLimitResult } from "@/lib/security/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
+import type { EnterpriseRole } from "@/types/enterprise";
 
 // ── Discriminated union return type ──
 
@@ -13,6 +14,8 @@ export type AiOrgContext =
       orgId: string;
       userId: string;
       role: "admin";
+      enterpriseId?: string;
+      enterpriseRole?: EnterpriseRole;
       supabase: any; // auth-bound client (for threads/messages via RLS)
       serviceSupabase: any; // service-role client (for tools/audit)
     }
@@ -80,12 +83,57 @@ export async function getAiOrgContext(
     };
   }
 
+  let enterpriseId: string | undefined;
+  let enterpriseRole: EnterpriseRole | undefined;
+
+  try {
+    const { data: orgRow, error: orgError } = await (serviceSupabase as any)
+      .from("organizations")
+      .select("enterprise_id")
+      .eq("id", orgId)
+      .maybeSingle();
+
+    if (orgError) {
+      aiLog("warn", "ai-context", "enterprise org lookup failed", deps.logContext ?? {
+        requestId: "unknown_request",
+        orgId,
+        userId: user.id,
+      }, { error: orgError });
+    } else if (orgRow?.enterprise_id) {
+      const { data: enterpriseRoleRow, error: enterpriseRoleError } = await (serviceSupabase as any)
+        .from("user_enterprise_roles")
+        .select("role")
+        .eq("enterprise_id", orgRow.enterprise_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (enterpriseRoleError) {
+        aiLog("warn", "ai-context", "enterprise role lookup failed", deps.logContext ?? {
+          requestId: "unknown_request",
+          orgId,
+          userId: user.id,
+        }, { error: enterpriseRoleError, enterpriseId: orgRow.enterprise_id });
+      } else if (enterpriseRoleRow?.role) {
+        enterpriseId = orgRow.enterprise_id;
+        enterpriseRole = enterpriseRoleRow.role as EnterpriseRole;
+      }
+    }
+  } catch (enterpriseContextError) {
+    aiLog("warn", "ai-context", "enterprise context lookup failed", deps.logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+      userId: user.id,
+    }, { error: enterpriseContextError });
+  }
+
   // 4. Success — return full context
   return {
     ok: true,
     orgId,
     userId: user.id,
     role: "admin",
+    enterpriseId,
+    enterpriseRole,
     supabase: deps.supabase ?? null, // routes pass their auth-bound client
     serviceSupabase,
   };

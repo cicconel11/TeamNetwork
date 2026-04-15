@@ -52,11 +52,26 @@ function getPendingActionErrorMessage(data: { error?: unknown; code?: unknown })
 }
 
 function getFeatureSegment(pathname: string): string {
-  return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? "";
+  return (
+    pathname.match(/^\/enterprise\/[^/]+\/([^/?#]+)/)?.[1] ??
+    pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ??
+    ""
+  );
 }
 
 function getAssistantScopeLabel(pathname: string, surface: ReturnType<typeof routeToSurface>): string {
   const segment = getFeatureSegment(pathname);
+  const isEnterprisePath = pathname.startsWith("/enterprise/");
+  if (isEnterprisePath && segment === "alumni") {
+    return "Enterprise Alumni";
+  }
+  if (isEnterprisePath && segment === "billing") {
+    return "Enterprise Billing";
+  }
+  if (isEnterprisePath && segment === "organizations") {
+    return "Managed Orgs";
+  }
+
   switch (segment) {
     case "announcements":
       return "Announcements";
@@ -69,22 +84,49 @@ function getAssistantScopeLabel(pathname: string, surface: ReturnType<typeof rou
     case "messages":
     case "chat":
       return "Messages";
+  }
+
+  if (isEnterprisePath) {
+    return "Enterprise";
+  }
+
+  switch (surface) {
+    case "members":
+      return "People";
+    case "events":
+      return "Events";
+    case "analytics":
+      return "Analytics";
     default:
-      switch (surface) {
-        case "members":
-          return "People";
-        case "events":
-          return "Events";
-        case "analytics":
-          return "Analytics";
-        default:
-          return "General";
-      }
+      return "General";
   }
 }
 
 function getStarterPrompts(pathname: string, surface: ReturnType<typeof routeToSurface>): string[] {
   const segment = getFeatureSegment(pathname);
+  const isEnterprisePath = pathname.startsWith("/enterprise/");
+  if (isEnterprisePath && segment === "alumni") {
+    return [
+      "How many alumni do we have across all orgs?",
+      "Show alumni from one managed org",
+      "Which managed orgs are in this enterprise?",
+    ];
+  }
+  if (isEnterprisePath && segment === "billing") {
+    return [
+      "How many alumni seats are left?",
+      "How many sub-org slots are left?",
+      "Show our enterprise quota snapshot",
+    ];
+  }
+  if (isEnterprisePath && segment === "organizations") {
+    return [
+      "List our managed orgs",
+      "How many orgs are enterprise-managed?",
+      "Which orgs are using our pooled seats?",
+    ];
+  }
+
   switch (segment) {
     case "announcements":
       return [
@@ -110,38 +152,56 @@ function getStarterPrompts(pathname: string, surface: ReturnType<typeof routeToS
         "Show pinned discussions",
         "Open the discussions page",
       ];
+  }
+
+  if (isEnterprisePath) {
+    return [
+      "How many alumni do we have across all orgs?",
+      "How many sub-org slots are left?",
+      "List our managed orgs",
+    ];
+  }
+
+  switch (surface) {
+    case "members":
+      return [
+        "How many active members do we have?",
+        "Show recent members",
+        "Open the members page",
+      ];
+    case "events":
+      return [
+        "What events are coming up?",
+        "Open the new event page",
+        "Show recent events",
+      ];
+    case "analytics":
+      return [
+        "Show organization stats",
+        "Open donations",
+        "Take me to navigation settings",
+      ];
     default:
-      switch (surface) {
-        case "members":
-          return [
-            "How many active members do we have?",
-            "Show recent members",
-            "Open the members page",
-          ];
-        case "events":
-          return [
-            "What events are coming up?",
-            "Open the new event page",
-            "Show recent events",
-          ];
-        case "analytics":
-          return [
-            "Show organization stats",
-            "Open donations",
-            "Take me to navigation settings",
-          ];
-        default:
-          return [
-            "Show recent announcements",
-            "What discussions are happening?",
-            "What jobs are we advertising?",
-          ];
-      }
+      return [
+        "Show recent announcements",
+        "What discussions are happening?",
+        "What jobs are we advertising?",
+      ];
   }
 }
 
 function getInputPlaceholder(pathname: string, surface: ReturnType<typeof routeToSurface>): string {
   const segment = getFeatureSegment(pathname);
+  const isEnterprisePath = pathname.startsWith("/enterprise/");
+  if (segment === "alumni" && isEnterprisePath) {
+    return "Ask about alumni across all managed orgs, counts, or filters...";
+  }
+  if ((segment === "billing" || segment === "organizations") && isEnterprisePath) {
+    return "Ask about enterprise quota, managed orgs, or cross-org totals...";
+  }
+  if (isEnterprisePath) {
+    return "Ask about alumni, managed orgs, enterprise quota, or cross-org totals...";
+  }
   if (segment === "announcements") {
     return "Ask about announcements, or ask me to open the right page...";
   }

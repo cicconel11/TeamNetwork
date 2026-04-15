@@ -117,6 +117,7 @@ describe("getAiOrgContext", () => {
     assert.deepEqual(mockServiceSupabase.eqCalls, [
       { column: "user_id", value: "user-id" },
       { column: "organization_id", value: "org-id" },
+      { column: "id", value: "org-id" },
     ]);
   });
 });

@@ -173,6 +173,12 @@ const PARENT_LIST_PROMPT_PATTERN =
   /(?<!\w)(?:parent\s+directory|parent\s+(?:list|roster|contacts)|guardians?|(?:list|show)\s+(?:the\s+)?parents)(?!\w)/i;
 const PHILANTHROPY_EVENTS_PROMPT_PATTERN =
   /(?<!\w)(?:philanthropy\s+events?|service\s+events?|volunteer\s+events?)(?!\w)/i;
+const ENTERPRISE_SCOPE_PROMPT_PATTERN =
+  /(?<!\w)(?:enterprise|across all orgs?|across all organizations|managed orgs?|sub[-\s]?orgs?)(?!\w)/i;
+const ENTERPRISE_QUOTA_PROMPT_PATTERN =
+  /(?<!\w)(?:quota|capacity|seat|seats|slot|slots|billing|bucket|limit|remaining)(?!\w)/i;
+const MANAGED_ORGS_PROMPT_PATTERN =
+  /(?<!\w)(?:managed orgs?|managed organizations?|sub[-\s]?orgs?|which orgs?|list orgs?|organizations?)(?!\w)/i;
 const HTTPS_URL_PATTERN = /https?:\/\//i;
 const ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN =
   /\b(?:title|body|audience|pin(?:ned)?|notify|notification|all members|active members|alumni|parents|individuals)\b/i;
@@ -186,6 +192,11 @@ const DISCUSSION_REPLY_FALLBACK_PATTERN =
 function getCurrentPathFeatureSegment(pathname: string | undefined): string | null {
   if (!pathname) {
     return null;
+  }
+
+  const enterpriseMatch = pathname.match(/^\/enterprise\/[^/]+\/([^/?#]+)/);
+  if (enterpriseMatch) {
+    return enterpriseMatch[1] ?? null;
   }
 
   return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? null;
@@ -899,6 +910,268 @@ function formatAlumniResponse(data: unknown): string | null {
   return ["Alumni", ...rows].join("\n");
 }
 
+function formatEnterpriseAlumniResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as {
+    results?: unknown;
+    total?: unknown;
+  };
+
+  if (!Array.isArray(payload.results)) {
+    return null;
+  }
+
+  if (payload.results.length === 0) {
+    return "I couldn't find any matching alumni across the enterprise.";
+  }
+
+  const rows = payload.results
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const name = getNonEmptyString((row as { name?: unknown }).name);
+      if (!name) {
+        return null;
+      }
+
+      const organizationName = getNonEmptyString(
+        (row as { organization_name?: unknown }).organization_name,
+      );
+      const gradYear =
+        typeof (row as { graduation_year?: unknown }).graduation_year === "number"
+          ? `class of ${(row as { graduation_year: number }).graduation_year}`
+          : null;
+      const company = getNonEmptyString((row as { current_company?: unknown }).current_company);
+      const city = getNonEmptyString((row as { current_city?: unknown }).current_city);
+      const title = getNonEmptyString((row as { title?: unknown }).title);
+
+      const metadata = [
+        organizationName,
+        gradYear,
+        company,
+        city,
+      ].filter((value): value is string => Boolean(value));
+
+      return `- ${name}${metadata.length > 0 ? ` - ${metadata.join(" - ")}` : ""}${title ? ` (${title})` : ""}`;
+    })
+    .filter((row): row is string => Boolean(row))
+    .slice(0, 10);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const total =
+    typeof payload.total === "number" ? ` (${payload.total} total)` : "";
+
+  return [`Enterprise alumni${total}`, ...rows].join("\n");
+}
+
+function formatEnterpriseStatsResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as {
+    total_count?: unknown;
+    org_stats?: unknown;
+    top_industries?: unknown;
+  };
+
+  const lines = ["Enterprise alumni snapshot"];
+
+  if (typeof payload.total_count === "number") {
+    lines.push(`- Total alumni: ${payload.total_count}`);
+  }
+
+  if (Array.isArray(payload.org_stats) && payload.org_stats.length > 0) {
+    const orgSummary = payload.org_stats
+      .map((row) => {
+        if (!row || typeof row !== "object") {
+          return null;
+        }
+        const name = getNonEmptyString((row as { name?: unknown }).name);
+        const count =
+          typeof (row as { count?: unknown }).count === "number"
+            ? (row as { count: number }).count
+            : null;
+        if (!name || count == null) {
+          return null;
+        }
+        return `${name} (${count})`;
+      })
+      .filter((value): value is string => Boolean(value))
+      .slice(0, 5);
+
+    if (orgSummary.length > 0) {
+      lines.push(`- Org counts: ${orgSummary.join(", ")}`);
+    }
+  }
+
+  if (Array.isArray(payload.top_industries) && payload.top_industries.length > 0) {
+    const industries = payload.top_industries
+      .map((row) => {
+        if (!row || typeof row !== "object") {
+          return null;
+        }
+        const name = getNonEmptyString((row as { name?: unknown }).name);
+        const count =
+          typeof (row as { count?: unknown }).count === "number"
+            ? (row as { count: number }).count
+            : null;
+        if (!name || count == null) {
+          return null;
+        }
+        return `${name} (${count})`;
+      })
+      .filter((value): value is string => Boolean(value))
+      .slice(0, 5);
+
+    if (industries.length > 0) {
+      lines.push(`- Top industries: ${industries.join(", ")}`);
+    }
+  }
+
+  return lines.length > 1 ? lines.join("\n") : null;
+}
+
+function formatEnterpriseQuotaResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as {
+    alumni?: { used?: unknown; limit?: unknown; remaining?: unknown } | null;
+    sub_orgs?: {
+      total?: unknown;
+      enterprise_managed_total?: unknown;
+      free_limit?: unknown;
+      free_remaining?: unknown;
+      configured_limit?: unknown;
+      configured_remaining?: unknown;
+    } | null;
+  };
+
+  const lines = ["Enterprise quota"];
+
+  if (payload.alumni && typeof payload.alumni === "object") {
+    const used =
+      typeof payload.alumni.used === "number" ? payload.alumni.used : null;
+    const limit =
+      typeof payload.alumni.limit === "number" ? payload.alumni.limit : null;
+    const remaining =
+      typeof payload.alumni.remaining === "number" ? payload.alumni.remaining : null;
+
+    if (used != null && limit != null) {
+      lines.push(`- Alumni seats: ${used}/${limit} used`);
+    }
+    if (remaining != null) {
+      lines.push(`- Alumni seats remaining: ${remaining}`);
+    }
+  }
+
+  if (payload.sub_orgs && typeof payload.sub_orgs === "object") {
+    const total =
+      typeof payload.sub_orgs.total === "number" ? payload.sub_orgs.total : null;
+    const enterpriseManagedTotal =
+      typeof payload.sub_orgs.enterprise_managed_total === "number"
+        ? payload.sub_orgs.enterprise_managed_total
+        : null;
+    const freeLimit =
+      typeof payload.sub_orgs.free_limit === "number" ? payload.sub_orgs.free_limit : null;
+    const freeRemaining =
+      typeof payload.sub_orgs.free_remaining === "number"
+        ? payload.sub_orgs.free_remaining
+        : null;
+    const configuredLimit =
+      typeof payload.sub_orgs.configured_limit === "number"
+        ? payload.sub_orgs.configured_limit
+        : null;
+    const configuredRemaining =
+      typeof payload.sub_orgs.configured_remaining === "number"
+        ? payload.sub_orgs.configured_remaining
+        : null;
+
+    if (total != null) {
+      lines.push(`- Managed orgs: ${total}`);
+    }
+    if (enterpriseManagedTotal != null) {
+      lines.push(`- Enterprise-managed org seats in use: ${enterpriseManagedTotal}`);
+    }
+    if (freeLimit != null) {
+      lines.push(`- Free sub-org slots included: ${freeLimit}`);
+    }
+    if (freeRemaining != null) {
+      lines.push(`- Free sub-org slots remaining: ${freeRemaining}`);
+    }
+    if (configuredLimit != null) {
+      lines.push(`- Configured sub-org seat limit: ${configuredLimit}`);
+    }
+    if (configuredRemaining != null) {
+      lines.push(`- Configured sub-org seats remaining: ${configuredRemaining}`);
+    }
+  }
+
+  return lines.length > 1 ? lines.join("\n") : null;
+}
+
+function formatManagedOrgsResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as { organizations?: unknown; total?: unknown };
+  if (!Array.isArray(payload.organizations)) {
+    return null;
+  }
+
+  if (payload.organizations.length === 0) {
+    return "I couldn't find any organizations managed by this enterprise.";
+  }
+
+  const rows = payload.organizations
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const name = getNonEmptyString((row as { name?: unknown }).name);
+      if (!name) {
+        return null;
+      }
+
+      const slug = getNonEmptyString((row as { slug?: unknown }).slug);
+      const relationshipType = getNonEmptyString(
+        (row as { enterprise_relationship_type?: unknown }).enterprise_relationship_type,
+      );
+      const adoptedAt = formatIsoDate(
+        (row as { enterprise_adopted_at?: unknown }).enterprise_adopted_at,
+      );
+
+      const metadata = [slug, relationshipType, adoptedAt].filter(
+        (value): value is string => Boolean(value),
+      );
+
+      return `- ${name}${metadata.length > 0 ? ` - ${metadata.join(" - ")}` : ""}`;
+    })
+    .filter((row): row is string => Boolean(row))
+    .slice(0, 10);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const total =
+    typeof payload.total === "number" ? ` (${payload.total} total)` : "";
+
+  return [`Managed organizations${total}`, ...rows].join("\n");
+}
+
 function formatDonationsResponse(data: unknown): string | null {
   if (!Array.isArray(data)) {
     return null;
@@ -1104,7 +1377,8 @@ function getPass1Tools(
   toolPolicy: TurnExecutionPolicy["toolPolicy"],
   intentType: TurnExecutionPolicy["intentType"],
   attachment?: ChatAttachment,
-  currentPath?: string
+  currentPath?: string,
+  enterpriseEnabled?: boolean,
 ) {
   if (toolPolicy !== "surface_read_tools") {
     return undefined;
@@ -1170,6 +1444,40 @@ function getPass1Tools(
     return [AI_TOOL_MAP.find_navigation_targets];
   }
 
+  const currentFeatureSegment = getCurrentPathFeatureSegment(currentPath);
+  const isEnterprisePortal =
+    enterpriseEnabled === true && currentPath?.startsWith("/enterprise/") === true;
+  const isEnterpriseScopedRequest =
+    enterpriseEnabled === true &&
+    (isEnterprisePortal || ENTERPRISE_SCOPE_PROMPT_PATTERN.test(message));
+
+  if (isEnterpriseScopedRequest) {
+    if (
+      currentFeatureSegment === "billing" ||
+      ENTERPRISE_QUOTA_PROMPT_PATTERN.test(message)
+    ) {
+      return [AI_TOOL_MAP.get_enterprise_quota];
+    }
+
+    if (
+      currentFeatureSegment === "organizations" ||
+      MANAGED_ORGS_PROMPT_PATTERN.test(message)
+    ) {
+      return [AI_TOOL_MAP.list_managed_orgs];
+    }
+
+    if (
+      currentFeatureSegment === "alumni" ||
+      ALUMNI_ROSTER_PROMPT_PATTERN.test(message)
+    ) {
+      if (MEMBER_COUNT_PROMPT_PATTERN.test(message)) {
+        return [AI_TOOL_MAP.get_enterprise_stats];
+      }
+
+      return [AI_TOOL_MAP.list_enterprise_alumni];
+    }
+  }
+
   if (effectiveSurface === "members" && CONNECTION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.suggest_connections];
   }
@@ -1204,7 +1512,6 @@ function getPass1Tools(
     }
   }
 
-  const currentFeatureSegment = getCurrentPathFeatureSegment(currentPath);
   if (
     currentFeatureSegment === "announcements" &&
     ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN.test(message) &&
@@ -1263,9 +1570,13 @@ function getForcedPass1ToolChoice(
     forcedToolName !== "prepare_event" &&
     forcedToolName !== "list_members" &&
     forcedToolName !== "get_org_stats" &&
+    forcedToolName !== "get_enterprise_stats" &&
+    forcedToolName !== "get_enterprise_quota" &&
     forcedToolName !== "list_events" &&
     forcedToolName !== "list_alumni" &&
+    forcedToolName !== "list_enterprise_alumni" &&
     forcedToolName !== "list_donations" &&
+    forcedToolName !== "list_managed_orgs" &&
     forcedToolName !== "list_parents" &&
     forcedToolName !== "list_philanthropy_events" &&
     forcedToolName !== "scrape_schedule_website" &&
@@ -1300,9 +1611,13 @@ function isToolFirstEligible(
     toolName === "list_discussions" ||
     toolName === "list_job_postings" ||
     toolName === "list_alumni" ||
+    toolName === "list_enterprise_alumni" ||
     toolName === "list_donations" ||
+    toolName === "list_managed_orgs" ||
     toolName === "list_parents" ||
     toolName === "list_philanthropy_events" ||
+    toolName === "get_enterprise_stats" ||
+    toolName === "get_enterprise_quota" ||
     toolName === "suggest_connections" ||
     toolName === "prepare_group_message"
   );
@@ -1923,12 +2238,20 @@ function formatDeterministicToolResponse(
       return formatExtractScheduleFileResponse(data);
     case "get_org_stats":
       return formatOrgStatsResponse(data);
+    case "get_enterprise_stats":
+      return formatEnterpriseStatsResponse(data);
+    case "get_enterprise_quota":
+      return formatEnterpriseQuotaResponse(data);
     case "list_members":
       return formatMembersResponse(data);
     case "list_alumni":
       return formatAlumniResponse(data);
+    case "list_enterprise_alumni":
+      return formatEnterpriseAlumniResponse(data);
     case "list_donations":
       return formatDonationsResponse(data);
+    case "list_managed_orgs":
+      return formatManagedOrgsResponse(data);
     case "list_parents":
       return formatParentsResponse(data);
     case "list_philanthropy_events":
@@ -3230,7 +3553,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           executionPolicy.toolPolicy,
           executionPolicy.intentType,
           attachment,
-          currentPath
+          currentPath,
+          Boolean(ctx.enterpriseId),
         );
       });
     } catch (err) {
@@ -4163,6 +4487,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   {
                     orgId: ctx.orgId,
                     userId: ctx.userId,
+                    enterpriseId: ctx.enterpriseId,
+                    enterpriseRole: ctx.enterpriseRole,
                     serviceSupabase: ctx.serviceSupabase,
                     authorization: toolAuthorization,
                     threadId,
@@ -4181,6 +4507,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 {
                   orgId: ctx.orgId,
                   userId: ctx.userId,
+                  enterpriseId: ctx.enterpriseId,
+                  enterpriseRole: ctx.enterpriseRole,
                   serviceSupabase: ctx.serviceSupabase,
                   authorization: toolAuthorization,
                   threadId,
@@ -4322,6 +4650,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               orgId: ctx.orgId,
               userId: ctx.userId,
               role: ctx.role,
+              enterpriseId: ctx.enterpriseId,
+              enterpriseRole: ctx.enterpriseRole,
               serviceSupabase: ctx.serviceSupabase,
               logContext: {
                 ...requestLogContext,
@@ -4576,6 +4906,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 {
                   orgId: ctx.orgId,
                   userId: ctx.userId,
+                  enterpriseId: ctx.enterpriseId,
+                  enterpriseRole: ctx.enterpriseRole,
                   serviceSupabase: ctx.serviceSupabase,
                   authorization: toolAuthorization,
                   threadId,
