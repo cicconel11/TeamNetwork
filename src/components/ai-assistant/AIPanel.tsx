@@ -692,14 +692,19 @@ export function AIPanel({ orgId }: AIPanelProps) {
       <div className="ai-panel-enter fixed top-0 right-0 bottom-0 z-[45] flex w-full flex-col border-l border-border bg-background shadow-2xl sm:w-96">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-indigo-500" />
-            <h2 className="text-sm font-semibold text-foreground">AI Assistant</h2>
-            <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400">
-              Beta
-            </span>
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {scopeLabel}
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-500" />
+              <h2 className="text-sm font-semibold text-foreground">AI Assistant</h2>
+              <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400">
+                Beta
+              </span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {scopeLabel}
+              </span>
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              TeamNetwork tasks only
             </span>
           </div>
           <div className="flex items-center gap-1">

@@ -76,7 +76,7 @@ export function MessageList({
           <div>
             <p className="text-sm font-medium text-foreground">How can I help?</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Ask about members, events, discussions, jobs, analytics, or anything about your organization.
+              Ask about members, events, discussions, jobs, analytics, or other TeamNetwork tasks for your organization. I don&apos;t help with general knowledge, coding, or off-platform topics.
             </p>
           </div>
           {suggestedPrompts && suggestedPrompts.length > 0 ? (
@@ -107,6 +107,7 @@ export function MessageList({
                 {capabilitySnapshot.unsupported.map((item) => (
                   <p key={item}>- Not yet: {item}.</p>
                 ))}
+                <p>- Not in scope: general knowledge, coding help, homework, travel, creative writing, or anything unrelated to TeamNetwork.</p>
               </div>
             </details>
           ) : null}

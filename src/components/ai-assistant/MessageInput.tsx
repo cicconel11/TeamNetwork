@@ -159,7 +159,7 @@ export function MessageInput({
             onInputChange(e.target.value);
           }}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder ?? "Ask about your organization..."}
+          placeholder={placeholder ?? "Ask about your TeamNetwork organization..."}
           disabled={isStreaming || isUploadingAttachment}
           rows={1}
           className="max-h-32 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
