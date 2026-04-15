@@ -16,6 +16,8 @@ import { ExportCsvButton } from "@/components/shared";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonationStat, OrganizationDonation } from "@/types/database";
 
+const SETTLED_STATUSES = ["succeeded", "recorded"];
+
 interface PhilanthropyPageProps {
   params: Promise<{ orgSlug: string }>;
   searchParams: Promise<{ view?: string; onboarding?: string }>;
@@ -76,11 +78,15 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const donationRows = orgCtx.isAdmin
     ? allDonationRows
     : allDonationRows
-        .filter((d) => (d.visibility || "public") === "public")
+        .filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
         .map((d) => ({ ...d, donor_email: null }));
 
-  const totalRaised = (donationStat?.total_amount_cents ?? 0) / 100;
-  const donationCount = donationStat?.donation_count ?? donationRows.length;
+  const totalRaised = orgCtx.isAdmin
+    ? (donationStat?.total_amount_cents ?? 0) / 100
+    : donationRows.reduce((sum, d) => sum + (d.amount_cents || 0), 0) / 100;
+  const donationCount = orgCtx.isAdmin
+    ? (donationStat?.donation_count ?? allDonationRows.length)
+    : donationRows.length;
   const avgDonation = donationCount > 0 ? totalRaised / donationCount : 0;
 
   const totalEvents = allPhilanthropyEvents?.length || 0;
@@ -88,7 +94,6 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const pastCount = totalEvents - upcomingCount;
   const eventsForForm = (allPhilanthropyEvents || []).map((evt) => ({ id: evt.id, title: evt.title }));
   const isConnected = Boolean(connectStatus?.isReady);
-  const purposeTotals = buildDonationPurposeTotals(donationRows, "General support");
 
   const navConfig = org.nav_config as NavConfig | null;
   const [tNav, locale, tPhilanthropy, , tEvents, tDonations] = await Promise.all([
@@ -102,6 +107,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/philanthropy", navConfig, t, locale);
   const exportStamp = new Date().toISOString().slice(0, 10);
+  const purposeTotals = buildDonationPurposeTotals(donationRows, tDonations("generalSupport"));
 
   return (
     <div className="animate-fade-in">

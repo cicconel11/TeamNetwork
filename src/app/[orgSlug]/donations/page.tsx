@@ -13,6 +13,8 @@ import { ExportCsvButton } from "@/components/shared";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonationStat, OrganizationDonation } from "@/types/database";
 
+const SETTLED_STATUSES = ["succeeded", "recorded"];
+
 interface DonationsPageProps {
   params: Promise<{ orgSlug: string }>;
 }
@@ -51,14 +53,24 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   ]);
 
   const stats = (donationStats || null) as OrganizationDonationStat | null;
-  const donationRows = (donations || []) as OrganizationDonation[];
+  const allDonationRows = (donations || []) as OrganizationDonation[];
   const eventsForForm = (philanthropyEvents || []) as { id: string; title: string }[];
 
+  // Server-side privacy gate: non-admins only see public donations, no donor emails
+  const donationRows = orgCtx.isAdmin
+    ? allDonationRows
+    : allDonationRows
+        .filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
+        .map((d) => ({ ...d, donor_email: null }));
+
   const isConnected = Boolean(connectStatus?.isReady);
-  const totalAmount = (stats?.total_amount_cents ?? 0) / 100;
-  const donationCount = stats?.donation_count ?? donationRows.length;
+  const totalAmount = orgCtx.isAdmin
+    ? (stats?.total_amount_cents ?? 0) / 100
+    : donationRows.reduce((sum, d) => sum + (d.amount_cents || 0), 0) / 100;
+  const donationCount = orgCtx.isAdmin
+    ? (stats?.donation_count ?? allDonationRows.length)
+    : donationRows.length;
   const avgDonation = donationCount > 0 ? totalAmount / donationCount : 0;
-  const purposeTotals = buildDonationPurposeTotals(donationRows, "General support");
 
   const navConfig = org.nav_config as NavConfig | null;
   const [tNav, locale, tDonations] = await Promise.all([
@@ -69,6 +81,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/donations", navConfig, t, locale);
   const exportStamp = new Date().toISOString().slice(0, 10);
+  const purposeTotals = buildDonationPurposeTotals(donationRows, tDonations("generalSupport"));
 
   return (
     <div className="animate-fade-in">

@@ -53,7 +53,10 @@ describe("philanthropy soft-delete filters", () => {
       assert.ok(destructIdx > -1);
       const fromEventsIdx = source.indexOf('.from("events")', destructIdx);
       assert.ok(fromEventsIdx > -1, "allPhilanthropyEvents must query events table");
-      const queryBlock = source.slice(fromEventsIdx, fromEventsIdx + 300);
+      // Limit window to this query only (stop at next `supabase` call)
+      const rest = source.slice(fromEventsIdx);
+      const nextQuery = rest.indexOf("supabase", 1);
+      const queryBlock = nextQuery > -1 ? rest.slice(0, nextQuery) : rest.slice(0, 300);
       assert.ok(
         !queryBlock.includes('.select("*")'),
         "allPhilanthropyEvents must not use select('*')",
