@@ -36,6 +36,7 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
       last_name: alumni.last_name || "",
       email: alumni.email || "",
       graduation_year: alumni.graduation_year?.toString() || "",
+      birth_year: alumni.birth_year?.toString() || "",
       major: alumni.major || "",
       job_title: alumni.job_title || "",
       photo_url: alumni.photo_url || "",
@@ -142,12 +143,23 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
                 {...register("graduation_year")}
               />
               <Input
-                label="Major"
-                placeholder="e.g., Finance, Computer Science"
-                error={errors.major?.message}
-                {...register("major")}
+                label="Year of Birth"
+                type="number"
+                placeholder="1998"
+                min={1900}
+                max={2100}
+                data-testid="alumni-birth-year"
+                error={errors.birth_year?.message}
+                {...register("birth_year")}
               />
             </div>
+
+            <Input
+              label="Major"
+              placeholder="e.g., Finance, Computer Science"
+              error={errors.major?.message}
+              {...register("major")}
+            />
 
             <Input
               label="Current Position (Legacy)"

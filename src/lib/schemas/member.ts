@@ -39,6 +39,7 @@ export const newAlumniSchema = z.object({
   last_name: safeString(100),
   email: optionalEmail,
   graduation_year: graduationYearSchema,
+  birth_year: graduationYearSchema,
   major: optionalSafeString(200),
   job_title: optionalSafeString(200),
   photo_url: optionalHttpsUrlSchema,

@@ -19,6 +19,7 @@ interface AlumniPageProps {
   params: Promise<{ orgSlug: string }>;
   searchParams: Promise<{
     year?: string;
+    birthYear?: string;
     industry?: string;
     company?: string;
     city?: string;
@@ -35,6 +36,7 @@ interface AlumniRecord {
   job_title: string | null;
   current_company: string | null;
   graduation_year: number | null;
+  birth_year: number | null;
   industry: string | null;
   current_city: string | null;
   linkedin_url: string | null;
@@ -71,7 +73,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
     .from("alumni")
     .select(`
       id, first_name, last_name, photo_url, position_title, job_title, current_company,
-      graduation_year, industry, current_city, linkedin_url
+      graduation_year, birth_year, industry, current_city, linkedin_url
     `)
     .eq("organization_id", org.id)
     .is("deleted_at", null);
@@ -79,6 +81,9 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   // Apply filters
   if (filters.year) {
     query = query.eq("graduation_year", parseInt(filters.year));
+  }
+  if (filters.birthYear) {
+    query = query.eq("birth_year", parseInt(filters.birthYear));
   }
   const industry = normalize(filters.industry);
   if (industry) {
@@ -107,11 +112,12 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   // Get unique values for filter dropdowns (from all alumni, not just filtered)
   const { data: allAlumni } = await dataClient
     .from("alumni")
-    .select("graduation_year, industry, current_company, current_city, position_title")
+    .select("graduation_year, birth_year, industry, current_company, current_city, position_title")
     .eq("organization_id", org.id)
     .is("deleted_at", null);
 
   const years = [...new Set(allAlumni?.map((a) => a.graduation_year).filter(Boolean))];
+  const birthYears = [...new Set(allAlumni?.map((a) => a.birth_year).filter(Boolean))];
   const industries = uniqueStringsCaseInsensitive(allAlumni?.map((a) => a.industry) ?? []).sort((a, b) =>
     a.localeCompare(b, undefined, { sensitivity: "base" })
   );
@@ -126,7 +132,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   );
 
   const hasActiveFilters =
-    filters.year || filters.industry || filters.company || filters.city || filters.position;
+    filters.year || filters.birthYear || filters.industry || filters.company || filters.city || filters.position;
 
   const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
   const t = (key: string) => tNav(key);
@@ -156,6 +162,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
       <AlumniFilters
         orgId={org.id}
         years={years}
+        birthYears={birthYears}
         industries={industries}
         companies={companies}
         cities={cities}

@@ -12,6 +12,7 @@ interface FilterOption {
 interface EnterpriseAlumniFiltersProps {
   organizations: { id: string; name: string }[];
   years: (number | null)[];
+  birthYears: (number | null)[];
   industries: string[];
   companies: string[];
   cities: string[];
@@ -21,6 +22,7 @@ interface EnterpriseAlumniFiltersProps {
 export function EnterpriseAlumniFilters({
   organizations,
   years,
+  birthYears,
   industries,
   companies,
   cities,
@@ -33,6 +35,7 @@ export function EnterpriseAlumniFilters({
   const [filters, setFilters] = useState({
     org: searchParams.get("org") || "",
     year: searchParams.get("year") || "",
+    birthYear: searchParams.get("birthYear") || "",
     industry: searchParams.get("industry") || "",
     company: searchParams.get("company") || "",
     city: searchParams.get("city") || "",
@@ -47,6 +50,7 @@ export function EnterpriseAlumniFilters({
     const params = new URLSearchParams();
     if (filters.org) params.set("org", filters.org);
     if (filters.year) params.set("year", filters.year);
+    if (filters.birthYear) params.set("birthYear", filters.birthYear);
     if (filters.industry) params.set("industry", filters.industry);
     if (filters.company) params.set("company", filters.company);
     if (filters.city) params.set("city", filters.city);
@@ -69,6 +73,7 @@ export function EnterpriseAlumniFilters({
     setFilters({
       org: "",
       year: "",
+      birthYear: "",
       industry: "",
       company: "",
       city: "",
@@ -89,6 +94,14 @@ export function EnterpriseAlumniFilters({
       .filter((y): y is number => y !== null)
       .sort((a, b) => b - a)
       .map((y) => ({ value: y.toString(), label: `Class of ${y}` })),
+  ];
+
+  const birthYearOptions: FilterOption[] = [
+    { value: "", label: "All Years" },
+    ...birthYears
+      .filter((y): y is number => y !== null)
+      .sort((a, b) => b - a)
+      .map((y) => ({ value: y.toString(), label: y.toString() })),
   ];
 
   const makeOptions = (values: string[], allLabel: string): FilterOption[] => [
@@ -120,6 +133,14 @@ export function EnterpriseAlumniFilters({
             value={filters.year}
             onChange={(e) => setFilters({ ...filters, year: e.target.value })}
             options={yearOptions}
+          />
+        </div>
+        <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[140px]">
+          <Select
+            label="Year of Birth"
+            value={filters.birthYear}
+            onChange={(e) => setFilters({ ...filters, birthYear: e.target.value })}
+            options={birthYearOptions}
           />
         </div>
         <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[140px]">

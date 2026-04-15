@@ -42,6 +42,7 @@ export default function NewAlumniPage() {
       last_name: "",
       email: "",
       graduation_year: "",
+      birth_year: "",
       major: "",
       job_title: "",
       photo_url: "",
@@ -215,12 +216,23 @@ export default function NewAlumniPage() {
               {...register("graduation_year")}
             />
             <Input
-              label="Major"
-              placeholder="e.g., Finance, Computer Science"
-              error={errors.major?.message}
-              {...register("major")}
+              label="Year of Birth"
+              type="number"
+              placeholder="1998"
+              min={1900}
+              max={2100}
+              data-testid="alumni-birth-year"
+              error={errors.birth_year?.message}
+              {...register("birth_year")}
             />
           </div>
+
+          <Input
+            label="Major"
+            placeholder="e.g., Finance, Computer Science"
+            error={errors.major?.message}
+            {...register("major")}
+          />
 
           <Input
             label="Current Position (Legacy)"

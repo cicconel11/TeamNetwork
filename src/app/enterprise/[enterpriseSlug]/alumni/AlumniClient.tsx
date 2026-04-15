@@ -59,6 +59,7 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
   });
   const [filterOptions, setFilterOptions] = useState({
     years: [] as (number | null)[],
+    birthYears: [] as (number | null)[],
     industries: [] as string[],
     companies: [] as string[],
     cities: [] as string[],
@@ -92,6 +93,7 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
           setOrganizations(statsData.organizations || []);
           setFilterOptions(statsData.filterOptions || {
             years: [],
+            birthYears: [],
             industries: [],
             companies: [],
             cities: [],
@@ -177,6 +179,7 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
       <EnterpriseAlumniFilters
         organizations={organizations}
         years={filterOptions.years}
+        birthYears={filterOptions.birthYears}
         industries={filterOptions.industries}
         companies={filterOptions.companies}
         cities={filterOptions.cities}
