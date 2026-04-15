@@ -204,15 +204,25 @@ export function SkeletonEventCard({ style }: SkeletonCardProps) {
   );
 }
 
-// Announcement card skeleton
+// Announcement list row skeleton (matches feed-style announcement rows)
 export function SkeletonAnnouncementCard({ style }: SkeletonCardProps) {
   const styles2 = useThemedStyles((n) => ({
-    card: {
-      backgroundColor: n.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: n.border,
-      padding: SPACING.md,
+    row: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      gap: SPACING.md,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.md,
+    },
+    main: {
+      flex: 1,
+      gap: SPACING.xs,
+    },
+    titleRow: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
     },
   }));
 
@@ -222,20 +232,16 @@ export function SkeletonAnnouncementCard({ style }: SkeletonCardProps) {
       accessibilityRole="progressbar"
       accessibilityLabel="Loading announcement"
       accessibilityState={{ busy: true }}
-      style={[styles2.card, style]}
+      style={[styles2.row, style]}
     >
-      <View style={styles.announcementHeader}>
-        <SkeletonAvatar size={36} />
-        <View style={styles.announcementHeaderText}>
-          <Skeleton width={100} height={14} />
-          <View style={{ height: 4 }} />
-          <Skeleton width={60} height={12} />
+      <Skeleton width={44} height={44} borderRadius={22} />
+      <View style={styles2.main}>
+        <View style={styles2.titleRow}>
+          <Skeleton width="65%" height={16} borderRadius={RADIUS.xs} />
+          <Skeleton width={48} height={12} borderRadius={RADIUS.xs} />
         </View>
+        <Skeleton width={100} height={12} borderRadius={RADIUS.xs} />
       </View>
-      <View style={{ height: 12 }} />
-      <Skeleton width="80%" height={18} />
-      <View style={{ height: 8 }} />
-      <SkeletonText lines={2} lineHeight={14} lastLineWidth="70%" />
     </View>
   );
 }
