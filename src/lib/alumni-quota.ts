@@ -59,7 +59,8 @@ export async function isOrgEnterpriseManaged(orgId: string): Promise<boolean> {
       .select("enterprise_id")
       .eq("id", orgId)
       .single() as Promise<{ data: OrgWithEnterprise | null }>,
-    supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
       .from("organization_subscriptions")
       .select("status")
       .eq("organization_id", orgId)
@@ -89,7 +90,8 @@ export async function getAlumniLimitForOrg(orgId: string): Promise<number | null
       .select("enterprise_id")
       .eq("id", orgId)
       .single() as Promise<{ data: OrgWithEnterprise | null }>,
-    supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
       .from("organization_subscriptions")
       .select("alumni_bucket, status")
       .eq("organization_id", orgId)

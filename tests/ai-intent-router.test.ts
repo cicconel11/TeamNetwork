@@ -10,20 +10,20 @@ describe("resolveSurfaceRouting — surface axis", () => {
     assert.equal(result.effectiveSurface, "members");
     assert.equal(result.inferredSurface, null);
     assert.equal(result.rerouted, false);
-    assert.equal(result.skipRetrieval, true);
+    assert.equal(result.intentType, "casual");
   });
 
-  it("marks gratitude messages to skip retrieval", () => {
+  it("marks gratitude messages as casual", () => {
     const result = resolveSurfaceRouting("Thanks!!", "general");
 
-    assert.equal(result.skipRetrieval, true);
+    assert.equal(result.intentType, "casual");
     assert.equal(result.effectiveSurface, "general");
   });
 
-  it("does not skip retrieval when a greeting includes a knowledge request", () => {
+  it("does not classify a greeting plus question as casual", () => {
     const result = resolveSurfaceRouting("hey, what events are coming up?", "general");
 
-    assert.equal(result.skipRetrieval, false);
+    assert.equal(result.intentType, "knowledge_query");
     assert.equal(result.intent, "events_query");
     assert.equal(result.effectiveSurface, "events");
     assert.equal(result.rerouted, true);
@@ -61,7 +61,6 @@ describe("resolveSurfaceRouting — intent type axis", () => {
     const result = resolveSurfaceRouting("hello", "general");
 
     assert.equal(result.intentType, "casual");
-    assert.equal(result.skipRetrieval, true);
   });
 
   it("classifies a farewell as casual", () => {
@@ -217,7 +216,6 @@ describe("resolveSurfaceRouting — intent type priority", () => {
 
     assert.equal(result.intentType, "action_request");
     assert.equal(result.intent, "events_query");
-    assert.equal(result.skipRetrieval, false);
   });
 
   it("greeting + navigation is classified as navigation, not casual", () => {
@@ -225,6 +223,62 @@ describe("resolveSurfaceRouting — intent type priority", () => {
 
     assert.equal(result.intentType, "navigation");
     assert.equal(result.intent, "members_query");
-    assert.equal(result.skipRetrieval, false);
+  });
+});
+
+describe("resolveSurfaceRouting — content-type keyword routing", () => {
+  it("routes announcement query to general with high confidence", () => {
+    const result = resolveSurfaceRouting("show me recent announcements", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+    assert.equal(result.inferredSurface, "general");
+  });
+
+  it("routes discussion query to general with high confidence", () => {
+    const result = resolveSurfaceRouting("what discussions are happening?", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+
+  it("routes job query to general with high confidence", () => {
+    const result = resolveSurfaceRouting("any job openings?", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+
+  it("lets members surface win when members keyword scores", () => {
+    const result = resolveSurfaceRouting("compare members and discussions", "general");
+    assert.equal(result.effectiveSurface, "members");
+    assert.equal(result.intent, "members_query");
+  });
+
+  it("reroutes content keyword query from non-general surface", () => {
+    const result = resolveSurfaceRouting("what are the latest threads?", "members");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.rerouted, true);
+    assert.equal(result.confidence, "high");
+  });
+
+  it("routes hiring query to general with high confidence", () => {
+    const result = resolveSurfaceRouting("who is hiring?", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+
+  it("does not reroute generic file uploads to events", () => {
+    const result = resolveSurfaceRouting("Upload this job posting PDF", "general");
+    assert.equal(result.intentType, "action_request");
+    assert.equal(result.intent, "general_query");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.inferredSurface, "general");
+    assert.equal(result.rerouted, false);
+  });
+
+  it("preserves requestedSurface when no keywords match (dead ternary fix)", () => {
+    // A message with no surface-specific or general-content keywords
+    // on a non-general surface should keep the requested surface
+    const result = resolveSurfaceRouting("what is going on?", "events");
+    assert.equal(result.effectiveSurface, "events");
+    assert.equal(result.rerouted, false);
   });
 });

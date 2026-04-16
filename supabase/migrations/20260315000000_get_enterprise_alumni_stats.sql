@@ -20,7 +20,6 @@ CREATE INDEX IF NOT EXISTS alumni_org_position_idx
 -- Uses SECURITY DEFINER so it can be called via service_role without per-row RLS checks.
 -- search_path = '' prevents search_path injection attacks.
 
--- TODO: align with enterprise_managed filter later
 
 CREATE OR REPLACE FUNCTION public.get_enterprise_alumni_stats(p_enterprise_id uuid)
 RETURNS jsonb

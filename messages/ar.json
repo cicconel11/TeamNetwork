@@ -3,6 +3,7 @@
     "groups": {
       "people": "الأشخاص",
       "community": "المجتمع",
+      "schedule": "الجدول",
       "activity": "النشاط",
       "finance": "المالية",
       "admin": "الإدارة"
@@ -125,7 +126,6 @@
     "createAccountBtn": "إنشاء حساب",
     "continueWithGoogle": "المتابعة باستخدام Google",
     "continueWithLinkedIn": "المتابعة باستخدام LinkedIn",
-    "continueWithMicrosoft": "المتابعة باستخدام Microsoft",
     "orContinueWithEmail": "أو المتابعة بالبريد الإلكتروني",
     "emailLabel": "البريد الإلكتروني",
     "emailPlaceholder": "you@example.com",
@@ -149,7 +149,6 @@
     "newPassword": "كلمة مرور جديدة",
     "confirmPassword": "تأكيد كلمة المرور",
     "updatePassword": "تحديث كلمة المرور",
-    "passwordUpdatedRedirecting": "تم تحديث كلمة المرور بنجاح. جارٍ إعادة التوجيه...",
     "backToSignIn": "العودة إلى تسجيل الدخول",
     "requestNewLink": "طلب رابط إعادة تعيين جديد",
     "resetLinkExpired": "رابط إعادة التعيين هذا منتهي الصلاحية أو غير صالح.",
@@ -165,8 +164,7 @@
     "tabs": {
       "connectedAccounts": "الحسابات المتصلة",
       "notifications": "الإشعارات",
-      "language": "اللغة",
-      "account": "الحساب"
+      "language": "اللغة"
     },
     "language": {
       "title": "اللغة",
@@ -176,14 +174,12 @@
     },
     "description": "إدارة الدعوات والاشتراكات والوصول إلى المنظمة",
     "createInvite": "إنشاء دعوة",
-    "bulkImport": "استيراد جماعي",
     "requireApproval": "طلب الموافقة للأعضاء الجدد",
     "requireApprovalDesc": "عند التفعيل، يجب الموافقة على المستخدمين الذين ينضمون عبر الدعوة قبل الحصول على حق الوصول. يمكنك أيضاً تجاوز هذا لكل دعوة.",
     "requireApprovalLabel": "طلب الموافقة على الدعوة",
     "reviewPending": "مراجعة الأعضاء المعلقين",
     "viewApprovals": "عرض الموافقات",
     "pendingApprovals": "الموافقات المعلقة",
-    "pendingApprovalsCount": "الموافقات المعلقة: {count}",
     "orgName": {
       "title": "اسم المنظمة",
       "description": "تغيير الاسم المعروض لمنظمتك.",
@@ -242,6 +238,16 @@
           "desc": "تحديثات المنافسات الجديدة"
         }
       }
+    },
+    "storage": {
+      "title": "استخدام تخزين الوسائط",
+      "description": "المساحة المستهلكة من عناصر المعرض ورفع الميزات.",
+      "usedOf": "{used} من {quota} مستخدم",
+      "usedUnlimited": "{used} مستخدم (خطة غير محدودة)",
+      "quotaExceeded": "تم تجاوز حصة التخزين. فكّر في حذف الوسائط غير المستخدمة أو ترقية خطتك.",
+      "approachingLimit": "تقترب من حد التخزين. فكّر في حذف الوسائط غير المستخدمة أو ترقية خطتك.",
+      "galleryItems": "{count} {count, plural, one {عنصر} other {عناصر}} في المعرض",
+      "featureUploads": "{count} {count, plural, one {رفع} other {رفعات}} ميزة"
     },
     "billing": {
       "title": "إدارة الفوترة",
@@ -418,7 +424,8 @@
       "accepted": "تم قبول طلب التبني! منظمتك الآن جزء من المؤسسة.",
       "rejected": "تم رفض طلب التبني.",
       "confirmReject": "هل أنت متأكد من رغبتك في رفض طلب التبني هذا؟"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {لا توجد موافقات معلّقة} one {# موافقة معلّقة} other {# موافقات معلّقة}}"
   },
   "customization": {
     "title": "التخصيص",
@@ -531,7 +538,6 @@
   },
   "sidebar": {
     "switchOrg": "تغيير المنظمة",
-    "userSettings": "إعدادات المستخدم",
     "poweredBy": "مدعوم من"
   },
   "app": {
@@ -546,7 +552,6 @@
     "orCreateEnterprise": "أو أنشئ مؤسسة لإدارة منظمات متعددة",
     "yourEnterprises": "مؤسساتك",
     "createEnterprise": "إنشاء مؤسسة",
-    "enterpriseDescription": "إدارة منظمات متعددة تحت حساب مؤسسي واحد",
     "manageMultiple": "إدارة منظمات متعددة تحت حساب فوترة واحد",
     "createFirstEnterprise": "أنشئ مؤسستك الأولى",
     "pendingApproval": "بانتظار الموافقة",
@@ -592,8 +597,8 @@
     "social": "اجتماعي",
     "fundraiser": "جمع تبرعات",
     "practice": "تدريب",
+    "class": "صف",
     "workout": "تمرين",
-    "class": "Class",
     "recurringEvent": "فعالية متكررة",
     "willAppear": "{label} ستظهر هنا بمجرد إنشائها",
     "noUpcomingEvents": "لا توجد {label} قادمة",
@@ -825,12 +830,12 @@
     "failedToLoadAlbums": "فشل في تحميل الألبومات",
     "storage": {
       "title": "تخزين الوسائط",
-      "usedOf": "{used} من {quota} مستخدم",
-      "usedUnlimited": "{used} مستخدم (خطة غير محدودة)",
-      "quotaExceeded": "تم تجاوز الحصة",
-      "approachingLimit": "الاقتراب من الحد",
-      "ariaUsedOf": "تخزين الوسائط: تم استخدام {used} من {quota}، بنسبة {percent} بالمئة",
-      "ariaUsedUnlimited": "تخزين الوسائط: تم استخدام {used} (خطة غير محدودة)"
+      "usedOf": "تمّ استخدام {used} من أصل {quota}",
+      "usedUnlimited": "تمّ استخدام {used}",
+      "quotaExceeded": "تمّ تجاوز حصّة التخزين",
+      "approachingLimit": "الاقتراب من حدّ التخزين",
+      "ariaUsedOf": "استخدام التخزين: {used} من أصل {quota} ({percent}٪)",
+      "ariaUsedUnlimited": "استخدام التخزين: {used} (خطّة غير محدودة)"
     }
   },
   "mentorship": {
@@ -857,51 +862,21 @@
     "expertise": "الخبرة",
     "phone": "الهاتف",
     "linkedin": "LinkedIn",
-    "editorialStrapline": "Connect with alumni who are ready to help",
-    "myMentor": "Your mentor",
-    "lookingForMentor": "Looking for a mentor",
-    "lastSession": "Last session",
-    "noSessionsYet": "No sessions yet",
-    "logSession": "Log a session",
-    "showAllLogs": "Show all {count} sessions",
-    "hideLogs": "Show fewer",
-    "availability": "Availability",
-    "availabilityDesc": "Toggle whether members can request you as a mentor",
-    "currentlyAvailable": "Available",
-    "currentlyUnavailable": "Not available",
-    "createPair": "Create a pair",
-    "createPairDesc": "Pair an alumni mentor with an active member",
-    "pairMembers": "Pair members",
-    "confirmPair": "Confirm pair",
-    "mentorSelectLabel": "Mentor (alumni)",
-    "menteeSelectLabel": "Mentee (active member)",
-    "selectMentor": "Select mentor",
-    "selectMentee": "Select mentee",
-    "yourMentee": "Your mentee",
-    "assignMentee": "Assign mentee",
-    "updateMentee": "Update mentee",
-    "removeMentee": "Remove mentee",
-    "noMenteeAssignedYet": "No mentee assigned yet",
-    "archivePair": "Archive pair",
-    "archivePairConfirm": "Archive this mentorship pair? All associated logs will also be archived.",
-    "openPairMenu": "Open pair menu",
-    "browseMentors": "Browse mentors below",
-    "beFirstMentor": "Be the first mentor",
-    "beFirstMentorDesc": "Alumni who register here help current members navigate their careers.",
-    "searchPlaceholder": "Search mentors by name",
-    "sessionSingular": "session",
-    "sessionPlural": "sessions",
-    "statusActive": "Active",
-    "statusPaused": "Paused",
-    "statusCompleted": "Completed",
-    "loggedBy": "by {name}",
-    "progressMetric": "Progress: {value}",
-    "pairCreated": "Pair created",
-    "pairCreatedNotifyFailed": "Pair created — notification failed to send",
-    "availabilityUpdated": "Availability updated",
-    "loadingControls": "Loading your mentorship controls...",
-    "signInManagePair": "You must be signed in to manage your pair.",
-    "signInManageAvailability": "Sign in to manage your mentee availability."
+    "editorialStrapline": "الموجّهون والمتدرّبون يتقدّمون معًا نحو تقدّم قابل للقياس.",
+    "mentorSelectLabel": "موجّه",
+    "menteeSelectLabel": "متدرّب",
+    "selectMentor": "اختر موجّهًا",
+    "selectMentee": "اختر متدرّبًا",
+    "noMenteeAssignedYet": "لم يتمّ تعيين متدرّب بعد.",
+    "openPairMenu": "فتح قائمة الزوج",
+    "statusActive": "نشط",
+    "statusPaused": "مُوقّف مؤقتًا",
+    "statusCompleted": "مُكتمل",
+    "loggedBy": "سجّله {name}",
+    "progressMetric": "التقدّم: {value}",
+    "loadingControls": "جارٍ تحميل أدوات الإرشاد…",
+    "signInManagePair": "سجّل الدخول لإدارة زوج الإرشاد.",
+    "signInManageAvailability": "سجّل الدخول لإدارة توافرك."
   },
   "linkedin": {
     "profileUrl": "رابط ملف LinkedIn",

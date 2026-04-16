@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import { getZaiModel } from "./client";
 import type { SSEEvent } from "./sse";
+import { aiLog, type AiLogContext } from "./logger";
 
 export interface UsageAccumulator {
   inputTokens: number;
@@ -27,8 +28,10 @@ interface ComposeOptions {
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
   toolResults?: ToolResultMessage[];
   tools?: OpenAI.Chat.ChatCompletionTool[];
+  toolChoice?: OpenAI.Chat.ChatCompletionToolChoiceOption;
   onUsage?: (usage: UsageAccumulator) => void;
   signal?: AbortSignal;
+  logContext?: AiLogContext;
 }
 
 /**
@@ -41,7 +44,17 @@ interface ComposeOptions {
 export async function* composeResponse(
   options: ComposeOptions
 ): AsyncGenerator<SSEEvent | ToolCallRequestedEvent> {
-  const { client, systemPrompt, messages, toolResults, tools, onUsage, signal } = options;
+  const {
+    client,
+    systemPrompt,
+    messages,
+    toolResults,
+    tools,
+    toolChoice,
+    onUsage,
+    signal,
+    logContext,
+  } = options;
 
   // Build message array
   const apiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -78,7 +91,7 @@ export async function* composeResponse(
       {
         model: getZaiModel(),
         messages: apiMessages,
-        ...(tools ? { tools, tool_choice: "auto" as const } : {}),
+        ...(tools ? { tools, tool_choice: toolChoice ?? ("auto" as const) } : {}),
         stream: true,
         stream_options: { include_usage: true },
         temperature: 0.7,
@@ -137,7 +150,10 @@ export async function* composeResponse(
     if (signal?.aborted) {
       throw signal.reason ?? err;
     }
-    console.error("[response-composer] streaming failed:", err);
+    aiLog("error", "response-composer", "streaming failed", logContext ?? {
+      requestId: "unknown_request",
+      orgId: "unknown_org",
+    }, { error: err });
     yield {
       type: "error",
       message: "Failed to generate response",

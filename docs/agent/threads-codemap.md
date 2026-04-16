@@ -9,9 +9,12 @@ Thread management provides CRUD operations for AI conversation threads and their
 | File | Purpose | Key Exports (line) |
 |---|---|---|
 | `src/lib/ai/thread-resolver.ts` | Thread ownership validation — normalizes all failures to 404 | `resolveOwnThread` (L11), `ThreadResolution` type (L7) |
-| `src/app/api/ai/[orgId]/threads/route.ts` | GET: list threads with cursor pagination | `GET` (L82), `createAiThreadsGetHandler` (L13) |
-| `src/app/api/ai/[orgId]/threads/[threadId]/route.ts` | DELETE: soft-delete a thread | `DELETE` (L71), `createAiThreadDeleteHandler` (L13) |
-| `src/app/api/ai/[orgId]/threads/[threadId]/messages/route.ts` | GET: list messages in a thread | `GET` (L73), `createAiThreadMessagesGetHandler` (L13) |
+| `src/app/api/ai/[orgId]/threads/route.ts` | Thin entrypoint that exports `GET` | `GET` |
+| `src/app/api/ai/[orgId]/threads/handler.ts` | GET handler factory for cursor-paginated thread listing | `createAiThreadsGetHandler` |
+| `src/app/api/ai/[orgId]/threads/[threadId]/route.ts` | Thin entrypoint that exports `DELETE` | `DELETE` |
+| `src/app/api/ai/[orgId]/threads/[threadId]/handler.ts` | DELETE handler factory for thread soft-delete | `createAiThreadDeleteHandler` |
+| `src/app/api/ai/[orgId]/threads/[threadId]/messages/route.ts` | Thin entrypoint that exports `GET` | `GET` |
+| `src/app/api/ai/[orgId]/threads/[threadId]/messages/handler.ts` | GET handler factory for thread message reads | `createAiThreadMessagesGetHandler` |
 | `src/lib/schemas/ai-assistant.ts` | `listThreadsSchema` — surface filter, limit, cursor validation | `listThreadsSchema` (L34) |
 | `src/lib/pagination/cursor.ts` | Generic cursor encoding/decoding and query helpers | `decodeCursor`, `applyCursorFilter`, `buildCursorResponse` |
 
@@ -62,6 +65,16 @@ List all messages in a thread, ordered by `created_at` ascending.
 
 **Errors**: `404` (thread not found / not owned), `401`, `403`, `429`, `500`
 
+## Current Structure
+
+Thread APIs now follow the same split used by the chat route:
+
+1. `route.ts` files stay intentionally thin and only export the Next.js handler.
+2. `handler.ts` files contain the auth, validation, and Supabase logic.
+3. `resolveOwnThread()` remains the shared ownership gate for any thread-specific read or write.
+
+This keeps route wiring simple while making the actual thread logic easier to unit test in isolation.
+
 ## Cursor Pagination
 
 Thread listing uses keyset pagination via the shared `src/lib/pagination/cursor.ts` module:
@@ -71,6 +84,7 @@ Thread listing uses keyset pagination via the shared `src/lib/pagination/cursor.
 3. If more pages exist, the cursor encodes the last row's `(created_at, id)` for the next request
 4. `applyCursorFilter` adds a `WHERE (created_at, id) < (cursor_created_at, cursor_id)` condition
 5. RLS ensures only the authenticated user's non-deleted threads are visible
+6. The `idx_ai_threads_org_listing` partial composite index on `(org_id, created_at DESC, id DESC) WHERE deleted_at IS NULL` directly covers this pagination query
 
 ## Soft-Delete Flow
 

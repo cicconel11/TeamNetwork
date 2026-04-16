@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 describe("resolveOwnThread", () => {
-  type MockThread = { id: string; user_id: string; org_id: string; surface: string; title: string | null };
+  type MockThread = { id: string; user_id: string; org_id: string; surface: string; title: string | null; metadata?: Record<string, unknown> };
   type MockError = { message: string };
 
   function createMockSupabase(opts: { thread?: MockThread | null; error?: MockError }) {
@@ -24,7 +24,7 @@ describe("resolveOwnThread", () => {
 
   it("returns ok for valid thread ownership", async () => {
     const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
-    const thread = { id: "t1", user_id: "u1", org_id: "o1", surface: "general", title: "Test" };
+    const thread = { id: "t1", user_id: "u1", org_id: "o1", surface: "general", title: "Test", metadata: {} };
     const mock = createMockSupabase({ thread });
     const result = await resolveOwnThread("t1", "u1", "o1", mock);
     assert.equal(result.ok, true);

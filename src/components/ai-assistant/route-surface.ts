@@ -22,9 +22,11 @@ const SURFACE_PREFIXES: ReadonlyArray<readonly [string, AiSurface]> = [
  * (the feature segment after /{orgSlug}/) and maps it to a surface.
  */
 export function routeToSurface(pathname: string): AiSurface {
-  // Capture group 1: the feature segment including its leading slash
-  // e.g. "/my-org/members/abc" → "/members"
-  const match = pathname.match(/^\/[^/]+(\/[^/?#]*)/);
+  // Capture group 1: the feature segment including its leading slash.
+  // Supports both "/{orgSlug}/feature" and "/enterprise/{slug}/feature".
+  const match =
+    pathname.match(/^\/enterprise\/[^/]+(\/[^/?#]*)/) ??
+    pathname.match(/^\/[^/]+(\/[^/?#]*)/);
   const segment = match?.[1] ?? "";
   for (const [prefix, surface] of SURFACE_PREFIXES) {
     if (segment === prefix || segment.startsWith(prefix + "/")) {

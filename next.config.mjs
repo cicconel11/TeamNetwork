@@ -200,7 +200,15 @@ const nextConfig = {
       dynamic: 0,
     },
     // Load server-side; avoids flaky missing `./vendor-chunks/@supabase.js` after HMR / partial `.next` deletes
-    serverComponentsExternalPackages: ["googleapis", "@supabase/supabase-js", "@supabase/ssr"],
+    serverComponentsExternalPackages: [
+      "googleapis",
+      "@supabase/supabase-js",
+      "@supabase/ssr",
+      "@js-temporal/polyfill",
+      "pdf-parse",
+      "falkordb",
+      "node-ical",
+    ],
   },
   images: {
     formats: ["image/avif", "image/webp"],
@@ -282,7 +290,7 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com https://va.vercel-scripts.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               // External member avatars are browser-fetched via <img>, so CSP
               // must allow arbitrary HTTPS image origins without widening the

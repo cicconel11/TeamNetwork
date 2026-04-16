@@ -6,10 +6,11 @@
  * Examples:
  *   npx tsx scripts/test-falkor-local.ts
  *   npx tsx scripts/test-falkor-local.ts ce2e47f8-... member:7f217239-...
+ *   npx tsx scripts/test-falkor-local.ts ce2e47f8-... --sample
  */
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Load .env.local manually (no dotenv dependency)
 const envPath = resolve(import.meta.dirname ?? __dirname, "..", ".env.local");
@@ -23,14 +24,213 @@ for (const line of readFileSync(envPath, "utf-8").split("\n")) {
   if (!process.env[key]) process.env[key] = value;
 }
 import { processGraphSyncQueue } from "../src/lib/falkordb/sync";
-import { suggestConnections } from "../src/lib/falkordb/suggestions";
+import {
+  scoreProjectedCandidates,
+  suggestConnections,
+} from "../src/lib/falkordb/suggestions";
 import { falkorClient } from "../src/lib/falkordb/client";
-import { buildPersonKey } from "../src/lib/falkordb/people";
+import {
+  ALUMNI_PERSON_SELECT,
+  buildProjectedPeople,
+  buildPersonKey,
+  buildSourcePerson,
+  MEMBER_PERSON_SELECT,
+  type AlumniPersonRow,
+  type MemberPersonRow,
+  type ProjectedPerson,
+} from "../src/lib/falkordb/people";
+import { normalizeConnectionText } from "../src/lib/falkordb/scoring";
 
 const DEFAULT_ORG_ID = "ce2e47f8-388a-4e06-9a2d-6d5b851ee899";
 
+type SourceRef = { person_type: "member" | "alumni"; person_id: string; label: string };
+
+function formatReasonList(source: {
+  reasons?: Array<{ code?: string; weight?: number }>;
+}) {
+  return (source.reasons ?? [])
+    .map((reason) => `${reason.code ?? "unknown"}${typeof reason.weight === "number" ? `(${reason.weight})` : ""}`)
+    .join(", ");
+}
+
+function calculateOverlap(left: string[], right: string[]) {
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  const intersection = [...leftSet].filter((value) => rightSet.has(value)).length;
+  const union = new Set([...leftSet, ...rightSet]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+async function loadSourceProjection(
+  supabase: SupabaseClient,
+  orgId: string,
+  source: SourceRef
+): Promise<ProjectedPerson | null> {
+  const sourceTable = source.person_type === "member" ? "members" : "alumni";
+  const select = source.person_type === "member" ? MEMBER_PERSON_SELECT : ALUMNI_PERSON_SELECT;
+
+  const { data: sourceRow } = await supabase
+    .from(sourceTable)
+    .select(select)
+    .eq("organization_id", orgId)
+    .eq("id", source.person_id)
+    .maybeSingle();
+
+  if (!sourceRow) {
+    return null;
+  }
+
+  if (source.person_type === "member") {
+    const memberRow = sourceRow as unknown as MemberPersonRow;
+    if (!memberRow.user_id) {
+      return buildSourcePerson({ memberRows: [memberRow], alumniRows: [] });
+    }
+
+    const { data: alumniRows } = await supabase
+      .from("alumni")
+      .select(ALUMNI_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("user_id", memberRow.user_id)
+      .is("deleted_at", null);
+
+    return buildSourcePerson({
+      memberRows: [memberRow],
+      alumniRows: (alumniRows as AlumniPersonRow[] | null) ?? [],
+    });
+  }
+
+  const alumniRow = sourceRow as unknown as AlumniPersonRow;
+  if (!alumniRow.user_id) {
+    return buildSourcePerson({ memberRows: [], alumniRows: [alumniRow] });
+  }
+
+  const { data: memberRows } = await supabase
+    .from("members")
+    .select(MEMBER_PERSON_SELECT)
+    .eq("organization_id", orgId)
+    .eq("user_id", alumniRow.user_id)
+    .eq("status", "active")
+    .is("deleted_at", null);
+
+  return buildSourcePerson({
+    memberRows: (memberRows as MemberPersonRow[] | null) ?? [],
+    alumniRows: [alumniRow],
+  });
+}
+
+async function loadProjectedPeopleForOrg(
+  supabase: SupabaseClient,
+  orgId: string
+) {
+  const [membersResponse, alumniResponse] = await Promise.all([
+    supabase
+      .from("members")
+      .select(MEMBER_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("status", "active")
+      .is("deleted_at", null),
+    supabase
+      .from("alumni")
+      .select(ALUMNI_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .is("deleted_at", null),
+  ]);
+
+  return buildProjectedPeople({
+    members: (membersResponse.data as MemberPersonRow[] | null) ?? [],
+    alumni: (alumniResponse.data as AlumniPersonRow[] | null) ?? [],
+  });
+}
+
+async function listSampleSources(
+  supabase: SupabaseClient,
+  orgId: string,
+  limit = 3
+) {
+  const sources: SourceRef[] = [];
+
+  const { data: members } = await supabase
+    .from("members")
+    .select("id, first_name, last_name")
+    .eq("organization_id", orgId)
+    .eq("status", "active")
+    .is("deleted_at", null)
+    .limit(limit);
+
+  for (const row of (members as Array<{ id: string; first_name?: string; last_name?: string }> | null) ?? []) {
+    const label = [row.first_name ?? "", row.last_name ?? ""].join(" ").trim() || row.id;
+    sources.push({ person_type: "member", person_id: row.id, label });
+  }
+
+  return sources;
+}
+
+async function runSuggestionDebug(
+  supabase: SupabaseClient,
+  orgId: string,
+  source: SourceRef
+) {
+  const projection = await loadSourceProjection(supabase, orgId, source);
+  const projectedPeople = await loadProjectedPeopleForOrg(supabase, orgId);
+  const { data: organization } = await supabase
+    .from("organizations")
+    .select("name")
+    .eq("id", orgId)
+    .maybeSingle();
+  const organizationName =
+    organization && typeof organization === "object" && typeof organization.name === "string"
+      ? organization.name
+      : null;
+  const result = await suggestConnections({
+    orgId,
+    serviceSupabase: supabase,
+    args: { person_type: source.person_type, person_id: source.person_id, limit: 5 },
+  });
+  const scoredSuggestions = projection
+    ? scoreProjectedCandidates({
+        source: projection,
+        allPeople: projectedPeople.values(),
+        candidates: projectedPeople.values(),
+        limit: 5,
+        scoringContext: {
+          genericCompanyValues: ["TeamNetwork", normalizeConnectionText(organizationName)],
+        },
+      })
+    : [];
+
+  console.log(`\n    Source: ${source.label}`);
+  if (projection) {
+    console.log(`      company=${projection.currentCompany ?? "—"}`);
+    console.log(`      industry=${projection.industry ?? "—"}`);
+    console.log(`      roleFamily=${projection.roleFamily ?? "—"}`);
+    console.log(`      city=${projection.currentCity ?? "—"}`);
+    console.log(`      graduationYear=${projection.graduationYear ?? "—"}`);
+  }
+  console.log(`      state=${result.state} mode=${result.mode}`);
+  console.log(`      suggestions=${result.suggestions.length}`);
+  for (const suggestion of scoredSuggestions) {
+    console.log(
+      `      - ${suggestion.name} (score: ${suggestion.score}) [${formatReasonList(suggestion)}]`
+    );
+    console.log(
+      `        qualifiers=${suggestion.debug?.qualificationCodes.join(", ") ?? "—"} rarity=${JSON.stringify(
+        suggestion.debug?.rarityMultipliers ?? {}
+      )} exposurePenalty=${suggestion.debug?.exposurePenalty ?? 0}`
+    );
+  }
+
+  return {
+    source,
+    projection,
+    result,
+    suggestionNames: result.suggestions.map((suggestion) => suggestion.name),
+  };
+}
+
 async function main() {
   const orgId = process.argv[2] || DEFAULT_ORG_ID;
+  const modeArg = process.argv[3] ?? null;
+  const sampleMode = modeArg === "--sample";
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -69,7 +269,7 @@ async function main() {
   console.log(`    Processed: ${totalProcessed}, Failed: ${totalFailed}, Iterations: ${iterations}`);
 
   // Step 3: Pick a source person to test suggestions
-  const personArg = process.argv[3];
+  const personArg = sampleMode ? null : modeArg;
   let source: { person_type: "member" | "alumni"; person_id: string; label: string } | null = null;
 
   if (personArg && personArg.includes(":")) {
@@ -160,7 +360,7 @@ async function main() {
     console.log(`    Source lookup failed: ${err instanceof Error ? err.message : err}`);
   }
 
-  // Step 4: Test supported Falkor queries directly
+  // Step 4: Test candidate enumeration directly
   console.log(`\n[4] Direct Falkor graph queries...`);
   try {
     const candidates = await falkorClient.query<Record<string, unknown>>(
@@ -179,82 +379,54 @@ async function main() {
     console.log(`    Candidates query FAILED: ${err instanceof Error ? err.message : err}`);
   }
 
-  try {
-    const directOutgoing = await falkorClient.query<Record<string, unknown>>(
-      orgId,
-      `MATCH (source:Person {personKey: $sourceKey})-[:MENTORS]->(candidate:Person)
-       RETURN candidate.personKey AS personKey, candidate.name AS name`,
-      { sourceKey: expectedKey }
-    );
-    console.log(`    Direct outgoing edges: ${directOutgoing.length} rows`);
-  } catch (err) {
-    console.log(`    Direct outgoing query FAILED: ${err instanceof Error ? err.message : err}`);
-  }
-
-  try {
-    const directIncoming = await falkorClient.query<Record<string, unknown>>(
-      orgId,
-      `MATCH (source:Person {personKey: $sourceKey})<-[:MENTORS]-(candidate:Person)
-       RETURN candidate.personKey AS personKey, candidate.name AS name`,
-      { sourceKey: expectedKey }
-    );
-    console.log(`    Direct incoming edges: ${directIncoming.length} rows`);
-  } catch (err) {
-    console.log(`    Direct incoming query FAILED: ${err instanceof Error ? err.message : err}`);
-  }
-
-  try {
-    const sharedMentor = await falkorClient.query<Record<string, unknown>>(
-      orgId,
-      `MATCH (source:Person {personKey: $sourceKey})<-[:MENTORS]-(:Person)-[:MENTORS]->(candidate:Person)
-       WHERE candidate.personKey <> $sourceKey
-       RETURN candidate.personKey AS personKey, candidate.name AS name`,
-      { sourceKey: expectedKey }
-    );
-    console.log(`    Mixed second-degree (shared mentor): ${sharedMentor.length} rows`);
-  } catch (err) {
-    console.log(`    Shared mentor query FAILED: ${err instanceof Error ? err.message : err}`);
-  }
-
-  try {
-    const sharedMentee = await falkorClient.query<Record<string, unknown>>(
-      orgId,
-      `MATCH (source:Person {personKey: $sourceKey})-[:MENTORS]->(:Person)<-[:MENTORS]-(candidate:Person)
-       WHERE candidate.personKey <> $sourceKey
-       RETURN candidate.personKey AS personKey, candidate.name AS name`,
-      { sourceKey: expectedKey }
-    );
-    console.log(`    Mixed second-degree (shared mentee): ${sharedMentee.length} rows`);
-  } catch (err) {
-    console.log(`    Shared mentee query FAILED: ${err instanceof Error ? err.message : err}`);
-  }
-
   console.log(`\n[5] Testing suggestConnections...`);
 
-  const result = await suggestConnections({
-    orgId,
-    serviceSupabase: supabase,
-    args: { person_type: source.person_type, person_id: source.person_id, limit: 5 },
-  });
-
-  console.log(`\n    Mode: ${result.mode}`);
-  console.log(`    Freshness: ${result.freshness.state} (as_of: ${result.freshness.as_of})`);
-  console.log(`    State: ${result.state}`);
-  if (result.source_person) {
-    console.log(`    Source: ${result.source_person.name}`);
-  }
-
-  if (result.disambiguation_options?.length) {
-    console.log(`    Disambiguation options (${result.disambiguation_options.length}):`);
-    for (const option of result.disambiguation_options) {
-      console.log(`      - ${option.name}${option.subtitle ? ` (${option.subtitle})` : ""}`);
+  if (sampleMode) {
+    const sampleSources = await listSampleSources(supabase, orgId, 3);
+    const runs = [];
+    for (const sampleSource of sampleSources) {
+      runs.push(await runSuggestionDebug(supabase, orgId, sampleSource));
     }
-  }
 
-  console.log(`    Suggestions (${result.suggestions.length}):`);
-  for (const suggestion of result.suggestions) {
-    const reasons = suggestion.reasons.map((reason) => reason.code).join(", ");
-    console.log(`      - ${suggestion.name} (score: ${suggestion.score}) [${reasons}]`);
+    if (runs.length > 1) {
+      console.log(`\n    Overlap summary:`);
+      for (let index = 0; index < runs.length; index += 1) {
+        for (let compareIndex = index + 1; compareIndex < runs.length; compareIndex += 1) {
+          const left = runs[index];
+          const right = runs[compareIndex];
+          const overlap = calculateOverlap(left.suggestionNames, right.suggestionNames);
+          console.log(
+            `      ${left.source.label} vs ${right.source.label}: ${(overlap * 100).toFixed(0)}%`
+          );
+        }
+      }
+    }
+  } else {
+    const result = await suggestConnections({
+      orgId,
+      serviceSupabase: supabase,
+      args: { person_type: source.person_type, person_id: source.person_id, limit: 5 },
+    });
+
+    console.log(`\n    Mode: ${result.mode}`);
+    console.log(`    Freshness: ${result.freshness.state} (as_of: ${result.freshness.as_of})`);
+    console.log(`    State: ${result.state}`);
+    if (result.source_person) {
+      console.log(`    Source: ${result.source_person.name}`);
+    }
+
+    if (result.disambiguation_options?.length) {
+      console.log(`    Disambiguation options (${result.disambiguation_options.length}):`);
+      for (const option of result.disambiguation_options) {
+        console.log(`      - ${option.name}${option.subtitle ? ` (${option.subtitle})` : ""}`);
+      }
+    }
+
+    console.log(`    Suggestions (${result.suggestions.length}):`);
+    for (const suggestion of result.suggestions) {
+      const reasons = suggestion.reasons.map((reason) => reason.code).join(", ");
+      console.log(`      - ${suggestion.name} (score: ${suggestion.score}) [${reasons}]`);
+    }
   }
 
   // Cleanup

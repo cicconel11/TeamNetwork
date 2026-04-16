@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import type { RateLimitResult } from "@/lib/security/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
+import { aiLog, type AiLogContext } from "@/lib/ai/logger";
+import type { EnterpriseRole } from "@/types/enterprise";
 
 // ── Discriminated union return type ──
 
@@ -11,8 +13,9 @@ export type AiOrgContext =
       ok: true;
       orgId: string;
       userId: string;
-      userEmail: string;
       role: "admin";
+      enterpriseId?: string;
+      enterpriseRole?: EnterpriseRole;
       supabase: any; // auth-bound client (for threads/messages via RLS)
       serviceSupabase: any; // service-role client (for tools/audit)
     }
@@ -23,6 +26,7 @@ export type AiOrgContext =
 export interface AiOrgContextDeps {
   serviceSupabase?: any;
   supabase?: any;
+  logContext?: AiLogContext;
 }
 
 // ── Helper ──
@@ -64,7 +68,11 @@ export async function getAiOrgContext(
     .maybeSingle();
 
   if (error) {
-    console.error("[ai-context] role query failed:", error);
+    aiLog("error", "ai-context", "role query failed", deps.logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+      userId: user.id,
+    }, { error });
     return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
   }
 
@@ -75,13 +83,55 @@ export async function getAiOrgContext(
     };
   }
 
+  let enterpriseId: string | undefined;
+  let enterpriseRole: EnterpriseRole | undefined;
+
+  const { data: orgRow, error: orgError } = await (serviceSupabase as any)
+    .from("organizations")
+    .select("enterprise_id")
+    .eq("id", orgId)
+    .maybeSingle();
+
+  if (orgError) {
+    aiLog("error", "ai-context", "enterprise org lookup failed", deps.logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+      userId: user.id,
+    }, { error: orgError });
+    return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
+  }
+
+  if (orgRow?.enterprise_id) {
+    const { data: enterpriseRoleRow, error: enterpriseRoleError } = await (serviceSupabase as any)
+      .from("user_enterprise_roles")
+      .select("role")
+      .eq("enterprise_id", orgRow.enterprise_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (enterpriseRoleError) {
+      aiLog("error", "ai-context", "enterprise role lookup failed", deps.logContext ?? {
+        requestId: "unknown_request",
+        orgId,
+        userId: user.id,
+      }, { error: enterpriseRoleError, enterpriseId: orgRow.enterprise_id });
+      return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
+    }
+
+    if (enterpriseRoleRow?.role) {
+      enterpriseId = orgRow.enterprise_id;
+      enterpriseRole = enterpriseRoleRow.role as EnterpriseRole;
+    }
+  }
+
   // 4. Success — return full context
   return {
     ok: true,
     orgId,
     userId: user.id,
-    userEmail: user.email ?? "",
     role: "admin",
+    enterpriseId,
+    enterpriseRole,
     supabase: deps.supabase ?? null, // routes pass their auth-bound client
     serviceSupabase,
   };

@@ -15,7 +15,20 @@ function normalizeIdentifier(value: string): string {
 }
 
 function stripMarkdown(value: string): string {
-  return value.replace(/[*_`~>#]/g, "").replace(/\[(.*?)\]\((.*?)\)/g, "$1").trim();
+  return value.replace(/[*_`~>#"]/g, "").replace(/\[(.*?)\]\((.*?)\)/g, "$1").trim();
+}
+
+function normalizeMemberCandidate(value: string): string {
+  return normalizeIdentifier(
+    stripMarkdown(value)
+      .replace(/\s+\((?:active member|admin|alumni|parent|email-only member|email-only admin)\)\s*$/i, "")
+      .replace(/^(?:name|member)\s*:\s*/i, "")
+      .trim()
+  );
+}
+
+function isIgnoredMemberCandidate(value: string): boolean {
+  return /^(?:email|role|added|joined|status|member type|type)$/i.test(value.trim());
 }
 
 function parseStatClaim(content: string, label: string): number | null {
@@ -133,8 +146,9 @@ function verifyListMembers(content: string, data: unknown): string[] {
   }
 
   for (const candidate of extractListEntryHeads(content)) {
-    const normalizedCandidate = normalizeIdentifier(candidate);
+    const normalizedCandidate = normalizeMemberCandidate(candidate);
     if (
+      isIgnoredMemberCandidate(candidate) ||
       normalizedCandidate.includes("@") ||
       normalizedCandidate.length < 3 ||
       /^your organization/.test(normalizedCandidate)
@@ -217,6 +231,177 @@ function verifyListEvents(content: string, data: unknown): string[] {
   return failures;
 }
 
+function verifyListDiscussions(content: string, data: unknown): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_discussions returned non-array data"];
+  }
+
+  type DiscussionRow = { title?: unknown; reply_count?: unknown };
+  const rows = data as DiscussionRow[];
+
+  const titles = new Set(
+    rows
+      .map((row) =>
+        row && typeof row === "object" && typeof row.title === "string"
+          ? normalizeIdentifier(row.title)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const replyCountByTitle = new Map(
+    rows
+      .filter(
+        (row) =>
+          row &&
+          typeof row === "object" &&
+          typeof row.title === "string" &&
+          typeof row.reply_count === "number"
+      )
+      .map((row) => [normalizeIdentifier(row.title as string), row.reply_count as number])
+  );
+
+  const failures: string[] = [];
+  for (const title of extractQuotedTitles(content)) {
+    if (!titles.has(normalizeIdentifier(title))) {
+      failures.push(`discussion title ${title} was not present in tool rows`);
+    }
+  }
+
+  for (const candidate of extractListEntryHeads(content)) {
+    const normalizedCandidate = normalizeIdentifier(candidate);
+    if (!titles.has(normalizedCandidate)) {
+      failures.push(`discussion title ${candidate} was not present in tool rows`);
+    }
+  }
+
+  // Verify reply counts: e.g. `"Active Discussion" has 99 replies`
+  for (const line of content.split("\n")) {
+    const replyMatch = line.match(/"([^"\n]+)"\s+has\s+(\d+)\s+replies?/i);
+    if (!replyMatch) continue;
+    const titleKey = normalizeIdentifier(replyMatch[1] ?? "");
+    const claimed = Number(replyMatch[2]);
+    const expected = replyCountByTitle.get(titleKey);
+    if (expected !== undefined && claimed !== expected) {
+      failures.push(`reply count claim ${claimed} did not match ${expected}`);
+    }
+  }
+
+  return failures;
+}
+
+function verifyListJobPostings(content: string, data: unknown): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_job_postings returned non-array data"];
+  }
+
+  type JobRow = { title?: unknown; company?: unknown };
+  const rows = data as JobRow[];
+
+  const titles = new Set(
+    rows
+      .map((row) =>
+        row && typeof row === "object" && typeof row.title === "string"
+          ? normalizeIdentifier(row.title)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const companies = new Set(
+    rows
+      .map((row) =>
+        row && typeof row === "object" && typeof row.company === "string"
+          ? normalizeIdentifier(row.company)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const failures: string[] = [];
+
+  // Check count claims: "There are N job openings"
+  const countMatch = content.match(/\b(\d+)\s+job\s+(?:openings?|postings?|listings?)\b/i);
+  if (countMatch) {
+    const claimed = Number(countMatch[1]);
+    if (claimed !== data.length) {
+      failures.push(`job posting count claim ${claimed} did not match ${data.length}`);
+    }
+  }
+
+  for (const quoted of extractQuotedTitles(content)) {
+    const normalized = normalizeIdentifier(quoted);
+    // A quoted string must appear either as a title or company
+    if (!titles.has(normalized) && !companies.has(normalized)) {
+      failures.push(`job posting title ${quoted} was not present in tool rows`);
+    }
+  }
+
+  for (const candidate of extractListEntryHeads(content)) {
+    // List entries like "Software Engineer at Acme Corp" — check each part around " at "
+    const parts = candidate.split(/\s+at\s+/i).map((p) => p.trim()).filter(Boolean);
+    const allPartsKnown = parts.every(
+      (part) => titles.has(normalizeIdentifier(part)) || companies.has(normalizeIdentifier(part))
+    );
+    if (!allPartsKnown) {
+      // Only flag the first part (the title) if it's unknown
+      const titlePart = parts[0] ?? candidate;
+      if (!titles.has(normalizeIdentifier(titlePart)) && !companies.has(normalizeIdentifier(titlePart))) {
+        failures.push(`job posting title ${titlePart} was not present in tool rows`);
+      }
+    }
+  }
+
+  return failures;
+}
+
+function verifyListAnnouncements(content: string, data: unknown): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_announcements returned non-array data"];
+  }
+
+  const titles = new Set(
+    data
+      .map((row) =>
+        row && typeof row === "object" && typeof (row as { title?: unknown }).title === "string"
+          ? normalizeIdentifier((row as { title: string }).title)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+  const dates = new Set(
+    data.flatMap((row) =>
+      row &&
+      typeof row === "object" &&
+      typeof (row as { published_at?: unknown }).published_at === "string"
+        ? formatKnownEventDates((row as { published_at: string }).published_at)
+        : []
+    )
+  );
+
+  const failures: string[] = [];
+  for (const title of extractQuotedTitles(content)) {
+    if (!titles.has(normalizeIdentifier(title))) {
+      failures.push(`announcement title ${title} was not present in tool rows`);
+    }
+  }
+
+  for (const candidate of extractListEntryHeads(content)) {
+    const normalizedCandidate = normalizeIdentifier(candidate);
+    if (!titles.has(normalizedCandidate)) {
+      failures.push(`announcement title ${candidate} was not present in tool rows`);
+    }
+  }
+
+  for (const date of extractMentionedDates(content)) {
+    if (!dates.has(date)) {
+      failures.push(`announcement date ${date} was not present in tool rows`);
+    }
+  }
+
+  return failures;
+}
+
 interface SuggestConnectionGroundingReason {
   code?: unknown;
   label?: unknown;
@@ -238,11 +423,8 @@ function extractSuggestConnectionReasonCodes(line: string): string[] {
   const matches = new Set<string>();
   const normalized = line.toLowerCase();
 
-  if (/direct mentorship/.test(normalized)) {
-    matches.add("direct_mentorship");
-  }
-  if (/(second[- ]degree mentorship|second degree|two[- ]hop mentorship|two hop)/.test(normalized)) {
-    matches.add("second_degree_mentorship");
+  if (/(direct mentorship|second[- ]degree mentorship|second degree|two[- ]hop mentorship|two hop)/.test(normalized)) {
+    matches.add("unsupported_mentorship");
   }
   if (/(shared company|same company)/.test(normalized)) {
     matches.add("shared_company");
@@ -250,11 +432,14 @@ function extractSuggestConnectionReasonCodes(line: string): string[] {
   if (/(shared industry|same industry)/.test(normalized)) {
     matches.add("shared_industry");
   }
-  if (/(shared major|same major|both studied)/.test(normalized)) {
-    matches.add("shared_major");
+  if (/(shared role family|same role family|similar role family)/.test(normalized)) {
+    matches.add("shared_role_family");
+  }
+  if (/(graduation proximity|graduated within 3 years|within 3 years of graduating|similar graduation year)/.test(normalized)) {
+    matches.add("graduation_proximity");
   }
   if (/(shared graduation year|same graduation year|class of)/.test(normalized)) {
-    matches.add("shared_graduation_year");
+    matches.add("graduation_proximity");
   }
   if (/(shared city|same city|both (?:live|based|located) in)/.test(normalized)) {
     matches.add("shared_city");
@@ -362,9 +547,9 @@ function verifySuggestConnections(content: string, data: unknown): string[] {
       : null;
   const sourceHeader = stripMarkdown(content)
     .split("\n")
-    .find((line) => /should connect with/i.test(line));
+    .find((line) => /top connections for/i.test(line));
   if (sourceName && sourceHeader) {
-    const match = sourceHeader.match(/who\s+(.+?)\s+should connect with/i);
+    const match = sourceHeader.match(/top connections for\s+(.+)/i);
     const renderedSource = match?.[1] ? normalizeIdentifier(match[1]) : null;
     if (renderedSource && renderedSource !== sourceName) {
       failures.push(`source person ${renderedSource} did not match ${sourceName}`);
@@ -433,8 +618,20 @@ export function verifyToolBackedResponse(input: {
       case "list_events":
         failures.push(...verifyListEvents(input.content, result.data));
         break;
+      case "list_announcements":
+        failures.push(...verifyListAnnouncements(input.content, result.data));
+        break;
+      case "list_discussions":
+        failures.push(...verifyListDiscussions(input.content, result.data));
+        break;
+      case "list_job_postings":
+        failures.push(...verifyListJobPostings(input.content, result.data));
+        break;
       case "suggest_connections":
         failures.push(...verifySuggestConnections(input.content, result.data));
+        break;
+      default:
+        // No grounding check for this tool
         break;
     }
   }

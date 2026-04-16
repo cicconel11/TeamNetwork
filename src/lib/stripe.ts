@@ -53,7 +53,7 @@ function validatePriceIds() {
 validatePriceIds();
 
 export const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2025-12-15.clover",
+  apiVersion: "2025-12-15.clover" as Stripe.LatestApiVersion,
   typescript: true,
 });
 
