@@ -192,3 +192,16 @@ BEGIN
   RETURN jsonb_build_object('success', true);
 END;
 $$;
+
+-- Lock down default PUBLIC execute: only authenticated (and service role,
+-- which is unaffected by REVOKE PUBLIC) may invoke these RPCs. Cron paths
+-- use the service role and are unaffected; the manual admin API uses the
+-- service role too. Direct client calls require the in-function admin guard.
+REVOKE ALL ON FUNCTION public.transition_member_to_alumni(uuid, uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.transition_member_to_alumni(uuid, uuid, uuid) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.reinstate_alumni_to_active(uuid, uuid, uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.reinstate_alumni_to_active(uuid, uuid, uuid, text) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.revoke_graduated_member(uuid, uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.revoke_graduated_member(uuid, uuid, uuid) TO authenticated;
