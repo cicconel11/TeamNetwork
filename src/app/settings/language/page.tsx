@@ -91,6 +91,9 @@ function LanguageSettingsContent() {
       } else {
         document.cookie = `NEXT_LOCALE=;path=/;max-age=0${secure}`;
       }
+      // Force middleware to re-read DB on next request so the cookie
+      // reflects the newly saved preference (or org default).
+      document.cookie = `NEXT_LOCALE_SYNCED_AT=;path=/;max-age=0${secure}`;
 
       // Full reload — router.refresh() doesn't re-run middleware or
       // re-evaluate next-intl's getRequestConfig.

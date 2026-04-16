@@ -18,6 +18,17 @@ import type { SupportedLocale } from "./i18n/config";
 // Validate at module load
 validateAuthTestMode();
 
+const LOCALE_SYNC_TTL_MS = 10 * 60 * 1000;
+
+function isLocaleCookieFresh(request: NextRequest): boolean {
+  const locale = request.cookies.get("NEXT_LOCALE")?.value;
+  const syncedAt = request.cookies.get("NEXT_LOCALE_SYNCED_AT")?.value;
+  if (!locale || !syncedAt) return false;
+  const ts = parseInt(syncedAt, 10);
+  if (!Number.isFinite(ts)) return false;
+  return Date.now() - ts < LOCALE_SYNC_TTL_MS;
+}
+
 interface OrgContextRpcResult {
   found: boolean;
   organization?: { default_language?: string | null } | null;
@@ -46,18 +57,24 @@ function syncLocaleCookie(
   ) as string;
 
   const current = request.cookies.get("NEXT_LOCALE")?.value;
+  const cookieOpts = {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+  };
   if (effective !== current) {
     // Set on the request so downstream server components (getRequestConfig)
     // see the updated locale in THIS request, not one request late.
     request.cookies.set("NEXT_LOCALE", effective);
     // Set on the response to persist the cookie for future requests.
-    response.cookies.set("NEXT_LOCALE", effective, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
+    response.cookies.set("NEXT_LOCALE", effective, cookieOpts);
   }
+  // Stamp sync time so middleware can skip the DB reads on subsequent
+  // requests until the TTL expires or a save-path clears this cookie.
+  const syncedAt = String(Date.now());
+  request.cookies.set("NEXT_LOCALE_SYNCED_AT", syncedAt);
+  response.cookies.set("NEXT_LOCALE_SYNCED_AT", syncedAt, cookieOpts);
 }
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
@@ -406,10 +423,12 @@ export async function middleware(request: NextRequest) {
 
   // ── Locale cookie sync ──
   // For org routes, language fields were already captured from the RPC above.
-  // For non-org routes, always query the user's language preference so the
-  // cookie stays in sync with DB changes (e.g. after saving on /settings/language).
+  // For non-org routes, skip the up-to-three DB reads when the cookie pair
+  // (NEXT_LOCALE + NEXT_LOCALE_SYNCED_AT) is still fresh. Save paths clear
+  // NEXT_LOCALE_SYNCED_AT to force a re-read on the next request.
   if (user) {
-    if (!isOrgRoute(pathname)) {
+    const skipLocaleDbReads = !isOrgRoute(pathname) && isLocaleCookieFresh(request);
+    if (!isOrgRoute(pathname) && !skipLocaleDbReads) {
       try {
         const { data: userData } = await supabase
           .from("users")
@@ -445,7 +464,21 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    syncLocaleCookie(request, response, userLangOverride, orgDefaultLang);
+    if (skipLocaleDbReads) {
+      // Cookie fresh — skip DB reads and preserve stored locale. Refresh the
+      // sync timestamp so the TTL window slides with activity.
+      const syncedAt = String(Date.now());
+      const current = request.cookies.get("NEXT_LOCALE")?.value;
+      if (current) request.cookies.set("NEXT_LOCALE_SYNCED_AT", syncedAt);
+      response.cookies.set("NEXT_LOCALE_SYNCED_AT", syncedAt, {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      });
+    } else {
+      syncLocaleCookie(request, response, userLangOverride, orgDefaultLang);
+    }
   }
 
   response.headers.set("x-pathname", pathname);
