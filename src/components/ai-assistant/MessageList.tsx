@@ -139,7 +139,7 @@ export function MessageList({
             {msg.role === "assistant" ? (
               <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
                 <AssistantMessageContent content={msg.content ?? ""} />
-                {msg.status === "completed" && (
+                {msg.status === "complete" && (
                   <MessageFeedback messageId={msg.id} orgId={orgId} />
                 )}
               </div>
