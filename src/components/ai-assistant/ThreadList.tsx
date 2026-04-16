@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { MessageSquare, Plus, Trash2 } from "lucide-react";
 import type { AIPanelThread } from "./panel-state";
 import { formatThreadUpdatedAt } from "./thread-date";
@@ -21,54 +22,87 @@ export function ThreadList({
   onNewThread,
   onDeleteThread,
 }: ThreadListProps) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const handleDelete = async (threadId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const confirmed = window.confirm("Delete this conversation?");
     if (!confirmed) return;
 
-    await onDeleteThread(threadId);
+    setDeletingId(threadId);
+    try {
+      await onDeleteThread(threadId);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b border-border p-3">
+      {/* New conversation button */}
+      <div className="p-3">
         <button
           onClick={onNewThread}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/50 px-3 py-2.5 text-sm font-medium text-foreground transition-all hover:border-org-secondary hover:bg-org-secondary/5 hover:text-org-secondary"
         >
           <Plus className="h-4 w-4" />
           New conversation
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto">
+
+      {/* Thread list */}
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
         {loading ? (
-          <div className="flex items-center justify-center p-8">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+          <div className="flex items-center justify-center py-12">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-org-secondary border-t-transparent" />
           </div>
         ) : threads.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted-foreground">
-            No conversations yet
-          </p>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="mb-3 rounded-full bg-muted/50 p-3">
+              <MessageSquare className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">No conversations yet</p>
+            <p className="mt-1 text-xs text-muted-foreground/70">
+              Start a new conversation
+            </p>
+          </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="space-y-1">
             {threads.map((thread) => (
               <div
                 key={thread.id}
-                className={`group flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted ${
-                  activeThreadId === thread.id ? "bg-indigo-50 dark:bg-indigo-900/20" : ""
-                }`}
+                className={`group relative rounded-xl transition-all ${
+                  activeThreadId === thread.id
+                    ? "bg-org-secondary/10"
+                    : "hover:bg-muted/50"
+                } ${deletingId === thread.id ? "opacity-50" : ""}`}
               >
                 <button
                   type="button"
                   onClick={() => onSelectThread(thread.id)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  disabled={deletingId === thread.id}
+                  className="flex w-full items-start gap-3 px-3 py-2.5 text-left"
                 >
-                  <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="flex-1 truncate">
-                    <p className="truncate font-medium text-foreground">
-                      {thread.title ?? "Untitled conversation"}
+                  <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                    activeThreadId === thread.id
+                      ? "bg-org-secondary/20"
+                      : "bg-muted/70"
+                  }`}>
+                    <MessageSquare className={`h-3.5 w-3.5 ${
+                      activeThreadId === thread.id
+                        ? "text-org-secondary"
+                        : "text-muted-foreground"
+                    }`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`truncate text-sm font-medium ${
+                      activeThreadId === thread.id
+                        ? "text-org-secondary"
+                        : "text-foreground"
+                    }`}>
+                      {thread.title ?? "Untitled"}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {formatThreadUpdatedAt(thread.updated_at)}
                     </p>
                   </div>
@@ -76,8 +110,9 @@ export function ThreadList({
                 <button
                   type="button"
                   onClick={(e) => handleDelete(thread.id, e)}
-                  aria-label="Delete thread"
-                  className="rounded p-1 text-muted-foreground opacity-0 transition-colors hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-red-900/20"
+                  disabled={deletingId === thread.id}
+                  aria-label="Delete conversation"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

@@ -683,42 +683,36 @@ export function AIPanel({ orgId }: AIPanelProps) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[45] bg-black/20 sm:hidden"
+        className="fixed inset-0 z-[45] bg-black/30 backdrop-blur-sm sm:hidden"
         onClick={closePanel}
         aria-hidden="true"
       />
 
-      {/* Panel */}
-      <div className="ai-panel-enter fixed top-0 right-0 bottom-0 z-[45] flex w-full flex-col border-l border-border bg-background shadow-2xl sm:w-96">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-indigo-500" />
-              <h2 className="text-sm font-semibold text-foreground">AI Assistant</h2>
-              <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400">
-                Beta
-              </span>
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {scopeLabel}
-              </span>
+      {/* Panel - Gemini style */}
+      <div className="ai-panel-enter fixed top-0 right-0 bottom-0 z-[45] flex w-full flex-col border-l border-border bg-background shadow-2xl sm:w-[420px]">
+        {/* Header - minimal, clean */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-org-secondary/20 to-org-secondary/5">
+              <Sparkles className="h-5 w-5 text-org-secondary" />
             </div>
-            <span className="text-[10px] text-muted-foreground">
-              TeamNetwork tasks only
-            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Assistant</h2>
+              <span className="text-[10px] text-muted-foreground">{scopeLabel}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <button
               onClick={() => setView(view === "chat" ? "threads" : "chat")}
-              aria-label={view === "chat" ? "Show thread list" : "Show chat"}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={view === "chat" ? "Show conversations" : "Back to chat"}
+              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
             >
               {view === "chat" ? <List className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
             </button>
             <button
               onClick={closePanel}
-              aria-label="Close AI assistant"
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Close"
+              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>

@@ -67,15 +67,15 @@ export function MessageFeedback({
   );
 
   return (
-    <div className="mt-1 flex items-center gap-1">
+    <div className="mt-2.5 flex items-center gap-0.5">
       <button
         type="button"
         onClick={() => void submitFeedback("positive")}
         disabled={isSubmitting}
-        className={`rounded p-1 transition-colors ${
+        className={`rounded-md p-1 transition-colors ${
           rating === "positive"
-            ? "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            ? "text-green-500 dark:text-green-400"
+            : "text-muted-foreground/40 hover:text-muted-foreground"
         }`}
         aria-label="Helpful"
         title="Helpful"
@@ -86,10 +86,10 @@ export function MessageFeedback({
         type="button"
         onClick={() => void submitFeedback("negative")}
         disabled={isSubmitting}
-        className={`rounded p-1 transition-colors ${
+        className={`rounded-md p-1 transition-colors ${
           rating === "negative"
-            ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            ? "text-red-500 dark:text-red-400"
+            : "text-muted-foreground/40 hover:text-muted-foreground"
         }`}
         aria-label="Not helpful"
         title="Not helpful"

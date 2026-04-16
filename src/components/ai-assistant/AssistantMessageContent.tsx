@@ -21,51 +21,63 @@ export function AssistantMessageContent({ content }: AssistantMessageContentProp
         a: (props) => (
           <a
             {...props}
-            className="break-all text-indigo-600 underline underline-offset-2 dark:text-indigo-400"
+            className="break-all text-org-secondary underline underline-offset-2 hover:text-org-secondary-dark"
             target={typeof props.href === "string" && /^https?:\/\//i.test(props.href) ? "_blank" : undefined}
             rel={typeof props.href === "string" && /^https?:\/\//i.test(props.href) ? "noreferrer noopener" : undefined}
           />
         ),
-        p: (props) => <p {...props} className="my-0 leading-relaxed" />,
-        ul: (props) => <ul {...props} className="ml-5 list-disc space-y-1" />,
-        ol: (props) => <ol {...props} className="ml-5 list-decimal space-y-1" />,
-        li: (props) => <li {...props} className="break-words" />,
+        p: (props) => <p {...props} className="mb-2.5 last:mb-0 leading-[1.65] text-foreground/85" />,
+        h1: (props) => <h1 {...props} className="mb-3 mt-5 first:mt-0 text-base font-semibold text-foreground" />,
+        h2: (props) => <h2 {...props} className="mb-2.5 mt-4 first:mt-0 text-[15px] font-semibold text-foreground" />,
+        h3: (props) => <h3 {...props} className="mb-2 mt-3.5 first:mt-0 text-sm font-medium text-foreground" />,
+        strong: (props) => <strong {...props} className="font-semibold text-foreground/95" />,
+        em: (props) => <em {...props} className="italic text-foreground/75" />,
+        ul: (props) => <ul {...props} className="mb-3 ml-4 list-outside list-disc space-y-1 text-foreground/85 marker:text-muted-foreground/50" />,
+        ol: (props) => <ol {...props} className="mb-3 ml-4 list-outside list-decimal space-y-1 text-foreground/85 marker:text-muted-foreground/50" />,
+        li: (props) => <li {...props} className="leading-[1.6] pl-0.5" />,
+        blockquote: (props) => (
+          <blockquote
+            {...props}
+            className="my-2 border-l-2 border-org-secondary/50 pl-3 italic text-muted-foreground"
+          />
+        ),
+        hr: () => <hr className="my-4 border-border" />,
         pre: (props) => (
           <pre
             {...props}
-            className="my-2 overflow-x-auto rounded-xl border border-border/70 bg-background/80 p-3 text-xs"
+            className="my-3 overflow-x-auto rounded-xl border border-border bg-muted/50 p-3 text-xs"
           />
         ),
         code: ({ inline, className, children, ...props }: MarkdownCodeProps) =>
           inline ? (
             <code
               {...props}
-              className={`rounded bg-background/80 px-1 py-0.5 text-[0.9em] ${className ?? ""}`.trim()}
+              className={`rounded-md bg-muted px-1.5 py-0.5 text-[0.875em] font-mono text-foreground ${className ?? ""}`.trim()}
             >
               {children}
             </code>
           ) : (
-            <code {...props} className={`text-xs ${className ?? ""}`.trim()}>
+            <code {...props} className={`font-mono text-xs ${className ?? ""}`.trim()}>
               {children}
             </code>
           ),
         table: (props) => (
-          <div className="my-2 overflow-x-auto">
-            <table {...props} className="w-full border-collapse text-xs" />
+          <div className="my-3 overflow-x-auto rounded-lg border border-border">
+            <table {...props} className="w-full border-collapse text-sm" />
           </div>
         ),
         thead: (props) => (
-          <thead {...props} className="border-b border-border bg-muted/30" />
+          <thead {...props} className="border-b border-border bg-muted/50" />
         ),
         tbody: (props) => <tbody {...props} />,
         tr: (props) => (
-          <tr {...props} className="border-b border-border/50 even:bg-muted/20" />
+          <tr {...props} className="border-b border-border/50 last:border-0" />
         ),
         th: (props) => (
-          <th {...props} className="px-2 py-1 text-left font-medium text-foreground" />
+          <th {...props} className="px-3 py-2 text-left text-xs font-semibold text-foreground" />
         ),
         td: (props) => (
-          <td {...props} className="px-2 py-1 text-muted-foreground" />
+          <td {...props} className="px-3 py-2 text-foreground" />
         ),
       }}
     >
