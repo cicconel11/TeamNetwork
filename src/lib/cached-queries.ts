@@ -49,7 +49,7 @@ export function getCachedOrgSettings(orgId: string) {
       const supabase = createServiceClient();
       const { data, error } = await supabase
         .from("organizations")
-        .select("id, name, slug, primary_color, secondary_color, logo_url, org_type, nav_config, stripe_connect_account_id")
+        .select("id, name, slug, base_color, primary_color, secondary_color, logo_url, org_type, nav_config, stripe_connect_account_id")
         .eq("id", id)
         .single();
       if (error) throw new Error(`Org settings query failed: ${error.message}`);

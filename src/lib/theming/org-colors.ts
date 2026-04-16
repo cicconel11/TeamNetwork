@@ -1,6 +1,6 @@
 /**
  * Organization color theming utilities
- * Provides centralized color manipulation and CSS variable generation for org branding
+ * 3-color system: base (white/dark toggle), sidebar (free hex), button (free hex)
  */
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -59,112 +59,106 @@ export function isColorDark(hex: string): boolean {
   return luminance < 0.6;
 }
 
-/**
- * Derives dark mode variants of org colors
- * Adjusts brightness to ensure proper contrast in dark mode
- */
-export function deriveOrgDarkModeColors(
-  primaryColor: string,
-  secondaryColor: string
-): {
-  primary: string;
-  primaryLight: string;
-  primaryDark: string;
-  secondary: string;
-  secondaryLight: string;
-  secondaryDark: string;
-  secondaryForeground: string;
-} {
-  const isPrimaryDark = isColorDark(primaryColor);
-  const isSecondaryDark = isColorDark(secondaryColor);
+/** Hardcoded light palette — stable, hand-picked values */
+const LIGHT_PALETTE = {
+  "--background": "#fafbfc",
+  "--foreground": "#000000",
+  "--card": "#ffffff",
+  "--card-foreground": "#000000",
+  "--muted": "#f1f5f9",
+  "--muted-foreground": "#4a5568",
+  "--border": "#e2e8f0",
+} as const;
 
-  // In dark mode, brighten dark colors and darken light colors for proper contrast
-  const primary = isPrimaryDark ? adjustColor(primaryColor, 15) : adjustColor(primaryColor, -30);
-  const secondary = isSecondaryDark
-    ? adjustColor(secondaryColor, 15)
-    : adjustColor(secondaryColor, -30);
+/** Hardcoded dark palette — stable, hand-picked values */
+const DARK_PALETTE = {
+  "--background": "#222326",
+  "--foreground": "#ffffff",
+  "--card": "#2a2d31",
+  "--card-foreground": "#ffffff",
+  "--muted": "#33363b",
+  "--muted-foreground": "#a0aec0",
+  "--border": "#3d4147",
+} as const;
+
+const BASE_DARK = "#222326";
+const BASE_PRIMARY = "primary";
+
+/** Compute a dynamic palette from an arbitrary hex color */
+function computeDynamicPalette(hex: string): Record<string, string> {
+  const dark = isColorDark(hex);
+  const foreground = dark ? "#ffffff" : "#000000";
+  const card = dark ? adjustColor(hex, 18) : adjustColor(hex, -12);
+  const muted = dark ? adjustColor(hex, 28) : adjustColor(hex, -25);
+  const mutedForeground = dark ? "#a0aec0" : "#4a5568";
+  const border = dark ? adjustColor(hex, 35) : adjustColor(hex, -35);
 
   return {
-    primary,
-    primaryLight: adjustColor(primary, 20),
-    primaryDark: adjustColor(primary, -20),
-    secondary,
-    secondaryLight: adjustColor(secondary, 20),
-    secondaryDark: adjustColor(secondary, -20),
-    secondaryForeground: isColorDark(secondary) ? "#ffffff" : "#0f172a",
+    "--background": hex,
+    "--foreground": foreground,
+    "--card": card,
+    "--card-foreground": foreground,
+    "--muted": muted,
+    "--muted-foreground": mutedForeground,
+    "--border": border,
   };
 }
 
 /**
- * Computes complete CSS variable object for org theming
- * Supports both light and dark modes
+ * Computes complete CSS variable object for org theming.
+ * Base color: "primary" (use sidebar color), "#ffffff" (light), or "#222326" (dark).
  */
 export function computeOrgThemeVariables(
-  primaryColor: string,
-  secondaryColor: string,
-  isDarkMode: boolean
+  baseColor: string,
+  sidebarColor: string,
+  buttonColor: string,
 ): Record<string, string> {
-  if (isDarkMode) {
-    const darkColors = deriveOrgDarkModeColors(primaryColor, secondaryColor);
-    const cardColor = adjustColor(darkColors.primary, 18);
-    const muted = adjustColor(darkColors.primary, 28);
-    const borderColor = adjustColor(darkColors.primary, 35);
-    const primaryForeground = isColorDark(darkColors.primary) ? "#f8fafc" : "#0f172a";
+  const basePalette =
+    baseColor === BASE_PRIMARY ? computeDynamicPalette(sidebarColor)
+    : baseColor === BASE_DARK ? DARK_PALETTE
+    : LIGHT_PALETTE;
 
-    return {
-      "--color-org-primary": darkColors.primary,
-      "--color-org-primary-light": darkColors.primaryLight,
-      "--color-org-primary-dark": darkColors.primaryDark,
-      "--color-org-primary-foreground": primaryForeground,
-      "--color-org-secondary": darkColors.secondary,
-      "--color-org-secondary-light": darkColors.secondaryLight,
-      "--color-org-secondary-dark": darkColors.secondaryDark,
-      "--color-org-secondary-foreground": darkColors.secondaryForeground,
-      "--background": darkColors.primary,
-      "--foreground": "#f8fafc",
-      "--card": cardColor,
-      "--card-foreground": "#f8fafc",
-      "--muted": muted,
-      "--muted-foreground": "#e2e8f0",
-      "--border": borderColor,
-      "--ring": darkColors.secondary,
-    };
-  }
+  // Sidebar: auto-derive foreground + muted variants from sidebar color darkness
+  const sidebarDark = isColorDark(sidebarColor);
+  const sidebarForeground = sidebarDark ? "#f8fafc" : "#1A1F36";
+  const sidebarMuted = sidebarDark ? adjustColor(sidebarColor, 25) : adjustColor(sidebarColor, -20);
+  const sidebarMutedForeground = sidebarDark ? "#94a3b8" : "#64748b";
 
-  // Light mode
-  const primaryLight = adjustColor(primaryColor, 20);
-  const primaryDark = adjustColor(primaryColor, -20);
-  const secondaryLight = adjustColor(secondaryColor, 20);
-  const secondaryDark = adjustColor(secondaryColor, -20);
-  const isPrimaryDark = isColorDark(primaryColor);
-  const isSecondaryDark = isColorDark(secondaryColor);
-  const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
-  const primaryForeground = isPrimaryDark ? "#ffffff" : "#0f172a";
-  const secondaryForeground = isSecondaryDark ? "#ffffff" : "#0f172a";
-  const cardColor = isPrimaryDark ? adjustColor(primaryColor, 18) : adjustColor(primaryColor, -12);
-  const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
-  const muted = isPrimaryDark ? adjustColor(primaryColor, 28) : adjustColor(primaryColor, -35);
-  const mutedForeground = isColorDark(muted) ? "#e2e8f0" : "#475569";
-  const borderColor = isPrimaryDark
-    ? adjustColor(primaryColor, 35)
-    : adjustColor(primaryColor, -45);
+  // Button: derive light/dark variants + foreground
+  const buttonDark = isColorDark(buttonColor);
+  const buttonLight = adjustColor(buttonColor, 20);
+  const buttonDarkVariant = adjustColor(buttonColor, -20);
+  const buttonForeground = buttonDark ? "#ffffff" : "#0f172a";
+
+  // Map org-primary vars → sidebar color (30+ components reference these)
+  const sidebarLight = adjustColor(sidebarColor, 20);
+  const sidebarDarkVariant = adjustColor(sidebarColor, -20);
+  const sidebarPrimaryForeground = sidebarDark ? "#ffffff" : "#0f172a";
 
   return {
-    "--color-org-primary": primaryColor,
-    "--color-org-primary-light": primaryLight,
-    "--color-org-primary-dark": primaryDark,
-    "--color-org-primary-foreground": primaryForeground,
-    "--color-org-secondary": secondaryColor,
-    "--color-org-secondary-light": secondaryLight,
-    "--color-org-secondary-dark": secondaryDark,
-    "--color-org-secondary-foreground": secondaryForeground,
-    "--background": primaryColor,
-    "--foreground": baseForeground,
-    "--card": cardColor,
-    "--card-foreground": cardForeground,
-    "--muted": muted,
-    "--muted-foreground": mutedForeground,
-    "--border": borderColor,
-    "--ring": secondaryColor,
+    // Base palette (hardcoded, no computation)
+    ...basePalette,
+
+    // Sidebar (scoped vars — applied on sidebar element to override base vars)
+    "--sidebar-bg": sidebarColor,
+    "--sidebar-foreground": sidebarForeground,
+    "--sidebar-muted": sidebarMuted,
+    "--sidebar-muted-foreground": sidebarMutedForeground,
+
+    // org-primary → maps to sidebar color (preserves existing component references)
+    "--color-org-primary": sidebarColor,
+    "--color-org-primary-light": sidebarLight,
+    "--color-org-primary-dark": sidebarDarkVariant,
+    "--color-org-primary-foreground": sidebarPrimaryForeground,
+
+    // org-secondary → maps to button color
+    "--color-org-secondary": buttonColor,
+    "--color-org-secondary-light": buttonLight,
+    "--color-org-secondary-dark": buttonDarkVariant,
+    "--color-org-secondary-foreground": buttonForeground,
+
+    // Ring & selection
+    "--ring": sidebarColor,
+    "--selection": buttonLight,
   };
 }

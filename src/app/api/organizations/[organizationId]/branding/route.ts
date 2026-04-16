@@ -111,21 +111,34 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const formData = await req.formData();
+  const rawBaseColor = formData.get("baseColor");
   const rawPrimary = formData.get("primaryColor");
   const rawSecondary = formData.get("secondaryColor");
+
+  // Validate base color: "primary", #ffffff, or #222326
+  const VALID_BASE_COLORS = new Set(["primary", "#ffffff", "#222326"]);
+  let baseColor: string | null = null;
+  if (rawBaseColor && typeof rawBaseColor === "string" && rawBaseColor.trim()) {
+    const normalized = rawBaseColor.trim().toLowerCase();
+    if (!VALID_BASE_COLORS.has(normalized)) {
+      return respond({ error: "Base color must be 'primary', #ffffff, or #222326." }, 400);
+    }
+    baseColor = normalized;
+  }
+
   const primary = normalizeHexColor(rawPrimary);
   const secondary = normalizeHexColor(rawSecondary);
   const file = formData.get("logo");
 
   if (primary.invalid) {
-    return respond({ error: "Primary color must be a 6-digit hex value like #1e3a5f." }, 400);
+    return respond({ error: "Sidebar color must be a 6-digit hex value like #1e3a5f." }, 400);
   }
   if (secondary.invalid) {
-    return respond({ error: "Secondary color must be a 6-digit hex value like #10b981." }, 400);
+    return respond({ error: "Button color must be a 6-digit hex value like #10b981." }, 400);
   }
 
   const uploadFile = file instanceof File ? file : null;
-  if (!uploadFile && !primary.color && !secondary.color) {
+  if (!uploadFile && !primary.color && !secondary.color && !baseColor) {
     return respond({ error: "Provide a logo or updated colors to save." }, 400);
   }
 
@@ -156,11 +169,15 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const serviceSupabase = createServiceClient();
   const updates: {
+    base_color?: string;
     primary_color?: string;
     secondary_color?: string;
     logo_url?: string;
   } = {};
 
+  if (baseColor) {
+    updates.base_color = baseColor;
+  }
   if (primary.color) {
     updates.primary_color = primary.color;
   }
@@ -195,7 +212,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .update(updates as any)
     .eq("id", organizationId)
-    .select("id, name, slug, logo_url, primary_color, secondary_color")
+    .select("id, name, slug, logo_url, base_color, primary_color, secondary_color")
     .maybeSingle();
 
   if (updateError) {

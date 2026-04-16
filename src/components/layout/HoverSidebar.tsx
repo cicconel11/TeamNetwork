@@ -87,6 +87,16 @@ useEffect(() => {
     ? "w-64"
     : "w-14 data-[expanded=true]:w-64";
 
+  // Scope base CSS vars within sidebar so child components (NavGroupSection, etc.)
+  // get sidebar-appropriate text/muted colors instead of page-level ones
+  const sidebarScopeStyle = {
+    "--foreground": "var(--sidebar-foreground)",
+    "--muted": "var(--sidebar-muted)",
+    "--muted-foreground": "var(--sidebar-muted-foreground)",
+    "--card": "var(--sidebar-bg)",
+    "--card-foreground": "var(--sidebar-foreground)",
+  } as React.CSSProperties;
+
   return (
     <aside
       data-expanded={isExpanded}
@@ -102,7 +112,8 @@ useEffect(() => {
               }
             }
       }
-      className={`flex flex-col bg-card border-r border-border overflow-hidden transition-[width] duration-300 ease-in-out motion-reduce:transition-none ${positionClass} ${widthClass} ${className}`}
+      style={sidebarScopeStyle}
+      className={`flex flex-col bg-[var(--sidebar-bg)] text-[var(--sidebar-foreground)] border-r border-border overflow-hidden transition-[width] duration-300 ease-in-out motion-reduce:transition-none ${positionClass} ${widthClass} ${className}`}
     >
       {children({ isExpanded, isPinned, togglePin })}
     </aside>
