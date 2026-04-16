@@ -75,6 +75,6 @@ export async function generateEmbeddings(
   }
 
   // Response data is sorted by index — map back to input order
-  const sorted = response.data.sort((a, b) => a.index - b.index);
+  const sorted = [...response.data].sort((a, b) => a.index - b.index);
   return sorted.map((d) => d.embedding);
 }

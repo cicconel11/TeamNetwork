@@ -2456,7 +2456,7 @@ const MESSAGE_SAFETY_FALLBACK =
 const SCOPE_REFUSAL_FALLBACK =
   "I can only help with TeamNetwork tasks for your organization — like members, events, announcements, discussions, jobs, donations, or finding the right page. That request is outside what I do.";
 
-export const SCOPE_REFUSAL_CANONICAL_PREFIX = "I can only help with TeamNetwork tasks";
+const SCOPE_REFUSAL_CANONICAL_PREFIX = "I can only help with TeamNetwork tasks";
 
 const TOOL_GROUNDING_FALLBACK =
   "I couldn’t verify that answer against your organization’s data, so I’m not returning it. Please try rephrasing or ask a narrower question.";

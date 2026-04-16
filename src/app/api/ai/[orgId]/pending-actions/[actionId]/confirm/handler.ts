@@ -39,6 +39,8 @@ import {
 import { calendarEventDetailPath } from "@/lib/calendar/routes";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
+import { syncEventToUsers } from "@/lib/google/calendar-sync";
+import { sendNotificationBlast } from "@/lib/notifications";
 
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
@@ -699,31 +701,44 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             });
           }
 
-          // Fire-and-forget: sync to Google Calendar
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-          fetch(`${appUrl}/api/calendar/event-sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              eventId: result.event.id,
-              organizationId: ctx.orgId,
-              operation: "create",
-            }),
-          }).catch(() => {});
+          try {
+            await syncEventToUsers(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
+          } catch (syncErr) {
+            aiLog("error", "ai-confirm", "google calendar sync failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, { actionId: action.id, eventId: result.event.id, error: syncErr });
+          }
 
-          // Fire-and-forget: send notification
-          fetch(`${appUrl}/api/notifications/send`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+          try {
+            const { syncOutlookEventToUsers } = await import("@/lib/microsoft/calendar-sync");
+            await syncOutlookEventToUsers(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
+          } catch (outlookErr) {
+            aiLog("error", "ai-confirm", "outlook calendar sync failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, { actionId: action.id, eventId: result.event.id, error: outlookErr });
+          }
+
+          try {
+            await sendNotificationBlast({
+              supabase: ctx.serviceSupabase,
               organizationId: ctx.orgId,
+              audience: "both",
+              channel: "email",
               title: `New Event: ${result.event.title}`,
               body: `Event scheduled for ${payload.start_date} at ${payload.start_time}${payload.location ? `\nWhere: ${payload.location}` : ""}`,
-              channel: "email",
-              audience: "both",
               category: "event",
-            }),
-          }).catch(() => {});
+            });
+          } catch (notifyErr) {
+            aiLog("error", "ai-confirm", "event notification blast failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, { actionId: action.id, eventId: result.event.id, error: notifyErr });
+          }
 
           return NextResponse.json({ ok: true, event: result.event, actionId: action.id });
         }
