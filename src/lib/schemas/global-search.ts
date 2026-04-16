@@ -7,7 +7,7 @@ export const globalSearchModeSchema = z.enum(["fast", "ai"]);
 export const globalSearchQuerySchema = z
   .string()
   .trim()
-  .min(1, "Enter at least one character")
+  .min(2, "Enter at least two characters")
   .max(100)
   .transform((s) => sanitizeIlikeInput(s));
 
