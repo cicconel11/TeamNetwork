@@ -94,6 +94,7 @@ export function LandingHeader() {
   }, [open]);
 
   return (
+    <>
     <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4">
         <Link href="#top" className="group flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
@@ -172,54 +173,57 @@ export function LandingHeader() {
           </button>
         </div>
       </div>
-
-      {/* Mobile drawer overlay */}
-      {open && (
-        <div className="fixed inset-0 top-[65px] z-40 bg-black/60 md:hidden">
-          <div
-            ref={drawerRef}
-            className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-landing-navy border-l border-landing-cream/10 shadow-2xl animate-slide-in-right"
-          >
-            <nav className="flex flex-col p-6 gap-1">
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={close}
-                  className="px-4 py-3 rounded-lg text-landing-cream/70 hover:text-landing-cream hover:bg-landing-cream/5 transition-colors text-base font-medium"
-                >
-                  {link.label}
-                </Link>
-              ))}
-
-              <div className="border-t border-landing-cream/10 mt-4 pt-4">
-                <ButtonLink
-                  href="/auth/signup"
-                  variant="custom"
-                  className="w-full bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold text-center"
-                >
-                  Get Started
-                </ButtonLink>
-              </div>
-            </nav>
-          </div>
-
-          {/* Slide-in animation */}
-          <style jsx>{`
-            @keyframes slideInRight {
-              from {
-                transform: translateX(100%);
-              }
-              to {
-                transform: translateX(0);
-              }
-            }
-            .animate-slide-in-right {
-              animation: slideInRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-            }
-          `}</style>
-        </div>
-      )}
     </header>
+
+    {/* Mobile drawer overlay — rendered outside <header> so `fixed` resolves against the
+        viewport. The header uses `backdrop-filter`, which creates a containing block for
+        fixed descendants and would otherwise clip the drawer to the header's height. */}
+    {open && (
+      <div className="fixed inset-0 z-50 bg-black/60 md:hidden">
+        <div
+          ref={drawerRef}
+          className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-landing-navy border-l border-landing-cream/10 shadow-2xl animate-slide-in-right"
+        >
+          <nav className="flex flex-col p-6 gap-1">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={close}
+                className="px-4 py-3 rounded-lg text-landing-cream/70 hover:text-landing-cream hover:bg-landing-cream/5 transition-colors text-base font-medium"
+              >
+                {link.label}
+              </Link>
+            ))}
+
+            <div className="border-t border-landing-cream/10 mt-4 pt-4">
+              <ButtonLink
+                href="/auth/signup"
+                variant="custom"
+                className="w-full bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold text-center"
+              >
+                Get Started
+              </ButtonLink>
+            </div>
+          </nav>
+        </div>
+
+        {/* Slide-in animation */}
+        <style jsx>{`
+          @keyframes slideInRight {
+            from {
+              transform: translateX(100%);
+            }
+            to {
+              transform: translateX(0);
+            }
+          }
+          .animate-slide-in-right {
+            animation: slideInRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+          }
+        `}</style>
+      </div>
+    )}
+    </>
   );
 }
