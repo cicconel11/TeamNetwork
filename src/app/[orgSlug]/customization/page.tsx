@@ -68,6 +68,7 @@ function OrgSettingsContent() {
 
   // Initial data for child components
   const [initialLogoUrl, setInitialLogoUrl] = useState<string | null>(null);
+  const [initialBaseColor, setInitialBaseColor] = useState("primary");
   const [initialPrimaryColor, setInitialPrimaryColor] = useState("#1e3a5f");
   const [initialSecondaryColor, setInitialSecondaryColor] = useState("#10b981");
   const [initialPrefs, setInitialPrefs] = useState<{
@@ -125,7 +126,7 @@ function OrgSettingsContent() {
 
       const { data: org, error: orgError } = await supabase
         .from("organizations")
-        .select("id, name, logo_url, primary_color, secondary_color, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, linkedin_resync_enabled, timezone, default_language")
+        .select("id, name, logo_url, base_color, primary_color, secondary_color, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, linkedin_resync_enabled, timezone, default_language")
         .eq("slug", orgSlug)
         .maybeSingle();
 
@@ -138,6 +139,7 @@ function OrgSettingsContent() {
       setOrgId(org.id);
       setOrgName(org.name || tCustom("fallbackOrgName"));
       setInitialLogoUrl(org.logo_url);
+      setInitialBaseColor((org as Record<string, unknown>).base_color as string || "primary");
       setInitialPrimaryColor(org.primary_color || "#1e3a5f");
       setInitialSecondaryColor(org.secondary_color || "#10b981");
       setFeedPostRoles((org as Record<string, unknown>).feed_post_roles as string[] || ["admin", "active_member", "alumni"]);
@@ -443,8 +445,9 @@ function OrgSettingsContent() {
             orgName={orgName}
             isAdmin={isAdmin}
             initialLogoUrl={initialLogoUrl}
-            initialPrimaryColor={initialPrimaryColor}
-            initialSecondaryColor={initialSecondaryColor}
+            initialBaseColor={initialBaseColor}
+            initialSidebarColor={initialPrimaryColor}
+            initialButtonColor={initialSecondaryColor}
           />
 
           {isAdmin && (
