@@ -20,6 +20,7 @@ The same panel is mounted on org layouts and enterprise layouts. Enterprise beha
 | `src/components/ai-assistant/MessageInput.tsx` | Textarea with send/stop buttons, schedule-file picker, error display, route-aware placeholder text | `MessageInput` (L14) |
 | `src/components/ai-assistant/ThreadList.tsx` | Thread listing with select, new, and delete actions | `ThreadList` (L16) |
 | `src/components/ai-assistant/AssistantMessageContent.tsx` | Markdown renderer (react-markdown + remark-gfm) | `AssistantMessageContent` (L11) |
+| `src/components/ai-assistant/MessageFeedback.tsx` | Thumbs up/down UI with persisted rating hydration + delete-on-toggle behavior | `MessageFeedback` |
 | `src/components/ai-assistant/PendingActionCard.tsx` | Confirmation UI for assistant-prepared writes | `PendingActionCard` |
 
 ### State & Utilities
@@ -51,7 +52,8 @@ The same panel is mounted on org layouts and enterprise layouts. Enterprise beha
               │     ├── MessageList
               │     │     ├── Empty state (Sparkles icon + prompt + starter prompt chips)
               │     │     ├── Message bubbles (user: indigo, assistant: muted)
-              │     │     │     └── AssistantMessageContent (ReactMarkdown)
+              │     │     │     ├── AssistantMessageContent (ReactMarkdown)
+              │     │     │     └── MessageFeedback (completed assistant messages only)
               │     │     ├── Preview assistant content (post-stream, pre-refresh)
               │     │     └── Streaming content (with cursor animation)
               │     ├── PendingActionCard
@@ -118,6 +120,14 @@ All state lives in `AIPanel` via `useState`. No global store or URL state.
 4. `useAIStream.sendMessage` fires fetch + SSE stream with optional `attachment`
 5. On success: messages reloaded from server (silent), `pendingAssistantContent` shown until load completes, then draft + attachment are cleared
 6. On failure/interruption: optimistic message removed or retried, and the uploaded attachment stays on the draft for resend
+
+### Feedback Persistence
+
+1. `MessageList` renders `MessageFeedback` only for completed assistant messages
+2. `MessageFeedback` loads the persisted rating from `GET /api/ai/{orgId}/feedback?messageId=...` on mount
+3. Clicking a thumb sends `POST /api/ai/{orgId}/feedback` to upsert `{ messageId, rating }`
+4. Clicking the active thumb sends `DELETE /api/ai/{orgId}/feedback?messageId=...` to remove the stored rating
+5. The feedback route validates that the message belongs to the current user and requested org before any read, write, or delete
 
 ### Idempotency Key Management
 

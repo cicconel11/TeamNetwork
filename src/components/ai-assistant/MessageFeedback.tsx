@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import type { AIFeedbackRating } from "@/lib/schemas";
 
@@ -17,37 +17,75 @@ export function MessageFeedback({
 }: MessageFeedbackProps) {
   const [rating, setRating] = useState<AIFeedbackRating | null>(initialRating);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasInteractedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    hasInteractedRef.current = false;
+    setRating(initialRating);
+
+    const loadPersistedRating = async () => {
+      try {
+        const res = await fetch(
+          `/api/ai/${orgId}/feedback?messageId=${encodeURIComponent(messageId)}`
+        );
+        if (!res.ok) return;
+
+        const body = await res.json();
+        const nextRating =
+          body?.data?.rating === "positive" || body?.data?.rating === "negative"
+            ? body.data.rating
+            : null;
+
+        if (!cancelled && !hasInteractedRef.current) {
+          setRating(nextRating);
+        }
+      } catch {
+        // Leave the local state alone on transient fetch failures.
+      }
+    };
+
+    void loadPersistedRating();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialRating, messageId, orgId]);
 
   const submitFeedback = useCallback(
     async (newRating: AIFeedbackRating) => {
       if (isSubmitting) return;
 
+      const previousRating = rating;
       // Toggle off if clicking same rating
       const targetRating = rating === newRating ? null : newRating;
+
+      hasInteractedRef.current = true;
 
       // Optimistic update
       setRating(targetRating);
 
-      if (!targetRating) {
-        // No API to delete feedback yet, just clear local state
-        return;
-      }
-
       setIsSubmitting(true);
       try {
-        const res = await fetch(`/api/ai/${orgId}/feedback`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messageId, rating: targetRating }),
-        });
+        const res = targetRating
+          ? await fetch(`/api/ai/${orgId}/feedback`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ messageId, rating: targetRating }),
+            })
+          : await fetch(
+              `/api/ai/${orgId}/feedback?messageId=${encodeURIComponent(messageId)}`,
+              { method: "DELETE" }
+            );
 
         if (!res.ok) {
           // Revert on failure
-          setRating(rating);
+          setRating(previousRating);
         }
       } catch {
         // Revert on error
-        setRating(rating);
+        setRating(previousRating);
       } finally {
         setIsSubmitting(false);
       }
