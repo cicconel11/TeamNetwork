@@ -19,39 +19,12 @@ export function MessageFeedback({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const hasInteractedRef = useRef(false);
 
+  // Sync from parent when initialRating changes (batch fetch completes)
   useEffect(() => {
-    let cancelled = false;
-
-    hasInteractedRef.current = false;
-    setRating(initialRating);
-
-    const loadPersistedRating = async () => {
-      try {
-        const res = await fetch(
-          `/api/ai/${orgId}/feedback?messageId=${encodeURIComponent(messageId)}`
-        );
-        if (!res.ok) return;
-
-        const body = await res.json();
-        const nextRating =
-          body?.data?.rating === "positive" || body?.data?.rating === "negative"
-            ? body.data.rating
-            : null;
-
-        if (!cancelled && !hasInteractedRef.current) {
-          setRating(nextRating);
-        }
-      } catch {
-        // Leave the local state alone on transient fetch failures.
-      }
-    };
-
-    void loadPersistedRating();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initialRating, messageId, orgId]);
+    if (!hasInteractedRef.current) {
+      setRating(initialRating);
+    }
+  }, [initialRating]);
 
   const submitFeedback = useCallback(
     async (newRating: AIFeedbackRating) => {
