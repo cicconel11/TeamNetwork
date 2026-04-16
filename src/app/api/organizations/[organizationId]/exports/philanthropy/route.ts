@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { escapeCsvCell } from "@/lib/export/spreadsheet";
@@ -59,11 +58,11 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden", message: "Only admins can export philanthropy." }, { status: 403 });
   }
 
-  const serviceClient = createServiceClient();
-  const { data: events, error } = await serviceClient
+  const { data: events, error } = await supabase
     .from("events")
     .select("id, title, start_date, end_date, location, description, audience, event_type, is_philanthropy, created_at, updated_at")
     .eq("organization_id", organizationId)
+    .is("deleted_at", null)
     .or("is_philanthropy.eq.true,event_type.eq.philanthropy")
     .order("start_date", { ascending: false });
 
