@@ -33,8 +33,55 @@ export interface RetrieveParams {
 
 const DEFAULT_MAX_CHUNKS = 5;
 const DEFAULT_SIMILARITY_THRESHOLD = parseFloat(
-  process.env.RAG_SIMILARITY_THRESHOLD || "0.5"
+  process.env.RAG_SIMILARITY_THRESHOLD || "0.55"
 );
+// Drop chunks whose content is too short to be meaningful ("ok", "hjbjk", etc.).
+const MIN_CHUNK_CONTENT_LENGTH = 40;
+
+// Map bare domain terms to an expanded phrase so embeddings align with indexed
+// content (e.g. a "job" query matches "Job: Senior Engineer" chunks).
+const QUERY_EXPANSIONS: Record<string, string> = {
+  job: "job posting role hiring position",
+  jobs: "job postings roles hiring positions",
+  event: "event meeting gathering schedule",
+  events: "events meetings gatherings schedule",
+  member: "team member roster directory",
+  members: "team members roster directory",
+  alumni: "alumni graduates former members directory",
+  announcement: "announcement update news",
+  announcements: "announcements updates news",
+  discussion: "discussion thread conversation",
+  discussions: "discussion threads conversations",
+  thread: "discussion thread conversation",
+  threads: "discussion threads conversations",
+};
+
+export function expandQuery(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) return trimmed;
+  const lower = trimmed.toLowerCase();
+  const expansion = QUERY_EXPANSIONS[lower];
+  return expansion ? `${trimmed} ${expansion}` : trimmed;
+}
+
+// Heuristic: detect gibberish chunks like "hjbhjb bhjhjkjkhkuh" — consonant runs,
+// no real vowels-to-letters ratio, and no recognizable word-shaped tokens. We
+// require at least one token of 3+ chars with a typical vowel ratio.
+function looksLikeGibberish(text: string): boolean {
+  const cleaned = text.trim().toLowerCase();
+  if (!cleaned) return true;
+  const tokens = cleaned.split(/\s+/).filter((t) => /[a-z]/.test(t));
+  if (tokens.length === 0) return true;
+  const realWordish = tokens.filter((t) => {
+    if (t.length < 3) return false;
+    const letters = t.replace(/[^a-z]/g, "");
+    if (letters.length < 3) return false;
+    const vowels = (letters.match(/[aeiou]/g) ?? []).length;
+    const ratio = vowels / letters.length;
+    return ratio >= 0.2 && ratio <= 0.75;
+  });
+  return realWordish.length === 0;
+}
 
 // ---------------------------------------------------------------------------
 // Retrieval
@@ -59,8 +106,8 @@ export async function retrieveRelevantChunks(
     sourceTables,
   } = params;
 
-  // Generate query embedding
-  const queryEmbedding = await generateEmbedding(query);
+  // Generate query embedding (expand bare domain terms first)
+  const queryEmbedding = await generateEmbedding(expandQuery(query));
 
   // Call the search RPC
   const { data, error } = await (serviceSupabase.rpc as any)(
@@ -86,15 +133,22 @@ export async function retrieveRelevantChunks(
     return [];
   }
 
-  const chunks: RetrievedChunk[] = (data as any[]).map((row) => ({
-    id: row.id,
-    sourceTable: row.source_table,
-    sourceId: row.source_id,
-    chunkIndex: row.chunk_index,
-    contentText: row.content_text,
-    metadata: row.metadata ?? {},
-    similarity: row.similarity,
-  }));
+  const chunks: RetrievedChunk[] = (data as any[])
+    .map((row) => ({
+      id: row.id,
+      sourceTable: row.source_table,
+      sourceId: row.source_id,
+      chunkIndex: row.chunk_index,
+      contentText: row.content_text,
+      metadata: row.metadata ?? {},
+      similarity: row.similarity,
+    }))
+    .filter((c) => {
+      const text = (c.contentText ?? "").trim();
+      if (text.length < MIN_CHUNK_CONTENT_LENGTH) return false;
+      if (looksLikeGibberish(text)) return false;
+      return true;
+    });
 
   // Auto-fetch parent thread chunks for reply results
   return await enrichWithParentChunks(chunks, orgId, serviceSupabase, logContext);
