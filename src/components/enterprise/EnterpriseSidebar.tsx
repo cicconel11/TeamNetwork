@@ -169,7 +169,7 @@ export function EnterpriseSidebar({
 
   return (
     <HoverSidebar
-      storageKey="sidebar-pinned-enterprise"
+      storageKey="sidebar-enterprise-pinned"
       forceExpanded={forceExpanded}
       layout={layout}
       className={className}

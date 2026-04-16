@@ -42,21 +42,21 @@ export function HoverSidebar({
 }: HoverSidebarProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const [isPinned, setIsPinned] = useState(true);
 
-  useEffect(() => {
+useEffect(() => {
     if (forceExpanded) return;
+    // Read from localStorage, default to true (pinned)
+    let pinned = true;
     try {
       const stored = window.localStorage.getItem(storageKey);
-      if (stored === "1") {
-        setIsPinned(true);
-        writeOffset(true);
-      } else {
-        writeOffset(false);
-      }
+      // Only unpin if explicitly "0", otherwise default pinned
+      pinned = stored !== "0";
     } catch {
-      writeOffset(false);
+      // ignore
     }
+    setIsPinned(pinned);
+    writeOffset(pinned);
     return () => {
       clearOffset();
     };
