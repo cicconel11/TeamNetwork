@@ -88,7 +88,7 @@ See `docs/Data_Inventory.md` for documented security controls including:
 * [x] **Access Control:** RBAC implemented via `src/lib/auth/roles.ts` with three tiers: admin, active_member, alumni. Row-Level Security (RLS) policies on all Supabase tables. Middleware enforcement in `src/middleware.ts`.
 * [x] **Encryption:** Supabase PostgreSQL uses AES-256 encryption at rest. TLS/SSL enforced for all connections (Supabase, Vercel deployment).
 * [x] **Authentication:** Password policy upgraded to NIST standards (12+ chars with complexity requirements: uppercase, lowercase, number, special character). Security headers implemented in `next.config.mjs` including CSP, HSTS, X-Frame-Options. hCaptcha on signup/login forms.
-* **MFA:** Planned for Q3 2026. Compensating controls in place: NIST SP 800-63B password policy, hCaptcha bot protection, Supabase 1-hour JWT expiry, rate limiting on auth endpoints.
+* **MFA:** Targeted for Q3 2026 (on track as of Apr 16 2026). Interim compensating controls: NIST SP 800-63B password policy, hCaptcha bot protection, Supabase 1-hour JWT expiry, rate limiting on auth endpoints. Owner and delivery date must be confirmed before signing any NY district contract.
 * [x] **Testing:** `npm audit --audit-level=high` runs in CI on every PR (`.github/workflows/ci.yml` `security-audit` job). Dependabot configured for weekly dependency scanning.
 
 > **COMPLETED:** Security controls documented in `docs/Data_Inventory.md`. Additional measures found:
@@ -132,22 +132,44 @@ See `docs/Data_Inventory.md` for documented security controls including:
 > * User-initiated integrations (Google Calendar) require explicit OAuth consent
 
 ### STEP 6 — Training
-* [ ] **Mandatory Training:** All staff must complete FERPA training.
-* [ ] **Refreshers:** Schedule annual compliance refreshers.
-* [ ] **Sign-off:** Collect signed acknowledgments of understanding.
+
+**Protocol (shared with COPPA — see that doc for rationale):**
+
+1. Annual 30-minute written policy review — this doc + `Data_Inventory.md` + `legal_templates/Use_Disclosure_Policy.md` + `legal_templates/K12_Data_Sharing_Agreement.md`.
+2. Signed acknowledgment (`legal_templates/Staff_Data_Handling_Acknowledgment.md`).
+3. Track one attestation per engineer per year.
+4. New hires: acknowledgment added to onboarding.
+
+* [x] Acknowledgment template exists
+* [ ] Current annual attestation on file (date: ____)
 
 ### STEP 7 — Data Rights Requests
-**Right:** Students/Parents have the right to access or correct records.
 
-* [ ] **Workflow:** Build internal processes to:
-    * Receive data requests.
-    * Route requests to the school data owner (the school usually fulfills the request).
-    * Log the response time and action taken.
+**Principle:** Under FERPA, the school is the records holder. Our role is to surface / export / delete data at the school's direction. Parents and students typically exercise FERPA rights through the school, not directly with us.
+
+**Workflow (fields to capture per request):**
+
+- Requester name and relationship (student / parent / guardian / school official)
+- Student identifier
+- Request type (inspect, correct, delete, export)
+- Date received → date acknowledged (≤10 days) → date resolved (≤45 days)
+- Routing: confirm school data owner and CC them on any non-trivial action
+- Resolution notes and record of action taken
+
+Storage: `data_access_log` for inspect/export events; `user_deletion_requests` for deletion; `compliance_audit_log` for age-gate-adjacent events. A dedicated `dsr_requests` table would tighten reporting — deferred.
 
 ### STEP 8 — Audit & Maintenance
-* [ ] **Internal Audit:** Perform quarterly internal reviews.
-* [ ] **External Audit:** Schedule annual third-party security audits.
-* [ ] **Update:** Review policies against new federal guidance annually.
+
+**Cadence:**
+
+- **Monthly (automated):** review audit log counts and error-group spikes (script).
+- **Quarterly (manual):** sample `data_access_log`, verify RLS on new tables, diff `docs/db/schema-audit.md` against migration count.
+- **Annually:** external security review (pentest or SOC 2 observation — not a full Type II audit at current team size).
+- **Policy review:** re-read this doc + Use/Disclosure policy against current federal and NY Ed Law 2-d guidance.
+
+* [ ] Monthly script owner: ____
+* [ ] Quarterly review owner: ____
+* [ ] Annual external review target date: ____
 
 ---
 
@@ -166,6 +188,8 @@ See `docs/Data_Inventory.md` for documented security controls including:
 - [x] Data Sharing Agreements Drafted — See `docs/legal_templates/`
 - [x] Security & Access Controls Live — RBAC, RLS, encryption active
 - [x] Use & Disclosure Policy Published — See `docs/legal_templates/Use_Disclosure_Policy.md`
-- [ ] Staff Training Completed
-- [ ] Rights Request Workflow Tested
-- [ ] Audit Plan Scheduled
+- [ ] Annual staff attestation on file — date: ____
+- [x] Rights Request Workflow Documented (STEP 7)
+- [ ] Rights Request Workflow Tested — add test: `tests/compliance/dsr-intake.test.ts`
+- [x] Audit Plan Documented (STEP 8) — owners still TBD
+- [ ] MFA delivered — target Q3 2026
