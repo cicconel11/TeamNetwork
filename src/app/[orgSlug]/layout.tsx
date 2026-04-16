@@ -32,7 +32,7 @@ const OrgGlobalSearch = dynamic(
   () => import("@/components/search/OrgGlobalSearch").then((m) => m.OrgGlobalSearch),
   { ssr: false },
 );
-import { computeOrgThemeVariables, safeHexColor } from "@/lib/theming/org-colors";
+import { computeOrgThemeVariables, safeCssValue, safeHexColor } from "@/lib/theming/org-colors";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -288,11 +288,14 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       <style
         dangerouslySetInnerHTML={{
           __html: (() => {
+            // Validate every key (must be a CSS custom property) and every
+            // value (allowlist of safe chars) before serializing so a bad
+            // org_branding row cannot escape the declaration block.
+            const KEY_RE = /^--[a-z0-9-]+$/i;
             const vars = Object.entries(themeVars)
-              .map(([key, value]) => `${key}: ${value};`)
+              .filter(([key]) => KEY_RE.test(key))
+              .map(([key, value]) => `${key}: ${safeCssValue(value, "inherit")};`)
               .join("\n              ");
-            // Inject into :root, .dark, AND prefers-color-scheme so org theme
-            // always wins over globals.css dark mode overrides
             return `
             :root { ${vars} }
             :root.dark { ${vars} }
