@@ -8,6 +8,8 @@ import { globalSearchApiParamsSchema } from "@/lib/schemas";
 import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
 import { hydrateRagSearchResults } from "@/lib/search/hydrate-rag-results";
 import { logBehavioralEventFromApi } from "@/lib/analytics/server-behavioral";
+import { detectIntent, fetchIntentFallbackRows } from "@/lib/search/intent-fallback";
+import { normalizeRepeatedTitle } from "@/lib/search/normalize-title";
 
 export async function handleGlobalSearchGet(request: NextRequest, orgSlug: string) {
   const rateLimit = checkRateLimit(request, {
@@ -53,6 +55,13 @@ export async function handleGlobalSearchGet(request: NextRequest, orgSlug: strin
 
   const org = orgCtx.organization;
 
+  if (params.mode === "ai" && params.q.length < 3) {
+    return NextResponse.json(
+      { error: "Query too short", details: "AI mode requires at least 3 characters" },
+      { status: 400, headers: rateLimit.headers },
+    );
+  }
+
   if (params.mode === "fast") {
     const { data, error } = await supabase.rpc("search_org_content", {
       p_org_id: org.id,
@@ -64,7 +73,60 @@ export async function handleGlobalSearchGet(request: NextRequest, orgSlug: strin
       console.error("[search] RPC error", error);
       return NextResponse.json({ error: "Search failed" }, { status: 500, headers: rateLimit.headers });
     }
-    const rows = data ?? [];
+    const rawRows = (data ?? []) as Array<{
+      entity_type: string;
+      entity_id: string;
+      title: string | null;
+      snippet: string | null;
+      url_path: string | null;
+      rank: number | null;
+      metadata: Record<string, unknown> | null;
+    }>;
+
+    const PER_TYPE_CAP = 5;
+
+    const intent = detectIntent(params.q);
+    const intentRows = intent
+      ? await fetchIntentFallbackRows({
+          supabase,
+          orgId: org.id,
+          orgSlug: org.slug,
+          entityType: intent,
+          limit: PER_TYPE_CAP,
+        })
+      : [];
+
+    // RPC results first (higher rank), intent fallback appended — dedupe collapses overlap.
+    const merged = [...rawRows, ...intentRows];
+
+    // Collapse identical titles within the same entity type (seed-data duplicates),
+    // dedupe on entity_id, cap each entity type.
+    const seenTitleByType = new Map<string, Set<string>>();
+    const seenIds = new Set<string>();
+    const countByType = new Map<string, number>();
+    const rows: typeof rawRows = [];
+    for (const r of merged) {
+      const idKey = `${r.entity_type}:${r.entity_id}`;
+      if (seenIds.has(idKey)) continue;
+      const normalizedTitle = normalizeRepeatedTitle(r.title);
+      const type = r.entity_type;
+      const titleKey = normalizedTitle.trim().toLowerCase();
+      if (titleKey) {
+        let seen = seenTitleByType.get(type);
+        if (!seen) {
+          seen = new Set();
+          seenTitleByType.set(type, seen);
+        }
+        if (seen.has(titleKey)) continue;
+        seen.add(titleKey);
+      }
+      const count = countByType.get(type) ?? 0;
+      if (count >= PER_TYPE_CAP) continue;
+      countByType.set(type, count + 1);
+      seenIds.add(idKey);
+      rows.push({ ...r, title: normalizedTitle || r.title });
+    }
+
     void logBehavioralEventFromApi(org.id, "search_used", {
       query_length: params.q.length,
       result_count: rows.length,
