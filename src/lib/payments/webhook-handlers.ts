@@ -87,8 +87,28 @@ export async function updatePaymentAttemptStatus(
     lastError?: string | null;
     organizationId?: string | null;
     stripeConnectedAccountId?: string | null;
+    metadataPatch?: Record<string, unknown> | null;
   }
 ): Promise<{ error: PostgrestError | null }> {
+  // JSONB-merge a partial metadata patch into the existing metadata when
+  // requested. Done as a read-then-merge to keep the call site ergonomic;
+  // payment_attempts rows are written by one attempt at a time post-claim,
+  // so this is race-safe for enterprise finalization.
+  let mergedMetadata: Record<string, unknown> | undefined;
+  if (params.metadataPatch && Object.keys(params.metadataPatch).length > 0) {
+    let lookup = supabase.from("payment_attempts").select("metadata");
+    if (params.paymentAttemptId) {
+      lookup = lookup.eq("id", params.paymentAttemptId);
+    } else if (params.paymentIntentId) {
+      lookup = lookup.eq("stripe_payment_intent_id", params.paymentIntentId);
+    } else if (params.checkoutSessionId) {
+      lookup = lookup.eq("stripe_checkout_session_id", params.checkoutSessionId);
+    }
+    const { data: existing } = await lookup.maybeSingle();
+    const base = (existing?.metadata as Record<string, unknown> | null) ?? {};
+    mergedMetadata = { ...base, ...params.metadataPatch };
+  }
+
   const payload: Database["public"]["Tables"]["payment_attempts"]["Update"] = {
     updated_at: new Date().toISOString(),
     ...(typeof params.status === "string" && { status: params.status }),
@@ -97,6 +117,9 @@ export async function updatePaymentAttemptStatus(
     ...(params.checkoutSessionId !== undefined && { stripe_checkout_session_id: params.checkoutSessionId }),
     ...(params.organizationId !== undefined && { organization_id: params.organizationId }),
     ...(params.stripeConnectedAccountId !== undefined && { stripe_connected_account_id: params.stripeConnectedAccountId }),
+    ...(mergedMetadata !== undefined && {
+      metadata: mergedMetadata as Database["public"]["Tables"]["payment_attempts"]["Update"]["metadata"],
+    }),
   };
 
   let query = supabase.from("payment_attempts").update(payload);

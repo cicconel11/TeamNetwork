@@ -317,6 +317,23 @@ export async function handleStripeWebhookPost(
 
         // Handle enterprise checkout (subscription mode)
         if (session.metadata?.type === "enterprise") {
+          const enterprisePaymentAttemptId =
+            (session.metadata?.payment_attempt_id as string | undefined) ?? null;
+
+          // Short-circuit if the attempt is already succeeded (duplicate
+          // webhook delivery, provisioning already completed).
+          if (enterprisePaymentAttemptId) {
+            const { data: priorAttempt } = await supabase
+              .from("payment_attempts")
+              .select("status")
+              .eq("id", enterprisePaymentAttemptId)
+              .maybeSingle();
+            if (priorAttempt?.status === "succeeded") {
+              debugLog("stripe-webhook", "Enterprise attempt already succeeded; skipping reprovision");
+              break;
+            }
+          }
+
           if (session.payment_status !== "paid") {
             debugLog("stripe-webhook", "Enterprise checkout completed without payment; skipping provisioning");
             break;
@@ -339,10 +356,28 @@ export async function handleStripeWebhookPost(
               sessionId: maskPII(session.id),
               metadata: session.metadata,
             });
+            if (enterprisePaymentAttemptId) {
+              await updatePaymentAttemptStatus(supabase, {
+                paymentAttemptId: enterprisePaymentAttemptId,
+                status: "failed",
+                lastError: "missing_required_metadata",
+              });
+            }
             return NextResponse.json(
               { error: "Enterprise provisioning failed - missing metadata" },
               { status: 500 }
             );
+          }
+
+          if (!enterprisePaymentAttemptId) {
+            // Legacy in-flight sessions without payment_attempt_id — keep
+            // provisioning idempotent via enterprise slug below and log so
+            // we can tell how many are still in the wild.
+            console.warn("[stripe-webhook] Enterprise checkout lacks payment_attempt_id; using legacy slug path", {
+              eventId: maskPII(event.id),
+              sessionId: maskPII(session.id),
+              enterpriseSlug,
+            });
           }
 
           debugLog("stripe-webhook", "Provisioning enterprise:", enterpriseSlug);
@@ -384,6 +419,13 @@ export async function handleStripeWebhookPost(
                 .maybeSingle();
 
               if (!retry) {
+                if (enterprisePaymentAttemptId) {
+                  await updatePaymentAttemptStatus(supabase, {
+                    paymentAttemptId: enterprisePaymentAttemptId,
+                    status: "failed",
+                    lastError: enterpriseError?.message || "enterprise_insert_failed",
+                  });
+                }
                 return NextResponse.json(
                   { error: "Enterprise provisioning failed - will retry" },
                   { status: 500 }
@@ -428,6 +470,13 @@ export async function handleStripeWebhookPost(
               error: subError.message,
               enterpriseId: enterprise.id,
             });
+            if (enterprisePaymentAttemptId) {
+              await updatePaymentAttemptStatus(supabase, {
+                paymentAttemptId: enterprisePaymentAttemptId,
+                status: "failed",
+                lastError: subError.message || "subscription_insert_failed",
+              });
+            }
             return NextResponse.json(
               { error: "Enterprise subscription provisioning failed" },
               { status: 500 }
@@ -452,6 +501,15 @@ export async function handleStripeWebhookPost(
               userId: creatorId,
             });
             // Don't fail - role can be granted manually
+          }
+
+          if (enterprisePaymentAttemptId) {
+            await updatePaymentAttemptStatus(supabase, {
+              paymentAttemptId: enterprisePaymentAttemptId,
+              status: "succeeded",
+              checkoutSessionId: session.id,
+              metadataPatch: { provisioned_enterprise_id: enterprise.id },
+            });
           }
 
           debugLog("stripe-webhook", "Enterprise provisioned successfully:", enterprise.id);
