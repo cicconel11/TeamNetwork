@@ -24,7 +24,6 @@ export interface SurfaceRoutingDecision {
   inferredSurface: AiSurface | null;
   confidence: "high" | "low";
   rerouted: boolean;
-  skipRetrieval: boolean;
 }
 
 const SURFACE_KEYWORDS: Record<Exclude<AiSurface, "general">, readonly string[]> = {
@@ -43,9 +42,47 @@ const SURFACE_KEYWORDS: Record<Exclude<AiSurface, "general">, readonly string[]>
     "networking",
     "introduce",
     "introduction",
+    "graduation",
+    "graduated",
+    "graduate",
+    "grad",
+    "message",
+    "messaging",
+    "chat",
+    "dm",
+    "text",
+    "reach out",
+    "contact",
+    "enterprise",
+    "managed org",
+    "managed orgs",
+    "sub org",
+    "sub orgs",
+    "sub-org",
+    "sub-orgs",
   ],
-  analytics: ["analytics", "metric", "metrics", "donation", "donations", "fundraising", "revenue", "expense", "expenses", "budget", "budgets", "financial", "finance"],
-  events: ["event", "events", "calendar", "schedule", "schedules", "meeting", "meetings", "ceremony", "game", "games", "rsvp"],
+  analytics: ["analytics", "metric", "metrics", "donation", "donations", "fundraising", "revenue", "expense", "expenses", "budget", "budgets", "financial", "finance", "donor", "donors", "billing", "quota", "capacity", "seat", "seats", "slot", "slots", "limit", "limits"],
+  events: [
+    "event",
+    "events",
+    "philanthropy",
+    "volunteer",
+    "volunteering",
+    "service",
+    "calendar",
+    "schedule",
+    "schedules",
+    "meeting",
+    "meetings",
+    "ceremony",
+    "game",
+    "games",
+    "rsvp",
+    "scrape",
+    "import",
+    "website",
+    "extract",
+  ],
 };
 
 const SURFACE_TO_INTENT: Record<AiSurface, Exclude<AiIntent, "ambiguous_query">> = {
@@ -69,6 +106,29 @@ const ACTION_KEYWORDS: readonly string[] = [
   "schedule", "change", "set", "assign", "cancel", "approve", "reject",
   "make", "edit", "move", "rename", "archive", "unarchive", "restore",
   "enable", "disable", "reset", "upload", "post", "publish",
+  "write", "compose", "draft", "reply", "respond", "comment",
+];
+
+// Keywords that map a message to general org content tools even when no surface-specific keyword fires
+const GENERAL_CONTENT_KEYWORDS: readonly string[] = [
+  "announcement",
+  "announcements",
+  "discussion",
+  "discussions",
+  "forum",
+  "thread",
+  "threads",
+  "job",
+  "jobs",
+  "posting",
+  "postings",
+  "hiring",
+  "career",
+  "careers",
+  "position",
+  "positions",
+  "opportunity",
+  "opportunities",
 ];
 
 // Phrases that signal the user wants to navigate somewhere
@@ -141,7 +201,6 @@ export function resolveSurfaceRouting(
 ): SurfaceRoutingDecision {
   const normalized = normalizeMessage(message);
   const intentType = classifyIntentType(message, normalized);
-  const skipRetrieval = intentType === "casual";
   const scores = {
     members: countMatches(normalized, SURFACE_KEYWORDS.members),
     analytics: countMatches(normalized, SURFACE_KEYWORDS.analytics),
@@ -153,14 +212,24 @@ export function resolveSurfaceRouting(
     .sort((a, b) => b[1] - a[1]) as Array<[Exclude<AiSurface, "general">, number]>;
 
   if (ranked.length === 0) {
+    const hasGeneralContent = countMatches(normalized, GENERAL_CONTENT_KEYWORDS) > 0;
+    if (intentType === "casual") {
+      return {
+        intent: SURFACE_TO_INTENT.general,
+        intentType,
+        effectiveSurface: requestedSurface,
+        inferredSurface: null,
+        confidence: "low",
+        rerouted: false,
+      };
+    }
     return {
       intent: SURFACE_TO_INTENT.general,
       intentType,
-      effectiveSurface: requestedSurface,
-      inferredSurface: null,
-      confidence: "low",
-      rerouted: false,
-      skipRetrieval,
+      effectiveSurface: hasGeneralContent ? "general" : requestedSurface,
+      inferredSurface: hasGeneralContent ? "general" : null,
+      confidence: hasGeneralContent ? "high" : "low",
+      rerouted: hasGeneralContent && requestedSurface !== "general",
     };
   }
 
@@ -175,7 +244,6 @@ export function resolveSurfaceRouting(
       inferredSurface: null,
       confidence: "low",
       rerouted: false,
-      skipRetrieval,
     };
   }
 
@@ -186,6 +254,5 @@ export function resolveSurfaceRouting(
     inferredSurface: winner,
     confidence: "high",
     rerouted: winner !== requestedSurface,
-    skipRetrieval,
   };
 }

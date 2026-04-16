@@ -3,6 +3,7 @@
     "groups": {
       "people": "Personas",
       "community": "Comunidad",
+      "schedule": "Horario",
       "activity": "Actividad",
       "finance": "Finanzas",
       "admin": "Admin"
@@ -125,7 +126,6 @@
     "createAccountBtn": "Crear cuenta",
     "continueWithGoogle": "Continuar con Google",
     "continueWithLinkedIn": "Continuar con LinkedIn",
-    "continueWithMicrosoft": "Continuar con Microsoft",
     "orContinueWithEmail": "O continuar con correo electronico",
     "emailLabel": "Correo electronico",
     "emailPlaceholder": "tu@ejemplo.com",
@@ -149,7 +149,6 @@
     "newPassword": "Nueva contrasena",
     "confirmPassword": "Confirmar contrasena",
     "updatePassword": "Actualizar contrasena",
-    "passwordUpdatedRedirecting": "Contrasena actualizada correctamente. Redirigiendo...",
     "backToSignIn": "Volver a iniciar sesion",
     "requestNewLink": "Solicitar un nuevo enlace de restablecimiento",
     "resetLinkExpired": "Este enlace de restablecimiento ha expirado o es invalido.",
@@ -165,8 +164,7 @@
     "tabs": {
       "connectedAccounts": "Cuentas conectadas",
       "notifications": "Notificaciones",
-      "language": "Idioma",
-      "account": "Cuenta"
+      "language": "Idioma"
     },
     "language": {
       "title": "Idioma",
@@ -176,14 +174,12 @@
     },
     "description": "Administra invitaciones, suscripciones y acceso a la organizacion",
     "createInvite": "Crear invitacion",
-    "bulkImport": "Importar en lote",
     "requireApproval": "Requerir aprobacion para nuevos miembros",
     "requireApprovalDesc": "Cuando esta activado, los usuarios que se unan mediante invitacion deben ser aprobados antes de obtener acceso. Tambien puedes anular esto por invitacion.",
     "requireApprovalLabel": "Requerir aprobacion de invitacion",
     "reviewPending": "Revisar miembros pendientes",
     "viewApprovals": "Ver aprobaciones",
     "pendingApprovals": "Aprobaciones pendientes",
-    "pendingApprovalsCount": "Aprobaciones pendientes: {count}",
     "orgName": {
       "title": "Nombre de la organizacion",
       "description": "Cambia el nombre visible de tu organizacion.",
@@ -242,6 +238,16 @@
           "desc": "Nuevas actualizaciones de competencias"
         }
       }
+    },
+    "storage": {
+      "title": "Uso de almacenamiento multimedia",
+      "description": "Almacenamiento consumido por elementos de la galeria y subidas de funciones.",
+      "usedOf": "{used} de {quota} usado",
+      "usedUnlimited": "{used} usado (plan ilimitado)",
+      "quotaExceeded": "Se excedio la cuota de almacenamiento. Considera eliminar archivos no utilizados o mejorar tu plan.",
+      "approachingLimit": "Acercandose al limite de almacenamiento. Considera eliminar archivos no utilizados o mejorar tu plan.",
+      "galleryItems": "{count} {count, plural, one {elemento} other {elementos}} de galeria",
+      "featureUploads": "{count} {count, plural, one {subida} other {subidas}} de funciones"
     },
     "billing": {
       "title": "Gestion de facturacion",
@@ -418,7 +424,8 @@
       "accepted": "Solicitud de adopcion aceptada! Tu organizacion ahora es parte de la empresa.",
       "rejected": "Solicitud de adopcion rechazada.",
       "confirmReject": "Estas seguro de que quieres rechazar esta solicitud de adopcion?"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {Sin aprobaciones pendientes} one {# aprobación pendiente} other {# aprobaciones pendientes}}"
   },
   "customization": {
     "title": "Personalizar",
@@ -531,7 +538,6 @@
   },
   "sidebar": {
     "switchOrg": "Cambiar organizacion",
-    "userSettings": "Configuracion de usuario",
     "poweredBy": "Impulsado por"
   },
   "app": {
@@ -546,7 +552,6 @@
     "orCreateEnterprise": "O crea una empresa para gestionar multiples organizaciones",
     "yourEnterprises": "Tus empresas",
     "createEnterprise": "Crear empresa",
-    "enterpriseDescription": "Gestiona multiples organizaciones bajo una cuenta empresarial",
     "manageMultiple": "Gestiona multiples organizaciones bajo una sola cuenta de facturacion",
     "createFirstEnterprise": "Crea tu primera empresa",
     "pendingApproval": "Aprobacion pendiente",
@@ -592,8 +597,8 @@
     "social": "Social",
     "fundraiser": "Recaudacion",
     "practice": "Practica",
+    "class": "Clase",
     "workout": "Entrenamiento",
-    "class": "Class",
     "recurringEvent": "Evento recurrente",
     "willAppear": "{label} aparecera aqui una vez creado",
     "noUpcomingEvents": "No hay {label} proximos",
@@ -824,13 +829,13 @@
     "newAlbum": "Nuevo album",
     "failedToLoadAlbums": "No se pudieron cargar los albumes",
     "storage": {
-      "title": "Almacenamiento multimedia",
-      "usedOf": "{used} de {quota} usado",
-      "usedUnlimited": "{used} usado (plan ilimitado)",
-      "quotaExceeded": "Cuota excedida",
-      "approachingLimit": "Acercandose al limite",
-      "ariaUsedOf": "Almacenamiento multimedia: {used} de {quota} usado, {percent} por ciento",
-      "ariaUsedUnlimited": "Almacenamiento multimedia: {used} usado (plan ilimitado)"
+      "title": "Almacenamiento de medios",
+      "usedOf": "{used} de {quota} utilizados",
+      "usedUnlimited": "{used} utilizados",
+      "quotaExceeded": "Cuota de almacenamiento superada",
+      "approachingLimit": "Acercándose al límite de almacenamiento",
+      "ariaUsedOf": "Uso de almacenamiento: {used} de {quota} ({percent}%)",
+      "ariaUsedUnlimited": "Uso de almacenamiento: {used} utilizados (plan ilimitado)"
     }
   },
   "mentorship": {
@@ -857,51 +862,21 @@
     "expertise": "Experiencia",
     "phone": "Telefono",
     "linkedin": "LinkedIn",
-    "editorialStrapline": "Connect with alumni who are ready to help",
-    "myMentor": "Your mentor",
-    "lookingForMentor": "Looking for a mentor",
-    "lastSession": "Last session",
-    "noSessionsYet": "No sessions yet",
-    "logSession": "Log a session",
-    "showAllLogs": "Show all {count} sessions",
-    "hideLogs": "Show fewer",
-    "availability": "Availability",
-    "availabilityDesc": "Toggle whether members can request you as a mentor",
-    "currentlyAvailable": "Available",
-    "currentlyUnavailable": "Not available",
-    "createPair": "Create a pair",
-    "createPairDesc": "Pair an alumni mentor with an active member",
-    "pairMembers": "Pair members",
-    "confirmPair": "Confirm pair",
-    "mentorSelectLabel": "Mentor (alumni)",
-    "menteeSelectLabel": "Mentee (active member)",
-    "selectMentor": "Select mentor",
-    "selectMentee": "Select mentee",
-    "yourMentee": "Your mentee",
-    "assignMentee": "Assign mentee",
-    "updateMentee": "Update mentee",
-    "removeMentee": "Remove mentee",
-    "noMenteeAssignedYet": "No mentee assigned yet",
-    "archivePair": "Archive pair",
-    "archivePairConfirm": "Archive this mentorship pair? All associated logs will also be archived.",
-    "openPairMenu": "Open pair menu",
-    "browseMentors": "Browse mentors below",
-    "beFirstMentor": "Be the first mentor",
-    "beFirstMentorDesc": "Alumni who register here help current members navigate their careers.",
-    "searchPlaceholder": "Search mentors by name",
-    "sessionSingular": "session",
-    "sessionPlural": "sessions",
-    "statusActive": "Active",
-    "statusPaused": "Paused",
-    "statusCompleted": "Completed",
-    "loggedBy": "by {name}",
-    "progressMetric": "Progress: {value}",
-    "pairCreated": "Pair created",
-    "pairCreatedNotifyFailed": "Pair created — notification failed to send",
-    "availabilityUpdated": "Availability updated",
-    "loadingControls": "Loading your mentorship controls...",
-    "signInManagePair": "You must be signed in to manage your pair.",
-    "signInManageAvailability": "Sign in to manage your mentee availability."
+    "editorialStrapline": "Mentores y aprendices avanzando juntos hacia un progreso medible.",
+    "mentorSelectLabel": "Mentor",
+    "menteeSelectLabel": "Aprendiz",
+    "selectMentor": "Selecciona un mentor",
+    "selectMentee": "Selecciona un aprendiz",
+    "noMenteeAssignedYet": "Aún no hay aprendiz asignado.",
+    "openPairMenu": "Abrir menú del par",
+    "statusActive": "Activo",
+    "statusPaused": "En pausa",
+    "statusCompleted": "Completado",
+    "loggedBy": "Registrado por {name}",
+    "progressMetric": "Progreso: {value}",
+    "loadingControls": "Cargando controles de mentoría…",
+    "signInManagePair": "Inicia sesión para gestionar este par de mentoría.",
+    "signInManageAvailability": "Inicia sesión para gestionar tu disponibilidad."
   },
   "linkedin": {
     "profileUrl": "URL del perfil de LinkedIn",

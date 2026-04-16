@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas, validateJson, ValidationError } from "@/lib/security/validation";
-import { updateTaskSchema } from "@/lib/mentorship/schemas";
+import { updateTaskSchema, type UpdateTask } from "@/lib/mentorship/schemas";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,7 +46,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 
   // Parse request body
-  let body: Record<string, unknown>;
+  let body: UpdateTask;
   try {
     body = await validateJson(req, updateTaskSchema, { maxBodyBytes: 100_000 });
   } catch (error) {
@@ -129,7 +130,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 
   // Construct update object based on role
-  const updateData: Record<string, unknown> = {
+  const updateData: Database["public"]["Tables"]["mentorship_tasks"]["Update"] = {
     updated_at: new Date().toISOString(),
   };
 

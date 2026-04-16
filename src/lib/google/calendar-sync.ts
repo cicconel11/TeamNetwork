@@ -25,7 +25,8 @@ export type EventType =
     | "fundraiser"
     | "philanthropy"
     | "practice"
-    | "workout";
+    | "workout"
+    | "class";
 
 // Sync operation types
 export type SyncOperation = "create" | "update" | "delete";
@@ -284,6 +285,8 @@ export function isUserEligibleForSync(
             return preferences.sync_practice !== false;
         case "workout":
             return preferences.sync_workout !== false;
+        case "class":
+            return preferences.sync_general !== false;
         default:
             // Unknown event type, default to syncing
             return true;

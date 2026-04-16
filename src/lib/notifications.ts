@@ -138,8 +138,10 @@ export async function sendEmail(params: EmailParams): Promise<NotificationResult
   }
 }
 
-// TODO: Replace SMS stub with actual provider integration (e.g., Twilio, MessageBird)
-// SMS requires a separate provider as Resend only handles email
+// NOTE: SMS stub — no provider configured yet. When an SMS provider is selected
+// (e.g., Twilio, MessageBird), replace this stub with the real integration and
+// gate on an SMS_PROVIDER env var. The stub safely returns success so callers
+// can be written against the final interface today.
 export async function sendSMS(params: SMSParams): Promise<NotificationResult> {
   console.log("[STUB] Sending SMS (provider not configured):", {
     to: params.to,

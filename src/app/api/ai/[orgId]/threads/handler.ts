@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import { listThreadsSchema } from "@/lib/schemas";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { decodeCursor, applyCursorFilter, buildCursorResponse } from "@/lib/pagination/cursor";
+import { decodeCursor, encodeCursor } from "@/lib/pagination/cursor";
 
 export interface AiThreadsRouteDeps {
   createClient?: typeof createClient;
@@ -61,12 +61,16 @@ export function createAiThreadsGetHandler(deps: AiThreadsRouteDeps = {}) {
     .from("ai_threads")
     .select("id, title, surface, created_at, updated_at")
     .eq("org_id", orgId)
-    .order("created_at", { ascending: false })
+    .order("updated_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit + 1);
 
   if (surface) query = query.eq("surface", surface);
-  if (decoded) query = applyCursorFilter(query, decoded);
+  if (decoded) {
+    query = query.or(
+      `updated_at.lt.${decoded.createdAt},and(updated_at.eq.${decoded.createdAt},id.lt.${decoded.id})`
+    );
+  }
 
   const { data, error } = await query;
   if (error) {
@@ -74,7 +78,17 @@ export function createAiThreadsGetHandler(deps: AiThreadsRouteDeps = {}) {
     return NextResponse.json({ error: "Failed to list threads" }, { status: 500 });
   }
 
-  const result = buildCursorResponse(data ?? [], limit);
+  const items = data ?? [];
+  const hasMore = items.length > limit;
+  const page = hasMore ? items.slice(0, limit) : items;
+  const lastItem = page[page.length - 1];
+  const result = {
+    data: page,
+    nextCursor: hasMore && lastItem
+      ? encodeCursor(lastItem.updated_at, lastItem.id)
+      : null,
+    hasMore,
+  };
     return NextResponse.json(result, { headers: rateLimit.headers });
   };
 }

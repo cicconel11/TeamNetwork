@@ -1,3 +1,9 @@
+import {
+  canonicalizeIndustry,
+  canonicalizeRoleFamily,
+  parseMemberCareerString,
+} from "@/lib/falkordb/career-signals";
+
 export interface MemberPersonRow {
   id: string;
   organization_id: string;
@@ -54,6 +60,7 @@ export interface ProjectedPerson {
   major: string | null;
   currentCompany: string | null;
   industry: string | null;
+  roleFamily: string | null;
   graduationYear: number | null;
   currentCity: string | null;
 }
@@ -122,6 +129,10 @@ function pickFirstNumber(values: Array<number | null | undefined>): number | nul
     }
   }
   return null;
+}
+
+function projectMemberCareer(member: MemberPersonRow) {
+  return parseMemberCareerString(member.current_company);
 }
 
 export function buildPersonKey(
@@ -196,6 +207,7 @@ export function buildProjectedPeople(input: {
   for (const [groupKey, group] of groups.entries()) {
     const primaryMember = group.members[0] ?? null;
     const primaryAlumni = group.alumni[0] ?? null;
+    const projectedMemberCareers = group.members.map(projectMemberCareer);
     const personType = primaryMember ? "member" : "alumni";
     const personId = primaryMember?.id ?? primaryAlumni?.id;
 
@@ -245,9 +257,22 @@ export function buildProjectedPeople(input: {
       major: pickFirstText(group.alumni.map((alumni) => alumni.major)),
       currentCompany: pickFirstText([
         ...group.alumni.map((alumni) => alumni.current_company),
-        ...group.members.map((member) => member.current_company),
+        ...projectedMemberCareers.map((career) => career.employer),
       ]),
-      industry: pickFirstText(group.alumni.map((alumni) => alumni.industry)),
+      industry: pickFirstText([
+        ...group.alumni.map((alumni) => canonicalizeIndustry(alumni.industry)),
+        ...projectedMemberCareers.map((career) => career.canonicalIndustry),
+      ]),
+      roleFamily: pickFirstText([
+        ...group.alumni.map((alumni) =>
+          canonicalizeRoleFamily(
+            pickFirstText([alumni.position_title, alumni.job_title]),
+            alumni.current_company,
+            canonicalizeIndustry(alumni.industry)
+          )
+        ),
+        ...projectedMemberCareers.map((career) => career.roleFamily),
+      ]),
       graduationYear: pickFirstNumber([
         ...group.alumni.map((alumni) => alumni.graduation_year),
         ...group.members.map((member) => member.graduation_year),

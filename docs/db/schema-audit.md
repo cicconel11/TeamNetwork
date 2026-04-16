@@ -1,8 +1,8 @@
 # Supabase Schema Audit
 
-**Last Updated:** March 21, 2026
-**Scope:** All migrations in `supabase/migrations/` through `20260709120000_form_submissions_nullable_user_friction.sql`
-**Current Migration Count:** 166
+**Last Updated:** March 25, 2026
+**Scope:** All migrations in `supabase/migrations/` through `20260719000000_ai_audit_stage_timings.sql`
+**Current Migration Count:** 167
 
 This document is a current-state schema snapshot. The generated types in `src/types/database.ts` are the best day-to-day source of truth when this doc drifts.
 
@@ -187,7 +187,7 @@ The live schema covers:
 |-------|---------|-------|
 | `ai_threads` | AI conversation threads | Scoped to user + org + surface. Soft-delete via `deleted_at`. Surfaces: `general`, `members`, `analytics`, `events` |
 | `ai_messages` | Messages within AI threads | Denormalized `user_id`/`org_id` with composite FK to `ai_threads(id, user_id, org_id)`. Idempotency key. Status: `pending`, `streaming`, `complete`, `error`. Role/content constraint check |
-| `ai_audit_log` | AI request audit trail | Service-role only (RLS enabled, no policies). No FK on `user_id`/`org_id` — intentional for audit survival. TTL: 90 days. Cache columns: `cache_status`, `cache_entry_id`, `cache_bypass_reason`. Context columns: `context_surface`, `context_token_estimate` |
+| `ai_audit_log` | AI request audit trail | Service-role only (RLS enabled, no policies). No FK on `user_id`/`org_id` — intentional for audit survival. TTL: 90 days. Cache columns: `cache_status`, `cache_entry_id`, `cache_bypass_reason`. Context columns: `context_surface`, `context_token_estimate`. Stage telemetry column: `stage_timings` JSONB |
 | `ai_semantic_cache` | Semantic response cache | Org-scoped, keyed by `(org_id, surface, permission_scope_key, cache_version, prompt_hash)`. TTL via `expires_at`, soft-invalidation via `invalidated_at`. Service-role only |
 
 ### LinkedIn Integration
@@ -308,7 +308,7 @@ Two-tier verification:
 - `ai_messages` denormalized with `user_id`/`org_id` from parent thread. Composite FK `(thread_id, user_id, org_id)` → `ai_threads(id, user_id, org_id)` prevents drift. RLS uses direct `user_id = auth.uid()` + EXISTS for `deleted_at IS NULL` filtering.
 - `ai_messages` enforces role/content invariants via CHECK constraint (user messages require content, assistant messages in `complete` status require content, etc.).
 - `ai_messages.idempotency_key` prevents duplicate user messages from retries (unique partial index where key IS NOT NULL).
-- `ai_audit_log` is service-role-only (no RLS policies). Logs model, tokens, latency, cache status. 90-day TTL via `expires_at`.
+- `ai_audit_log` is service-role-only (no RLS policies). Logs model, tokens, latency, cache status, retrieval decision metadata, and per-stage timing/status in `stage_timings`. 90-day TTL via `expires_at`.
 - `ai_semantic_cache` deduplicates by `(org_id, surface, permission_scope_key, cache_version, prompt_hash)` where `invalidated_at IS NULL`. TTL-based expiry with `purge_expired_ai_semantic_cache()` function (batched, service-role only).
 - pgvector extension (`vector` in `extensions` schema) enabled for future embedding-based similarity search.
 
@@ -357,7 +357,7 @@ Two-tier verification:
 | Apr 2026 | Stripe idempotency, Google Calendar sync, calendar feeds, schedule sources/events, schedule domain allowlist, performance/security fixes |
 | May 2026 | Enterprise hybrid pricing, event recurrence, discussions, jobs, mentor profiles, feed, media uploads, dev-admin audit |
 | Jun 2026 | Media archive + moderation + albums, parent invites, parent role propagation (feed, announcements, chat, remaining tables), donations anonymous flag, chat polls/forms, alumni quota fixes, member soft-delete sync |
-| Jul 2026 | Parent invite redemption fixes, analytics hardening (allowlisted props, enum validation, behavioral tracking policy), AI context enrichment columns (`context_surface`, `context_token_estimate` on `ai_audit_log`) |
+| Jul 2026 | Parent invite redemption fixes, analytics hardening (allowlisted props, enum validation, behavioral tracking policy), AI context enrichment columns (`context_surface`, `context_token_estimate` on `ai_audit_log`), AI stage timing telemetry (`stage_timings` on `ai_audit_log`) |
 
 ---
 

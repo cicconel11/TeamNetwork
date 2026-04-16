@@ -31,6 +31,7 @@ export * from "./form-builder";
 
 // Chat schemas
 export * from "./chat";
+export * from "./chat-ai";
 
 // Chat polls & forms schemas
 export * from "./chat-polls";
@@ -76,3 +77,6 @@ export * from "./blackbaud";
 
 // AI assistant schemas
 export * from "./ai-assistant";
+
+// AI feedback schemas
+export * from "./ai-feedback";

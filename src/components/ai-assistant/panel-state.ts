@@ -14,6 +14,19 @@ export interface AIPanelMessage {
   optimistic?: boolean;
 }
 
+export interface PendingActionSummary {
+  title: string;
+  description: string;
+}
+
+export interface PendingActionState {
+  actionId: string;
+  actionType: string;
+  summary: PendingActionSummary;
+  payload: Record<string, unknown>;
+  expiresAt: string;
+}
+
 export interface RetryRequestIdentity {
   content: string;
   threadId: string | null;

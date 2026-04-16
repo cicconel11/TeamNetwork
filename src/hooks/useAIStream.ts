@@ -2,9 +2,17 @@
 
 import { useState, useCallback, useRef } from "react";
 import type { SSEEvent } from "@/lib/ai/sse";
+import { deriveToolStatusLabel } from "@/components/ai-assistant/tool-status";
+import type { PendingActionState } from "@/components/ai-assistant/panel-state";
 
 interface UseAIStreamOptions {
   orgId: string;
+}
+
+export interface AIChatAttachment {
+  storagePath: string;
+  fileName: string;
+  mimeType: "application/pdf" | "image/png" | "image/jpeg" | "image/jpg";
 }
 
 interface AIStreamState {
@@ -12,6 +20,8 @@ interface AIStreamState {
   error: string | null;
   currentContent: string;
   threadId: string | null;
+  toolStatusLabel: string | null;
+  pendingActions: PendingActionState[];
 }
 
 export interface AIStreamResult {
@@ -19,13 +29,20 @@ export interface AIStreamResult {
   content?: string;
   replayed?: boolean;
   inFlight?: boolean;
+  interrupted?: boolean;
   usage?: { inputTokens: number; outputTokens: number };
 }
 
 interface UseAIStreamReturn extends AIStreamState {
   sendMessage: (
     message: string,
-    opts: { surface: string; threadId?: string; idempotencyKey: string }
+    opts: {
+      surface: string;
+      currentPath?: string;
+      threadId?: string;
+      idempotencyKey: string;
+      attachment?: AIChatAttachment;
+    }
   ) => Promise<AIStreamResult | null>;
   cancel: () => void;
   clearError: () => void;
@@ -35,6 +52,9 @@ interface StreamCallbacks {
   onChunk?: (content: string) => void;
   onDone?: (event: Extract<SSEEvent, { type: "done" }>) => void;
   onError?: (message: string) => void;
+  onToolStatus?: (event: Extract<SSEEvent, { type: "tool_status" }>) => void;
+  onPendingAction?: (event: Extract<SSEEvent, { type: "pending_action" }>) => void;
+  onPendingActionsBatch?: (event: Extract<SSEEvent, { type: "pending_actions_batch" }>) => void;
 }
 
 interface AIErrorBody {
@@ -110,7 +130,20 @@ export async function consumeSSEStream(
             usage: event.usage,
           };
         }
-        // Skip unrecognized event types (e.g., tool_status)
+
+        if (event.type === "tool_status") {
+          callbacks.onToolStatus?.(event);
+          continue;
+        }
+
+        if (event.type === "pending_action") {
+          callbacks.onPendingAction?.(event);
+          continue;
+        }
+
+        if (event.type === "pending_actions_batch") {
+          callbacks.onPendingActionsBatch?.(event);
+        }
       } catch {
         // Ignore malformed events and keep streaming.
       }
@@ -126,13 +159,15 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
     error: null,
     currentContent: "",
     threadId: null,
+    toolStatusLabel: null,
+    pendingActions: [],
   });
   const abortRef = useRef<AbortController | null>(null);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    setState(prev => ({ ...prev, isStreaming: false }));
+    setState(prev => ({ ...prev, isStreaming: false, toolStatusLabel: null }));
   }, []);
 
   const clearError = useCallback(() => {
@@ -141,7 +176,13 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
 
   const sendMessage = useCallback(async (
     message: string,
-    opts: { surface: string; threadId?: string; idempotencyKey: string }
+    opts: {
+      surface: string;
+      currentPath?: string;
+      threadId?: string;
+      idempotencyKey: string;
+      attachment?: AIChatAttachment;
+    }
   ) => {
     // Cancel any in-flight request
     abortRef.current?.abort();
@@ -153,7 +194,10 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       error: null,
       currentContent: "",
       threadId: opts.threadId ?? null,
+      toolStatusLabel: null,
+      pendingActions: [],
     });
+    let responseThreadId = opts.threadId ?? null;
 
     try {
       const response = await fetch(`/api/ai/${orgId}/chat`, {
@@ -162,11 +206,17 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
         body: JSON.stringify({
           message,
           surface: opts.surface,
+          currentPath: opts.currentPath,
           threadId: opts.threadId,
           idempotencyKey: opts.idempotencyKey,
+          attachment: opts.attachment,
         }),
         signal: controller.signal,
       });
+      responseThreadId = response.headers.get("x-ai-thread-id") ?? responseThreadId;
+      if (responseThreadId) {
+        setState(prev => ({ ...prev, threadId: responseThreadId }));
+      }
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({ error: "Request failed" }));
@@ -176,6 +226,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
           isStreaming: false,
           threadId: failure.result?.threadId ?? prev.threadId,
           error: failure.error,
+          toolStatusLabel: null,
         }));
         return failure.result;
       }
@@ -192,6 +243,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
             ...prev,
             isStreaming: false,
             threadId: event.threadId,
+            toolStatusLabel: null,
           }));
         },
         onError: (messageText) => {
@@ -199,6 +251,40 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
             ...prev,
             isStreaming: false,
             error: messageText,
+            toolStatusLabel: null,
+          }));
+        },
+        onToolStatus: (event) => {
+          setState((prev) => ({
+            ...prev,
+            toolStatusLabel: deriveToolStatusLabel(prev.toolStatusLabel, event),
+          }));
+        },
+        onPendingAction: (event) => {
+          setState((prev) => ({
+            ...prev,
+            pendingActions: [
+              ...prev.pendingActions,
+              {
+                actionId: event.actionId,
+                actionType: event.actionType,
+                summary: event.summary,
+                payload: event.payload,
+                expiresAt: event.expiresAt,
+              },
+            ],
+          }));
+        },
+        onPendingActionsBatch: (event) => {
+          setState((prev) => ({
+            ...prev,
+            pendingActions: event.actions.map((a) => ({
+              actionId: a.actionId,
+              actionType: a.actionType,
+              summary: a.summary,
+              payload: a.payload,
+              expiresAt: a.expiresAt,
+            })),
           }));
         },
       });
@@ -211,13 +297,16 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       return result;
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
-        // User cancelled — no error
+        if (responseThreadId) {
+          return { threadId: responseThreadId, interrupted: true };
+        }
         return null;
       }
       setState(prev => ({
         ...prev,
         isStreaming: false,
         error: err instanceof Error ? err.message : "Unknown error",
+        toolStatusLabel: null,
       }));
       return null;
     } finally {

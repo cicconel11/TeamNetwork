@@ -25,6 +25,55 @@ export const newAnnouncementSchema = z.object({
 });
 export type NewAnnouncementForm = z.infer<typeof newAnnouncementSchema>;
 
+export const createAnnouncementSchema = newAnnouncementSchema.extend({
+  audience_user_ids: z.array(z.string().uuid()).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.audience === "individuals" && (!value.audience_user_ids || value.audience_user_ids.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["audience_user_ids"],
+      message: "Select at least one recipient for individual announcements",
+    });
+  }
+});
+export type CreateAnnouncementForm = z.infer<typeof createAnnouncementSchema>;
+
+export const assistantAnnouncementDraftSchema = z.object({
+  title: safeString(200).optional(),
+  body: optionalSafeString(5000),
+  is_pinned: z.boolean().optional(),
+  audience: announcementAudienceSchema.optional(),
+  send_notification: z.boolean().optional(),
+  audience_user_ids: z.array(z.string().uuid()).optional(),
+}).superRefine((value, ctx) => {
+  if (value.audience === "individuals" && (!value.audience_user_ids || value.audience_user_ids.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["audience_user_ids"],
+      message: "Select at least one recipient for individual announcements",
+    });
+  }
+});
+export type AssistantAnnouncementDraft = z.infer<typeof assistantAnnouncementDraftSchema>;
+
+export const assistantPreparedAnnouncementSchema = z.object({
+  title: safeString(200),
+  body: optionalSafeString(5000),
+  is_pinned: z.boolean(),
+  audience: announcementAudienceSchema,
+  send_notification: z.boolean(),
+  audience_user_ids: z.array(z.string().uuid()).optional(),
+}).superRefine((value, ctx) => {
+  if (value.audience === "individuals" && (!value.audience_user_ids || value.audience_user_ids.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["audience_user_ids"],
+      message: "Select at least one recipient for individual announcements",
+    });
+  }
+});
+export type AssistantPreparedAnnouncement = z.infer<typeof assistantPreparedAnnouncementSchema>;
+
 // Edit announcement form - no send_notification (already sent)
 export const editAnnouncementSchema = z.object({
   title: safeString(200),

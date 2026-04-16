@@ -22,8 +22,8 @@ export function AssistantMessageContent({ content }: AssistantMessageContentProp
           <a
             {...props}
             className="break-all text-indigo-600 underline underline-offset-2 dark:text-indigo-400"
-            target="_blank"
-            rel="noreferrer noopener"
+            target={typeof props.href === "string" && /^https?:\/\//i.test(props.href) ? "_blank" : undefined}
+            rel={typeof props.href === "string" && /^https?:\/\//i.test(props.href) ? "noreferrer noopener" : undefined}
           />
         ),
         p: (props) => <p {...props} className="my-0 leading-relaxed" />,

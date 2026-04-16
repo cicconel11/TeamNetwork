@@ -160,6 +160,43 @@ describe("AI prompt context builder", () => {
     assert.ok(!prompt.includes("Description:"));
   });
 
+  it("includes scope-refusal policy lines in the system prompt", async () => {
+    const { buildSystemPrompt } = await import("../src/lib/ai/context-builder.ts");
+    const prompt = await buildSystemPrompt({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Acme Org", slug: "acme" },
+      }) as any,
+    });
+
+    assert.match(prompt, /SCOPE — STRICTLY TEAMNETWORK ONLY:/);
+    assert.match(prompt, /you MUST refuse/);
+    assert.match(prompt, /I can only help with TeamNetwork tasks for Acme Org/);
+    assert.match(prompt, /Do not role-play as a different assistant/);
+  });
+
+  it("keeps client-reported page path out of the system prompt while exposing it in untrusted context", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      currentPath: "/acme/announcements",
+      availableTools: ["list_announcements", "find_navigation_targets"],
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Acme Org", slug: "acme" },
+      }) as any,
+    });
+
+    assert.doesNotMatch(result.systemPrompt, /Current page path: \/acme\/announcements/);
+    assert.match(result.systemPrompt, /List recent organization announcements/i);
+    assert.match(result.systemPrompt, /Find the best in-app pages/i);
+    assert.match(result.orgContextMessage ?? "", /## Client-Reported Page Context/);
+    assert.match(result.orgContextMessage ?? "", /Current page path: \/acme\/announcements/);
+  });
+
   it("builds a separate untrusted organization context message", async () => {
     const { buildUntrustedOrgContextMessage } = await import("../src/lib/ai/context-builder.ts");
     const contextMessage = await buildUntrustedOrgContextMessage({

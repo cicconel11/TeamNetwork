@@ -14,11 +14,17 @@ describe("getAiOrgContext", () => {
 
     return {
       eqCalls,
-      from: () => ({
+      from: (table: string) => ({
         select: () => ({
           eq: (column: string, value: unknown) => {
             eqCalls.push({ column, value });
             return {
+              maybeSingle: async () => {
+                if (table === "organizations") {
+                  return { data: { enterprise_id: null }, error: null };
+                }
+                return { data: null, error: null };
+              },
               eq: (innerColumn: string, innerValue: unknown) => {
                 eqCalls.push({ column: innerColumn, value: innerValue });
                 return {
@@ -117,6 +123,7 @@ describe("getAiOrgContext", () => {
     assert.deepEqual(mockServiceSupabase.eqCalls, [
       { column: "user_id", value: "user-id" },
       { column: "organization_id", value: "org-id" },
+      { column: "id", value: "org-id" },
     ]);
   });
 });

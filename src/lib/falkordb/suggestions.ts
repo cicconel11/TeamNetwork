@@ -9,12 +9,20 @@ import {
   type ProjectedPerson,
 } from "@/lib/falkordb/people";
 import {
+  buildConnectionRarityStats,
+  getCandidateQualificationCodes,
+  hasProfessionalStrengthQualification,
+  hasProfessionalStrengthReason,
+  inspectCandidateSignals,
   buildDisplayReadyConnectionPerson,
   buildDisplayReadySuggestedConnection,
   buildSuggestionForCandidate,
   clampSuggestionsLimit,
   GRAPH_STALE_AFTER_SECONDS,
+  normalizeConnectionText,
   sortSuggestedConnections,
+  type CandidateQualificationCode,
+  type ConnectionScoringContext,
   type SuggestConnectionsFreshness,
   type SuggestConnectionsResult,
 } from "@/lib/falkordb/scoring";
@@ -25,22 +33,24 @@ import {
   type FalkorQueryClient,
 } from "@/lib/falkordb/client";
 import {
+  getSuggestedCandidateExposureCounts,
   getSuggestionObservabilitySnapshot,
+  recordSuggestedCandidates,
   recordSuggestionExecution,
   type GraphFallbackReason,
+  type SuggestionResultStrength,
 } from "@/lib/falkordb/telemetry";
 import { MAX_GRAPH_SYNC_ATTEMPTS, readOptionalString } from "@/lib/falkordb/utils";
+import {
+  findBestProjectedPersonNameMatches,
+  normalizeHumanNameText,
+} from "@/lib/falkordb/name-matching";
 
 export interface SuggestConnectionsArgs {
   person_type?: "member" | "alumni";
   person_id?: string;
   person_query?: string;
   limit?: number;
-}
-
-interface MentorshipDistanceRow {
-  user_id: string;
-  distance: number;
 }
 
 interface GraphSuggestionRow extends Record<string, unknown> {
@@ -56,9 +66,9 @@ interface GraphSuggestionRow extends Record<string, unknown> {
   major: string | null;
   currentCompany: string | null;
   industry: string | null;
+  roleFamily: string | null;
   graduationYear: number | null;
   currentCity: string | null;
-  mentorshipDistance: number | null;
 }
 
 const CHAT_CONNECTION_SUGGESTION_LIMIT = 3;
@@ -224,9 +234,7 @@ async function fetchSourceWithComplement(
   };
 }
 
-function normalizeLookupValue(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
+const MIN_FUZZY_AUTORESOLVE_MARGIN = 15;
 
 function resolveSourceFromQuery(
   projectedPeople: Map<string, ProjectedPerson>,
@@ -235,56 +243,59 @@ function resolveSourceFromQuery(
   | { state: "resolved"; source: ProjectedPerson }
   | { state: "ambiguous"; options: ProjectedPerson[] }
   | { state: "not_found" } {
-  const normalizedQuery = normalizeLookupValue(personQuery);
-  const matches = [...projectedPeople.values()].filter((person) => {
-    const normalizedName = normalizeLookupValue(person.name);
-    const normalizedEmail = person.email ? normalizeLookupValue(person.email) : null;
-    return normalizedName === normalizedQuery || normalizedEmail === normalizedQuery;
+  const normalizedQuery = normalizeHumanNameText(personQuery);
+
+  const emailMatches = [...projectedPeople.values()].filter((person) => {
+    const normalizedEmail = person.email ? normalizeHumanNameText(person.email) : "";
+    return normalizedEmail.length > 0 && normalizedEmail === normalizedQuery;
   });
 
-  if (matches.length === 0) {
+  if (emailMatches.length === 1) {
+    return { state: "resolved", source: emailMatches[0] };
+  }
+
+  if (emailMatches.length > 1) {
+    emailMatches.sort((left, right) => {
+      const leftName = left.name.localeCompare(right.name);
+      if (leftName !== 0) return leftName;
+      return left.personId.localeCompare(right.personId);
+    });
+    return { state: "ambiguous", options: emailMatches };
+  }
+
+  const exactNameMatches = [...projectedPeople.values()].filter((person) => {
+    const normalizedName = normalizeHumanNameText(person.name);
+    return normalizedName.length > 0 && normalizedName === normalizedQuery;
+  });
+
+  if (exactNameMatches.length === 1) {
+    return { state: "resolved", source: exactNameMatches[0] };
+  }
+
+  if (exactNameMatches.length > 1) {
+    exactNameMatches.sort((left, right) => {
+      const leftName = left.name.localeCompare(right.name);
+      if (leftName !== 0) return leftName;
+      return left.personId.localeCompare(right.personId);
+    });
+    return { state: "ambiguous", options: exactNameMatches };
+  }
+
+  const fuzzyMatches = findBestProjectedPersonNameMatches(projectedPeople.values(), personQuery);
+  if (fuzzyMatches.length === 0) {
     return { state: "not_found" };
   }
 
-  matches.sort((left, right) => {
-    const leftName = left.name.localeCompare(right.name);
-    if (leftName !== 0) return leftName;
-    return left.personId.localeCompare(right.personId);
-  });
-
-  if (matches.length > 1) {
-    return { state: "ambiguous", options: matches };
+  const topMatch = fuzzyMatches[0];
+  const runnerUp = fuzzyMatches[1] ?? null;
+  if (!runnerUp || topMatch.score - runnerUp.score >= MIN_FUZZY_AUTORESOLVE_MARGIN) {
+    return { state: "resolved", source: topMatch.person };
   }
 
-  return { state: "resolved", source: matches[0] };
-}
-
-async function fetchMentorshipDistances(
-  serviceSupabase: SupabaseClient,
-  orgId: string,
-  source: ProjectedPerson
-) {
-  if (!source.userId) {
-    return new Map<string, number>();
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (serviceSupabase as any).rpc("get_mentorship_distances", {
-    p_org_id: orgId,
-    p_user_id: source.userId,
-  });
-
-  if (error) {
-    throw new Error("Failed to load mentorship distances");
-  }
-
-  const distances = new Map<string, number>();
-  for (const row of (data ?? []) as MentorshipDistanceRow[]) {
-    if (row.user_id && typeof row.distance === "number") {
-      distances.set(row.user_id, row.distance);
-    }
-  }
-  return distances;
+  return {
+    state: "ambiguous",
+    options: fuzzyMatches.map((match) => match.person),
+  };
 }
 
 async function fetchGraphFreshness(
@@ -335,28 +346,162 @@ async function fetchGraphFreshness(
   }
 }
 
-function scoreProjectedCandidates(input: {
-  source: ProjectedPerson;
-  candidates: Iterable<ProjectedPerson>;
-  mentorshipDistances: Map<string, number>;
-  limit: number;
-}) {
-  const suggestions = [];
+async function loadOrganizationName(
+  serviceSupabase: SupabaseClient,
+  orgId: string
+): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (serviceSupabase as any)
+      .from("organizations")
+      .select("name")
+      .eq("id", orgId)
+      .maybeSingle();
 
-  for (const candidate of input.candidates) {
-    const mentorshipDistance =
-      candidate.userId ? input.mentorshipDistances.get(candidate.userId) ?? null : null;
-    const suggestion = buildSuggestionForCandidate({
-      source: input.source,
-      candidate,
-      mentorshipDistance,
-    });
-    if (suggestion) {
-      suggestions.push(suggestion);
+    if (error) {
+      return null;
+    }
+
+    const name =
+      data && typeof data === "object" && typeof (data as { name?: unknown }).name === "string"
+        ? (data as { name: string }).name
+        : null;
+
+    return name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildExposurePenaltyByPersonId(orgId: string) {
+  const counts = getSuggestedCandidateExposureCounts(orgId);
+  const penalties = new Map<string, number>();
+
+  for (const [personId, appearances] of counts.entries()) {
+    let penalty = 0;
+    if (appearances >= 10) {
+      penalty = 15;
+    } else if (appearances >= 6) {
+      penalty = 10;
+    } else if (appearances >= 3) {
+      penalty = 5;
+    }
+
+    if (penalty > 0) {
+      penalties.set(personId, penalty);
     }
   }
 
-  return sortSuggestedConnections(suggestions).slice(0, input.limit);
+  return penalties;
+}
+
+export interface CandidatePoolEntry {
+  candidate: ProjectedPerson;
+  qualificationCodes: CandidateQualificationCode[];
+}
+
+export function buildCandidatePool(input: {
+  source: ProjectedPerson;
+  candidates: Iterable<ProjectedPerson>;
+  limit: number;
+  scoringContext?: ConnectionScoringContext;
+}) {
+  const professionalEntries: CandidatePoolEntry[] = [];
+  const weakSupportEntries: CandidatePoolEntry[] = [];
+
+  for (const candidate of input.candidates) {
+    if (candidate.personKey === input.source.personKey) {
+      continue;
+    }
+
+    const signals = inspectCandidateSignals({
+      source: input.source,
+      candidate,
+      scoringContext: input.scoringContext,
+    });
+    const qualificationCodes = getCandidateQualificationCodes(signals);
+    if (qualificationCodes.length === 0) {
+      continue;
+    }
+
+    const entry = { candidate, qualificationCodes };
+    if (hasProfessionalStrengthQualification(qualificationCodes)) {
+      professionalEntries.push(entry);
+    } else {
+      weakSupportEntries.push(entry);
+    }
+  }
+
+  if (professionalEntries.length >= input.limit * 5) {
+    return professionalEntries;
+  }
+
+  return [
+    ...professionalEntries,
+    ...weakSupportEntries.slice(0, Math.max(0, input.limit * 5 - professionalEntries.length)),
+  ];
+}
+
+export function scoreProjectedCandidates(input: {
+  source: ProjectedPerson;
+  allPeople: Iterable<ProjectedPerson>;
+  candidates: Iterable<ProjectedPerson>;
+  limit: number;
+  scoringContext?: ConnectionScoringContext;
+}) {
+  const rarityStats = buildConnectionRarityStats({
+    people: input.allPeople,
+    scoringContext: input.scoringContext,
+  });
+  const exposurePenaltyByPersonId = buildExposurePenaltyByPersonId(input.source.orgId);
+  const strongSuggestions = [];
+  const weakSuggestions = [];
+  const candidatePool = buildCandidatePool({
+    source: input.source,
+    candidates: input.candidates,
+    limit: input.limit,
+    scoringContext: input.scoringContext,
+  });
+
+  for (const { candidate } of candidatePool) {
+    const suggestion = buildSuggestionForCandidate({
+      source: input.source,
+      candidate,
+      scoringContext: {
+        ...input.scoringContext,
+        rarityStats,
+        exposurePenaltyByPersonId,
+      },
+    });
+    if (!suggestion) {
+      continue;
+    }
+
+    if (hasProfessionalStrengthReason(suggestion)) {
+      strongSuggestions.push(suggestion);
+    } else {
+      weakSuggestions.push(suggestion);
+    }
+  }
+
+  const results = strongSuggestions.length > 0 ? strongSuggestions : weakSuggestions;
+  return sortSuggestedConnections(results).slice(0, input.limit);
+}
+
+function classifySuggestionResultStrength(
+  suggestions: SuggestConnectionsResult["suggestions"]
+): SuggestionResultStrength {
+  if (suggestions.length === 0) {
+    return "none";
+  }
+
+  return suggestions.some((suggestion) =>
+    suggestion.reasons.some((reason) =>
+      ["shared_industry", "shared_company", "shared_role_family"].includes(reason.code)
+    )
+  )
+    ? "strong"
+    : "weak_fallback";
 }
 
 function buildLookupOnlyResult(input: {
@@ -428,6 +573,7 @@ function graphRowToProjectedPerson(
     major: row.major ?? null,
     currentCompany: row.currentCompany ?? null,
     industry: row.industry ?? null,
+    roleFamily: row.roleFamily ?? null,
     graduationYear: row.graduationYear ?? null,
     currentCity: row.currentCity ?? null,
   };
@@ -478,23 +624,14 @@ function preferredCandidate(left: ProjectedPerson, right: ProjectedPerson) {
   return right.personId.localeCompare(left.personId) < 0 ? right : left;
 }
 
-function mergeMentorshipDistance(left: number | null, right: number | null) {
-  if (left === null) return right;
-  if (right === null) return left;
-  return Math.min(left, right);
-}
-
-function dedupeGraphCandidates(
-  entries: Array<{ candidate: ProjectedPerson; mentorshipDistance: number | null }>
-) {
+function dedupeGraphCandidates(entries: ProjectedPerson[]) {
   const groups: Array<{
     candidate: ProjectedPerson;
-    mentorshipDistance: number | null;
     tokens: Set<string>;
   }> = [];
 
-  for (const entry of entries) {
-    const entryTokens = candidateIdentityTokens(entry.candidate);
+  for (const candidate of entries) {
+    const entryTokens = candidateIdentityTokens(candidate);
     const matchingIndexes = groups
       .map((group, index) => ({ group, index }))
       .filter(({ group }) => [...entryTokens].some((token) => group.tokens.has(token)))
@@ -502,8 +639,7 @@ function dedupeGraphCandidates(
 
     if (matchingIndexes.length === 0) {
       groups.push({
-        candidate: entry.candidate,
-        mentorshipDistance: entry.mentorshipDistance,
+        candidate,
         tokens: entryTokens,
       });
       continue;
@@ -511,11 +647,7 @@ function dedupeGraphCandidates(
 
     const baseIndex = matchingIndexes[0];
     const baseGroup = groups[baseIndex];
-    baseGroup.candidate = preferredCandidate(baseGroup.candidate, entry.candidate);
-    baseGroup.mentorshipDistance = mergeMentorshipDistance(
-      baseGroup.mentorshipDistance,
-      entry.mentorshipDistance
-    );
+    baseGroup.candidate = preferredCandidate(baseGroup.candidate, candidate);
     for (const token of entryTokens) {
       baseGroup.tokens.add(token);
     }
@@ -523,10 +655,6 @@ function dedupeGraphCandidates(
     for (const index of matchingIndexes.slice(1).reverse()) {
       const group = groups[index];
       baseGroup.candidate = preferredCandidate(baseGroup.candidate, group.candidate);
-      baseGroup.mentorshipDistance = mergeMentorshipDistance(
-        baseGroup.mentorshipDistance,
-        group.mentorshipDistance
-      );
       for (const token of group.tokens) {
         baseGroup.tokens.add(token);
       }
@@ -534,109 +662,60 @@ function dedupeGraphCandidates(
     }
   }
 
-  return groups.map(({ candidate, mentorshipDistance }) => ({
-    candidate,
-    mentorshipDistance,
-  }));
+  return groups.map(({ candidate }) => candidate);
 }
 
 function resolveUnavailableFallbackReason(graphClient: FalkorQueryClient): GraphFallbackReason {
   return graphClient.getUnavailableReason?.() ?? "unavailable";
 }
 
-const MENTORSHIP_DISTANCE_PATTERNS: ReadonlyArray<{ matchClause: string; distance: number }> = [
-  { matchClause: "(source:Person {personKey: $sourceKey})-[:MENTORS]->(candidate:Person)", distance: 1 },
-  { matchClause: "(source:Person {personKey: $sourceKey})<-[:MENTORS]-(candidate:Person)", distance: 1 },
-  { matchClause: "(source:Person {personKey: $sourceKey})-[:MENTORS]->(:Person)-[:MENTORS]->(candidate:Person)", distance: 2 },
-  { matchClause: "(source:Person {personKey: $sourceKey})<-[:MENTORS]-(:Person)<-[:MENTORS]-(candidate:Person)", distance: 2 },
-  { matchClause: "(source:Person {personKey: $sourceKey})<-[:MENTORS]-(:Person)-[:MENTORS]->(candidate:Person)", distance: 2 },
-  { matchClause: "(source:Person {personKey: $sourceKey})-[:MENTORS]->(:Person)<-[:MENTORS]-(candidate:Person)", distance: 2 },
-];
-
 async function fetchGraphSuggestions(input: {
   orgId: string;
   source: ProjectedPerson;
+  allPeople: Iterable<ProjectedPerson>;
   limit: number;
   graphClient: FalkorQueryClient;
+  scoringContext?: ConnectionScoringContext;
 }) {
-  // FalkorDB has partial shortestPath support, and the SQL fallback treats
-  // mentorship edges as undirected up to depth 2. Query the direct and
-  // second-degree shapes explicitly so Falkor mode preserves the same
-  // semantics without relying on unsupported Cypher forms.
-  const [candidateRows, distanceRows] = await Promise.all([
-    input.graphClient.query<GraphSuggestionRow>(
-      input.orgId,
-      `
-        MATCH (source:Person {personKey: $sourceKey})
-        MATCH (candidate:Person)
-        WHERE candidate.personKey <> source.personKey
-        RETURN
-          candidate.personKey AS personKey,
-          candidate.personType AS personType,
-          candidate.personId AS personId,
-          candidate.memberId AS memberId,
-          candidate.alumniId AS alumniId,
-          candidate.name AS name,
-          candidate.email AS email,
-          candidate.userId AS userId,
-          candidate.role AS role,
-          candidate.major AS major,
-          candidate.currentCompany AS currentCompany,
-          candidate.industry AS industry,
-          candidate.graduationYear AS graduationYear,
-          candidate.currentCity AS currentCity
-      `,
-      { sourceKey: input.source.personKey }
-    ),
-    (async () => {
-      const distanceQueryResults = await Promise.all(
-        MENTORSHIP_DISTANCE_PATTERNS.map(({ matchClause, distance }) =>
-          input.graphClient.query<{ personKey: string; distance: number }>(
-            input.orgId,
-            `
-              MATCH ${matchClause}
-              WHERE candidate.personKey <> $sourceKey
-              RETURN candidate.personKey AS personKey, ${distance} AS distance
-            `,
-            { sourceKey: input.source.personKey }
-          )
-        )
-      );
-      return distanceQueryResults.flat();
-    })(),
-  ]);
+  const candidateRows = await input.graphClient.query<GraphSuggestionRow>(
+    input.orgId,
+    `
+      MATCH (source:Person {personKey: $sourceKey})
+      MATCH (candidate:Person)
+      WHERE candidate.personKey <> source.personKey
+      RETURN
+        candidate.personKey AS personKey,
+        candidate.personType AS personType,
+        candidate.personId AS personId,
+        candidate.memberId AS memberId,
+        candidate.alumniId AS alumniId,
+        candidate.name AS name,
+        candidate.email AS email,
+        candidate.userId AS userId,
+        candidate.role AS role,
+        candidate.major AS major,
+        candidate.currentCompany AS currentCompany,
+        candidate.industry AS industry,
+        candidate.roleFamily AS roleFamily,
+        candidate.graduationYear AS graduationYear,
+        candidate.currentCity AS currentCity
+    `,
+    { sourceKey: input.source.personKey }
+  );
 
-  const distanceMap = new Map<string, number>();
-  for (const row of distanceRows) {
-    if (row.personKey && typeof row.distance === "number") {
-      const existing = distanceMap.get(row.personKey);
-      if (existing === undefined || row.distance < existing) {
-        distanceMap.set(row.personKey, row.distance);
-      }
-    }
-  }
+  const candidates = dedupeGraphCandidates(
+    candidateRows
+      .map((row) => graphRowToProjectedPerson(row, input.orgId))
+      .filter((candidate): candidate is ProjectedPerson => candidate !== null)
+  );
 
-  const candidatesWithDistance = candidateRows
-    .map((row) => ({
-      candidate: graphRowToProjectedPerson(row, input.orgId),
-      mentorshipDistance: distanceMap.get(row.personKey) ?? null,
-    }))
-    .filter(
-      (entry): entry is { candidate: ProjectedPerson; mentorshipDistance: number | null } =>
-        entry.candidate !== null
-    );
-
-  const suggestions = dedupeGraphCandidates(candidatesWithDistance)
-    .map(({ candidate, mentorshipDistance }) =>
-      buildSuggestionForCandidate({
-        source: input.source,
-        candidate,
-        mentorshipDistance,
-      })
-    )
-    .filter((suggestion): suggestion is NonNullable<typeof suggestion> => suggestion !== null);
-
-  return sortSuggestedConnections(suggestions).slice(0, input.limit);
+  return scoreProjectedCandidates({
+    source: input.source,
+    allPeople: input.allPeople,
+    candidates,
+    limit: input.limit,
+    scoringContext: input.scoringContext,
+  });
 }
 
 export async function suggestConnections(input: {
@@ -651,6 +730,13 @@ export async function suggestConnections(input: {
   const { orgId, serviceSupabase } = input;
   let resolvedSource: ProjectedPerson | null = null;
   let projectedPeopleForLookup: Map<string, ProjectedPerson> | null = null;
+  const organizationName = await loadOrganizationName(serviceSupabase, orgId);
+  const scoringContext: ConnectionScoringContext = {
+    genericCompanyValues: [
+      "TeamNetwork",
+      normalizeConnectionText(organizationName),
+    ],
+  };
 
   if (input.args.person_query) {
     projectedPeopleForLookup = await loadProjectedPeople(serviceSupabase, orgId);
@@ -690,43 +776,45 @@ export async function suggestConnections(input: {
     throw new SuggestConnectionsLookupError("Person not found");
   }
 
+  const projectedPeople = projectedPeopleForLookup
+    ? projectedPeopleForLookup
+    : await loadProjectedPeople(serviceSupabase, orgId);
+  const projectedSource = projectedPeople.get(`${orgId}:${resolvedSource.personKey}`) ?? resolvedSource;
+
   async function computeSqlFallback(
     fallbackReason: GraphFallbackReason,
     freshness: SuggestConnectionsFreshness
   ): Promise<SuggestConnectionsResult> {
-    const source = resolvedSource;
-    if (!source) {
-      throw new SuggestConnectionsLookupError("Person not found");
-    }
-
-    const [projectedPeople, mentorshipDistances] = await Promise.all([
-      projectedPeopleForLookup
-        ? Promise.resolve(projectedPeopleForLookup)
-        : loadProjectedPeople(serviceSupabase, orgId),
-      fetchMentorshipDistances(serviceSupabase, orgId, source),
-    ]);
     const results = scoreProjectedCandidates({
-      source: projectedPeople.get(`${orgId}:${source.personKey}`) ?? source,
+      source: projectedSource,
+      allPeople: projectedPeople.values(),
       candidates: projectedPeople.values(),
-      mentorshipDistances,
       limit,
+      scoringContext,
     });
     return buildResolvedResult({
       mode: "sql_fallback",
       fallbackReason,
       freshness,
-      source: projectedPeople.get(`${orgId}:${source.personKey}`) ?? source,
+      source: projectedSource,
       results,
       displayLimit,
     });
   }
 
   function finalizeResult(result: SuggestConnectionsResult) {
+    if (result.state === "resolved") {
+      recordSuggestedCandidates({
+        orgId,
+        personIds: result.suggestions.slice(0, 3).map((suggestion) => suggestion.person_id),
+      });
+    }
     recordSuggestionExecution({
       orgId,
       mode: result.mode,
       fallbackReason: result.fallback_reason,
       freshnessState: result.freshness.state,
+      resultStrength: classifySuggestionResultStrength(result.suggestions),
     });
     return result;
   }
@@ -746,9 +834,11 @@ export async function suggestConnections(input: {
   try {
     const graphResults = await fetchGraphSuggestions({
       orgId,
-      source: resolvedSource,
+      source: projectedSource,
+      allPeople: projectedPeople.values(),
       limit,
       graphClient,
+      scoringContext,
     });
 
     return finalizeResult({
@@ -756,7 +846,7 @@ export async function suggestConnections(input: {
       fallback_reason: null,
       freshness,
       state: graphResults.length > 0 ? "resolved" : "no_suggestions",
-      source_person: buildDisplayReadyConnectionPerson(resolvedSource),
+      source_person: buildDisplayReadyConnectionPerson(projectedSource),
       suggestions: graphResults
         .slice(0, displayLimit)
         .map((suggestion) => buildDisplayReadySuggestedConnection(suggestion)),

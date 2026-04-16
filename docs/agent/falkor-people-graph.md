@@ -22,13 +22,19 @@ Relevant code:
 
 Members and alumni from Supabase are merged into `ProjectedPerson` objects. The identity model is the foundation: if a member and alumni share a `user_id`, they merge under `user:<userId>`. Unlinked rows stay separate as `member:<id>` or `alumni:<id>`. Both write and read paths use `buildProjectedPeople()`.
 
+Connection reads also normalize career signals before scoring:
+- alumni `industry` values are canonicalized into shared buckets such as `Technology`, `Finance`, and `Healthcare`
+- member `current_company` strings like `Microsoft (SWE intern)` or `Penn Medicine — clinical research assistant` are parsed into employer names and, when recognized, mapped to a canonical industry
+- alumni titles and member role fragments are normalized into a small shared `roleFamily` taxonomy used for candidate generation and ranking
+- alumni still win when linked alumni data is richer than member data
+
 ### Step 2 — Infrastructure (`client.ts`)
 
 `FalkorClientImpl` manages the connection. Config resolves from env vars in priority order: `FALKOR_URL` (remote) → `FALKOR_HOST` (remote discrete) → `FALKOR_EMBEDDED` (local dev with falkordblite). Each org gets its own graph named `teamnetwork_people_<orgId>`. The `FalkorQueryClient` interface is the DI seam — tests inject stubs here.
 
 ### Step 3 — Database foundation (migration SQL)
 
-Triggers on `members`, `alumni`, and `mentorship_pairs` fire on INSERT/UPDATE, compare relevant fields, and enqueue changed rows to `graph_sync_queue` with old-key context in the payload. Four service-role RPCs: `dequeue_graph_sync_queue` (SKIP LOCKED for concurrency), `increment_graph_sync_attempts`, `purge_graph_sync_queue`, `backfill_graph_sync_queue`. Plus `get_mentorship_distances` — a recursive CTE that walks mentorship edges up to depth 2 for the SQL fallback.
+Triggers on `members`, `alumni`, and `mentorship_pairs` fire on INSERT/UPDATE, compare relevant fields, and enqueue changed rows to `graph_sync_queue` with old-key context in the payload. Four service-role RPCs: `dequeue_graph_sync_queue` (SKIP LOCKED for concurrency), `increment_graph_sync_attempts`, `purge_graph_sync_queue`, and `backfill_graph_sync_queue`.
 
 ### Step 4 — Write path (`sync.ts`)
 
@@ -40,26 +46,30 @@ Queue items are processed per `source_table`. For people: re-read all active sou
 
 ### Step 6 — Scoring (`scoring.ts`)
 
-Seven weighted reason codes; Falkor and SQL paths use identical scoring:
+Five normalized reason codes exist, but only four are required to qualify a candidate for final rendering. Falkor and SQL paths use identical scoring:
 
 | Reason | Weight |
 |--------|--------|
-| `direct_mentorship` | 100 |
-| `second_degree_mentorship` | 50 |
-| `shared_company` | 20 |
-| `shared_industry` | 12 |
-| `shared_major` | 10 |
-| `shared_graduation_year` | 8 |
-| `shared_city` | 5 |
+| `shared_industry` | 24 × rarity |
+| `shared_company` | 20 × rarity |
+| `shared_role_family` | 20 × rarity |
+| `shared_city` | 4 |
+| `graduation_proximity` | 3 |
 
-Score = sum of matching weights. Deterministic tie-breaking: score → reason count → name → `person_id`.
+Candidate generation and reranking are split:
+- candidate generation starts from professional signals (`shared_industry`, `shared_company`, `shared_role_family`, or adjacent `roleFamily`) and only uses city/year to expand the pool when the professional pool is small
+- final rendered suggestions must include at least one professional-strength exact match, so city + graduation proximity alone now degrade to `no_suggestions`
+- rarity is computed from the org-local projected people set using bounded multipliers, so common industries/companies/role families count less than rarer ones
+- an in-memory rolling exposure penalty dampens candidates who keep appearing in recent top-3 lists
+
+`graduation_proximity` matches when the source and candidate graduated within 3 years of each other. `shared_company` is suppressed when the normalized company value is the platform name (`TeamNetwork`) or the current organization's name, so generic org-internal company strings do not flatten rankings across the whole org. Deterministic tie-breaking stays: score → reason count → name → `person_id`.
 
 ### Step 7 — Read path (`suggestions.ts`)
 
-`suggestConnections()` is the main entry. It resolves the source person with cross-table complement (loads both member and alumni rows for the same user), then branches:
+`suggestConnections()` is the main entry. It resolves the source person with cross-table complement (loads both member and alumni rows for the same user), builds org-local rarity/exposure context, then branches:
 
-- **Falkor mode:** parallel Cypher queries — all candidates plus six directed mentorship distance queries (outgoing d=1, incoming d=1, four mixed-direction d=2 patterns). Scores in app code.
-- **SQL fallback:** loads full org projection and mentorship distances via the recursive CTE RPC. Scores identically.
+- **Falkor mode:** query all candidate `Person` nodes in the org, dedupe to canonical people, build the gated candidate pool, then rerank in app code.
+- **SQL fallback:** load the full org projection from Supabase and run the same gated candidate generation + reranking path.
 
 If Falkor throws, the implementation silently falls back to SQL.
 
@@ -87,7 +97,14 @@ Tests verify graph/SQL parity, projection deduplication, merged source attribute
 - `tests/falkordb-people-graph.test.ts`
 - New or touched scripts/tests: `scripts/test-falkor-local.ts`, `tests/create-org-checkout-integration.test.ts`
 
-The graph stores only `Person` nodes and `MENTORS` edges today. There are no event or interaction edges, no group-membership edges, and no weighted graph affinity — scoring is attribute-based (shared company, industry, etc.) plus mentorship proximity. Expanding the graph model (e.g. shared event attendance, chat interactions, discussion co-participation) is a natural next step if richer recommendations are needed.
+The graph stores only `Person` nodes and `MENTORS` edges today. There are no event or interaction edges, no group-membership edges, and no weighted graph affinity. Ranking is career-signal-oriented in app code: shared industry and shared company dominate, with city and graduation proximity as supporting signals. Expanding the graph model (e.g. shared event attendance, chat interactions, discussion co-participation) is a natural next step if richer recommendations are needed.
+
+### Revisit notes from the March 25, 2026 latency pass
+
+- The AI chat latency work intentionally made narrow structured org questions feel fast by skipping RAG for tool-only turns. Local verification showed member, parent, and event queries succeeding quickly on that path.
+- `suggest_connections` was not a good latency baseline during that pass. The graph data was still sparse for high-confidence connection recommendations, and local testing also exposed an import regression: `src/lib/falkordb/suggestions.ts` still imports `normalizeConnectionText`, but `src/lib/falkordb/scoring.ts` no longer exports it.
+- When revisiting Falkor work, first restore that import/export compatibility and rerun direct-name connection prompts before drawing conclusions about graph quality.
+- After the import issue is fixed, evaluate connection quality with richer org data. If recommendations are still weak, prefer improving graph population and signal coverage before tuning ranking weights.
 
 ## Graph Model
 
@@ -248,12 +265,16 @@ The response includes:
 Before querying Falkor, the app resolves the source person on the server:
 
 - chat-driven prompts may pass `person_query` (name or email) directly to `suggest_connections`
+- direct email and full-name matches still resolve immediately
+- if no exact name/email match exists, the resolver now applies a small deterministic in-memory name matcher over the org's projected people
+- v1 fuzzy support is intentionally narrow: Matt-family aliases (`mat`, `matt`, `matthew`) plus two-token first/last prefix shorthand such as `mat leo`
+- fuzzy matches only auto-resolve when one candidate clearly beats the runner-up; otherwise the tool returns `ambiguous`
 - internal callers may still pass `person_type` plus `person_id`
 - once a concrete source is identified, the app builds a merged source projection using the same rules as the full SQL projection
 - if the source has a `user_id`, it loads all matching complement rows from the other table
 - it then builds a single merged source person
 
-This matters because scoring reasons like shared company or shared graduation year depend on the merged source attributes, not just the row the admin clicked on. It also means the AI route no longer depends on the model discovering a separate `list_members -> suggest_connections` tool chain for direct-name prompts.
+This matters because scoring reasons like shared company or graduation proximity depend on the merged source attributes, not just the row the admin clicked on. It also means the AI route no longer depends on the model discovering a separate `list_members -> suggest_connections` tool chain for direct-name prompts.
 
 ### Freshness
 
@@ -280,7 +301,7 @@ After ranking, both Falkor and SQL fallback normalize into the same chat-ready e
 - `disambiguation_options`: present only for ambiguous `person_query` matches
 - `mode`, `freshness`, and `fallback_reason`
 
-This is the integration boundary between the people graph and the AI route. Pass 2 receives this payload directly and renders a fixed connection template. Grounding verifies the rendered answer against this normalized payload instead of against raw graph rows.
+This is the integration boundary between the people graph and the AI route. Single-tool connection turns are rendered directly from this payload in the route, while mixed tool turns can still hand it to pass 2 with a fixed connection template. Grounding verifies the rendered answer against this normalized payload instead of against raw graph rows.
 
 ## How To Test It
 
@@ -430,6 +451,16 @@ Check:
 - remote or embedded config is actually present
 - Falkor process is reachable
 - the org graph has been backfilled and synced
+
+If quick member/event/parent queries in the AI panel are healthy but connection prompts still error, that usually means the chat routing and tool-only execution-policy path are fine and the issue is isolated to the Falkor/suggestions stack instead.
+
+### `suggest_connections` errors immediately in local chat
+
+Check:
+
+- `src/lib/falkordb/suggestions.ts` and `src/lib/falkordb/scoring.ts` still agree on exported helper names, especially `normalizeConnectionText`
+- the local branch does not have unresolved Falkor refactors that leave the tool importable but partially broken
+- after fixing the import issue, rerun direct-name prompts such as "Who should Matt connect with?" before debugging graph freshness or ranking
 
 ### Queue rows keep retrying
 

@@ -3,6 +3,7 @@
     "groups": {
       "people": "People",
       "community": "Community",
+      "schedule": "Schedule",
       "activity": "Activity",
       "finance": "Finance",
       "admin": "Admin"
@@ -125,7 +126,6 @@
     "createAccountBtn": "Create Account",
     "continueWithGoogle": "Continue with Google",
     "continueWithLinkedIn": "Continue with LinkedIn",
-    "continueWithMicrosoft": "Continue with Microsoft",
     "orContinueWithEmail": "Or continue with email",
     "emailLabel": "Email",
     "emailPlaceholder": "you@example.com",
@@ -149,7 +149,6 @@
     "newPassword": "New Password",
     "confirmPassword": "Confirm Password",
     "updatePassword": "Update Password",
-    "passwordUpdatedRedirecting": "Password updated successfully! Redirecting...",
     "backToSignIn": "Back to sign in",
     "requestNewLink": "Request a new reset link",
     "resetLinkExpired": "This password reset link is expired or invalid.",
@@ -165,8 +164,7 @@
     "tabs": {
       "connectedAccounts": "Connected Accounts",
       "notifications": "Notifications",
-      "language": "Language",
-      "account": "Account"
+      "language": "Language"
     },
     "language": {
       "title": "Language",
@@ -176,14 +174,12 @@
     },
     "description": "Manage invites, subscriptions, and organization access",
     "createInvite": "Create Invite",
-    "bulkImport": "Bulk Import",
     "requireApproval": "Require Approval for New Members",
     "requireApprovalDesc": "When enabled, users who join via invite must be approved before gaining access. You can also override this per invite.",
     "requireApprovalLabel": "Require invite approval",
     "reviewPending": "Review pending members",
     "viewApprovals": "View approvals",
     "pendingApprovals": "Pending Approvals",
-    "pendingApprovalsCount": "Pending approvals: {count}",
     "orgName": {
       "title": "Organization name",
       "description": "Change your organization's display name.",
@@ -242,6 +238,16 @@
           "desc": "New competition updates"
         }
       }
+    },
+    "storage": {
+      "title": "Media storage usage",
+      "description": "Storage consumed by gallery items and feature uploads.",
+      "usedOf": "{used} of {quota} used",
+      "usedUnlimited": "{used} used (unlimited plan)",
+      "quotaExceeded": "Storage quota exceeded. Consider removing unused media or upgrading your plan.",
+      "approachingLimit": "Approaching storage limit. Consider removing unused media or upgrading your plan.",
+      "galleryItems": "{count} gallery {count, plural, one {item} other {items}}",
+      "featureUploads": "{count} feature {count, plural, one {upload} other {uploads}}"
     },
     "billing": {
       "title": "Billing Management",
@@ -418,7 +424,8 @@
       "accepted": "Adoption request accepted! Your organization is now part of the enterprise.",
       "rejected": "Adoption request rejected.",
       "confirmReject": "Are you sure you want to reject this adoption request?"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {No pending approvals} one {# pending approval} other {# pending approvals}}"
   },
   "customization": {
     "title": "Customization",
@@ -531,7 +538,6 @@
   },
   "sidebar": {
     "switchOrg": "Switch Organization",
-    "userSettings": "User Settings",
     "poweredBy": "Powered by"
   },
   "app": {
@@ -546,7 +552,6 @@
     "orCreateEnterprise": "Or create an enterprise to manage multiple organizations",
     "yourEnterprises": "Your Enterprises",
     "createEnterprise": "Create Enterprise",
-    "enterpriseDescription": "Manage multiple organizations under one enterprise account",
     "manageMultiple": "Manage multiple organizations under one billing account",
     "createFirstEnterprise": "Create your first enterprise",
     "pendingApproval": "Pending Approval",
@@ -592,8 +597,8 @@
     "social": "Social",
     "fundraiser": "Fundraiser",
     "practice": "Practice",
-    "workout": "Workout",
     "class": "Class",
+    "workout": "Workout",
     "recurringEvent": "Recurring event",
     "willAppear": "{label} will appear here once created",
     "noUpcomingEvents": "No upcoming {label}",
@@ -844,11 +849,11 @@
     "storage": {
       "title": "Media storage",
       "usedOf": "{used} of {quota} used",
-      "usedUnlimited": "{used} used (unlimited plan)",
-      "quotaExceeded": "Quota exceeded",
-      "approachingLimit": "Approaching limit",
-      "ariaUsedOf": "Media storage: {used} of {quota} used, {percent} percent",
-      "ariaUsedUnlimited": "Media storage: {used} used (unlimited plan)"
+      "usedUnlimited": "{used} used",
+      "quotaExceeded": "Storage quota exceeded",
+      "approachingLimit": "Approaching storage limit",
+      "ariaUsedOf": "Storage usage: {used} of {quota} ({percent}%)",
+      "ariaUsedUnlimited": "Storage usage: {used} used (unlimited plan)"
     }
   },
   "mentorship": {
@@ -875,51 +880,21 @@
     "expertise": "Expertise",
     "phone": "Phone",
     "linkedin": "LinkedIn",
-    "editorialStrapline": "Connect with alumni who are ready to help",
-    "myMentor": "Your mentor",
-    "lookingForMentor": "Looking for a mentor",
-    "lastSession": "Last session",
-    "noSessionsYet": "No sessions yet",
-    "logSession": "Log a session",
-    "showAllLogs": "Show all {count} sessions",
-    "hideLogs": "Show fewer",
-    "availability": "Availability",
-    "availabilityDesc": "Toggle whether members can request you as a mentor",
-    "currentlyAvailable": "Available",
-    "currentlyUnavailable": "Not available",
-    "createPair": "Create a pair",
-    "createPairDesc": "Pair an alumni mentor with an active member",
-    "pairMembers": "Pair members",
-    "confirmPair": "Confirm pair",
-    "mentorSelectLabel": "Mentor (alumni)",
-    "menteeSelectLabel": "Mentee (active member)",
-    "selectMentor": "Select mentor",
-    "selectMentee": "Select mentee",
-    "yourMentee": "Your mentee",
-    "assignMentee": "Assign mentee",
-    "updateMentee": "Update mentee",
-    "removeMentee": "Remove mentee",
-    "noMenteeAssignedYet": "No mentee assigned yet",
-    "archivePair": "Archive pair",
-    "archivePairConfirm": "Archive this mentorship pair? All associated logs will also be archived.",
+    "editorialStrapline": "Mentors and mentees moving together toward measurable progress.",
+    "mentorSelectLabel": "Mentor",
+    "menteeSelectLabel": "Mentee",
+    "selectMentor": "Select a mentor",
+    "selectMentee": "Select a mentee",
+    "noMenteeAssignedYet": "No mentee assigned yet.",
     "openPairMenu": "Open pair menu",
-    "browseMentors": "Browse mentors below",
-    "beFirstMentor": "Be the first mentor",
-    "beFirstMentorDesc": "Alumni who register here help current members navigate their careers.",
-    "searchPlaceholder": "Search mentors by name",
-    "sessionSingular": "session",
-    "sessionPlural": "sessions",
     "statusActive": "Active",
     "statusPaused": "Paused",
     "statusCompleted": "Completed",
-    "loggedBy": "by {name}",
+    "loggedBy": "Logged by {name}",
     "progressMetric": "Progress: {value}",
-    "pairCreated": "Pair created",
-    "pairCreatedNotifyFailed": "Pair created — notification failed to send",
-    "availabilityUpdated": "Availability updated",
-    "loadingControls": "Loading your mentorship controls...",
-    "signInManagePair": "You must be signed in to manage your pair.",
-    "signInManageAvailability": "Sign in to manage your mentee availability."
+    "loadingControls": "Loading mentorship controls…",
+    "signInManagePair": "Sign in to manage this mentorship pair.",
+    "signInManageAvailability": "Sign in to manage your availability."
   },
   "linkedin": {
     "profileUrl": "LinkedIn Profile URL",

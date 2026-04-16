@@ -620,12 +620,14 @@ const COMPONENTS = [
       'Transport-noise cleanup before any model-facing use (Unicode normalization, zero-width/control-char stripping)',
       'Message safety assessment returns none / suspicious / blocked with stable reasons',
       'Prompt-injection and prompt-exfiltration attempts short-circuit before model, tools, RAG, or cache write',
-      'Rate limiting: 30 req/min IP, 20 req/min user',
+      'Rate limiting: 30 req/min IP, 20 req/min user, 60 req/min org (AI_ORG_RATE_LIMIT override)',
       'Idempotency via idempotency_key + localStorage',
       'Duplicate detection with 409 recovery for in-flight requests',
+      'Completed duplicate requests now also return 409 when the original assistant reply is not ready yet (instead of a replay error)',
       'Abandoned stream cleanup (5-min threshold, status → error)',
       'Atomic init_ai_chat RPC for thread create/reuse + message insert',
-      'Route-derived surface from pathname via routeToSurface()'
+      'Route-derived surface from pathname via routeToSurface()',
+      'requestId generated at handler entry and threaded through structured AI logs + stage timings'
     ],
     missing: []
   },
@@ -651,6 +653,7 @@ const COMPONENTS = [
       'ContextMetadata returned (sectionsIncluded, sectionsExcluded, estimatedTokens)',
       'Untrusted org context injected as user role (prompt injection safe)',
       'System prompt with NARROW_PANEL_POLICY',
+      'tool_first context mode keeps simple deterministic read turns lighter than full-context live lookups',
       'shared_static mode overrides surface for cache-eligible miss contexts',
       'Cross-surface thread reset on navigation (prevents thread/surface mismatch)',
       'Thread list filtered by current surface',
@@ -712,12 +715,13 @@ const COMPONENTS = [
       'Keyword-based intent classifier (resolveSurfaceRouting)',
       'Scores messages across members, analytics, events keyword lists',
       'Detects ambiguous queries when surfaces score equally',
-      'skipRetrieval: true for exact casual messages (greetings, thanks) via regex',
+      'Exact casual-message detection now feeds intentType; retrieval decisions move to TurnExecutionPolicy',
       'Returns rerouted flag when inferred surface differs from requested',
       'Maps surface → intent: members_query, analytics_query, events_query, general_query, ambiguous_query',
       'Routing based on classified intent — effectiveSurface drives context selection',
       'Routing/classification now consumes promptSafeMessage rather than raw user text',
-      'Exact casual turns omit pass-1 tools; non-casual turns gate tools by effectiveSurface'
+      'Exact casual turns omit pass-1 tools; non-casual turns gate tools by effectiveSurface',
+      'Simple member roster, event list, and stats prompts can narrow to a single fast-path read tool before the model plans anything more expensive'
     ],
     missing: [
       'No plan decomposition for multi-step requests',
@@ -737,7 +741,7 @@ const COMPONENTS = [
       'src/app/api/ai/[orgId]/chat/handler.ts'
     ],
     built: [
-      'Deterministic verification for current read-tool summaries (members, events, org stats)',
+      'Deterministic verification for read-tool summaries (members, events, announcements, discussions, job postings, org stats)',
       'Tool-backed pass-2 content buffered server-side before release',
       'Ungrounded tool-backed responses replaced with a safe fallback instead of being streamed to the user',
       'Grounding failures emit ops telemetry (tool_grounding_failed)'
@@ -770,14 +774,16 @@ const COMPONENTS = [
       'Fail-closed pattern: DB error returns 503, never proceeds',
       'Thread ownership validation (resolveOwnThread)',
       'Never leaks thread existence to non-owners',
-      'Rate limiting at IP and user level',
+      'Rate limiting at IP, user, and org level',
       'RLS policies on ai_threads and ai_messages',
       'Abandoned stream detection (5-min timeout, prevents stuck threads)',
       'Distinct suspicious vs blocked safety outcomes with identical fail-closed execution behavior in v1',
-      'Risky prior user messages sanitized before prompt replay so blocked turns do not poison later turns'
+      'Risky prior user messages sanitized before prompt replay so blocked turns do not poison later turns',
+      'Confirmation gate for write tools: prepare_* tools create pending actions requiring explicit user confirmation before execution',
+      'Existing-thread history lookup failures now degrade to current-turn-only execution instead of aborting the chat request'
     ],
     missing: [
-      'No per-action permission checks for write tools (read-only tools execute freely)'
+      'Write tool permission checks limited to admin role gate — no granular per-action RBAC beyond admin/non-admin'
     ]
   },
   {
@@ -821,7 +827,8 @@ const COMPONENTS = [
       'Parent thread title/body enrichment on retrieved replies',
       'RAG wired end-to-end in chat handler — additive, never blocking',
       'RAG silently skipped when EMBEDDING_API_KEY absent (graceful degradation)',
-      'RAG metrics in audit log (rag_chunk_count, rag_top_similarity, rag_error)'
+      'RAG metrics in audit log (rag_chunk_count, rag_top_similarity, rag_error)',
+      'RAG retrieval now uses the shared timed-stage wrapper and emits structured request-scoped logs on failure'
     ],
     missing: [
       'No manual knowledge base management UI (add/remove custom FAQ entries)',
@@ -833,34 +840,61 @@ const COMPONENTS = [
     id: 'actions',
     label: 'Action Executor',
     shortLabel: 'Actions',
-    pct: 80,
+    pct: 90,
     status: 'built',
     layer: 'execution',
     x: 690, y: 170,
     files: [
       'src/lib/ai/tools/definitions.ts',
       'src/lib/ai/tools/executor.ts',
+      'src/lib/ai/schedule-extraction.ts',
+      'src/lib/ai/schedule-upload-path.ts',
+      'src/lib/ai/pending-actions.ts',
+      'src/lib/ai/navigation-targets.ts',
       'src/lib/ai/response-composer.ts',
-      'src/app/api/ai/[orgId]/chat/handler.ts'
+      'src/app/api/ai/[orgId]/chat/handler.ts',
+      'src/app/api/ai/[orgId]/upload-schedule/handler.ts',
+      'supabase/migrations/20260727000000_ai_pending_actions.sql',
+      'supabase/migrations/20260402120000_ai_schedule_uploads_bucket.sql',
+      'supabase/migrations/20260403120000_ai_schedule_uploads_auth_delete.sql'
     ],
     built: [
-      'AI_TOOLS defines 4 OpenAI function-calling tools: list_members, list_events, get_org_stats, suggest_connections',
-      'Full Zod argument validation per tool (limit, upcoming) with fail-closed behavior',
+      'AI_TOOLS defines 23 OpenAI function-calling tools: list_members, list_alumni, list_parents, list_events, list_announcements, list_discussions, list_job_postings, list_donations, list_philanthropy_events, list_chat_groups, prepare_announcement, prepare_job_posting, prepare_discussion_thread, prepare_discussion_reply, prepare_chat_message, prepare_group_message, prepare_event, prepare_events_batch, get_org_stats, suggest_connections, find_navigation_targets, scrape_schedule_website, extract_schedule_pdf',
+      'Full Zod argument validation per tool (limit, upcoming, pinned_only, etc.) with fail-closed behavior',
       'list_members reads valid members columns only, prefers members first_name + last_name, and falls back to public.users.name for placeholder linked rows',
       'executeToolCall with safeToolQuery/safeToolCount error wrappers',
       'Two-pass tool loop: Pass 1 conditionally streams with tools, Pass 2 feeds tool results back (no tools, prevents chaining)',
+      'Single-tool deterministic fast path for list_members, list_events, get_org_stats, list_announcements, suggest_connections, and find_navigation_targets skips pass 2 entirely',
+      'Simple member / alumni / donation / events prompts can force a single read tool and use tool_first context for lower latency',
       'tool_status SSE events emitted: calling, done, error',
       'Malformed args fail closed — no {} fallback, error pushed to tool results',
       'Cache bypass when toolCallMade = true (tool responses are dynamic)',
       'Usage accumulated across both passes via usageRef',
       'Tool calls recorded in audit log (toolCalls array)',
-      'Tool-backed pass-2 text is withheld until grounding verification succeeds'
+      'Tool-backed pass-2 text is withheld until grounding verification succeeds',
+      'Schedule ingestion tools: scrape_schedule_website (fetchUrlSafe with domain allowlist enforcement) and extract_schedule_pdf (PDF/image extraction with 2MB image size cap)',
+      'Schedule upload API: private storage bucket with MIME+magic-byte validation, UUID orgId gating, shared path-ownership check (isOwnedScheduleUploadPath), authenticated DELETE RLS policy',
+      'LLM-based schedule extraction pipeline: text/PDF/image → Zod-validated event drafts → pending_actions batch confirmation flow',
+      'Confirmation-gated write tools: prepare_announcement, prepare_job_posting, prepare_discussion_thread, prepare_discussion_reply, prepare_chat_message, prepare_group_message, prepare_event, and prepare_events_batch create pending actions (ai_pending_actions table) with 15-min expiry',
+      'Pending action lifecycle: pending → confirmed → executed | failed | cancelled | expired (with rollback-safe CAS transitions)',
+      'Confirm handler rolls back to pending on unknown action_type (no stuck confirmed rows)',
+      'Cleanup endpoint recovers stranded confirmed actions by CAS-transitioning stale rows to failed',
+      'Cancel handler returns 410 for already-expired actions instead of false 200',
+      'prepare_job_posting validates draft, identifies missing fields, optionally enriches from application URL via fetchJobSourceDraft',
+      'prepare_announcement drafts org-wide or targeted announcements with audience selection (all, members, active_members, alumni, individuals) and optional notification flag',
+      'prepare_discussion_reply resolves threads by ID or title search and drafts replies',
+      'prepare_chat_message resolves recipients by member ID or name query and drafts direct messages',
+      'list_chat_groups returns chat groups the user belongs to with their role (admin/moderator/member)',
+      'prepare_group_message resolves groups by ID or name query and drafts group messages with moderation-aware status (approved/pending)',
+      'prepare_event and prepare_events_batch draft single or multiple calendar events with full event metadata (title, dates, times, location, type, philanthropy flag)',
+      'find_navigation_targets resolves in-app pages for open/manage/create requests against org nav config',
+      'list_announcements supports pinned_only filter; list_discussions and list_job_postings are org-scoped read tools; list_alumni supports graduation_year, industry, company, city filters; list_donations supports status and purpose filters; list_philanthropy_events supports upcoming filter',
+      'Tool execution timeout guard (withStageTimeout) prevents hung tool calls'
     ],
     missing: [
-      'No write actions (create events, send announcements, manage members)',
-      'No action confirmation workflow for write actions',
       'No tool chaining (intentionally limited to single pass)',
-      'No streaming tool execution (tools run synchronously between passes)'
+      'No streaming tool execution (tools run synchronously between passes)',
+      'Write tools cover announcements, job postings, discussion threads, discussion replies, direct chat messages, group chat messages, and calendar events (no member management or edit/delete operations yet)'
     ]
   },
   {
@@ -940,10 +974,13 @@ const COMPONENTS = [
       'SSE encoding with chunk/done/error/tool_status events',
       'Configurable temperature (0.7) and max_tokens (2000)',
       'streaming → complete status transitions on ai_messages',
+      'streaming status write now fails closed instead of fire-and-forget',
       'Tool call detection: streams OpenAI deltas, assembles multi-chunk argsJson by index',
       'Yields tool_call_requested events with assembled tool call data',
       'Pass 2 mode: reconstructs assistant + tool role messages per OpenAI function-calling protocol',
-      'Tool-backed pass-2 content now buffers until the route verifies it before emitting chunk text'
+      'Tool-backed pass-2 content now buffers until the route verifies it before emitting chunk text',
+      'Deterministic read turns can emit the final chunk directly from trusted tool data without a second model pass',
+      'response-composer stream failures log with requestId/orgId context'
     ],
     missing: [
       'No structured output parsing',
@@ -978,7 +1015,8 @@ const COMPONENTS = [
       'toolCalls array in audit entries (names + args of all executed tools)',
       'cacheBypassReason: tool_call_made recorded when tools used',
       'Safety short-circuit reasons recorded via bypassReason/message_safety_* paths',
-      'tool_grounding_failed emitted to ops telemetry when buffered verification rejects a tool-backed answer'
+      'tool_grounding_failed emitted to ops telemetry when buffered verification rejects a tool-backed answer',
+      'requestId recorded inside stageTimings.request for cross-log correlation'
     ],
     missing: [
       'No real-time monitoring dashboard',

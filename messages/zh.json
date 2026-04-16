@@ -3,6 +3,7 @@
     "groups": {
       "people": "人员",
       "community": "社区",
+      "schedule": "日程",
       "activity": "活动",
       "finance": "财务",
       "admin": "管理"
@@ -125,7 +126,6 @@
     "createAccountBtn": "创建账户",
     "continueWithGoogle": "使用 Google 继续",
     "continueWithLinkedIn": "使用 LinkedIn 继续",
-    "continueWithMicrosoft": "使用 Microsoft 继续",
     "orContinueWithEmail": "或使用邮箱继续",
     "emailLabel": "邮箱",
     "emailPlaceholder": "you@example.com",
@@ -149,7 +149,6 @@
     "newPassword": "新密码",
     "confirmPassword": "确认密码",
     "updatePassword": "更新密码",
-    "passwordUpdatedRedirecting": "密码更新成功，正在跳转...",
     "backToSignIn": "返回登录",
     "requestNewLink": "请求新的重置链接",
     "resetLinkExpired": "此密码重置链接已过期或无效。",
@@ -165,8 +164,7 @@
     "tabs": {
       "connectedAccounts": "关联账户",
       "notifications": "通知",
-      "language": "语言",
-      "account": "账户"
+      "language": "语言"
     },
     "language": {
       "title": "语言",
@@ -176,14 +174,12 @@
     },
     "description": "管理邀请、订阅和组织访问权限",
     "createInvite": "创建邀请",
-    "bulkImport": "批量导入",
     "requireApproval": "新成员需要审批",
     "requireApprovalDesc": "启用后，通过邀请加入的用户需要获得批准才能访问。您也可以按邀请单独设置。",
     "requireApprovalLabel": "要求邀请审批",
     "reviewPending": "审核待处理成员",
     "viewApprovals": "查看审批",
     "pendingApprovals": "待审批",
-    "pendingApprovalsCount": "待审批：{count}",
     "orgName": {
       "title": "组织名称",
       "description": "更改组织的显示名称。",
@@ -242,6 +238,16 @@
           "desc": "新的比赛动态"
         }
       }
+    },
+    "storage": {
+      "title": "媒体存储用量",
+      "description": "相册项目和功能上传所消耗的存储空间。",
+      "usedOf": "已使用 {used}，共 {quota}",
+      "usedUnlimited": "已使用 {used}（无限套餐）",
+      "quotaExceeded": "存储配额已超出。请考虑删除未使用的媒体或升级套餐。",
+      "approachingLimit": "即将达到存储上限。请考虑删除未使用的媒体或升级套餐。",
+      "galleryItems": "{count} 个相册{count, plural, one {项目} other {项目}}",
+      "featureUploads": "{count} 个功能{count, plural, one {上传} other {上传}}"
     },
     "billing": {
       "title": "账单管理",
@@ -418,7 +424,8 @@
       "accepted": "接管请求已接受！您的组织现在是企业的一部分。",
       "rejected": "接管请求已拒绝。",
       "confirmReject": "您确定要拒绝此接管请求吗？"
-    }
+    },
+    "pendingApprovalsCount": "{count, plural, =0 {没有待审批项} other {# 项待审批}}"
   },
   "customization": {
     "title": "自定义",
@@ -531,7 +538,6 @@
   },
   "sidebar": {
     "switchOrg": "切换组织",
-    "userSettings": "用户设置",
     "poweredBy": "技术支持"
   },
   "app": {
@@ -546,7 +552,6 @@
     "orCreateEnterprise": "或创建企业来管理多个组织",
     "yourEnterprises": "您的企业",
     "createEnterprise": "创建企业",
-    "enterpriseDescription": "在一个企业账户下管理多个组织",
     "manageMultiple": "在一个账单账户下管理多个组织",
     "createFirstEnterprise": "创建您的第一个企业",
     "pendingApproval": "待审批",
@@ -592,8 +597,8 @@
     "social": "社交",
     "fundraiser": "筹款",
     "practice": "训练",
+    "class": "课程",
     "workout": "锻炼",
-    "class": "Class",
     "recurringEvent": "周期性活动",
     "willAppear": "{label}创建后将显示在此处",
     "noUpcomingEvents": "没有即将举行的{label}",
@@ -825,12 +830,12 @@
     "failedToLoadAlbums": "加载相册失败",
     "storage": {
       "title": "媒体存储",
-      "usedOf": "已使用 {used}，共 {quota}",
-      "usedUnlimited": "已使用 {used}（无限套餐）",
-      "quotaExceeded": "配额已超出",
-      "approachingLimit": "即将达到上限",
-      "ariaUsedOf": "媒体存储：已使用 {used}，共 {quota}，使用率 {percent}%",
-      "ariaUsedUnlimited": "媒体存储：已使用 {used}（无限套餐）"
+      "usedOf": "已使用 {used} / {quota}",
+      "usedUnlimited": "已使用 {used}",
+      "quotaExceeded": "存储配额已超出",
+      "approachingLimit": "接近存储上限",
+      "ariaUsedOf": "存储使用：已使用 {used} / {quota}（{percent}%）",
+      "ariaUsedUnlimited": "存储使用：已使用 {used}（无限量方案）"
     }
   },
   "mentorship": {
@@ -857,51 +862,21 @@
     "expertise": "专业领域",
     "phone": "电话",
     "linkedin": "LinkedIn",
-    "editorialStrapline": "Connect with alumni who are ready to help",
-    "myMentor": "Your mentor",
-    "lookingForMentor": "Looking for a mentor",
-    "lastSession": "Last session",
-    "noSessionsYet": "No sessions yet",
-    "logSession": "Log a session",
-    "showAllLogs": "Show all {count} sessions",
-    "hideLogs": "Show fewer",
-    "availability": "Availability",
-    "availabilityDesc": "Toggle whether members can request you as a mentor",
-    "currentlyAvailable": "Available",
-    "currentlyUnavailable": "Not available",
-    "createPair": "Create a pair",
-    "createPairDesc": "Pair an alumni mentor with an active member",
-    "pairMembers": "Pair members",
-    "confirmPair": "Confirm pair",
-    "mentorSelectLabel": "Mentor (alumni)",
-    "menteeSelectLabel": "Mentee (active member)",
-    "selectMentor": "Select mentor",
-    "selectMentee": "Select mentee",
-    "yourMentee": "Your mentee",
-    "assignMentee": "Assign mentee",
-    "updateMentee": "Update mentee",
-    "removeMentee": "Remove mentee",
-    "noMenteeAssignedYet": "No mentee assigned yet",
-    "archivePair": "Archive pair",
-    "archivePairConfirm": "Archive this mentorship pair? All associated logs will also be archived.",
-    "openPairMenu": "Open pair menu",
-    "browseMentors": "Browse mentors below",
-    "beFirstMentor": "Be the first mentor",
-    "beFirstMentorDesc": "Alumni who register here help current members navigate their careers.",
-    "searchPlaceholder": "Search mentors by name",
-    "sessionSingular": "session",
-    "sessionPlural": "sessions",
-    "statusActive": "Active",
-    "statusPaused": "Paused",
-    "statusCompleted": "Completed",
-    "loggedBy": "by {name}",
-    "progressMetric": "Progress: {value}",
-    "pairCreated": "Pair created",
-    "pairCreatedNotifyFailed": "Pair created — notification failed to send",
-    "availabilityUpdated": "Availability updated",
-    "loadingControls": "Loading your mentorship controls...",
-    "signInManagePair": "You must be signed in to manage your pair.",
-    "signInManageAvailability": "Sign in to manage your mentee availability."
+    "editorialStrapline": "导师与学员携手迈向可量化的进展。",
+    "mentorSelectLabel": "导师",
+    "menteeSelectLabel": "学员",
+    "selectMentor": "选择导师",
+    "selectMentee": "选择学员",
+    "noMenteeAssignedYet": "尚未分配学员。",
+    "openPairMenu": "打开配对菜单",
+    "statusActive": "活跃",
+    "statusPaused": "已暂停",
+    "statusCompleted": "已完成",
+    "loggedBy": "由 {name} 记录",
+    "progressMetric": "进展：{value}",
+    "loadingControls": "正在加载导师指导控件…",
+    "signInManagePair": "登录以管理此导师配对。",
+    "signInManageAvailability": "登录以管理您的可用性。"
   },
   "linkedin": {
     "profileUrl": "LinkedIn 个人资料 URL",
