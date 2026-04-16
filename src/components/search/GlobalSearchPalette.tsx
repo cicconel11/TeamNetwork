@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   Briefcase,
   CalendarDays,
@@ -131,10 +132,12 @@ export function GlobalSearchPalette() {
     }
   }, [open, orgSlug]);
 
+  const minQueryLength = mode === "ai" ? 3 : 2;
+
   useEffect(() => {
     const q = query.trim();
     if (!open) return;
-    if (q.length === 0) {
+    if (q.length < minQueryLength) {
       setFastResults([]);
       setAiResults([]);
       setLoading(false);
@@ -170,17 +173,35 @@ export function GlobalSearchPalette() {
       }
     }, 100);
     return () => window.clearTimeout(t);
-  }, [query, mode, open, orgSlug]);
+  }, [query, mode, open, orgSlug, minQueryLength]);
 
   const groupedFast = useMemo(() => {
     const m = new Map<string, FastSearchRow[]>();
+    const seenTitlesPerType = new Map<string, Set<string>>();
     for (const r of fastResults) {
       const k = r.entity_type;
+      const titleKey = (r.title ?? "").trim().toLowerCase();
+      if (titleKey) {
+        if (!seenTitlesPerType.has(k)) seenTitlesPerType.set(k, new Set());
+        const seen = seenTitlesPerType.get(k)!;
+        if (seen.has(titleKey)) continue;
+        seen.add(titleKey);
+      }
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(r);
     }
     return [...m.entries()];
   }, [fastResults]);
+
+  const groupedAi = useMemo(() => {
+    const m = new Map<string, { row: AiSearchRow; pos: number }[]>();
+    aiResults.forEach((row, idx) => {
+      const k = row.sourceTable;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push({ row, pos: idx + 1 });
+    });
+    return [...m.entries()];
+  }, [aiResults]);
 
   const navigateTo = useCallback(
     (url: string, meta: { entityType: string; position: number; qLen: number }) => {
@@ -212,23 +233,31 @@ export function GlobalSearchPalette() {
     : "fixed left-1/2 top-[15%] z-[60] w-full max-w-xl max-h-[min(80vh,640px)] -translate-x-1/2 rounded-xl border border-border bg-background shadow-lg overflow-hidden flex flex-col";
 
   return (
-    <Command.Dialog
-      open={open}
-      onOpenChange={setOpen}
-      label="Search organization"
-      shouldFilter={false}
-      overlayClassName={dialogOverlay}
-      contentClassName={dialogContent}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          setOpen(false);
-        }
-        if (e.key === "Tab") {
-          e.preventDefault();
-          setMode((m) => (m === "fast" ? "ai" : "fast"));
-        }
-      }}
-    >
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={dialogOverlay} />
+        <Dialog.Content
+          className={dialogContent}
+          aria-describedby={undefined}
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+          }}
+        >
+          <Dialog.Title className="sr-only">Search organization</Dialog.Title>
+          <Command
+            label="Search organization"
+            shouldFilter={false}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setOpen(false);
+              }
+              if (e.key === "Tab") {
+                e.preventDefault();
+                setMode((m) => (m === "fast" ? "ai" : "fast"));
+              }
+            }}
+            className="flex h-full min-h-0 flex-col"
+          >
       <div className={`flex items-center gap-2 border-b border-border px-3 py-2 shrink-0 ${isMobile ? "pt-4" : ""}`}>
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <Command.Input
@@ -272,15 +301,23 @@ export function GlobalSearchPalette() {
           </Command.Group>
         )}
 
-        {loading && query.trim().length > 0 && (
+        {query.trim().length > 0 && query.trim().length < minQueryLength && (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {mode === "ai"
+              ? "Type at least 3 characters for semantic search."
+              : "Type at least 2 characters."}
+          </div>
+        )}
+
+        {loading && query.trim().length >= minQueryLength && (
           <Command.Loading className="py-8 text-center text-sm text-muted-foreground">Searching…</Command.Loading>
         )}
 
-        {!loading && query.trim().length > 0 && mode === "fast" && fastResults.length === 0 && (
+        {!loading && query.trim().length >= minQueryLength && mode === "fast" && fastResults.length === 0 && (
           <Command.Empty className="py-8 text-center text-sm text-muted-foreground">No results.</Command.Empty>
         )}
 
-        {!loading && query.trim().length > 0 && mode === "ai" && aiResults.length === 0 && (
+        {!loading && query.trim().length >= minQueryLength && mode === "ai" && aiResults.length === 0 && (
           <Command.Empty className="py-8 text-center text-sm text-muted-foreground">No semantic matches.</Command.Empty>
         )}
 
@@ -306,13 +343,12 @@ export function GlobalSearchPalette() {
                   >
                     <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-foreground">{row.title || "Untitled"}</div>
+                      <div className="line-clamp-1 text-sm font-medium text-foreground">
+                        {row.title || "Untitled"}
+                      </div>
                       {row.snippet ? (
                         <div className="line-clamp-2 text-xs text-muted-foreground">{row.snippet}</div>
                       ) : null}
-                      <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {entityLabel(row.entity_type)}
-                      </div>
                     </div>
                   </Command.Item>
                 );
@@ -321,31 +357,35 @@ export function GlobalSearchPalette() {
           ))}
 
         {mode === "ai" &&
-          aiResults.map((row, idx) => {
-            const Icon = entityIcon(row.sourceTable);
-            return (
-              <Command.Item
-                key={row.id}
-                value={row.id}
-                onSelect={() =>
-                  navigateTo(row.url, {
-                    entityType: row.sourceTable,
-                    position: idx + 1,
-                    qLen: query.trim().length,
-                  })
-                }
-                className="flex cursor-pointer gap-3 rounded-lg px-2 py-2 text-left aria-selected:bg-muted aria-selected:text-org-secondary"
-              >
-                <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-foreground">{row.title}</div>
-                  {row.snippet ? (
-                    <div className="line-clamp-2 text-xs text-muted-foreground">{row.snippet}</div>
-                  ) : null}
-                </div>
-              </Command.Item>
-            );
-          })}
+          groupedAi.map(([type, items]) => (
+            <Command.Group key={type} heading={entityLabel(type)}>
+              {items.map(({ row, pos }) => {
+                const Icon = entityIcon(row.sourceTable);
+                return (
+                  <Command.Item
+                    key={row.id}
+                    value={row.id}
+                    onSelect={() =>
+                      navigateTo(row.url, {
+                        entityType: row.sourceTable,
+                        position: pos,
+                        qLen: query.trim().length,
+                      })
+                    }
+                    className="flex cursor-pointer gap-3 rounded-lg px-2 py-2 text-left aria-selected:bg-muted aria-selected:text-org-secondary"
+                  >
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <div className="line-clamp-1 text-sm font-medium text-foreground">{row.title}</div>
+                      {row.snippet ? (
+                        <div className="line-clamp-2 text-xs text-muted-foreground">{row.snippet}</div>
+                      ) : null}
+                    </div>
+                  </Command.Item>
+                );
+              })}
+            </Command.Group>
+          ))}
       </Command.List>
 
       <div className="border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex flex-col gap-1 shrink-0">
@@ -370,6 +410,9 @@ export function GlobalSearchPalette() {
           </p>
         )}
       </div>
-    </Command.Dialog>
+          </Command>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

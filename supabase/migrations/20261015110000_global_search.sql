@@ -27,7 +27,7 @@ AS $$
           WHERE uor.organization_id = p_org_id
             AND uor.user_id = m.user_id
             AND uor.status = 'active'::public.membership_status
-            AND uor.role = ANY (
+            AND uor.role::text = ANY (
               ARRAY['admin'::text, 'active_member'::text, 'parent'::text, 'member'::text]
             )
         )
@@ -83,7 +83,7 @@ BEGIN
     RETURN v_uid = ANY(e.target_user_ids);
   END IF;
 
-  SELECT uor.role INTO v_role
+  SELECT uor.role::text INTO v_role
   FROM public.user_organization_roles uor
   WHERE uor.organization_id = e.organization_id
     AND uor.user_id = v_uid
@@ -206,6 +206,7 @@ DECLARE
   v_trim text;
   v_short boolean;
   v_prefix text;
+  v_sub text;
   v_lim int;
 BEGIN
   v_uid := auth.uid();
@@ -238,8 +239,11 @@ BEGIN
     RETURN;
   END IF;
 
-  v_short := length(v_trim) < 3;
+  -- Queries shorter than 4 characters use substring matching only (trigram
+  -- similarity is too noisy on 1-3 char tokens).
+  v_short := length(v_trim) < 4;
   v_prefix := v_trim || '%';
+  v_sub := '%' || v_trim || '%';
   v_lim := GREATEST(1, LEAST(COALESCE(p_limit, 20), 50));
 
   RETURN QUERY
@@ -254,7 +258,7 @@ BEGIN
       CASE
         WHEN v_short THEN 1.0::real
         ELSE GREATEST(
-          word_similarity(
+          public.word_similarity(
             v_trim,
             COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '') || ' ' || COALESCE(m.email, '')
           )::real,
@@ -268,17 +272,8 @@ BEGIN
       AND m.deleted_at IS NULL
       AND public.is_member_directory_visible(m.id, p_org_id)
       AND (
-        v_short AND (
-          lower(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) LIKE lower(v_prefix)
-          OR lower(COALESCE(m.email, '')) LIKE lower(v_prefix)
-        )
-        OR (
-          NOT v_short
-          AND word_similarity(
-            v_trim,
-            COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '') || ' ' || COALESCE(m.email, '')
-          ) > 0.05
-        )
+        lower(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(m.email, '')) LIKE lower(v_sub)
       )
     ORDER BY sort_at DESC
     LIMIT v_lim
@@ -301,7 +296,7 @@ BEGIN
       CASE
         WHEN v_short THEN 1.0::real
         ELSE GREATEST(
-          word_similarity(
+          public.word_similarity(
             v_trim,
             COALESCE(al.first_name, '') || ' ' || COALESCE(al.last_name, '') || ' ' ||
             COALESCE(al.current_company, '') || ' ' || COALESCE(al.headline, '')
@@ -316,18 +311,9 @@ BEGIN
       AND al.deleted_at IS NULL
       AND public.is_alumni_directory_visible(al.id, p_org_id)
       AND (
-        v_short AND (
-          lower(COALESCE(al.first_name, '') || ' ' || COALESCE(al.last_name, '')) LIKE lower(v_prefix)
-          OR lower(COALESCE(al.current_company, '')) LIKE lower(v_prefix)
-        )
-        OR (
-          NOT v_short
-          AND word_similarity(
-            v_trim,
-            COALESCE(al.first_name, '') || ' ' || COALESCE(al.last_name, '') || ' ' ||
-            COALESCE(al.current_company, '') || ' ' || COALESCE(al.headline, '')
-          ) > 0.05
-        )
+        lower(COALESCE(al.first_name, '') || ' ' || COALESCE(al.last_name, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(al.current_company, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(al.headline, '')) LIKE lower(v_sub)
       )
     ORDER BY al.created_at DESC NULLS LAST
     LIMIT v_lim
@@ -346,8 +332,8 @@ BEGIN
             ELSE 0.5::real
           END
         ELSE GREATEST(
-          word_similarity(v_trim, COALESCE(a.title, ''))::real,
-          word_similarity(v_trim, COALESCE(a.body, ''))::real,
+          public.word_similarity(v_trim, COALESCE(a.title, ''))::real,
+          public.word_similarity(v_trim, COALESCE(a.body, ''))::real,
           0.0::real
         )
       END,
@@ -358,14 +344,8 @@ BEGIN
       AND a.deleted_at IS NULL
       AND public.can_view_announcement(a)
       AND (
-        v_short AND (lower(COALESCE(a.title, '')) LIKE lower(v_prefix))
-        OR (
-          NOT v_short
-          AND (
-            word_similarity(v_trim, COALESCE(a.title, '')) > 0.05
-            OR word_similarity(v_trim, COALESCE(a.body, '')) > 0.05
-          )
-        )
+        lower(COALESCE(a.title, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(a.body, '')) LIKE lower(v_sub)
       )
     ORDER BY a.created_at DESC NULLS LAST
     LIMIT v_lim
@@ -381,7 +361,7 @@ BEGIN
         WHEN v_short THEN
           CASE WHEN lower(COALESCE(t.title, '')) LIKE lower(v_prefix) THEN 1.0::real ELSE 0.5::real END
         ELSE GREATEST(
-          word_similarity(v_trim, COALESCE(t.title, '') || ' ' || COALESCE(t.body, ''))::real,
+          public.word_similarity(v_trim, COALESCE(t.title, '') || ' ' || COALESCE(t.body, ''))::real,
           0.0::real
         )
       END,
@@ -390,16 +370,19 @@ BEGIN
     FROM public.discussion_threads t
     WHERE t.organization_id = p_org_id
       AND t.deleted_at IS NULL
-      AND public.has_active_role(
-        t.organization_id,
-        ARRAY['admin', 'active_member', 'alumni', 'parent', 'member']::text[]
+      AND EXISTS (
+        SELECT 1
+        FROM public.user_organization_roles uor
+        WHERE uor.organization_id = t.organization_id
+          AND uor.user_id = (SELECT auth.uid())
+          AND uor.status = 'active'::public.membership_status
+          AND uor.role::text = ANY (
+            ARRAY['admin', 'active_member', 'alumni', 'parent', 'member']::text[]
+          )
       )
       AND (
-        v_short AND lower(COALESCE(t.title, '')) LIKE lower(v_prefix)
-        OR (
-          NOT v_short
-          AND word_similarity(v_trim, COALESCE(t.title, '') || ' ' || COALESCE(t.body, '')) > 0.05
-        )
+        lower(COALESCE(t.title, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(t.body, '')) LIKE lower(v_sub)
       )
     ORDER BY t.created_at DESC NULLS LAST
     LIMIT v_lim
@@ -415,7 +398,7 @@ BEGIN
         WHEN v_short THEN
           CASE WHEN lower(COALESCE(e.title, '')) LIKE lower(v_prefix) THEN 1.0::real ELSE 0.5::real END
         ELSE GREATEST(
-          word_similarity(v_trim, COALESCE(e.title, '') || ' ' || COALESCE(e.description, ''))::real,
+          public.word_similarity(v_trim, COALESCE(e.title, '') || ' ' || COALESCE(e.description, ''))::real,
           0.0::real
         )
       END,
@@ -426,11 +409,9 @@ BEGIN
       AND e.deleted_at IS NULL
       AND public.can_view_event(e)
       AND (
-        v_short AND lower(COALESCE(e.title, '')) LIKE lower(v_prefix)
-        OR (
-          NOT v_short
-          AND word_similarity(v_trim, COALESCE(e.title, '') || ' ' || COALESCE(e.description, '')) > 0.05
-        )
+        lower(COALESCE(e.title, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(e.description, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(e.location, '')) LIKE lower(v_sub)
       )
     ORDER BY e.start_date DESC NULLS LAST
     LIMIT v_lim
@@ -451,7 +432,7 @@ BEGIN
             ELSE 0.5::real
           END
         ELSE GREATEST(
-          word_similarity(v_trim, COALESCE(j.title, '') || ' ' || COALESCE(j.company, ''))::real,
+          public.word_similarity(v_trim, COALESCE(j.title, '') || ' ' || COALESCE(j.company, ''))::real,
           0.0::real
         )
       END,
@@ -463,14 +444,9 @@ BEGIN
       AND j.is_active = true
       AND (j.expires_at IS NULL OR j.expires_at > now())
       AND (
-        v_short AND (
-          lower(COALESCE(j.title, '')) LIKE lower(v_prefix)
-          OR lower(COALESCE(j.company, '')) LIKE lower(v_prefix)
-        )
-        OR (
-          NOT v_short
-          AND word_similarity(v_trim, COALESCE(j.title, '') || ' ' || COALESCE(j.company, '')) > 0.05
-        )
+        lower(COALESCE(j.title, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(j.company, '')) LIKE lower(v_sub)
+        OR lower(COALESCE(j.description, '')) LIKE lower(v_sub)
       )
     ORDER BY j.created_at DESC NULLS LAST
     LIMIT v_lim
