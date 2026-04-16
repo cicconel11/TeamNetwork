@@ -52,8 +52,17 @@ export interface AiPendingActionConfirmRouteDeps {
   createDiscussionReply?: typeof createDiscussionReply;
   createDiscussionThread?: typeof createDiscussionThread;
   createEvent?: typeof createEvent;
+  sendAnnouncementNotification?: typeof sendAnnouncementNotification;
   sendAiAssistedDirectChatMessage?: typeof sendAiAssistedDirectChatMessage;
   sendAiAssistedGroupChatMessage?: typeof sendAiAssistedGroupChatMessage;
+  syncEventToUsers?: typeof syncEventToUsers;
+  syncOutlookEventToUsers?: (
+    supabase: Parameters<typeof syncEventToUsers>[0],
+    organizationId: string,
+    eventId: string,
+    operation: Parameters<typeof syncEventToUsers>[3]
+  ) => Promise<void>;
+  sendNotificationBlast?: typeof sendNotificationBlast;
   clearDraftSession?: typeof clearDraftSession;
 }
 
@@ -67,10 +76,20 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const createDiscussionReplyFn = deps.createDiscussionReply ?? createDiscussionReply;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
   const createEventFn = deps.createEvent ?? createEvent;
+  const sendAnnouncementNotificationFn =
+    deps.sendAnnouncementNotification ?? sendAnnouncementNotification;
   const sendAiAssistedDirectChatMessageFn =
     deps.sendAiAssistedDirectChatMessage ?? sendAiAssistedDirectChatMessage;
   const sendAiAssistedGroupChatMessageFn =
     deps.sendAiAssistedGroupChatMessage ?? sendAiAssistedGroupChatMessage;
+  const syncEventToUsersFn = deps.syncEventToUsers ?? syncEventToUsers;
+  const syncOutlookEventToUsersFn =
+    deps.syncOutlookEventToUsers ??
+    (async (...args) => {
+      const { syncOutlookEventToUsers } = await import("@/lib/microsoft/calendar-sync");
+      return syncOutlookEventToUsers(...args);
+    });
+  const sendNotificationBlastFn = deps.sendNotificationBlast ?? sendNotificationBlast;
   const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
 
   return async function POST(
@@ -203,7 +222,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           try {
-            await sendAnnouncementNotification({
+            await sendAnnouncementNotificationFn({
               supabase: ctx.serviceSupabase,
               announcementId: result.announcement.id,
               orgId: ctx.orgId,
@@ -211,10 +230,25 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
                 ...payload,
                 audience_user_ids: payload.audience_user_ids ?? null,
               },
-              apiUrlBase: process.env.NEXT_PUBLIC_APP_URL || "",
+              sendDirectNotification: async ({ organizationId, title, body, audience, targetUserIds }) => {
+                await sendNotificationBlastFn({
+                  supabase: ctx.serviceSupabase,
+                  organizationId,
+                  audience,
+                  channel: "email",
+                  title,
+                  body,
+                  targetUserIds,
+                  category: "announcement",
+                });
+              },
             });
-          } catch {
-            // Notification failures should not block successful announcement creation.
+          } catch (notificationError) {
+            aiLog("error", "ai-confirm", "announcement notification failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, { actionId: action.id, announcementId: result.announcement.id, error: notificationError });
           }
 
           const orgSlug =
@@ -702,7 +736,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           try {
-            await syncEventToUsers(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
+            await syncEventToUsersFn(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
           } catch (syncErr) {
             aiLog("error", "ai-confirm", "google calendar sync failed", {
               ...logContext,
@@ -712,8 +746,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           try {
-            const { syncOutlookEventToUsers } = await import("@/lib/microsoft/calendar-sync");
-            await syncOutlookEventToUsers(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
+            await syncOutlookEventToUsersFn(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
           } catch (outlookErr) {
             aiLog("error", "ai-confirm", "outlook calendar sync failed", {
               ...logContext,
@@ -723,7 +756,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           try {
-            await sendNotificationBlast({
+            await sendNotificationBlastFn({
               supabase: ctx.serviceSupabase,
               organizationId: ctx.orgId,
               audience: "both",
