@@ -154,7 +154,7 @@ export async function handleGlobalSearchGet(request: NextRequest, orgSlug: strin
       chunks,
       orgSlug,
       orgId: org.id,
-      serviceSupabase: service,
+      userSupabase: supabase,
     });
     void logBehavioralEventFromApi(org.id, "search_used", {
       query_length: params.q.length,

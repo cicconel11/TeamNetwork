@@ -37,9 +37,14 @@ export async function hydrateRagSearchResults(params: {
   chunks: RetrievedChunk[];
   orgSlug: string;
   orgId: string;
-  serviceSupabase: SupabaseClient;
+  /**
+   * User-scoped client used for title hydration so RLS filters out
+   * records the caller cannot see (private events, audience-restricted
+   * threads, inactive jobs). Must NOT be a service-role client.
+   */
+  userSupabase: SupabaseClient;
 }): Promise<HydratedSearchHit[]> {
-  const { chunks, orgSlug, orgId, serviceSupabase } = params;
+  const { chunks, orgSlug, orgId, userSupabase } = params;
   if (chunks.length === 0) return [];
 
   const deduped = new Map<string, RetrievedChunk>();
@@ -113,19 +118,34 @@ export async function hydrateRagSearchResults(params: {
   const eventIds = combined.filter((x) => x.sourceTable === "events").map((x) => x.sourceId);
   const jobIds = combined.filter((x) => x.sourceTable === "job_postings").map((x) => x.sourceId);
 
+  // Use the user-scoped client so RLS filters out records the caller
+  // cannot see. `.is("deleted_at", null)` and `.eq("is_active", true)`
+  // enforce visibility in addition to RLS policies.
   const [threads, events, jobs] = await Promise.all([
     threadIds.length
-      ? serviceSupabase
+      ? userSupabase
           .from("discussion_threads")
           .select("id, title")
           .eq("organization_id", orgId)
+          .is("deleted_at", null)
           .in("id", threadIds)
       : Promise.resolve({ data: [] as { id: string; title: string | null }[] }),
     eventIds.length
-      ? serviceSupabase.from("events").select("id, title").eq("organization_id", orgId).in("id", eventIds)
+      ? userSupabase
+          .from("events")
+          .select("id, title")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .in("id", eventIds)
       : Promise.resolve({ data: [] as { id: string; title: string | null }[] }),
     jobIds.length
-      ? serviceSupabase.from("job_postings").select("id, title").eq("organization_id", orgId).in("id", jobIds)
+      ? userSupabase
+          .from("job_postings")
+          .select("id, title")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .eq("is_active", true)
+          .in("id", jobIds)
       : Promise.resolve({ data: [] as { id: string; title: string | null }[] }),
   ]);
 
@@ -139,7 +159,17 @@ export async function hydrateRagSearchResults(params: {
   const eventTitles = titleMap(events.data);
   const jobTitles = titleMap(jobs.data);
 
-  return combined.map((c) => {
+  // Drop chunks whose entity is no longer visible to the caller (RLS
+  // filtered the hydration query). This prevents leaking placeholder
+  // titles for private events, restricted threads, or inactive jobs.
+  const visible = combined.filter((c) => {
+    if (c.sourceTable === "discussion_threads") return threadTitles.has(c.sourceId);
+    if (c.sourceTable === "events") return eventTitles.has(c.sourceId);
+    if (c.sourceTable === "job_postings") return jobTitles.has(c.sourceId);
+    return true;
+  });
+
+  return visible.map((c) => {
     let title = "";
     let url = "";
     if (c.sourceTable === "discussion_threads") {
