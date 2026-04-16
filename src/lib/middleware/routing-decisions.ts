@@ -32,6 +32,7 @@ const NON_ORG_TOP_LEVEL_SEGMENTS = [
   "app",
   "auth",
   "api",
+  "blog",
   "settings",
   "enterprise",
   "_next",
@@ -60,7 +61,7 @@ export function isPublicApiPattern(pathname: string): boolean {
  * Includes all /auth/* sub-paths.
  */
 export function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some((route) => pathname === route) || pathname.startsWith("/auth/");
+  return PUBLIC_ROUTES.some((route) => pathname === route) || pathname.startsWith("/auth/") || pathname.startsWith("/blog");
 }
 
 /**

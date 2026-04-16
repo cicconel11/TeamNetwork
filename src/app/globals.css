@@ -7,7 +7,7 @@
   --font-display: "Bitter";
   --font-mono: "Space Mono";
 
-  /* Dynamic org color - will be overridden per-org */
+  /* Dynamic org colors - overridden per-org via layout <style> */
   --color-org-primary: #1e3a5f;
   --color-org-primary-light: #2d4a6f;
   --color-org-primary-dark: #0f2a4f;
@@ -16,6 +16,12 @@
   --color-org-secondary-light: #34d399;
   --color-org-secondary-dark: #047857;
   --color-org-secondary-foreground: #ffffff;
+
+  /* Sidebar */
+  --sidebar-bg: #1e3a5f;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-muted: #2d4a6f;
+  --sidebar-muted-foreground: #94a3b8;
 
   /* Base theme */
   --background: #fafbfc;
@@ -151,12 +157,13 @@ body {
 }
 
 .badge-primary {
-  background: var(--color-org-primary);
-  @apply text-white;
+  background: var(--color-org-secondary);
+  color: var(--color-org-secondary-foreground);
 }
 
 .badge-success {
-  @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400;
+  background: color-mix(in srgb, var(--color-org-secondary) 15%, var(--card));
+  color: var(--color-org-secondary);
 }
 
 .badge-success-muted {
@@ -165,11 +172,12 @@ body {
 }
 
 .badge-warning {
-  @apply bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400;
+  background: color-mix(in srgb, var(--color-org-primary) 15%, var(--card));
+  color: var(--color-org-primary);
 }
 
 .badge-error {
-  @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400;
+  @apply bg-red-100 text-red-800;
 }
 
 .badge-muted {

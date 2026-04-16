@@ -267,12 +267,13 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         .eq("organization_id", organization.id)
         .maybeSingle()
     : { data: null };
-  const primary = safeHexColor(organization.primary_color, "#1e3a5f");
-  const secondary = safeHexColor(organization.secondary_color, "#10b981");
+  const rawBase = (organization as Record<string, unknown>).base_color as string | null;
+  const baseColor = rawBase === "primary" ? "primary" : safeHexColor(rawBase, "primary");
+  const sidebarColor = safeHexColor(organization.primary_color, "#1e3a5f");
+  const buttonColor = safeHexColor(organization.secondary_color, "#10b981");
 
-  // Compute theme variables for both light and dark modes
-  const lightModeVars = computeOrgThemeVariables(primary, secondary, false);
-  const darkModeVars = computeOrgThemeVariables(primary, secondary, true);
+  // Compute theme variables — base color determines light/dark, no separate modes
+  const themeVars = computeOrgThemeVariables(baseColor, sidebarColor, buttonColor);
 
   return (
     <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
@@ -281,27 +282,18 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     <div data-org-shell className="min-h-screen">
       <style
         dangerouslySetInnerHTML={{
-          __html: `
-            :root {
-              ${Object.entries(lightModeVars)
-                .map(([key, value]) => `${key}: ${value};`)
-                .join("\n              ")}
-            }
-
-            :root.dark {
-              ${Object.entries(darkModeVars)
-                .map(([key, value]) => `${key}: ${value};`)
-                .join("\n              ")}
-            }
-
-            @media (prefers-color-scheme: dark) {
-              :root:not(.light) {
-                ${Object.entries(darkModeVars)
-                  .map(([key, value]) => `${key}: ${value};`)
-                  .join("\n                ")}
-              }
-            }
-          `,
+          __html: (() => {
+            const vars = Object.entries(themeVars)
+              .map(([key, value]) => `${key}: ${value};`)
+              .join("\n              ");
+            // Inject into :root, .dark, AND prefers-color-scheme so org theme
+            // always wins over globals.css dark mode overrides
+            return `
+            :root { ${vars} }
+            :root.dark { ${vars} }
+            @media (prefers-color-scheme: dark) { :root:not(.light) { ${vars} } }
+            `;
+          })(),
         }}
       />
 
