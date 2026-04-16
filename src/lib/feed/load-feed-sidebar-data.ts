@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { filterAnnouncementsForUser } from "@/lib/announcements";
+import { filterAnnouncementsForUserViaRpc } from "@/lib/announcements";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import type { Announcement, MembershipStatus } from "@/types/database";
 
@@ -59,9 +59,13 @@ export async function loadFeedSidebarData(params: {
     console.error("[loadFeedSidebarData] announcements query failed:", announcementsError.message);
   if (membersError) console.error("[loadFeedSidebarData] members query failed:", membersError.message);
 
-  const visibleAnnouncements = filterAnnouncementsForUser(
-    recentAnnouncements as Announcement[] | null,
-    { role, status: status as MembershipStatus | null, userId },
+  const visibleAnnouncements = (
+    await filterAnnouncementsForUserViaRpc(
+      supabase,
+      orgId,
+      recentAnnouncements as Announcement[] | null,
+      { role, status: status as MembershipStatus | null, userId },
+    )
   ).slice(0, 3);
 
   return {

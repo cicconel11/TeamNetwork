@@ -6090,6 +6090,10 @@ export type Database = {
         }
         Returns: Json
       }
+      filter_announcement_ids_for_user: {
+        Args: { p_org_id: string; p_announcement_ids: string[] }
+        Returns: string[]
+      }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
       get_enterprise_alumni_stats: {
@@ -6305,6 +6309,23 @@ export type Database = {
           source_table: string
         }[]
       }
+      search_org_content: {
+        Args: {
+          p_limit?: number
+          p_org_id: string
+          p_org_slug: string
+          p_query: string
+        }
+        Returns: {
+          entity_id: string
+          entity_type: string
+          metadata: Json
+          rank: number
+          snippet: string
+          title: string
+          url_path: string
+        }[]
+      }
       shift_media_album_sort_orders: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -6376,6 +6397,8 @@ export type Database = {
         | "chat_thread_open"
         | "chat_message_send"
         | "chat_participants_change"
+        | "search_used"
+        | "search_result_click"
       chat_group_role: "admin" | "moderator" | "member"
       chat_message_status: "pending" | "approved" | "rejected"
       event_type:
@@ -6551,6 +6574,8 @@ export const Constants = {
         "chat_thread_open",
         "chat_message_send",
         "chat_participants_change",
+        "search_used",
+        "search_result_click",
       ],
       chat_group_role: ["admin", "moderator", "member"],
       chat_message_status: ["pending", "approved", "rejected"],

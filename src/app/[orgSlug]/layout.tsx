@@ -28,6 +28,10 @@ const AIEdgeTab = dynamic(
   () => import("@/components/ai-assistant/AIEdgeTab").then((m) => m.AIEdgeTab),
   { ssr: false },
 );
+const OrgGlobalSearch = dynamic(
+  () => import("@/components/search/OrgGlobalSearch").then((m) => m.OrgGlobalSearch),
+  { ssr: false },
+);
 import { computeOrgThemeVariables, safeHexColor } from "@/lib/theming/org-colors";
 
 interface OrgLayoutProps {
@@ -279,6 +283,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
     <AnalyticsProvider>
     <AIPanelProvider autoOpen={isAdmin}>
+    <OrgGlobalSearch orgSlug={orgSlug} orgId={organization.id}>
     <div data-org-shell className="min-h-screen">
       <style
         dangerouslySetInnerHTML={{
@@ -356,6 +361,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         </>
       )}
     </div>
+    </OrgGlobalSearch>
     </AIPanelProvider>
     </AnalyticsProvider>
     </OrgAnalyticsProvider>

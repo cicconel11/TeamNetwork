@@ -78,5 +78,8 @@ export * from "./blackbaud";
 // AI assistant schemas
 export * from "./ai-assistant";
 
+// Global search (Cmd+K)
+export * from "./global-search";
+
 // AI feedback schemas
 export * from "./ai-feedback";
