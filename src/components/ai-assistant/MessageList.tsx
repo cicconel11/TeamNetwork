@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bot, User, Sparkles } from "lucide-react";
 import type { AssistantCapabilitySnapshot } from "@/lib/ai/capabilities";
 import type { AIPanelMessage, PendingActionState } from "./panel-state";
+import type { AIFeedbackRating } from "@/lib/schemas";
 import { AssistantMessageContent } from "./AssistantMessageContent";
 import { MessageFeedback } from "./MessageFeedback";
 import { PendingActionCard } from "./PendingActionCard";
@@ -46,12 +47,57 @@ export function MessageList({
   onCancelAllPendingActions,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, AIFeedbackRating>>({});
+  const fetchedIdsRef = useRef<Set<string>>(new Set());
+
   const lastAssistantMessage = [...messages]
     .reverse()
     .find((message) => message.role === "assistant" && Boolean(message.content));
   const shouldRenderPreviewAssistant =
     Boolean(previewAssistantContent) &&
     lastAssistantMessage?.content !== previewAssistantContent;
+
+  // Fetch feedback for complete assistant messages
+  useEffect(() => {
+    const completeAssistantIds = messages
+      .filter((m) => m.role === "assistant" && m.status === "complete")
+      .map((m) => m.id)
+      .filter((id) => !fetchedIdsRef.current.has(id));
+
+    if (completeAssistantIds.length === 0) return;
+
+    const controller = new AbortController();
+    const fetchFeedback = async () => {
+      try {
+        const res = await fetch(
+          `/api/ai/${orgId}/feedback?messageIds=${completeAssistantIds.join(",")}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) return;
+
+        const json = await res.json() as {
+          data: Array<{ message_id: string; rating: AIFeedbackRating }>;
+        };
+        const newMap: Record<string, AIFeedbackRating> = {};
+        for (const item of json.data) {
+          newMap[item.message_id] = item.rating;
+          fetchedIdsRef.current.add(item.message_id);
+        }
+        // Mark fetched even if no feedback exists
+        for (const id of completeAssistantIds) {
+          fetchedIdsRef.current.add(id);
+        }
+        if (Object.keys(newMap).length > 0) {
+          setFeedbackMap((prev) => ({ ...prev, ...newMap }));
+        }
+      } catch {
+        // Ignore abort errors
+      }
+    };
+
+    void fetchFeedback();
+    return () => controller.abort();
+  }, [messages, orgId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -140,7 +186,11 @@ export function MessageList({
               <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
                 <AssistantMessageContent content={msg.content ?? ""} />
                 {msg.status === "complete" && (
-                  <MessageFeedback messageId={msg.id} orgId={orgId} />
+                  <MessageFeedback
+                    messageId={msg.id}
+                    orgId={orgId}
+                    initialRating={feedbackMap[msg.id] ?? null}
+                  />
                 )}
               </div>
             ) : (
