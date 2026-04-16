@@ -5,11 +5,13 @@ import { Bot, User, Sparkles } from "lucide-react";
 import type { AssistantCapabilitySnapshot } from "@/lib/ai/capabilities";
 import type { AIPanelMessage, PendingActionState } from "./panel-state";
 import { AssistantMessageContent } from "./AssistantMessageContent";
+import { MessageFeedback } from "./MessageFeedback";
 import { PendingActionCard } from "./PendingActionCard";
 
 interface MessageListProps {
   messages: AIPanelMessage[];
   loading: boolean;
+  orgId: string;
   streamingContent?: string;
   isStreaming?: boolean;
   previewAssistantContent?: string;
@@ -28,6 +30,7 @@ interface MessageListProps {
 export function MessageList({
   messages,
   loading,
+  orgId,
   streamingContent,
   isStreaming,
   previewAssistantContent,
@@ -136,6 +139,9 @@ export function MessageList({
             {msg.role === "assistant" ? (
               <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
                 <AssistantMessageContent content={msg.content ?? ""} />
+                {msg.status === "completed" && (
+                  <MessageFeedback messageId={msg.id} orgId={orgId} />
+                )}
               </div>
             ) : (
               <div className="whitespace-pre-wrap break-words">{msg.content ?? ""}</div>

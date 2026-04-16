@@ -77,3 +77,6 @@ export * from "./blackbaud";
 
 // AI assistant schemas
 export * from "./ai-assistant";
+
+// AI feedback schemas
+export * from "./ai-feedback";

@@ -731,6 +731,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
             <MessageList
               messages={messages}
               loading={messagesLoading}
+              orgId={orgId}
               streamingContent={currentContent}
               isStreaming={isStreaming}
               previewAssistantContent={pendingAssistantContent ?? undefined}
