@@ -217,7 +217,7 @@ export function LandingHeader() {
             </button>
           </div>
 
-          <nav className="flex flex-col p-6 gap-1">
+          <nav className="flex flex-col p-6 gap-1 overflow-y-auto">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -229,7 +229,14 @@ export function LandingHeader() {
               </Link>
             ))}
 
-            <div className="border-t border-landing-cream/10 mt-4 pt-4">
+            <div className="border-t border-landing-cream/10 mt-4 pt-4 flex flex-col gap-2">
+              <ButtonLink
+                href="/auth/login"
+                variant="custom"
+                className="w-full border border-landing-cream/20 bg-landing-cream/5 text-landing-cream text-center hover:bg-landing-cream/10"
+              >
+                Sign In
+              </ButtonLink>
               <ButtonLink
                 href="/auth/signup"
                 variant="custom"
