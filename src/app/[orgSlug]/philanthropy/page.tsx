@@ -74,17 +74,22 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const donationStat = (donationStats || null) as OrganizationDonationStat | null;
   const allDonationRows = (donations || []) as OrganizationDonation[];
 
-  // Server-side privacy gate: non-admins only see public donations, no donor emails
-  const donationRows = orgCtx.isAdmin
+  // Server-side privacy gate: non-admins/non-editors only see public donations, no donor emails
+  // When hide_donor_names is enabled, non-admins/editors see no donation rows at all
+  const hideDonorNames = Boolean((org as Record<string, unknown>).hide_donor_names);
+  const canSeeDonors = orgCtx.isAdmin || canEditNavItem(org.nav_config as NavConfig, "/donations", orgCtx.role, ["admin"]);
+  const donationRows = canSeeDonors
     ? allDonationRows
-    : allDonationRows
-        .filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
-        .map((d) => ({ ...d, donor_email: null }));
+    : hideDonorNames
+      ? []
+      : allDonationRows
+          .filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
+          .map((d) => ({ ...d, donor_email: null }));
 
-  const totalRaised = orgCtx.isAdmin
+  const totalRaised = canSeeDonors
     ? (donationStat?.total_amount_cents ?? 0) / 100
     : donationRows.reduce((sum, d) => sum + (d.amount_cents || 0), 0) / 100;
-  const donationCount = orgCtx.isAdmin
+  const donationCount = canSeeDonors
     ? (donationStat?.donation_count ?? allDonationRows.length)
     : donationRows.length;
   const avgDonation = donationCount > 0 ? totalRaised / donationCount : 0;
@@ -203,6 +208,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         purposeTotals={purposeTotals}
         philanthropyEventsForForm={eventsForForm}
         purposeEmptyMessage={tDonations("willGroupHere", { label: pageLabel })}
+        hideDonorNames={hideDonorNames}
       />
 
       {/* Events section */}

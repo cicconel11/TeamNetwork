@@ -23,8 +23,9 @@ interface RecentDuesTableProps {
 }
 
 export function RecentDuesTable({ donations, isAdmin, isPublicView = false, translations: t }: RecentDuesTableProps) {
+  const SETTLED_STATUSES = ["succeeded", "recorded"];
   const visibleDonations = isPublicView
-    ? donations.filter((d) => (d.visibility || "public") === "public")
+    ? donations.filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
     : donations;
 
   if (visibleDonations.length === 0) {

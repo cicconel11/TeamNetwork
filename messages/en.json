@@ -650,7 +650,11 @@
     "amount": "Amount",
     "status": "Status",
     "visibility": "Visibility",
-    "anonymous": "Anonymous"
+    "anonymous": "Anonymous",
+    "hideDonorNames": "Hide Donor Names",
+    "hideDonorNamesDescription": "When enabled, donor names are hidden from members. Only admins and editors can see who donated.",
+    "donorPrivacy": "Donor Privacy",
+    "saving": "Saving…"
   },
   "forms": {
     "manage": "Manage organization {label}",

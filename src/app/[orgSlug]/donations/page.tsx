@@ -56,12 +56,16 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const allDonationRows = (donations || []) as OrganizationDonation[];
   const eventsForForm = (philanthropyEvents || []) as { id: string; title: string }[];
 
-  // Server-side privacy gate: non-admins only see public donations, no donor emails
-  const donationRows = orgCtx.isAdmin
+  // Server-side privacy gate: non-admins/non-editors only see public donations, no donor emails
+  // When hide_donor_names is enabled, non-admins/editors see no donation rows at all
+  const hideDonorNames = Boolean((org as Record<string, unknown>).hide_donor_names);
+  const donationRows = (orgCtx.isAdmin || canEdit)
     ? allDonationRows
-    : allDonationRows
-        .filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
-        .map((d) => ({ ...d, donor_email: null }));
+    : hideDonorNames
+      ? []
+      : allDonationRows
+          .filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
+          .map((d) => ({ ...d, donor_email: null }));
 
   const isConnected = Boolean(connectStatus?.isReady);
   const totalAmount = orgCtx.isAdmin
@@ -145,6 +149,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
         purposeTotals={purposeTotals}
         philanthropyEventsForForm={eventsForForm}
         purposeEmptyMessage={tDonations("willGroupHere", { label: pageLabel })}
+        hideDonorNames={hideDonorNames}
       />
     </div>
   );
