@@ -1,6 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
+ * Lightpanda Cloud endpoint for headless browser testing.
+ * 16x less memory, 9x faster than Chrome.
+ * @see https://lightpanda.io/docs/
+ */
+const LIGHTPANDA_TOKEN = process.env.LIGHTPANDA_TOKEN;
+const LIGHTPANDA_ENDPOINT = LIGHTPANDA_TOKEN
+  ? `wss://euwest.cloud.lightpanda.io/ws?token=${LIGHTPANDA_TOKEN}`
+  : undefined;
+
+/**
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
@@ -66,6 +76,42 @@ export default defineConfig({
         storageState: 'playwright/.auth/e2e-state.json',
       },
       dependencies: ['e2e-setup'],
+    },
+    /* Lightpanda Cloud - fast headless browser for CI */
+    {
+      name: 'lightpanda',
+      testDir: './tests/e2e/specs',
+      use: {
+        baseURL: 'http://localhost:3000',
+        storageState: 'playwright/.auth/e2e-state.json',
+        // Connect to Lightpanda Cloud via CDP
+        connectOptions: LIGHTPANDA_ENDPOINT
+          ? { wsEndpoint: LIGHTPANDA_ENDPOINT }
+          : undefined,
+      },
+      dependencies: ['e2e-setup'],
+    },
+    /* FERPA Compliance Tests - requires auth */
+    {
+      name: 'ferpa',
+      testDir: './tests/e2e/specs',
+      testMatch: 'ferpa-compliance.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+        storageState: 'playwright/.auth/e2e-state.json',
+      },
+      dependencies: ['e2e-setup'],
+    },
+    /* FERPA API Tests - no auth required */
+    {
+      name: 'ferpa-api',
+      testDir: './tests/e2e/specs',
+      testMatch: 'ferpa-api.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+      },
     },
   ],
 
