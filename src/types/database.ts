@@ -349,6 +349,41 @@ export type Database = {
           },
         ]
       }
+      ai_feedback: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          message_id: string
+          rating: string
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          message_id: string
+          rating: string
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string
+          rating?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_feedback_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_indexing_exclusions: {
         Row: {
           created_at: string
@@ -616,6 +651,7 @@ export type Database = {
       alumni: {
         Row: {
           address_summary: string | null
+          birth_year: number | null
           created_at: string | null
           current_city: string | null
           current_company: string | null
@@ -650,6 +686,7 @@ export type Database = {
         }
         Insert: {
           address_summary?: string | null
+          birth_year?: number | null
           created_at?: string | null
           current_city?: string | null
           current_company?: string | null
@@ -684,6 +721,7 @@ export type Database = {
         }
         Update: {
           address_summary?: string | null
+          birth_year?: number | null
           created_at?: string | null
           current_city?: string | null
           current_company?: string | null
@@ -3743,6 +3781,75 @@ export type Database = {
           },
         ]
       }
+      mentorship_meetings: {
+        Row: {
+          calendar_event_id: string | null
+          calendar_sync_status: string
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          duration_minutes: number
+          id: string
+          meeting_link: string | null
+          organization_id: string
+          pair_id: string
+          platform: string
+          scheduled_at: string
+          scheduled_end_at: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          calendar_event_id?: string | null
+          calendar_sync_status?: string
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          duration_minutes?: number
+          id?: string
+          meeting_link?: string | null
+          organization_id: string
+          pair_id: string
+          platform: string
+          scheduled_at: string
+          scheduled_end_at?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          calendar_event_id?: string | null
+          calendar_sync_status?: string
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          duration_minutes?: number
+          id?: string
+          meeting_link?: string | null
+          organization_id?: string
+          pair_id?: string
+          platform?: string
+          scheduled_at?: string
+          scheduled_end_at?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentorship_meetings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentorship_meetings_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "mentorship_pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mentorship_pairs: {
         Row: {
           created_at: string
@@ -3780,6 +3887,63 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentorship_tasks: {
+        Row: {
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          organization_id: string
+          pair_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          organization_id: string
+          pair_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          organization_id?: string
+          pair_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentorship_tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentorship_tasks_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "mentorship_pairs"
             referencedColumns: ["id"]
           },
         ]
@@ -4181,6 +4345,7 @@ export type Database = {
           stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
           updated_at: string
+          visibility: string
         }
         Insert: {
           amount_cents: number
@@ -4199,6 +4364,7 @@ export type Database = {
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           updated_at?: string
+          visibility?: string
         }
         Update: {
           amount_cents?: number
@@ -4217,6 +4383,7 @@ export type Database = {
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           updated_at?: string
+          visibility?: string
         }
         Relationships: [
           {
@@ -4349,6 +4516,7 @@ export type Database = {
       }
       organizations: {
         Row: {
+          base_color: string | null
           created_at: string | null
           default_language: string
           description: string | null
@@ -4359,6 +4527,7 @@ export type Database = {
           enterprise_nav_synced_at: string | null
           enterprise_relationship_type: string | null
           feed_post_roles: string[]
+          hide_donor_names: boolean
           id: string
           job_post_roles: string[]
           linkedin_resync_enabled: boolean
@@ -4377,6 +4546,7 @@ export type Database = {
           timezone: string
         }
         Insert: {
+          base_color?: string | null
           created_at?: string | null
           default_language?: string
           description?: string | null
@@ -4387,6 +4557,7 @@ export type Database = {
           enterprise_nav_synced_at?: string | null
           enterprise_relationship_type?: string | null
           feed_post_roles?: string[]
+          hide_donor_names?: boolean
           id?: string
           job_post_roles?: string[]
           linkedin_resync_enabled?: boolean
@@ -4405,6 +4576,7 @@ export type Database = {
           timezone?: string
         }
         Update: {
+          base_color?: string | null
           created_at?: string | null
           default_language?: string
           description?: string | null
@@ -4415,6 +4587,7 @@ export type Database = {
           enterprise_nav_synced_at?: string | null
           enterprise_relationship_type?: string | null
           feed_post_roles?: string[]
+          hide_donor_names?: boolean
           id?: string
           job_post_roles?: string[]
           linkedin_resync_enabled?: boolean
@@ -5919,6 +6092,10 @@ export type Database = {
       }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
+      get_enterprise_alumni_stats: {
+        Args: { p_enterprise_id: string }
+        Returns: Json
+      }
       get_enterprise_member_counts: {
         Args: { enterprise_ids: string[] }
         Returns: {
