@@ -182,8 +182,41 @@ export function LandingHeader() {
       <div className="fixed inset-0 z-50 bg-black/60 md:hidden">
         <div
           ref={drawerRef}
-          className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-landing-navy border-l border-landing-cream/10 shadow-2xl animate-slide-in-right"
+          className="absolute right-0 top-0 h-full w-72 max-w-[80vw] bg-landing-navy border-l border-landing-cream/10 shadow-2xl animate-slide-in-right flex flex-col"
         >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-landing-cream/10">
+            <Link
+              href="#top"
+              onClick={close}
+              className="flex items-center gap-2"
+              aria-label="TeamNetwork home"
+            >
+              <Image
+                src="/TeamNetwor.png"
+                alt=""
+                width={541}
+                height={303}
+                sizes="28px"
+                className="h-7 w-auto object-contain"
+                aria-hidden="true"
+              />
+              <span className="font-display text-base font-bold tracking-tight">
+                <span className="text-landing-green">Team</span>
+                <span className="text-landing-cream">Network</span>
+              </span>
+            </Link>
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close menu"
+              className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg text-landing-cream/70 hover:bg-landing-cream/10 hover:text-landing-cream"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
           <nav className="flex flex-col p-6 gap-1">
             {NAV_LINKS.map((link) => (
               <Link
