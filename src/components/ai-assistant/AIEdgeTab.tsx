@@ -18,7 +18,7 @@ export function AIEdgeTab({ isAdmin }: AIEdgeTabProps) {
       onClick={togglePanel}
       aria-label={isOpen ? "Close AI assistant" : "Open AI assistant"}
       aria-expanded={isOpen}
-      className={`ai-edge-tab fixed top-1/3 right-0 z-[44] flex flex-col items-center gap-1.5 rounded-l-xl bg-indigo-600 px-2 py-3 text-white shadow-[-2px_0_8px_rgba(0,0,0,0.15)] transition-all duration-200 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${
+      className={`ai-edge-tab fixed top-1/3 right-0 z-[44] flex flex-col items-center gap-1.5 rounded-l-2xl bg-org-secondary px-2.5 py-3.5 text-org-secondary-foreground shadow-[-4px_0_12px_rgba(0,0,0,0.1)] transition-all duration-200 hover:bg-org-secondary-dark hover:shadow-[-4px_0_16px_rgba(0,0,0,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-org-secondary focus-visible:ring-offset-1 ${
         isOpen
           ? "pointer-events-none translate-x-full opacity-0"
           : "translate-x-0 opacity-100"

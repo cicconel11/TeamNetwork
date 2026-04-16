@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, User, Sparkles } from "lucide-react";
+import { Bot, User, Sparkles, ArrowRight } from "lucide-react";
 import type { AssistantCapabilitySnapshot } from "@/lib/ai/capabilities";
 import type { AIPanelMessage, PendingActionState } from "./panel-state";
 import type { AIFeedbackRating } from "@/lib/schemas";
@@ -106,7 +106,7 @@ export function MessageList({
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-org-secondary border-t-transparent" />
       </div>
     );
   }
@@ -117,100 +117,114 @@ export function MessageList({
       (capabilitySnapshot.supported.length > 0 || capabilitySnapshot.unsupported.length > 0);
 
     return (
-      <div className="flex flex-1 flex-col overflow-y-auto p-6">
-        <div className="mx-auto w-full max-w-sm space-y-4 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/50">
-            <Sparkles className="h-6 w-6 text-indigo-500" />
+      <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-5 py-8">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          {/* Hero icon */}
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-org-secondary/20 to-org-secondary/5 shadow-lg shadow-org-secondary/10">
+            <Sparkles className="h-8 w-8 text-org-secondary" />
           </div>
-          <div>
-            <p className="text-sm font-medium text-foreground">How can I help?</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Ask about members, events, discussions, jobs, analytics, or other TeamNetwork tasks for your organization. I don&apos;t help with general knowledge, coding, or off-platform topics.
+
+          {/* Welcome text */}
+          <div className="space-y-2">
+            <h3 className="font-display text-xl font-semibold text-foreground">
+              How can I help?
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Ask about your organization&apos;s members, events, discussions, or announcements.
             </p>
           </div>
-          {suggestedPrompts && suggestedPrompts.length > 0 ? (
-            <div className="flex flex-wrap justify-center gap-2">
+
+          {/* Suggested prompts - Gemini style cards */}
+          {suggestedPrompts && suggestedPrompts.length > 0 && (
+            <div className="space-y-2">
               {suggestedPrompts.slice(0, 3).map((prompt) => (
                 <button
                   key={prompt}
                   type="button"
                   onClick={() => void onSelectPrompt?.(prompt)}
-                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
+                  className="group flex w-full items-center justify-between rounded-xl border border-border/70 bg-card/50 px-4 py-3 text-left text-sm text-foreground shadow-sm transition-all hover:border-org-secondary/50 hover:bg-org-secondary/5 hover:shadow-md"
                 >
-                  {prompt}
+                  <span>{prompt}</span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-org-secondary" />
                 </button>
               ))}
             </div>
-          ) : null}
-          {hasCapabilities ? (
-            <details className="group rounded-lg border border-border bg-muted/30 px-3 py-2 text-left text-xs">
-              <summary className="cursor-pointer select-none list-none font-medium text-foreground marker:hidden [&::-webkit-details-marker]:hidden">
-                What I can do here
-                <span className="ml-1 text-muted-foreground group-open:hidden">+</span>
-                <span className="ml-1 hidden text-muted-foreground group-open:inline">−</span>
+          )}
+
+          {/* Capabilities disclosure */}
+          {hasCapabilities && (
+            <details className="rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-left">
+              <summary className="cursor-pointer select-none list-none text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center justify-between">
+                  What I can do
+                  <span className="text-muted-foreground/50">+</span>
+                </span>
               </summary>
-              <div className="mt-2 space-y-1 text-muted-foreground">
+              <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
                 {capabilitySnapshot.supported.map((capability) => (
-                  <p key={capability.toolName}>- {capability.description}</p>
+                  <p key={capability.toolName} className="flex items-start gap-2">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-org-secondary" />
+                    {capability.description}
+                  </p>
                 ))}
                 {capabilitySnapshot.unsupported.map((item) => (
-                  <p key={item}>- Not yet: {item}.</p>
+                  <p key={item} className="flex items-start gap-2 text-muted-foreground/60">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/30" />
+                    Not yet: {item}
+                  </p>
                 ))}
-                <p>- Not in scope: general knowledge, coding help, homework, travel, creative writing, or anything unrelated to TeamNetwork.</p>
               </div>
             </details>
-          ) : null}
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
       {messages.filter((message) => message.role !== "system").map((msg) => (
         <div
           key={msg.id}
           className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
         >
           {msg.role === "assistant" && (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-              <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-org-secondary/20 to-org-secondary/5">
+              <Bot className="h-4 w-4 text-org-secondary" />
             </div>
           )}
-          <div className={`max-w-[80%] overflow-hidden rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-            msg.role === "user"
-              ? "bg-indigo-600 text-white"
-              : "bg-muted text-foreground"
-          }`}>
-            {msg.role === "assistant" ? (
-              <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
+          {msg.role === "assistant" ? (
+            <div className="min-w-0 flex-1 pt-1 text-[14.5px]">
+              <div className="break-words [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-muted/50 [&_pre]:p-3 [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
                 <AssistantMessageContent content={msg.content ?? ""} />
-                {msg.status === "complete" && (
-                  <MessageFeedback
-                    messageId={msg.id}
-                    orgId={orgId}
-                    initialRating={feedbackMap[msg.id] ?? null}
-                  />
-                )}
               </div>
-            ) : (
-              <div className="whitespace-pre-wrap break-words">{msg.content ?? ""}</div>
-            )}
-          </div>
+              {msg.status === "complete" && (
+                <MessageFeedback
+                  messageId={msg.id}
+                  orgId={orgId}
+                  initialRating={feedbackMap[msg.id] ?? null}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="max-w-[85%] rounded-2xl bg-org-secondary px-4 py-2.5 text-[14.5px] text-org-secondary-foreground shadow-sm">
+              <div className="whitespace-pre-wrap break-words leading-[1.55]">{msg.content ?? ""}</div>
+            </div>
+          )}
           {msg.role === "user" && (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-              <User className="h-4 w-4 text-muted-foreground" />
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted/80">
+              <User className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
           )}
         </div>
       ))}
       {shouldRenderPreviewAssistant && (
         <div className="flex gap-3 justify-start">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-            <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-org-secondary/20 to-org-secondary/5">
+            <Bot className="h-4 w-4 text-org-secondary" />
           </div>
-          <div className="max-w-[80%] overflow-hidden rounded-2xl bg-muted px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
-            <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
+          <div className="min-w-0 flex-1 pt-1 text-[14.5px]">
+            <div className="break-words [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-muted/50 [&_pre]:p-3 [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
               <AssistantMessageContent content={previewAssistantContent ?? ""} />
             </div>
           </div>
@@ -218,35 +232,35 @@ export function MessageList({
       )}
       {isStreaming && streamingContent && (
         <div className="flex gap-3 justify-start">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-            <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-org-secondary/20 to-org-secondary/5">
+            <Bot className="h-4 w-4 text-org-secondary" />
           </div>
-          <div className="max-w-[80%] overflow-hidden rounded-2xl bg-muted px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
-            <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
+          <div className="min-w-0 flex-1 pt-1 text-[14.5px]">
+            <div className="break-words [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-muted/50 [&_pre]:p-3 [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
               <AssistantMessageContent content={streamingContent} />
             </div>
-            <span className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-indigo-500" />
+            <span className="mt-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-org-secondary" />
           </div>
         </div>
       )}
-      {pendingActions && pendingActions.length > 0 ? (
+      {pendingActions && pendingActions.length > 0 && (
         <div className="space-y-2">
           {pendingActions.length > 1 && (
-            <div className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-800 dark:bg-indigo-950/50">
-              <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+            <div className="flex items-center justify-between rounded-xl border border-org-secondary/30 bg-org-secondary/5 px-4 py-2.5">
+              <span className="text-sm font-medium text-org-secondary">
                 Review {pendingActions.length} events
               </span>
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700"
+                  className="rounded-lg bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
                   onClick={() => void onCancelAllPendingActions?.()}
                 >
                   Cancel All
                 </button>
                 <button
                   type="button"
-                  className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-indigo-500"
+                  className="rounded-lg bg-org-secondary px-3 py-1.5 text-xs font-medium text-org-secondary-foreground shadow-sm transition-colors hover:bg-org-secondary-dark"
                   onClick={() => void onConfirmAllPendingActions?.()}
                 >
                   Confirm All
@@ -265,7 +279,7 @@ export function MessageList({
             />
           ))}
         </div>
-      ) : null}
+      )}
       <div ref={bottomRef} />
     </div>
   );
