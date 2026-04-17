@@ -58,7 +58,7 @@ Connecting LinkedIn does NOT auto-populate the profile URL, and vice versa. The 
 ## OIDC Limitations (MVP)
 
 The integration uses standard OpenID Connect scopes only (`openid profile email`).
-We do not request `offline_access`, so treat the connection as reconnect-required after the access token expires.
+We do not request `offline_access` (not generally available to standard LinkedIn developer apps as of April 2026), so treat the connection as reconnect-required after the access token expires.
 
 **Returns:** `sub`, `given_name`, `family_name`, `email`, `picture`, `email_verified`, `locale`
 
@@ -67,6 +67,18 @@ We do not request `offline_access`, so treat the connection as reconnect-require
 Other limitations:
 - No token revocation endpoint — disconnect deletes the local record only
 - If LinkedIn expires the access token and does not issue a refresh token, the user must reconnect
+
+### ID Token Shortcut
+
+With `openid` in scope, LinkedIn returns a signed JWT `id_token` alongside the access token. The ID token already contains the userinfo claims (`sub`, `given_name`, `family_name`, `email`, `picture`), so a successful initial login does not strictly require a `/v2/userinfo` call. We still call userinfo for re-sync to pick up any server-side updates.
+
+### Scopes We Do Not Request
+
+For clarity during feature reviews, we intentionally do **not** request:
+
+- `w_member_social` (posting to LinkedIn on the member's behalf)
+- `r_ads`, `r_organization_social` (Marketing APIs — require Marketing Developer Platform partner access)
+- `r_liteprofile`, `r_emailaddress` (legacy, deprecated in favor of `openid profile email`)
 
 ## API Operations
 
@@ -99,4 +111,24 @@ Two route sets currently exist for LinkedIn:
 - **`/api/linkedin/*`** — Primary OAuth routes (`auth`, `callback`, `disconnect`, `sync`). Used by `/settings/connected-accounts`.
 - **`/api/user/linkedin/*`** — Alternate routes with `status`/`url` endpoints. Used by `/settings/linkedin`.
 
-These should be consolidated in a future cleanup. The primary flow uses `/api/linkedin/*`.
+### Consolidation Plan
+
+Canonical path: **`/api/linkedin/*`** (already registered with LinkedIn as the OAuth callback URL — moving it would require redirect-URI updates across every environment).
+
+Migration steps:
+
+1. Move `status` and `url` handlers under `/api/linkedin/status` and `/api/linkedin/url`.
+2. Leave `/api/user/linkedin/*` as thin re-export wrappers for one release with a `console.warn` deprecation note.
+3. Update `/settings/linkedin` and `/settings/connected-accounts` callers to the canonical paths.
+4. Delete the wrappers the following release.
+
+## Content Security Policy
+
+The following directives are required in `next.config.mjs`:
+
+```text
+img-src 'self' data: blob: https://media.licdn.com https://static.licdn.com
+connect-src 'self' https://api.linkedin.com https://www.linkedin.com
+```
+
+`media.licdn.com` hosts profile photos; `static.licdn.com` hosts widget assets (allowlisted preemptively in case a LinkedIn-hosted widget is added). `api.linkedin.com` is used by server-side token refresh / userinfo calls.

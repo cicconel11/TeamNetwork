@@ -379,6 +379,134 @@ test("confirm executes create_announcement and appends assistant message", async
   );
 });
 
+test("confirm create_announcement sends notifications server-side without internal auth fetches", async () => {
+  const insertedMessages: any[] = [];
+  const insertedNotifications: any[] = [];
+  const updatedNotificationIds: string[] = [];
+  const updatedStatuses: any[] = [];
+  const blasts: any[] = [];
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from(table: string) {
+            if (table === "ai_messages") {
+              return {
+                insert(payload: Record<string, unknown>) {
+                  insertedMessages.push(payload);
+                  return Promise.resolve({ error: null });
+                },
+              };
+            }
+            if (table === "notifications") {
+              return {
+                insert(payload: Record<string, unknown>) {
+                  insertedNotifications.push(payload);
+                  return {
+                    select() {
+                      return {
+                        single() {
+                          return Promise.resolve({
+                            data: { id: "notification-123", ...payload },
+                            error: null,
+                          });
+                        },
+                      };
+                    },
+                  };
+                },
+                update(payload: Record<string, unknown>) {
+                  return {
+                    eq(_column: string, id: string) {
+                      updatedNotificationIds.push(id);
+                      return Promise.resolve({ data: { id, ...payload }, error: null });
+                    },
+                  };
+                },
+              };
+            }
+            throw new Error(`unexpected table ${table}`);
+          },
+        },
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "create_announcement",
+        payload: {
+          title: "Practice moved indoors",
+          body: "Meet in Weight Room B at 6pm.",
+          audience: "all",
+          is_pinned: true,
+          send_notification: true,
+          orgSlug: "upenn-sprint-football",
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createAnnouncement: async () =>
+      ({
+        ok: true,
+        status: 201,
+        announcement: {
+          id: "announcement-123",
+          title: "Practice moved indoors",
+        },
+      }) as any,
+    sendNotificationBlast: async (input) => {
+      blasts.push(input);
+      return {
+        total: 3,
+        emailCount: 3,
+        smsCount: 0,
+        skippedMissingContact: 0,
+        errors: [],
+      };
+    },
+    clearDraftSession: async () => {},
+  } as any);
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.equal(insertedNotifications.length, 1);
+  assert.equal(insertedNotifications[0].organization_id, ORG_ID);
+  assert.equal(blasts.length, 1);
+  assert.equal(blasts[0].organizationId, ORG_ID);
+  assert.equal(blasts[0].title, "Practice moved indoors");
+  assert.equal(blasts[0].body, "Meet in Weight Room B at 6pm.");
+  assert.equal(blasts[0].category, "announcement");
+  assert.deepEqual(updatedNotificationIds, ["notification-123"]);
+  assert.equal(insertedMessages[0].thread_id, THREAD_ID);
+});
+
 test("confirm executes create_discussion_reply and appends assistant message", async () => {
   const insertedMessages: any[] = [];
   const updatedStatuses: any[] = [];
@@ -473,6 +601,9 @@ test("confirm executes create_discussion_reply and appends assistant message", a
 test("confirm executes create_event and appends assistant message", async () => {
   const insertedMessages: any[] = [];
   const updatedStatuses: any[] = [];
+  const syncedEvents: any[] = [];
+  const outlookSyncedEvents: any[] = [];
+  const blasts: any[] = [];
 
   const handler = createAiPendingActionConfirmHandler({
     createClient: async () =>
@@ -541,6 +672,22 @@ test("confirm executes create_event and appends assistant message", async () => 
         },
         eventUrl: "/upenn-sprint-football/calendar/events/event-123",
       }) as any,
+    syncEventToUsers: async (_supabase, organizationId, eventId, operation) => {
+      syncedEvents.push({ organizationId, eventId, operation });
+    },
+    syncOutlookEventToUsers: async (_supabase, organizationId, eventId, operation) => {
+      outlookSyncedEvents.push({ organizationId, eventId, operation });
+    },
+    sendNotificationBlast: async (input) => {
+      blasts.push(input);
+      return {
+        total: 4,
+        emailCount: 4,
+        smsCount: 0,
+        skippedMissingContact: 0,
+        errors: [],
+      };
+    },
     clearDraftSession: async () => {},
   });
 
@@ -562,6 +709,12 @@ test("confirm executes create_event and appends assistant message", async () => 
     String(insertedMessages[0].content),
     /upenn-sprint-football\/calendar\/events\/event-123/
   );
+  assert.deepEqual(syncedEvents, [{ organizationId: ORG_ID, eventId: "event-123", operation: "create" }]);
+  assert.deepEqual(outlookSyncedEvents, [{ organizationId: ORG_ID, eventId: "event-123", operation: "create" }]);
+  assert.equal(blasts.length, 1);
+  assert.equal(blasts[0].organizationId, ORG_ID);
+  assert.equal(blasts[0].title, "New Event: Sprint Football Practice");
+  assert.equal(blasts[0].category, "event");
 });
 
 test("confirm create_event rolls back and returns structured event_type errors", async () => {

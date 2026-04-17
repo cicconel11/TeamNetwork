@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { stripe } from "@/lib/stripe";
@@ -15,6 +16,16 @@ import {
 } from "@/lib/security/validation";
 import { getBillableOrgCount, isSalesLed } from "@/lib/enterprise/pricing";
 import { requireEnv } from "@/lib/env";
+import {
+  claimPaymentAttempt,
+  ensurePaymentAttempt,
+  hashFingerprint,
+  hasStripeResource,
+  IdempotencyConflictError,
+  updatePaymentAttempt,
+  waitForExistingStripeResource,
+} from "@/lib/payments/idempotency";
+import { buildEnterpriseCheckoutFingerprintPayload } from "@/lib/payments/enterprise-checkout-fingerprint";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,6 +40,7 @@ const createEnterpriseSchema = z
     billingContactEmail: baseSchemas.email,
     description: optionalSafeString(800),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
+    paymentAttemptId: baseSchemas.uuid.optional(),
   })
   .strict();
 
@@ -65,8 +77,11 @@ export async function POST(req: Request) {
       subOrgQuantity,
       billingContactEmail,
       description,
-      idempotencyKey,
+      idempotencyKey: rawIdempotencyKey,
+      paymentAttemptId,
     } = body;
+
+    const idempotencyKey = rawIdempotencyKey ?? null;
 
     // Check if bucket quantity requires sales-led process
     if (isSalesLed(alumniBucketQuantity)) {
@@ -107,6 +122,9 @@ export async function POST(req: Request) {
       return respond({ error: "Slug is already taken" }, 409);
     }
 
+    let resolvedAttemptId: string | null = null;
+    let stripeResourceCreated = false;
+
     try {
       const origin = getStripeOrigin(req.url);
 
@@ -139,7 +157,90 @@ export async function POST(req: Request) {
         });
       }
 
-      // Prepare metadata
+      const fingerprint = hashFingerprint(
+        buildEnterpriseCheckoutFingerprintPayload({
+          userId: user.id,
+          slug,
+          billingInterval,
+          alumniBucketQuantity,
+          subOrgQuantity: totalOrgs,
+          billingContactEmail,
+        }),
+      );
+
+      const pendingEnterpriseId = randomUUID();
+
+      const attemptMetadata = {
+        pending_enterprise_id: pendingEnterpriseId,
+        slug,
+        alumni_bucket_quantity: String(alumniBucketQuantity),
+        sub_org_quantity: String(totalOrgs),
+        billing_interval: billingInterval,
+        billing_contact_email: billingContactEmail,
+      };
+
+      const { attempt } = await ensurePaymentAttempt({
+        supabase: serviceSupabase,
+        idempotencyKey,
+        paymentAttemptId,
+        flowType: "enterprise_checkout",
+        amountCents: 0,
+        currency: "usd",
+        userId: user.id,
+        organizationId: null,
+        requestFingerprint: fingerprint,
+        metadata: attemptMetadata,
+      });
+
+      resolvedAttemptId = attempt.id;
+
+      const storedMetadata = (attempt.metadata as Record<string, string> | null) ?? {};
+      const persistedEnterpriseId = storedMetadata.pending_enterprise_id || pendingEnterpriseId;
+
+      const { attempt: claimedAttempt, claimed } = await claimPaymentAttempt({
+        supabase: serviceSupabase,
+        attempt,
+        amountCents: 0,
+        currency: "usd",
+        requestFingerprint: fingerprint,
+        stripeConnectedAccountId: null,
+      });
+
+      const respondWithExisting = (candidate: typeof claimedAttempt) => {
+        if (candidate.checkout_url && candidate.stripe_checkout_session_id) {
+          return respond({
+            checkoutUrl: candidate.checkout_url,
+            idempotencyKey: candidate.idempotency_key,
+            paymentAttemptId: candidate.id,
+          });
+        }
+        return null;
+      };
+
+      if (!claimed) {
+        const existingResponse = hasStripeResource(claimedAttempt)
+          ? respondWithExisting(claimedAttempt)
+          : null;
+        if (existingResponse) return existingResponse;
+
+        const awaited = await waitForExistingStripeResource(serviceSupabase, claimedAttempt.id);
+        if (awaited && hasStripeResource(awaited)) {
+          const awaitedResponse = respondWithExisting(awaited);
+          if (awaitedResponse) return awaitedResponse;
+        }
+
+        return respond(
+          {
+            error: "Checkout is already processing for this idempotency key. Retry shortly with the same key.",
+            idempotencyKey: claimedAttempt.idempotency_key,
+            paymentAttemptId: claimedAttempt.id,
+          },
+          409,
+        );
+      }
+
+      // Prepare metadata — identifiers on Stripe mirror the payment-attempt
+      // row so the webhook can close the loop idempotently.
       const metadata = {
         type: "enterprise",
         alumni_bucket_quantity: alumniBucketQuantity.toString(),
@@ -150,9 +251,10 @@ export async function POST(req: Request) {
         billingContactEmail,
         billingInterval,
         enterpriseDescription: description ?? "",
+        payment_attempt_id: claimedAttempt.id,
+        pending_enterprise_id: persistedEnterpriseId,
       } as const;
 
-      // Create Stripe checkout session (always subscription mode)
       const session = await stripe.checkout.sessions.create(
         {
           mode: "subscription",
@@ -165,11 +267,42 @@ export async function POST(req: Request) {
           success_url: `${origin}/app?enterprise=${slug}&checkout=success`,
           cancel_url: `${origin}/app/create-enterprise?checkout=cancel`,
         },
-        idempotencyKey ? { idempotencyKey } : undefined,
+        { idempotencyKey: claimedAttempt.idempotency_key },
       );
 
-      return respond({ checkoutUrl: session.url });
+      stripeResourceCreated = true;
+
+      await updatePaymentAttempt(serviceSupabase, claimedAttempt.id, {
+        stripe_checkout_session_id: session.id,
+        checkout_url: session.url,
+        status: "processing",
+      });
+
+      return respond({
+        checkoutUrl: session.url,
+        idempotencyKey: claimedAttempt.idempotency_key,
+        paymentAttemptId: claimedAttempt.id,
+      });
     } catch (error) {
+      if (error instanceof IdempotencyConflictError) {
+        return respond({ error: error.message }, 409);
+      }
+
+      const stripeErr = error as {
+        message?: string;
+        raw?: { message?: string };
+      };
+      const lastError = stripeErr?.message || stripeErr?.raw?.message || "checkout_failed";
+
+      if (resolvedAttemptId) {
+        const errorUpdate: { last_error: string; status?: string } = { last_error: lastError };
+        if (!stripeResourceCreated) {
+          errorUpdate.status = "initiated";
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await serviceSupabase.from("payment_attempts").update(errorUpdate as any).eq("id", resolvedAttemptId);
+      }
+
       const message = error instanceof Error ? error.message : "Unable to create checkout session";
       return respond({ error: message }, 400);
     }

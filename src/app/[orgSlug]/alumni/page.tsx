@@ -15,6 +15,9 @@ import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
 import { LinkedInBadge } from "@/components/shared";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
+const PAGE_SIZE = 50;
+const FACET_ROW_CAP = 5000;
+
 interface AlumniPageProps {
   params: Promise<{ orgSlug: string }>;
   searchParams: Promise<{
@@ -24,6 +27,7 @@ interface AlumniPageProps {
     company?: string;
     city?: string;
     position?: string;
+    page?: string;
   }>;
 }
 
@@ -68,13 +72,19 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const { role } = await getOrgRole({ orgId: org.id });
   const canEdit = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
 
+  const currentPage = Math.max(1, parseInt(filters.page ?? "1", 10) || 1);
+  const offset = (currentPage - 1) * PAGE_SIZE;
+
   // Query alumni directly — the alumni table is the source of truth
   let query = dataClient
     .from("alumni")
-    .select(`
+    .select(
+      `
       id, first_name, last_name, photo_url, position_title, job_title, current_company,
       graduation_year, birth_year, industry, current_city, linkedin_url
-    `)
+    `,
+      { count: "exact" },
+    )
     .eq("organization_id", org.id)
     .is("deleted_at", null);
 
@@ -102,19 +112,26 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
     query = query.ilike("position_title", sanitizeIlikeInput(position));
   }
 
-  // Apply ordering after all filters
-  query = query.order("graduation_year", { ascending: false });
+  // Apply ordering + pagination window
+  query = query
+    .order("graduation_year", { ascending: false, nullsFirst: false })
+    .order("last_name", { ascending: true })
+    .range(offset, offset + PAGE_SIZE - 1);
 
-  const { data: rawAlumni } = await query;
+  const { data: rawAlumni, count: totalCount } = await query;
 
   const alumni: AlumniRecord[] = (rawAlumni as AlumniRecord[] | null) || [];
+  const total = totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // Get unique values for filter dropdowns (from all alumni, not just filtered)
+  // Get unique values for filter dropdowns (from all alumni, not just filtered).
+  // Cap at FACET_ROW_CAP rows — follow-up: move to RPC get_alumni_facet_options.
   const { data: allAlumni } = await dataClient
     .from("alumni")
     .select("graduation_year, birth_year, industry, current_company, current_city, position_title")
     .eq("organization_id", org.id)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .limit(FACET_ROW_CAP);
 
   const years = [...new Set(allAlumni?.map((a) => a.graduation_year).filter(Boolean))];
   const birthYears = [...new Set(allAlumni?.map((a) => a.birth_year).filter(Boolean))];
@@ -142,12 +159,22 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const tMembers2 = await getTranslations("members");
   const tActions = await getTranslations("pages.actions");
 
+  // Preserve active filters across pagination links
+  const filterParams = new URLSearchParams();
+  if (filters.year) filterParams.set("year", filters.year);
+  if (filters.birthYear) filterParams.set("birthYear", filters.birthYear);
+  if (filters.industry) filterParams.set("industry", filters.industry);
+  if (filters.company) filterParams.set("company", filters.company);
+  if (filters.city) filterParams.set("city", filters.city);
+  if (filters.position) filterParams.set("position", filters.position);
+  const paginationBase = filterParams.toString() ? `?${filterParams.toString()}&` : "?";
+
   const pageContent = (
     <div className="animate-fade-in">
       <DirectoryViewTracker organizationId={org.id} directoryType="alumni" />
       <PageHeader
         title={pageLabel}
-        description={`${alumni?.length || 0} ${pageLabel.toLowerCase()}${hasActiveFilters ? ` ${tActions("filtered")}` : ` ${tActions("inOurNetwork")}`}`}
+        description={`${total} ${pageLabel.toLowerCase()}${hasActiveFilters ? ` ${tActions("filtered")}` : ` ${tActions("inOurNetwork")}`}`}
         actions={
           canEdit && (
             <AlumniActionsMenu
@@ -174,7 +201,8 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
       {/* Alumni Grid */}
       {alumni && alumni.length > 0 ? (
-        canEdit ? (
+        <>
+        {canEdit ? (
           <AlumniSelectableGrid
             alumni={alumni}
             orgSlug={orgSlug}
@@ -226,7 +254,27 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
               </Card>
             ))}
           </div>
-        )
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </p>
+            <div className="flex gap-2">
+              {currentPage > 1 && (
+                <Link href={`/${orgSlug}/alumni${paginationBase}page=${currentPage - 1}`}>
+                  <Button variant="secondary" size="sm">Previous</Button>
+                </Link>
+              )}
+              {currentPage < totalPages && (
+                <Link href={`/${orgSlug}/alumni${paginationBase}page=${currentPage + 1}`}>
+                  <Button variant="secondary" size="sm">Next</Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+        </>
       ) : (
         <Card>
           <EmptyState

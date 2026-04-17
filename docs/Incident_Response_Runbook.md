@@ -1,7 +1,9 @@
 # Incident Response Runbook
 
-**Version:** 1.0
-**Last Updated:** April 2026
+**Version:** 1.1
+**Last Updated:** April 16, 2026
+**Related tables:** `breach_incidents`, `data_access_log`, `compliance_audit_log`
+**Related docs:** `FERPA_COMPLIANCE.md` (STEP 7–8), `COPPA_COMPLIANCE.md` (DSR section), `legal_templates/K12_Data_Sharing_Agreement.md` (Section 9)
 
 ---
 

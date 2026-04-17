@@ -1,10 +1,12 @@
 # Supabase Schema Audit
 
-**Last Updated:** March 25, 2026
-**Scope:** All migrations in `supabase/migrations/` through `20260719000000_ai_audit_stage_timings.sql`
-**Current Migration Count:** 167
+**Last Updated:** April 16, 2026
+**Scope:** All migrations in `supabase/migrations/` through `20261017000000_graduation_rpc_admin_guard.sql`
+**Current Migration Count:** 266
 
-This document is a current-state schema snapshot. The generated types in `src/types/database.ts` are the best day-to-day source of truth when this doc drifts.
+> **Freshness rule.** Header is hand-maintained. To recheck: `ls supabase/migrations/*.sql | wc -l` and `ls supabase/migrations/ | sort | tail -1`. If either drifts more than ~20 migrations, refresh this doc.
+
+This document is a current-state schema snapshot. The generated types in `src/types/database.ts` are the best day-to-day source of truth when this doc drifts. For per-policy RLS detail, grep the corresponding migration rather than duplicating SQL here.
 
 ---
 
@@ -24,6 +26,11 @@ The live schema covers:
 - User deletion requests (GDPR/COPPA)
 - AI assistant (threads, messages, audit log, semantic cache)
 - LinkedIn OAuth connections and enrichment
+- Global search (cross-entity search across members/alumni/events/announcements/jobs/discussions/feed)
+- Mentorship tasks and meetings (PM upgrade: task lists, scheduled meetings, cascade deletion)
+- Breach incidents, data access log, user agreements (FERPA / NY Ed Law 2-d incident tracking)
+- AI feedback (thumbs up/down on assistant responses)
+- Alumni birth year (opt-in cohort data for reunions and enterprise stats)
 
 ---
 
@@ -196,6 +203,34 @@ The live schema covers:
 |-------|---------|-------|
 | `user_linkedin_connections` | LinkedIn OAuth connection state | Mirrors `user_calendar_connections` pattern. `UNIQUE(user_id)`, encrypted tokens, sync status: `connected`/`disconnected`/`error` |
 
+### Mentorship PM (Oct 2026)
+
+| Table | Purpose | Notes |
+|-------|---------|-------|
+| `mentorship_tasks` | Tasks attached to a mentorship pair | Status, due date, optional assignee. Soft-delete via `deleted_at`. Cascade on pair deletion |
+| `mentorship_meetings` | Scheduled meetings within a pair | Start/end timestamps, notes, optional calendar link. Soft-delete via `deleted_at`. Cascade on pair deletion |
+
+### Search (Oct 2026)
+
+| Table | Purpose | Notes |
+|-------|---------|-------|
+| `global_search_entries` | Cross-entity search index | Materialized search surface covering members, alumni, events, announcements, jobs, discussions, feed. Refreshed by triggers / scheduled job. See migration `20261015110000_global_search.sql` |
+| `search_behavioral_analytics` | Search query telemetry | Query text (hashed/truncated), result counts, click-through events. PII-minimized |
+
+### Compliance & Security (Oct 2026)
+
+| Table | Purpose | Notes |
+|-------|---------|-------|
+| `breach_incidents` | Security/privacy incident tracking | Discovery/containment/resolution timestamps, severity tier, notification log. Backs `docs/Incident_Response_Runbook.md` |
+| `data_access_log` | Record-level access telemetry | Who accessed which resource when (for FERPA / NY Ed Law 2-d audit). IP stored hashed |
+| `user_agreements` | User acceptance of ToS / Privacy / DSA versions | `user_id`, `agreement_type`, `version`, `accepted_at` |
+
+### AI Feedback (Oct 2026)
+
+| Table | Purpose | Notes |
+|-------|---------|-------|
+| `ai_feedback` | Per-message thumbs/ratings on assistant responses | `message_id`, `user_id`, `rating`, optional `comment`. RLS: users read/write only their own feedback; admins read within org |
+
 ### Audit Logs
 
 | Table | Purpose | Notes |
@@ -358,6 +393,11 @@ Two-tier verification:
 | May 2026 | Enterprise hybrid pricing, event recurrence, discussions, jobs, mentor profiles, feed, media uploads, dev-admin audit |
 | Jun 2026 | Media archive + moderation + albums, parent invites, parent role propagation (feed, announcements, chat, remaining tables), donations anonymous flag, chat polls/forms, alumni quota fixes, member soft-delete sync |
 | Jul 2026 | Parent invite redemption fixes, analytics hardening (allowlisted props, enum validation, behavioral tracking policy), AI context enrichment columns (`context_surface`, `context_token_estimate` on `ai_audit_log`), AI stage timing telemetry (`stage_timings` on `ai_audit_log`) |
+| Aug 2026 | Audit log retention, RAG hardening follow-ups, security definer search-path hardening |
+| Sep 2026 | Enterprise invite hardening, invite pagination indexes, enterprise member count RPC, enterprise invite role cast fix |
+| Oct 2026 | Duplicate OAuth account merge, user agreements, `data_access_log`, IP hash backfill, `breach_incidents`, mentorship tasks + meetings + pair cascade deletion, parent role added to remaining RLS policies, parent discussion posting, alumni birth year (+ enterprise stats, bulk-import column), announcement visibility reconciliation, member restore on re-approval, `global_search` surface, org `hide_donor_names`, org `base_color`, search behavioral analytics, AI feedback, graduation RPC admin guard |
+
+> For per-migration detail, use `git log supabase/migrations/` — this table is intentionally coarse and will no longer be extended month-by-month once the next schema refresh lands.
 
 ---
 
@@ -378,4 +418,13 @@ Two-tier verification:
 1. Prefer `src/types/database.ts` when checking exact column names or enums.
 2. Re-run this audit after major migration batches; the schema changes frequently.
 3. Treat compliance docs that omit parent records or say "no behavioral data" as stale unless updated after the July 2026 migrations.
-4. `rls-and-schema-fixes.md` in this directory is a historical reference for early Dec 2025 fixes; the patterns described there (RLS performance, `(select auth.uid())`) remain valid guidance.
+4. `rls-playbook.md` in this directory is the evergreen RLS pattern reference (`(select auth.uid())`, policy consolidation, SECURITY DEFINER helpers, indexing RLS-referenced columns). The old `rls-and-schema-fixes.md` was a one-off Dec 2025 post-mortem — consult migration history for per-fix detail.
+
+## Suggested Future Automation
+
+This doc is currently hand-maintained. Drift is inevitable. Two small scripts would keep it honest:
+
+1. **Header regeneration** — script that reads `supabase/migrations/` and rewrites the `Last Updated` / `Scope` / `Current Migration Count` block. Wire into `npm run gen:types`.
+2. **Policy + index matrix** — dump `pg_policies` and `pg_indexes` from a staging DB to `docs/db/rls-matrix.generated.md` and `docs/db/indexes.generated.md`. Link from this audit. Keeps "who can SELECT on X" and "is column Y indexed" out of human memory.
+
+Both are deferred (YAGNI) until drift becomes painful again.

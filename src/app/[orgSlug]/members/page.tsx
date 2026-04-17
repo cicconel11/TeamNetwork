@@ -19,6 +19,10 @@ import {
   type ParentDirectoryRow,
 } from "@/lib/members/directory";
 
+// Pragmatic cap per source until we replace the union with a paginating RPC
+// (see follow-up: get_org_member_directory).
+const SOURCE_CAP = 500;
+
 interface MembersPageProps {
   params: Promise<{ orgSlug: string }>;
   searchParams: Promise<{ status?: string; role?: string }>;
@@ -113,10 +117,12 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     parentProfilesQuery = parentProfilesQuery.in("user_id", ["__no_match__"]);
   }
 
-  // Apply ordering after all filters
-  linkedMembersQuery = linkedMembersQuery.order("last_name");
-  manualMembersQuery = manualMembersQuery.order("last_name");
-  parentProfilesQuery = parentProfilesQuery.order("last_name");
+  // Apply ordering after all filters. Cap each source at SOURCE_CAP so the
+  // page cannot OOM on large orgs; render a truncation banner if any
+  // source returns the full cap.
+  linkedMembersQuery = linkedMembersQuery.order("last_name").limit(SOURCE_CAP);
+  manualMembersQuery = manualMembersQuery.order("last_name").limit(SOURCE_CAP);
+  parentProfilesQuery = parentProfilesQuery.order("last_name").limit(SOURCE_CAP);
 
   // Run queries in parallel
   const [{ data: linkedMembers }, { data: manualMembers }, { data: parentProfiles }, { data: allMembers }] = await Promise.all([
@@ -138,6 +144,11 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     parentProfiles: ((parentProfiles || []) as ParentDirectoryRow[]),
     adminUserIds,
   });
+
+  const isTruncated =
+    (linkedMembers?.length ?? 0) >= SOURCE_CAP ||
+    (manualMembers?.length ?? 0) >= SOURCE_CAP ||
+    (parentProfiles?.length ?? 0) >= SOURCE_CAP;
 
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 
@@ -178,6 +189,16 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
           roles={roles}
         />
       </div>
+
+      {isTruncated && (
+        <div
+          data-testid="members-truncation-banner"
+          className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          Showing the first {SOURCE_CAP} entries per source. Use filters to narrow results;
+          full pagination is coming soon.
+        </div>
+      )}
 
       {/* Members Grid */}
       {members && members.length > 0 ? (

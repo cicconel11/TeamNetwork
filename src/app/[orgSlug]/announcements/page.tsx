@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getOrgContext } from "@/lib/auth/roles";
-import { filterAnnouncementsForUser } from "@/lib/announcements";
+import { filterAnnouncementsForUserViaRpc } from "@/lib/announcements";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AnnouncementsFeed } from "@/components/announcements/AnnouncementsFeed";
@@ -27,11 +27,16 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
     .order("is_pinned", { ascending: false })
     .order("published_at", { ascending: false });
 
-  const visibleAnnouncements = filterAnnouncementsForUser(announcements, {
-    role: orgCtx.role,
-    status: orgCtx.status,
-    userId: orgCtx.userId,
-  });
+  const visibleAnnouncements = await filterAnnouncementsForUserViaRpc(
+    supabase,
+    org.id,
+    announcements,
+    {
+      role: orgCtx.role,
+      status: orgCtx.status,
+      userId: orgCtx.userId,
+    },
+  );
 
   const navConfig = org.nav_config as NavConfig | null;
   const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { escapeCsvCell } from "@/lib/export/spreadsheet";
@@ -58,8 +57,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden", message: "Only admins can export donations." }, { status: 403 });
   }
 
-  const serviceClient = createServiceClient();
-  const { data: donations, error } = await serviceClient
+  const { data: donations, error } = await supabase
     .from("organization_donations")
     .select("id, donor_name, donor_email, amount_cents, currency, purpose, status, created_at, event_id, events(title)")
     .eq("organization_id", organizationId)

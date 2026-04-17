@@ -11,6 +11,19 @@ export function safeHexColor(raw: string | null | undefined, fallback: string): 
 }
 
 /**
+ * Final gate before injecting a value into a CSS custom property declaration.
+ * Allows hex colors, CSS keywords, and simple numeric/color-name tokens.
+ * Rejects anything containing `;`, `{`, `}`, `/`, `<`, `>`, quotes, or newlines
+ * so a malformed derived value cannot escape the declaration context.
+ */
+const CSS_VALUE_ALLOWED = /^[#a-zA-Z0-9._\-+(), %]+$/;
+export function safeCssValue(raw: string, fallback: string): string {
+  if (typeof raw !== "string") return fallback;
+  if (raw.length > 64) return fallback;
+  return CSS_VALUE_ALLOWED.test(raw) ? raw : fallback;
+}
+
+/**
  * Adjusts a hex color by lightening or darkening it
  * @param hex - Hex color code (3 or 6 digits)
  * @param amount - Positive to lighten, negative to darken

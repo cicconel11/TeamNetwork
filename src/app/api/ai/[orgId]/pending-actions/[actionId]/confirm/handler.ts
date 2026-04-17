@@ -39,6 +39,8 @@ import {
 import { calendarEventDetailPath } from "@/lib/calendar/routes";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
+import { syncEventToUsers } from "@/lib/google/calendar-sync";
+import { sendNotificationBlast } from "@/lib/notifications";
 
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
@@ -50,8 +52,17 @@ export interface AiPendingActionConfirmRouteDeps {
   createDiscussionReply?: typeof createDiscussionReply;
   createDiscussionThread?: typeof createDiscussionThread;
   createEvent?: typeof createEvent;
+  sendAnnouncementNotification?: typeof sendAnnouncementNotification;
   sendAiAssistedDirectChatMessage?: typeof sendAiAssistedDirectChatMessage;
   sendAiAssistedGroupChatMessage?: typeof sendAiAssistedGroupChatMessage;
+  syncEventToUsers?: typeof syncEventToUsers;
+  syncOutlookEventToUsers?: (
+    supabase: Parameters<typeof syncEventToUsers>[0],
+    organizationId: string,
+    eventId: string,
+    operation: Parameters<typeof syncEventToUsers>[3]
+  ) => Promise<void>;
+  sendNotificationBlast?: typeof sendNotificationBlast;
   clearDraftSession?: typeof clearDraftSession;
 }
 
@@ -65,10 +76,20 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const createDiscussionReplyFn = deps.createDiscussionReply ?? createDiscussionReply;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
   const createEventFn = deps.createEvent ?? createEvent;
+  const sendAnnouncementNotificationFn =
+    deps.sendAnnouncementNotification ?? sendAnnouncementNotification;
   const sendAiAssistedDirectChatMessageFn =
     deps.sendAiAssistedDirectChatMessage ?? sendAiAssistedDirectChatMessage;
   const sendAiAssistedGroupChatMessageFn =
     deps.sendAiAssistedGroupChatMessage ?? sendAiAssistedGroupChatMessage;
+  const syncEventToUsersFn = deps.syncEventToUsers ?? syncEventToUsers;
+  const syncOutlookEventToUsersFn =
+    deps.syncOutlookEventToUsers ??
+    (async (...args) => {
+      const { syncOutlookEventToUsers } = await import("@/lib/microsoft/calendar-sync");
+      return syncOutlookEventToUsers(...args);
+    });
+  const sendNotificationBlastFn = deps.sendNotificationBlast ?? sendNotificationBlast;
   const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
 
   return async function POST(
@@ -201,7 +222,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           try {
-            await sendAnnouncementNotification({
+            await sendAnnouncementNotificationFn({
               supabase: ctx.serviceSupabase,
               announcementId: result.announcement.id,
               orgId: ctx.orgId,
@@ -209,10 +230,25 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
                 ...payload,
                 audience_user_ids: payload.audience_user_ids ?? null,
               },
-              apiUrlBase: process.env.NEXT_PUBLIC_APP_URL || "",
+              sendDirectNotification: async ({ organizationId, title, body, audience, targetUserIds }) => {
+                await sendNotificationBlastFn({
+                  supabase: ctx.serviceSupabase,
+                  organizationId,
+                  audience,
+                  channel: "email",
+                  title,
+                  body,
+                  targetUserIds,
+                  category: "announcement",
+                });
+              },
             });
-          } catch {
-            // Notification failures should not block successful announcement creation.
+          } catch (notificationError) {
+            aiLog("error", "ai-confirm", "announcement notification failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, { actionId: action.id, announcementId: result.announcement.id, error: notificationError });
           }
 
           const orgSlug =
@@ -699,31 +735,43 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             });
           }
 
-          // Fire-and-forget: sync to Google Calendar
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-          fetch(`${appUrl}/api/calendar/event-sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              eventId: result.event.id,
-              organizationId: ctx.orgId,
-              operation: "create",
-            }),
-          }).catch(() => {});
+          try {
+            await syncEventToUsersFn(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
+          } catch (syncErr) {
+            aiLog("error", "ai-confirm", "google calendar sync failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, { actionId: action.id, eventId: result.event.id, error: syncErr });
+          }
 
-          // Fire-and-forget: send notification
-          fetch(`${appUrl}/api/notifications/send`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+          try {
+            await syncOutlookEventToUsersFn(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
+          } catch (outlookErr) {
+            aiLog("error", "ai-confirm", "outlook calendar sync failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, { actionId: action.id, eventId: result.event.id, error: outlookErr });
+          }
+
+          try {
+            await sendNotificationBlastFn({
+              supabase: ctx.serviceSupabase,
               organizationId: ctx.orgId,
+              audience: "both",
+              channel: "email",
               title: `New Event: ${result.event.title}`,
               body: `Event scheduled for ${payload.start_date} at ${payload.start_time}${payload.location ? `\nWhere: ${payload.location}` : ""}`,
-              channel: "email",
-              audience: "both",
               category: "event",
-            }),
-          }).catch(() => {});
+            });
+          } catch (notifyErr) {
+            aiLog("error", "ai-confirm", "event notification blast failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, { actionId: action.id, eventId: result.event.id, error: notifyErr });
+          }
 
           return NextResponse.json({ ok: true, event: result.event, actionId: action.id });
         }

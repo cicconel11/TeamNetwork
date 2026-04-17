@@ -32,6 +32,15 @@ export interface SendAnnouncementNotificationRequest {
   input: CreateAnnouncementForm;
   fetchImpl?: typeof fetch;
   apiUrlBase?: string;
+  sendDirectNotification?: (input: {
+    notificationId: string;
+    announcementId: string;
+    organizationId: string;
+    title: string;
+    body: string;
+    audience: "both" | "members" | "alumni";
+    targetUserIds: string[] | null;
+  }) => Promise<void>;
 }
 
 function mapAnnouncementAudienceToNotificationAudience(
@@ -121,6 +130,24 @@ export async function sendAnnouncementNotification(
     .single();
 
   if (!notification) {
+    return;
+  }
+
+  if (request.sendDirectNotification) {
+    await request.sendDirectNotification({
+      notificationId: notification.id,
+      announcementId: request.announcementId,
+      organizationId: request.orgId,
+      title: request.input.title,
+      body: request.input.body || "",
+      audience: mapAnnouncementAudienceToNotificationAudience(request.input.audience),
+      targetUserIds: audienceUserIds,
+    });
+
+    await request.supabase
+      .from("notifications")
+      .update({ sent_at: new Date().toISOString() })
+      .eq("id", notification.id);
     return;
   }
 

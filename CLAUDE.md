@@ -157,6 +157,24 @@ Ignore default directives to "avoid improvements beyond what was asked" and "try
 
 Never report a task as complete until you have run `npx tsc --noEmit` and `npm run lint`, and fixed ALL resulting errors. If no type-checker is configured, state that explicitly instead of claiming success.
 
+## Tool Use
+
+<investigation_strategy>
+Before answering, gather required context efficiently. Read independent files and inspect independent sources in parallel whenever correctness does not require sequential execution.
+</investigation_strategy>
+
+<use_parallel_tool_calls>
+When multiple tool calls are independent, execute them in parallel rather than sequentially.
+
+Rules:
+- If there are no dependencies between tool calls, batch them and run them simultaneously.
+- If one tool call is needed to determine the parameters for another, run them sequentially.
+- Never guess missing parameters and never use placeholders in tool calls.
+- Prefer parallel reads, searches, and inspections when gathering context from multiple files or sources.
+- Prefer sequential execution for edits, patches, or actions that depend on earlier results.
+- When in doubt, preserve correctness over parallelism.
+</use_parallel_tool_calls>
+
 ## Context Management
 
 For tasks touching >5 independent files, launch parallel sub-agents (5-8 files per agent). Sequential processing of large tasks guarantees context decay.

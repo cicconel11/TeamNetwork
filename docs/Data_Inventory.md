@@ -2,8 +2,8 @@
 
 This document catalogs the main classes of PII and education-adjacent data currently stored by TeamNetwork.
 
-**Last Updated:** March 11, 2026  
-**Primary Sources:** `src/types/database.ts`, `src/lib/analytics/policy.ts`, and current Supabase migrations
+**Last Updated:** April 16, 2026
+**Primary Sources:** `src/types/database.ts`, `src/lib/analytics/policy.ts`, and current Supabase migrations (266 as of this revision).
 
 ---
 
@@ -110,6 +110,9 @@ Enterprise accounts add another layer of admin and billing PII:
 | Admin invite emails | `enterprise_invites` | Direct identifier | Enterprise onboarding |
 | Enterprise role assignments | `user_enterprise_roles` | Indirect identifier | Links user identity to enterprise privileges |
 | Enterprise audit logs | `enterprise_audit_logs` | Sensitive admin metadata | Includes actor email, IP, user agent, action metadata |
+| Record access log | `data_access_log` | Sensitive audit metadata | Per-resource access telemetry for FERPA / NY Ed Law 2-d; raw IPs hashed (`20261012030000_hash_existing_raw_ips.sql`) |
+| Incident log | `breach_incidents` | Sensitive incident metadata | Discovery / containment / resolution timestamps, notification log (backs `Incident_Response_Runbook.md`) |
+| User agreement log | `user_agreements` | Consent/version metadata | ToS / Privacy / DSA version acceptance per user |
 
 Current retention guidance is no longer "undefined." The repo includes audit-log retention work in `supabase/migrations/20260501110000_audit_log_retention.sql`, so future compliance docs should describe the implemented retention behavior instead of calling it unbounded.
 

@@ -16,6 +16,7 @@ import { useUIProfile } from "@/lib/analytics/use-ui-profile";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { getRoleLabel } from "@/lib/auth/role-display";
+import { Search } from "lucide-react";
 
 
 interface OrgSidebarProps {
@@ -203,6 +204,28 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                 </Link>
               </div>
             )}
+
+            {/* Global search */}
+            <div className={`${isCollapsed ? "px-2 pt-1 pb-1" : "px-3 pt-2 pb-1"}`}>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("tn:open-global-search"))}
+                className={`flex w-full items-center gap-2 rounded-lg text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground ${
+                  isCollapsed ? "justify-center px-0 py-2" : "px-2 py-2"
+                }`}
+                aria-label="Open search"
+              >
+                <Search className="h-4 w-4 shrink-0" aria-hidden />
+                {!isCollapsed && (
+                  <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                    <span className="truncate">Search</span>
+                    <kbd className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground sm:inline">
+                      ⌘K
+                    </kbd>
+                  </span>
+                )}
+              </button>
+            </div>
 
             {/* Navigation */}
             <nav className={`flex-1 overflow-y-auto overflow-x-hidden ${isCollapsed ? "px-2 py-2" : "p-2"}`}>

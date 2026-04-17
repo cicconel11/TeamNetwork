@@ -82,25 +82,13 @@ Always-on warnings appear regardless of debug mode as `console.warn(...)`.
 
 ---
 
-## Issue #4: Chat — Cannot Add/Remove Users After Creation
+## Issue #4: Chat — Cannot Add/Remove Users After Creation — RESOLVED
 
-**Location:** `/{orgSlug}/chat/{groupId}`
+**Status:** Resolved.
 
-**Steps to reproduce:**
-1. Create a chat group with some members
-2. Open the chat group
-3. Look for a way to add or remove members from the group
+UI landed as `src/components/chat/ManageMembersPanel.tsx` with API at `src/app/api/chat/[groupId]/members/route.ts`. Schema foundation (soft-delete via `removed_at`, `added_by` tracking, re-add via UPDATE) in migration `20260429100000_chat_group_member_management.sql`; see `docs/db/chat-members.md` for the permission model.
 
-**Expected:** Moderators or admins can add/remove members from an existing chat group.
-
-**Actual:** No UI or API endpoint exists to modify group membership after creation. RLS policies support it, but the feature is missing.
-
-**Debug output to look for:**
-- `[debug][chat] ChatRoom mounted` — logs `hasEditMembersUI: false` to document the gap
-
-**Root cause:** Missing feature, not a bug. The `hasEditMembersUI: false` flag in debug output confirms there is no add/remove members UI.
-
-**Update (Feb 2026):** The `chat_group_members` table now has `removed_at` soft-deletion, `added_by` tracking, and a re-add via UPDATE pattern (migration `20260429100000_chat_group_member_management.sql`). The DB schema supports add/remove operations. UI implementation may still be pending.
+Keep this entry for history only — do not re-open without a concrete repro.
 
 ---
 
@@ -125,6 +113,8 @@ Always-on warnings appear regardless of debug mode as `console.warn(...)`.
 - `[debug][forms-export] exporting` — logs submission and field counts
 
 **Root cause:** The DB migration (`20260108020000_forms.sql`) defines the column as `responses`, but the generated TypeScript types (`database.ts:2234`) show `data`. The admin page reads `submission.data` which is `undefined`. The fill page correctly reads `submission.responses`. The instrumentation now tries both properties as a workaround.
+
+**Update (Apr 2026):** `submission.data` references are no longer present in `src/`; admin and export paths read `submission.responses` directly. Entry kept as historical record — re-open only with a fresh repro.
 
 ---
 
