@@ -841,6 +841,10 @@
   "mentorship": {
     "noPairs": "暂无导师配对",
     "pairsWillAppear": "配对创建后将显示在此处。",
+    "pairMembers": "配对成员",
+    "createPair": "创建配对",
+    "createPairDesc": "将导师与学员配对以开始跟踪进度。",
+    "searchPlaceholder": "按姓名搜索",
     "noActivePair": "未选择有效的导师配对",
     "selectOrCreatePair": "请选择一个导师配对，或先创建一个来开始跟踪任务。",
     "noTasks": "暂无任务",
@@ -859,6 +863,7 @@
     "adjustFilters": "尝试调整筛选条件以查看更多结果",
     "noMentorsYet": "暂无导师",
     "checkBackLater": "稍后再来查看注册帮助的校友",
+    "resultsCount": "显示 {count} / {total} 位导师",
     "expertise": "专业领域",
     "phone": "电话",
     "linkedin": "LinkedIn",

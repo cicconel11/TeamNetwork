@@ -841,6 +841,10 @@
   "mentorship": {
     "noPairs": "Aun no hay pares de mentoria",
     "pairsWillAppear": "Los pares apareceran aqui una vez creados.",
+    "pairMembers": "Miembros del par",
+    "createPair": "Crear par",
+    "createPairDesc": "Empareja un mentor con un aprendiz para comenzar a hacer seguimiento.",
+    "searchPlaceholder": "Buscar por nombre",
     "noActivePair": "No hay una pareja de mentoria activa seleccionada",
     "selectOrCreatePair": "Selecciona una pareja de mentoria o crea una para comenzar a seguir tareas.",
     "noTasks": "Aun no hay tareas",
@@ -859,6 +863,7 @@
     "adjustFilters": "Intenta ajustar tus filtros para ver mas resultados",
     "noMentorsYet": "Aun no hay mentores",
     "checkBackLater": "Vuelve mas tarde cuando los egresados se registren para ayudar",
+    "resultsCount": "Mostrando {count} de {total} mentores",
     "expertise": "Experiencia",
     "phone": "Telefono",
     "linkedin": "LinkedIn",

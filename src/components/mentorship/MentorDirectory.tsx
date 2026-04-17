@@ -335,6 +335,10 @@ export function MentorDirectory({
           </p>
         )}
 
+        <p className="text-xs text-muted-foreground mb-3">
+          {tMentorship("resultsCount", { count: sortedMentors.length, total: mentors.length })}
+        </p>
+
         {sortedMentors.length === 0 ? (
           <EmptyState
             title={hasActiveFilters ? tMentorship("noMentorsFound") : tMentorship("noMentorsYet")}

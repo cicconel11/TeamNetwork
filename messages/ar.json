@@ -841,6 +841,10 @@
   "mentorship": {
     "noPairs": "لا توجد أزواج إرشاد بعد",
     "pairsWillAppear": "ستظهر الأزواج هنا بمجرد إنشائها.",
+    "pairMembers": "أعضاء الزوج",
+    "createPair": "إنشاء زوج",
+    "createPairDesc": "اقرن مرشدًا بمتدرب لبدء تتبع التقدم.",
+    "searchPlaceholder": "البحث بالاسم",
     "noActivePair": "لا توجد علاقة إرشاد نشطة محددة",
     "selectOrCreatePair": "حدد علاقة إرشاد أو أنشئ واحدة لبدء تتبع المهام.",
     "noTasks": "لا توجد مهام بعد",
@@ -859,6 +863,7 @@
     "adjustFilters": "حاول تعديل الفلاتر لرؤية المزيد من النتائج",
     "noMentorsYet": "لا يوجد مرشدون بعد",
     "checkBackLater": "تحقق لاحقاً عندما يسجل الخريجون للمساعدة",
+    "resultsCount": "عرض {count} من {total} مرشد",
     "expertise": "الخبرة",
     "phone": "الهاتف",
     "linkedin": "LinkedIn",
