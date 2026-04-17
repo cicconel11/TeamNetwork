@@ -357,6 +357,7 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
       orgSlug={orgSlug}
       currentUserId={currentUserId}
       canRequestIntro={canRequestIntro}
+      isAdmin={isAdmin}
     />
   );
 

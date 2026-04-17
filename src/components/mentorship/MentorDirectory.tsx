@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Avatar, Button, EmptyState, Select, Input } from "@/components/ui";
 import { MentorRegistration } from "./MentorRegistration";
@@ -39,6 +40,7 @@ interface MentorDirectoryProps {
   orgSlug: string;
   currentUserId: string;
   canRequestIntro: boolean;
+  isAdmin: boolean;
 }
 
 type SortMode = "relevance" | "name" | "year";
@@ -52,7 +54,9 @@ export function MentorDirectory({
   orgSlug,
   currentUserId,
   canRequestIntro,
+  isAdmin,
 }: MentorDirectoryProps) {
+  const router = useRouter();
   const tMentorship = useTranslations("mentorship");
   const tMembers = useTranslations("members");
   const tCommon = useTranslations("common");
@@ -341,10 +345,18 @@ export function MentorDirectory({
 
         {sortedMentors.length === 0 ? (
           <EmptyState
-            title={hasActiveFilters ? tMentorship("noMentorsFound") : tMentorship("noMentorsYet")}
+            title={
+              hasActiveFilters
+                ? tMentorship("noMentorsFound")
+                : isAdmin
+                ? tMentorship("noMentorsAdminTitle")
+                : tMentorship("noMentorsYet")
+            }
             description={
               hasActiveFilters
                 ? tMentorship("adjustFilters")
+                : isAdmin
+                ? tMentorship("noMentorsAdminDesc")
                 : showRegistration
                 ? tMentorship("beFirstMentorDesc")
                 : tMentorship("checkBackLater")
@@ -353,6 +365,10 @@ export function MentorDirectory({
               hasActiveFilters ? (
                 <Button variant="ghost" size="sm" onClick={clearFilters}>
                   {tMentorship("clearFilters")}
+                </Button>
+              ) : isAdmin ? (
+                <Button onClick={() => router.push(`/${orgSlug}/members`)}>
+                  {tMentorship("inviteAlumni")}
                 </Button>
               ) : showRegistration && !showRegistrationForm ? (
                 <Button onClick={() => setShowRegistrationForm(true)}>
