@@ -66,6 +66,15 @@ function AdminStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const safeT = (key: string, fallback: string) => {
+    try {
+      const v = tMentorship(key);
+      return v || fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
   useEffect(() => {
     if (!expanded) return;
     let cancelled = false;
@@ -180,14 +189,24 @@ function AdminStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
           </p>
         </div>
         {!expanded && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setExpanded(true)}
-            disabled={isSaving}
-          >
-            {tMentorship("createPair")}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/${orgSlug}/mentorship/admin/matches`)}
+              disabled={isSaving}
+            >
+              {safeT("runMatchRound", "Match queue")}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setExpanded(true)}
+              disabled={isSaving}
+            >
+              {tMentorship("createPair")}
+            </Button>
+          </div>
         )}
       </div>
 

@@ -404,7 +404,7 @@ export async function resolveChatMessageRecipient(
   };
 }
 
-async function ensureChatGroupMember(
+export async function ensureChatGroupMember(
   supabase: DirectChatSupabase,
   input: {
     chatGroupId: string;
@@ -459,7 +459,7 @@ async function ensureChatGroupMember(
   return { ok: true };
 }
 
-async function createDirectChatGroup(
+export async function createDirectChatGroup(
   supabase: DirectChatSupabase,
   input: {
     organizationId: string;
@@ -485,6 +485,91 @@ async function createDirectChatGroup(
   }
 
   return { chatGroupId: (data as { id: string }).id, error: null };
+}
+
+export type EnsureDirectChatGroupResult =
+  | { ok: true; chatGroupId: string; reused: boolean }
+  | {
+      ok: false;
+      code:
+        | "chat_lookup_failed"
+        | "chat_create_failed"
+        | "membership_sync_failed"
+        | "recipient_lookup_failed";
+    };
+
+async function loadUserDisplayName(
+  supabase: DirectChatSupabase,
+  userId: string,
+): Promise<string> {
+  const { data } = await supabase
+    .from("users")
+    .select("name,email")
+    .eq("id", userId)
+    .maybeSingle();
+  const row = (data as { name?: string | null; email?: string | null } | null) ?? null;
+  return row?.name?.trim() || row?.email?.trim() || "Member";
+}
+
+/**
+ * Ensure a 2-member direct chat group exists between two users in an org.
+ * Idempotent: reuses an existing exact 2-member group if one exists.
+ */
+export async function ensureDirectChatGroup(
+  supabase: DirectChatSupabase,
+  input: { userAId: string; userBId: string; orgId: string },
+): Promise<EnsureDirectChatGroupResult> {
+  if (input.userAId === input.userBId) {
+    return { ok: false, code: "recipient_lookup_failed" };
+  }
+
+  const existing = await findExactDirectChatGroup(supabase, {
+    organizationId: input.orgId,
+    senderUserId: input.userAId,
+    recipientUserId: input.userBId,
+  });
+
+  if (existing.error === "chat_lookup_failed") {
+    return { ok: false, code: "chat_lookup_failed" };
+  }
+
+  if (existing.chatGroupId) {
+    return { ok: true, chatGroupId: existing.chatGroupId, reused: true };
+  }
+
+  const displayName = await loadUserDisplayName(supabase, input.userBId);
+
+  const created = await createDirectChatGroup(supabase, {
+    organizationId: input.orgId,
+    senderUserId: input.userAId,
+    recipientDisplayName: displayName,
+  });
+
+  if (created.error || !created.chatGroupId) {
+    return { ok: false, code: "chat_create_failed" };
+  }
+
+  const chatGroupId = created.chatGroupId;
+
+  const aMembership = await ensureChatGroupMember(supabase, {
+    chatGroupId,
+    organizationId: input.orgId,
+    userId: input.userAId,
+    role: "admin",
+    addedBy: input.userAId,
+  });
+  if (!aMembership.ok) return { ok: false, code: aMembership.code };
+
+  const bMembership = await ensureChatGroupMember(supabase, {
+    chatGroupId,
+    organizationId: input.orgId,
+    userId: input.userBId,
+    role: "member",
+    addedBy: input.userAId,
+  });
+  if (!bMembership.ok) return { ok: false, code: bMembership.code };
+
+  return { ok: true, chatGroupId, reused: false };
 }
 
 export async function sendAiAssistedDirectChatMessage(
