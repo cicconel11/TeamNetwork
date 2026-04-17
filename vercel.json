@@ -56,6 +56,10 @@
     {
       "path": "/api/cron/audit-log-retention",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/mentor-match-expire",
+      "schedule": "0 8 * * *"
     }
   ]
 }

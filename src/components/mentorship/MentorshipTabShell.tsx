@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import type { MentorshipTab } from "@/lib/mentorship/view-state";
 
 interface MentorshipTabShellProps {
@@ -9,23 +10,38 @@ interface MentorshipTabShellProps {
   orgSlug: string;
   activity: React.ReactNode;
   directory: React.ReactNode;
+  proposals?: React.ReactNode;
+  proposalCount?: number;
 }
-
-const TAB_LABELS: Record<MentorshipTab, string> = {
-  activity: "Activity",
-  directory: "Directory",
-};
-
-const TAB_ORDER: MentorshipTab[] = ["activity", "directory"];
 
 export function MentorshipTabShell({
   initialTab,
   orgSlug,
   activity,
   directory,
+  proposals,
+  proposalCount,
 }: MentorshipTabShellProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<MentorshipTab>(initialTab);
+  const tMentorship = useTranslations("mentorship");
+  const tabs: MentorshipTab[] = proposals
+    ? ["activity", "directory", "proposals"]
+    : ["activity", "directory"];
+  const resolvedInitialTab =
+    initialTab === "proposals" && !proposals ? "activity" : initialTab;
+  const [activeTab, setActiveTab] = useState<MentorshipTab>(resolvedInitialTab);
+
+  const labelFor = (tab: MentorshipTab): string => {
+    try {
+      if (tab === "activity") return tMentorship("tabActivity");
+      if (tab === "directory") return tMentorship("tabDirectory");
+      return tMentorship("tabProposals");
+    } catch {
+      if (tab === "activity") return "Activity";
+      if (tab === "directory") return "Directory";
+      return "Proposals";
+    }
+  };
 
   const buildTabUrl = (tab: MentorshipTab) => {
     const params = new URLSearchParams(window.location.search);
@@ -42,20 +58,20 @@ export function MentorshipTabShell({
     e: React.KeyboardEvent<HTMLDivElement>,
     tab: MentorshipTab
   ) => {
-    const currentIndex = TAB_ORDER.indexOf(tab);
+    const currentIndex = tabs.indexOf(tab);
     let nextIndex = currentIndex;
 
     if (e.key === "ArrowRight") {
       e.preventDefault();
-      nextIndex = (currentIndex + 1) % TAB_ORDER.length;
+      nextIndex = (currentIndex + 1) % tabs.length;
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
-      nextIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
     } else {
       return;
     }
 
-    const nextTab = TAB_ORDER[nextIndex];
+    const nextTab = tabs[nextIndex];
     setActiveTab(nextTab);
     router.replace(buildTabUrl(nextTab), { scroll: false });
   };
@@ -70,22 +86,28 @@ export function MentorshipTabShell({
   const contentMap: Record<MentorshipTab, React.ReactNode> = {
     activity,
     directory,
+    proposals: proposals ?? null,
   };
 
   return (
     <div className="space-y-0 animate-fade-in">
       <div className="mb-4">
         <div className="flex gap-0">
-          {TAB_ORDER.map((tab) => (
+          {tabs.map((tab) => (
             <div key={tab} onKeyDown={(e) => handleKeyDown(e, tab)}>
               <button
                 onClick={() => handleTabClick(tab)}
-                aria-label={TAB_LABELS[tab]}
+                aria-label={labelFor(tab)}
                 aria-selected={activeTab === tab}
                 role="tab"
                 className={tabButtonClass(tab)}
               >
-                {TAB_LABELS[tab]}
+                {labelFor(tab)}
+                {tab === "proposals" && proposalCount !== undefined && proposalCount > 0 && (
+                  <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold rounded-full bg-[var(--muted)] text-[var(--foreground)]">
+                    {proposalCount}
+                  </span>
+                )}
               </button>
             </div>
           ))}
