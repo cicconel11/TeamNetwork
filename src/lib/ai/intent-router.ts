@@ -158,10 +158,6 @@ function isCasualMessage(message: string): boolean {
   return CASUAL_MESSAGE_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
-export function isExactCasualMessage(message: string): boolean {
-  return isCasualMessage(message);
-}
-
 function hasActionKeywords(normalized: string): boolean {
   return ACTION_KEYWORDS.some((keyword) => {
     const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
