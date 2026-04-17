@@ -19,6 +19,7 @@ import { AIPanelProvider } from "@/components/ai-assistant";
 import { JoinOrgGate } from "@/components/join/JoinOrgGate";
 import { MediaUploadManagerProvider } from "@/components/media/MediaUploadManagerContext";
 import { pickCurrentOrgProfile } from "@/lib/auth/current-org-profile";
+import { getProgress } from "@/lib/onboarding/progress";
 import dynamic from "next/dynamic";
 const AIPanel = dynamic(
   () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
@@ -30,6 +31,10 @@ const AIEdgeTab = dynamic(
 );
 const OrgGlobalSearch = dynamic(
   () => import("@/components/search/OrgGlobalSearch").then((m) => m.OrgGlobalSearch),
+  { ssr: false },
+);
+const OnboardingShell = dynamic(
+  () => import("@/components/onboarding/OnboardingShell").then((m) => m.OnboardingShell),
   { ssr: false },
 );
 import { computeOrgThemeVariables, safeCssValue, safeHexColor } from "@/lib/theming/org-colors";
@@ -196,6 +201,15 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   let currentProfileName: string | undefined;
   let currentProfileAvatar: string | undefined;
   let pendingApprovalsCount = 0;
+  let onboardingProgress = {
+    id: null as string | null,
+    completedItems: [] as import("@/lib/schemas/onboarding").OnboardingItemId[],
+    visitedItems: [] as import("@/lib/schemas/onboarding").OnboardingItemId[],
+    welcomeSeenAt: null as string | null,
+    tourCompletedAt: null as string | null,
+    dismissedAt: null as string | null,
+  };
+  let currentMemberId: string | null = null;
   if (orgContext.userId) {
     const supabase = await createClient();
     const [{ data: memberRow }, { data: alumniRow }, { data: parentRow }] = await Promise.all([
@@ -244,6 +258,21 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         .eq("status", "pending");
       pendingApprovalsCount = count ?? 0;
     }
+
+    // Onboarding progress (non-blocking — zero-state on error)
+    [onboardingProgress] = await Promise.all([
+      getProgress(orgContext.userId, organization.id),
+    ]);
+
+    // Capture current member ID for onboarding deep-links (complete_profile)
+    const memberRowForOnboarding = await supabase
+      .from("members")
+      .select("id")
+      .eq("organization_id", organization.id)
+      .eq("user_id", orgContext.userId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    currentMemberId = memberRowForOnboarding.data?.id ?? null;
   }
 
   let serviceSupabase = null;
@@ -336,6 +365,19 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentProfileHref={currentProfileHref} currentProfileName={currentProfileName} currentProfileAvatar={currentProfileAvatar} pendingApprovalsCount={pendingApprovalsCount} />
       {!isDevAdmin && <ConsentModal />}
       {!isDevAdmin && <LinkedInUrlPrompt />}
+      {!isDevAdmin && orgContext.userId && (
+        <OnboardingShell
+          userId={orgContext.userId}
+          orgId={organization.id}
+          orgSlug={orgSlug}
+          orgName={organization.name}
+          memberId={currentMemberId}
+          role={orgContext.role}
+          hasAlumniAccess={orgContext.hasAlumniAccess}
+          hasParentsAccess={orgContext.hasParentsAccess}
+          initialProgress={onboardingProgress}
+        />
+      )}
 
       <MediaUploadManagerProvider orgId={organization.id}>
         <OrgMainContent hasTopBanner={orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling}>

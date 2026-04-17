@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Driver.js guided tour styles */
+@import "driver.js/dist/driver.css";
+
 :root {
   --font-sans: "Plus Jakarta Sans";
   --font-display: "Bitter";

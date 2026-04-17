@@ -55,6 +55,8 @@ export type OrgNavItem = {
   requiresAlumni?: boolean;
   requiresParents?: boolean;
   group?: NavGroupId;
+  /** Identifier used by the guided onboarding tour (sets data-tour attribute on the nav link). */
+  tourId?: string;
 };
 
 export type NavConfigEntry = {
@@ -70,20 +72,20 @@ export type NavConfig = Record<string, NavConfigEntry>;
 export const getConfigKey = (href: string): string => href === "" ? "dashboard" : href;
 
 export const ORG_NAV_ITEMS: OrgNavItem[] = [
-  { href: "", label: "Home", i18nKey: "home", icon: HomeIcon, roles: ["admin", "active_member", "alumni", "parent"] },
-  { href: "/members", label: "Members", i18nKey: "members", icon: UsersIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "people" },
-  { href: "/messages", label: "Messages", i18nKey: "messages", icon: ChatIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
+  { href: "", label: "Home", i18nKey: "home", icon: HomeIcon, roles: ["admin", "active_member", "alumni", "parent"], tourId: "feed" },
+  { href: "/members", label: "Members", i18nKey: "members", icon: UsersIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "people", tourId: "members" },
+  { href: "/messages", label: "Messages", i18nKey: "messages", icon: ChatIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community", tourId: "messages" },
   { href: "/alumni", label: "Alumni", i18nKey: "alumni", icon: GraduationCapIcon, roles: ["admin", "active_member", "alumni", "parent"], requiresAlumni: true, group: "people" },
   { href: "/parents", label: "Parents", i18nKey: "parents", icon: ParentsIcon, roles: ["admin", "active_member", "parent"], requiresParents: true, group: "people" },
   { href: "/mentorship", label: "Mentorship", i18nKey: "mentorship", icon: HandshakeIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "people" },
   { href: "/workouts", label: "Workouts", i18nKey: "workouts", icon: DumbbellIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "activity" },
   { href: "/competition", label: "Competition", i18nKey: "competition", icon: AwardIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "activity" },
-  { href: "/announcements", label: "Announcements", i18nKey: "announcements", icon: MegaphoneIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
+  { href: "/announcements", label: "Announcements", i18nKey: "announcements", icon: MegaphoneIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community", tourId: "announcements" },
   { href: "/philanthropy", label: "Philanthropy", i18nKey: "philanthropy", icon: HeartIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "finance" },
   { href: "/donations", label: "Donations", i18nKey: "donations", icon: DollarIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "finance" },
   { href: "/expenses", label: "Expenses", i18nKey: "expenses", icon: ReceiptIcon, roles: ["admin", "active_member"], group: "finance" },
   { href: "/records", label: "Records", i18nKey: "records", icon: TrophyIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "activity" },
-  { href: "/calendar", label: "Calendar", i18nKey: "calendar", icon: BookOpenIcon, roles: ["admin", "active_member", "alumni", "parent"] },
+  { href: "/calendar", label: "Calendar", i18nKey: "calendar", icon: BookOpenIcon, roles: ["admin", "active_member", "alumni", "parent"], tourId: "calendar" },
   { href: "/jobs", label: "Jobs", i18nKey: "jobs", icon: BriefcaseIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/forms", label: "Forms", i18nKey: "forms", icon: ClipboardIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/media", label: "Media", i18nKey: "media", icon: GridIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },

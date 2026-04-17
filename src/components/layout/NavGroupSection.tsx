@@ -152,6 +152,7 @@ export function NavItemLink({
         href={href}
         title={isCollapsed ? item.label : undefined}
         aria-label={isCollapsed ? item.label : undefined}
+        data-tour={item.tourId ?? undefined}
         onClick={() => {
           trackBehavioralEvent(
             "nav_click",

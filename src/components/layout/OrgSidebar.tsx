@@ -17,6 +17,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { getRoleLabel } from "@/lib/auth/role-display";
 import { Search } from "lucide-react";
+import { ChecklistTrigger } from "@/components/onboarding/ChecklistTrigger";
+import { getVisibleOnboardingItems } from "@/lib/onboarding/visible-items";
 
 
 interface OrgSidebarProps {
@@ -45,6 +47,33 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
   const tAuth = useTranslations("auth");
 
   const [openGroups, setOpenGroups] = useState<Set<NavGroupId>>(new Set());
+
+  // Onboarding checklist progress — updated via tn:onboarding-progress CustomEvent from OnboardingShell
+  const onboardingItems = useMemo(
+    () => getVisibleOnboardingItems({ role, hasAlumniAccess, hasParentsAccess }),
+    [role, hasAlumniAccess, hasParentsAccess]
+  );
+  const [onboardingCompleted, setOnboardingCompleted] = useState(0);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+
+  useEffect(() => {
+    function handleProgress(e: Event) {
+      const detail = (e as CustomEvent<{ completedCount: number; totalCount: number }>).detail;
+      setOnboardingCompleted(detail.completedCount);
+      if (detail.completedCount >= detail.totalCount && detail.totalCount > 0) {
+        // Keep visible until user explicitly dismisses
+      }
+    }
+    function handleDismissed() {
+      setOnboardingDismissed(true);
+    }
+    window.addEventListener("tn:onboarding-progress", handleProgress);
+    window.addEventListener("tn:onboarding-dismissed", handleDismissed);
+    return () => {
+      window.removeEventListener("tn:onboarding-progress", handleProgress);
+      window.removeEventListener("tn:onboarding-dismissed", handleDismissed);
+    };
+  }, []);
 
   const navConfig = useMemo<NavConfig>(() => {
     if (
@@ -297,6 +326,14 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
 
             {/* User Section */}
             <div className={`border-t border-border ${isCollapsed ? "flex flex-col items-center gap-1 px-2 py-2" : "space-y-1 p-2"}`}>
+              {/* Onboarding checklist trigger — hidden when collapsed, dismissed, or all done */}
+              {!isCollapsed && !onboardingDismissed && onboardingItems.length > 0 && (
+                <ChecklistTrigger
+                  completedCount={onboardingCompleted}
+                  totalCount={onboardingItems.length}
+                />
+              )}
+
               <Link
                 href="/app"
                 title={isCollapsed ? tSidebar("switchOrg") : undefined}

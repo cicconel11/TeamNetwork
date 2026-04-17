@@ -83,3 +83,6 @@ export * from "./global-search";
 
 // AI feedback schemas
 export * from "./ai-feedback";
+
+// Onboarding checklist schemas
+export * from "./onboarding";
