@@ -47,6 +47,8 @@ export function DevPanel({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
   const [reconcileResult, setReconcileResult] = useState<string | null>(null);
+  const [isSeedingMentors, setIsSeedingMentors] = useState(false);
+  const [seedMentorsResult, setSeedMentorsResult] = useState<string | null>(null);
   const [showAllOrgs, setShowAllOrgs] = useState(false);
   const [allOrgs, setAllOrgs] = useState<Organization[]>([]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
@@ -86,6 +88,32 @@ export function DevPanel({
       setReconcileResult(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {
       setIsReconciling(false);
+    }
+  };
+
+  const handleSeedMentors = async () => {
+    setIsSeedingMentors(true);
+    setSeedMentorsResult(null);
+    try {
+      const res = await fetch("/api/dev-admin/seed-mentors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId: organizationId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSeedMentorsResult(`Error: ${data.error || res.statusText}`);
+        return;
+      }
+      setSeedMentorsResult(
+        `Seeded: inserted=${data.inserted}, skipped=${data.skipped}`
+      );
+    } catch (err) {
+      setSeedMentorsResult(
+        `Error: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    } finally {
+      setIsSeedingMentors(false);
     }
   };
 
@@ -257,10 +285,22 @@ export function DevPanel({
                 >
                   View Enterprises
                 </button>
+                <button
+                  onClick={handleSeedMentors}
+                  disabled={isSeedingMentors}
+                  className="bg-pink-600 hover:bg-pink-700 disabled:opacity-50 px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                >
+                  {isSeedingMentors ? "Seeding..." : "Seed 5 Mentors"}
+                </button>
               </div>
               {reconcileResult && (
                 <div className={`mt-2 p-2 rounded text-xs ${reconcileResult.startsWith("Error") ? "bg-red-900/50" : "bg-green-900/50"}`}>
                   {reconcileResult}
+                </div>
+              )}
+              {seedMentorsResult && (
+                <div className={`mt-2 p-2 rounded text-xs ${seedMentorsResult.startsWith("Error") ? "bg-red-900/50" : "bg-green-900/50"}`}>
+                  {seedMentorsResult}
                 </div>
               )}
             </section>
