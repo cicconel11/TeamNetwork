@@ -5883,6 +5883,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_view_event: {
+        Args: { e: Database["public"]["Tables"]["events"]["Row"] }
+        Returns: boolean
+      }
       cancel_ai_pending_action: {
         Args: { p_action_id: string; p_user_id: string }
         Returns: Json
@@ -6091,7 +6095,7 @@ export type Database = {
         Returns: Json
       }
       filter_announcement_ids_for_user: {
-        Args: { p_org_id: string; p_announcement_ids: string[] }
+        Args: { p_announcement_ids: string[]; p_org_id: string }
         Returns: string[]
       }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
@@ -6180,12 +6184,20 @@ export type Database = {
         }
         Returns: Json
       }
+      is_alumni_directory_visible: {
+        Args: { p_alumni_id: string; p_org_id: string }
+        Returns: boolean
+      }
       is_chat_group_creator: { Args: { group_id: string }; Returns: boolean }
       is_chat_group_member: { Args: { group_id: string }; Returns: boolean }
       is_chat_group_moderator: { Args: { group_id: string }; Returns: boolean }
       is_enterprise_admin: { Args: { ent_id: string }; Returns: boolean }
       is_enterprise_member: { Args: { ent_id: string }; Returns: boolean }
       is_enterprise_owner: { Args: { ent_id: string }; Returns: boolean }
+      is_member_directory_visible: {
+        Args: { p_member_id: string; p_org_id: string }
+        Returns: boolean
+      }
       is_org_admin: { Args: { org_id: string }; Returns: boolean }
       is_org_member: { Args: { org_id: string }; Returns: boolean }
       log_analytics_event: {
@@ -6334,6 +6346,8 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       sync_enterprise_nav_to_org: {
         Args: { p_enterprise_id: string; p_organization_id: string }
         Returns: boolean

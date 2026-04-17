@@ -42,6 +42,7 @@
     "animejs": "^4.2.2",
     "cheerio": "^1.2.0",
     "cmdk": "^1.0.4",
+    "driver.js": "^1.4.0",
     "falkordb": "^6.6.2",
     "falkordblite": "^0.2.0",
     "framer-motion": "^12.38.0",
