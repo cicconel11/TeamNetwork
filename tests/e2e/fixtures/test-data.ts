@@ -46,6 +46,47 @@ export const TestData = {
   getOrgSlug: () => process.env.E2E_ORG_SLUG || "e2e-test-org",
 
   /**
+   * Get the E2E test organization UUID. Required by mentorship API routes,
+   * which accept the organization UUID (not slug) in their paths.
+   */
+  getOrgId: () => process.env.E2E_ORG_ID || "",
+
+  /**
+   * Get a secondary org UUID used to verify cross-org isolation.
+   */
+  getOtherOrgId: () => process.env.E2E_OTHER_ORG_ID || "",
+
+  /**
+   * Mentor test user — must be an active_member of E2E_ORG_ID with a
+   * mentor_profiles row (is_active=true, accepting_new=true).
+   */
+  getMentorCredentials: () => ({
+    email: process.env.E2E_MENTOR_EMAIL || "e2e-mentor@test.local",
+    password: process.env.E2E_MENTOR_PASSWORD || "e2e-mentor-password",
+    userId: process.env.E2E_MENTOR_USER_ID || "",
+  }),
+
+  /**
+   * Mentee test user — must be an active_member of E2E_ORG_ID.
+   */
+  getMenteeCredentials: () => ({
+    email: process.env.E2E_MENTEE_EMAIL || "e2e-mentee@test.local",
+    password: process.env.E2E_MENTEE_PASSWORD || "e2e-mentee-password",
+    userId: process.env.E2E_MENTEE_USER_ID || "",
+  }),
+
+  /**
+   * Admin user ID (the user authenticated via auth.setup.ts). Used when
+   * seeding tests that need to reference the admin's user_id.
+   */
+  getAdminUserId: () => process.env.E2E_ADMIN_USER_ID || "",
+
+  /**
+   * Cron secret for authorizing /api/cron/* endpoints.
+   */
+  getCronSecret: () => process.env.CRON_SECRET || "",
+
+  /**
    * Generate a unique alumni with random data
    */
   generateAlumni: () => {

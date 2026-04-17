@@ -45,6 +45,14 @@ test("all supported locales provide the mentorship translations used by the reva
     "mentorship.loadingControls",
     "mentorship.signInManagePair",
     "mentorship.signInManageAvailability",
+    "mentorship.tabProposals",
+    "mentorship.intakeBannerTitle",
+    "mentorship.runMatchRound",
+    "mentorship.noPendingProposals",
+    "mentorship.queueCount",
+    "mentorship.sortScore",
+    "mentorship.viewMenteeIntake",
+    "mentorship.overrideApprove",
   ];
 
   for (const locale of SUPPORTED_LOCALES) {

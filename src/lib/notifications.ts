@@ -11,7 +11,7 @@ const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 export type DeliveryChannel = "email" | "sms";
 
 export type NotificationCategory =
-  | "announcement" | "discussion" | "event" | "workout" | "competition";
+  | "announcement" | "discussion" | "event" | "workout" | "competition" | "mentorship";
 
 export interface NotificationTarget {
   email?: string | null;
@@ -153,12 +153,15 @@ export async function sendSMS(params: SMSParams): Promise<NotificationResult> {
 
 type PreferenceRow = Database["public"]["Tables"]["notification_preferences"]["Row"];
 
+// mentorship_emails_enabled added in Phase 2 migration; cast to keyof for
+// forward compatibility with generated types that haven't been regenerated yet.
 const CATEGORY_PREF_COLUMN: Record<NotificationCategory, keyof PreferenceRow> = {
   announcement: "announcement_emails_enabled",
   discussion: "discussion_emails_enabled",
   event: "event_emails_enabled",
   workout: "workout_emails_enabled",
   competition: "competition_emails_enabled",
+  mentorship: "mentorship_emails_enabled" as keyof PreferenceRow,
 };
 
 const getChannelsForContact = ({
@@ -244,7 +247,7 @@ export async function buildNotificationTargets(params: {
   const [prefsRes, usersRes] = await Promise.all([
     supabase
       .from("notification_preferences")
-      .select("email_enabled,email_address,sms_enabled,phone_number,user_id,organization_id,announcement_emails_enabled,discussion_emails_enabled,event_emails_enabled,workout_emails_enabled,competition_emails_enabled")
+      .select("email_enabled,email_address,sms_enabled,phone_number,user_id,organization_id,announcement_emails_enabled,discussion_emails_enabled,event_emails_enabled,workout_emails_enabled,competition_emails_enabled,mentorship_emails_enabled")
       .eq("organization_id", organizationId)
       .in("user_id", memberUserIds),
     supabase
