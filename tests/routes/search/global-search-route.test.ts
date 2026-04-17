@@ -30,6 +30,20 @@ test("globalSearchApiParamsSchema accepts valid q and mode", () => {
   }
 });
 
+test("globalSearchApiParamsSchema rejects 2-char q in ai mode (min 3)", () => {
+  const r = globalSearchApiParamsSchema.safeParse({ q: "ab", mode: "ai" });
+  assert.equal(r.success, false);
+  if (!r.success) {
+    const messages = r.error.issues.map((i) => i.message).join(" ");
+    assert.ok(/at least 3/i.test(messages));
+  }
+});
+
+test("globalSearchApiParamsSchema accepts 3-char q in ai mode", () => {
+  const r = globalSearchApiParamsSchema.safeParse({ q: "abc", mode: "ai" });
+  assert.equal(r.success, true);
+});
+
 test("normalizeRepeatedTitle collapses repeated tokens", () => {
   assert.equal(
     normalizeRepeatedTitle("Baseball Baseball Baseball Baseball"),

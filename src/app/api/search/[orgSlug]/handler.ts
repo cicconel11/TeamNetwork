@@ -55,13 +55,6 @@ export async function handleGlobalSearchGet(request: NextRequest, orgSlug: strin
 
   const org = orgCtx.organization;
 
-  if (params.mode === "ai" && params.q.length < 3) {
-    return NextResponse.json(
-      { error: "Query too short", details: "AI mode requires at least 3 characters" },
-      { status: 400, headers: rateLimit.headers },
-    );
-  }
-
   if (params.mode === "fast") {
     const { data, error } = await supabase.rpc("search_org_content", {
       p_org_id: org.id,
@@ -100,8 +93,11 @@ export async function handleGlobalSearchGet(request: NextRequest, orgSlug: strin
     const merged = [...rawRows, ...intentRows];
 
     // Collapse identical titles within the same entity type (seed-data duplicates),
+    // collapse cross-type person duplicates (member == alumni by name+email),
     // dedupe on entity_id, cap each entity type.
+    const PERSON_TYPES = new Set(["member", "alumni"]);
     const seenTitleByType = new Map<string, Set<string>>();
+    const seenPersonKeys = new Set<string>();
     const seenIds = new Set<string>();
     const countByType = new Map<string, number>();
     const rows: typeof rawRows = [];
@@ -119,6 +115,12 @@ export async function handleGlobalSearchGet(request: NextRequest, orgSlug: strin
         }
         if (seen.has(titleKey)) continue;
         seen.add(titleKey);
+      }
+      if (PERSON_TYPES.has(type) && titleKey) {
+        const snippetKey = (r.snippet ?? "").trim().toLowerCase();
+        const personKey = `${titleKey}|${snippetKey}`;
+        if (seenPersonKeys.has(personKey)) continue;
+        seenPersonKeys.add(personKey);
       }
       const count = countByType.get(type) ?? 0;
       if (count >= PER_TYPE_CAP) continue;

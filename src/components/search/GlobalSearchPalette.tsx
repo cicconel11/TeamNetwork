@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useGlobalSearch, type GlobalSearchMode } from "./GlobalSearchProvider";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
+import { detectIntent } from "@/lib/search/intent-fallback";
 
 type FastSearchRow = {
   entity_type: string;
@@ -200,8 +201,27 @@ export function GlobalSearchPalette() {
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push({ row, pos: idx + 1 });
     });
-    return [...m.entries()];
-  }, [aiResults]);
+    // Singular source-table aliases used by the AI mode (events, job_postings,
+    // discussion_threads) → canonical intent key.
+    const intentToSource: Record<string, string> = {
+      job_posting: "job_postings",
+      event: "events",
+      discussion_thread: "discussion_threads",
+    };
+    const intent = detectIntent(query);
+    const intentSource = intent ? (intentToSource[intent] ?? intent) : null;
+    const entries = [...m.entries()];
+    entries.sort(([aKey, aItems], [bKey, bItems]) => {
+      if (intentSource) {
+        if (aKey === intentSource && bKey !== intentSource) return -1;
+        if (bKey === intentSource && aKey !== intentSource) return 1;
+      }
+      const aTop = aItems[0]?.row.similarity ?? 0;
+      const bTop = bItems[0]?.row.similarity ?? 0;
+      return bTop - aTop;
+    });
+    return entries;
+  }, [aiResults, query]);
 
   const navigateTo = useCallback(
     (url: string, meta: { entityType: string; position: number; qLen: number }) => {
