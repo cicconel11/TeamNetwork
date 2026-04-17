@@ -859,6 +859,10 @@
   "mentorship": {
     "noPairs": "No mentorship pairs yet",
     "pairsWillAppear": "Pairs will appear here once created.",
+    "pairMembers": "Pair members",
+    "createPair": "Create pair",
+    "createPairDesc": "Pair a mentor with a mentee to start tracking progress.",
+    "searchPlaceholder": "Search by name",
     "noActivePair": "No active mentorship pair selected",
     "selectOrCreatePair": "Select a mentorship pair or create one to start tracking tasks.",
     "noTasks": "No tasks yet",
@@ -877,6 +881,7 @@
     "adjustFilters": "Try adjusting your filters to see more results",
     "noMentorsYet": "No mentors yet",
     "checkBackLater": "Check back later as alumni register to help",
+    "resultsCount": "Showing {count} of {total} mentors",
     "expertise": "Expertise",
     "phone": "Phone",
     "linkedin": "LinkedIn",

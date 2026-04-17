@@ -841,6 +841,10 @@
   "mentorship": {
     "noPairs": "Aucun binome de mentorat pour le moment",
     "pairsWillAppear": "Les binomes apparaitront ici une fois crees.",
+    "pairMembers": "Membres du binome",
+    "createPair": "Creer un binome",
+    "createPairDesc": "Associez un mentor et un mentore pour commencer le suivi.",
+    "searchPlaceholder": "Rechercher par nom",
     "noActivePair": "Aucun binome de mentorat actif selectionne",
     "selectOrCreatePair": "Selectionnez un binome de mentorat ou creez-en un pour commencer a suivre des taches.",
     "noTasks": "Aucune tache pour le moment",
@@ -859,6 +863,7 @@
     "adjustFilters": "Essayez d'ajuster vos filtres pour voir plus de resultats",
     "noMentorsYet": "Aucun mentor pour le moment",
     "checkBackLater": "Revenez plus tard lorsque des anciens se seront inscrits pour aider",
+    "resultsCount": "Affichage de {count} mentors sur {total}",
     "expertise": "Expertise",
     "phone": "Telephone",
     "linkedin": "LinkedIn",
