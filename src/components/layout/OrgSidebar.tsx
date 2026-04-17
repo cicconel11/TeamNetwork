@@ -340,6 +340,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                     alt="TeamNetwork"
                     width={541}
                     height={303}
+                    priority
                     className="w-full max-w-[200px] h-auto object-contain opacity-50 group-hover:opacity-80 transition-opacity"
                   />
                 </Link>

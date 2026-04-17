@@ -841,6 +841,10 @@
   "mentorship": {
     "noPairs": "Nessuna coppia di mentoring ancora",
     "pairsWillAppear": "Le coppie appariranno qui una volta create.",
+    "pairMembers": "Membri della coppia",
+    "createPair": "Crea coppia",
+    "createPairDesc": "Abbina un mentore a un mentee per iniziare il monitoraggio.",
+    "searchPlaceholder": "Cerca per nome",
     "noActivePair": "Nessuna coppia di mentoring attiva selezionata",
     "selectOrCreatePair": "Seleziona una coppia di mentoring o creane una per iniziare a monitorare le attivita.",
     "noTasks": "Nessuna attivita ancora",
@@ -859,6 +863,7 @@
     "adjustFilters": "Prova a modificare i filtri per vedere più risultati",
     "noMentorsYet": "Nessun mentore ancora",
     "checkBackLater": "Torna più tardi man mano che gli ex studenti si registrano per aiutare",
+    "resultsCount": "Mostrati {count} di {total} mentori",
     "expertise": "Competenza",
     "phone": "Telefono",
     "linkedin": "LinkedIn",
