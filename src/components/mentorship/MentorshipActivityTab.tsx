@@ -160,8 +160,10 @@ export function MentorshipActivityTab({
           `/api/organizations/${orgId}/mentorship/meetings?pairId=${selectedPairId}`,
           { signal: controller.signal }
         );
+        if (controller.signal.aborted) return;
         if (res.ok) {
           const { upcoming: upData, past: pastData } = await res.json();
+          if (controller.signal.aborted) return;
           setUpcoming(upData || []);
           setPast(pastData || []);
         }
@@ -170,7 +172,9 @@ export function MentorshipActivityTab({
           showFeedback("Failed to load meetings", "error");
         }
       } finally {
-        setMeetingsLoading(false);
+        if (!controller.signal.aborted) {
+          setMeetingsLoading(false);
+        }
       }
     };
 
