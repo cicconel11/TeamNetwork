@@ -23,6 +23,7 @@ export const BEHAVIORAL_EVENT_NAMES = [
   "chat_participants_change",
   "search_used",
   "search_result_click",
+  "search_action_click",
 ] as const;
 
 export type AnalyticsEventName = (typeof BEHAVIORAL_EVENT_NAMES)[number];
