@@ -12,8 +12,6 @@ export async function GET(request: Request) {
   const { origin } = new URL(request.url);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
 
-  console.log("[signout] Rejected GET request - use POST to sign out");
-
   // Redirect to home instead of signing out
   return NextResponse.redirect(`${siteUrl}/`, { status: 303 });
 }
@@ -47,8 +45,6 @@ export async function POST(request: Request) {
   });
 
   await supabase.auth.signOut();
-
-  console.log("[signout] Signed out, cookies cleared");
 
   // Force-clear any legacy cookies on .myteamnetwork.com domain to prevent conflicts
   if (process.env.NODE_ENV === "production") {

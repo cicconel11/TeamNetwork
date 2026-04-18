@@ -132,7 +132,6 @@ export async function POST(req: Request) {
         );
         // If subscription doesn't exist in Stripe, clear it from database
         if (error instanceof Error && error.message.includes("No such subscription")) {
-          console.log("[billing-portal] Clearing invalid subscription ID for org:", organization.id);
           const serviceSupabase = createServiceClient();
           await serviceSupabase
             .from("organization_subscriptions")
@@ -224,10 +223,3 @@ export async function POST(req: Request) {
     throw error;
   }
 }
-
-
-
-
-
-
-

@@ -234,8 +234,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("[media/finalize] Success", { mediaId: body.mediaId });
-
     // Generate signed URLs
     const urls = await getMediaUrls(
       serviceClient,
