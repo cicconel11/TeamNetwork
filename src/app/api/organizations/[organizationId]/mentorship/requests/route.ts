@@ -61,10 +61,11 @@ export async function POST(req: Request, { params }: RouteParams) {
           maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
         };
       };
-      update: (v: unknown) => {
-        eq: (c: string, v: string) => Promise<{ error: { message: string } | null }>;
-      };
     };
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>
+    ) => Promise<{ data: unknown; error: { code?: string; message: string } | null }>;
   };
 
   // Caller must be an active_member in this org
@@ -166,46 +167,43 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
   }
 
-  // Insert proposal (RLS allows mentee self-insert with status=proposed)
-  const { data: inserted, error: insertError } = await supabase
-    .from("mentorship_pairs")
-    .insert({
-      organization_id: organizationId,
-      mentor_user_id: body.mentor_user_id,
-      mentee_user_id: user.id,
-      status: "proposed",
-    })
-    .select("*")
-    .maybeSingle();
+  // Insert proposal atomically via admin_propose_pair RPC (validates actor,
+  // persists score+signals in a single statement, idempotent on concurrent retries).
+  const { data: rpcData, error: rpcError } = await svc.rpc("admin_propose_pair", {
+    p_organization_id: organizationId,
+    p_mentor_user_id: body.mentor_user_id,
+    p_mentee_user_id: user.id,
+    p_match_score: match.score,
+    p_match_signals: match.signals,
+    p_actor_user_id: user.id,
+  });
 
-  if (insertError || !inserted) {
-    // Unique index violation → concurrent request. Re-read and return existing.
-    const { data: concurrent } = await service
-      .from("mentorship_pairs")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .eq("mentor_user_id", body.mentor_user_id)
-      .eq("mentee_user_id", user.id)
-      .in("status", ["proposed", "accepted", "active", "paused"])
-      .is("deleted_at", null)
-      .maybeSingle();
-
-    if (concurrent) {
-      return NextResponse.json({ pair: concurrent, reused: true }, { status: 200 });
-    }
-    console.error("[mentorship/requests] insert failed", insertError);
+  if (rpcError) {
+    console.error("[mentorship/requests] RPC failed", rpcError);
     return NextResponse.json({ error: "Failed to create proposal" }, { status: 500 });
   }
 
-  // Persist score/signals via service (match_score/match_signals are admin-only in trigger).
-  if (match) {
-    await svc
-      .from("mentorship_pairs")
-      .update({
-        match_score: match.score,
-        match_signals: match.signals,
-      })
-      .eq("id", inserted.id);
+  const rpcRow = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as
+    | { pair_id?: string; status?: string; match_score?: number; match_signals?: unknown; reused?: boolean }
+    | null;
+
+  if (!rpcRow?.pair_id) {
+    return NextResponse.json({ error: "Failed to create proposal" }, { status: 500 });
+  }
+
+  // Hydrate full row for response
+  const { data: inserted } = await service
+    .from("mentorship_pairs")
+    .select("*")
+    .eq("id", rpcRow.pair_id)
+    .maybeSingle();
+
+  if (!inserted) {
+    return NextResponse.json({ error: "Failed to load proposal" }, { status: 500 });
+  }
+
+  if (rpcRow.reused) {
+    return NextResponse.json({ pair: inserted, reused: true }, { status: 200 });
   }
 
   // Notification — best effort
@@ -238,5 +236,5 @@ export async function POST(req: Request, { params }: RouteParams) {
     console.error("[mentorship/requests] notify failed", notifyError);
   }
 
-  return NextResponse.json({ pair: { ...inserted, match_score: match?.score ?? null, match_signals: match?.signals ?? null }, reused: false }, { status: 201 });
+  return NextResponse.json({ pair: inserted, reused: false }, { status: 201 });
 }

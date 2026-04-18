@@ -202,6 +202,10 @@ export async function POST(req: Request, { params }: RouteParams) {
         };
       };
     };
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>
+    ) => Promise<{ data: unknown; error: { code?: string; message: string } | null }>;
   };
 
   const [
@@ -354,33 +358,39 @@ export async function POST(req: Request, { params }: RouteParams) {
       continue;
     }
 
-    const { data: inserted, error: insertError } = await svc
-      .from("mentorship_pairs")
-      .insert({
-        organization_id: organizationId,
-        mentor_user_id: topMatch.mentorUserId,
-        mentee_user_id: menteeUserId,
-        status: "proposed",
-        match_score: topMatch.score,
-        match_signals: topMatch.signals,
-      })
-      .select("id")
-      .maybeSingle();
+    const { data: rpcData, error: rpcError } = await svc.rpc("admin_propose_pair", {
+      p_organization_id: organizationId,
+      p_mentor_user_id: topMatch.mentorUserId,
+      p_mentee_user_id: menteeUserId,
+      p_match_score: topMatch.score,
+      p_match_signals: topMatch.signals,
+      p_actor_user_id: user.id,
+    });
 
-    if (insertError) {
-      if (insertError.code === "23505") {
+    if (rpcError) {
+      if (rpcError.code === "23505") {
         skippedExisting += 1;
         continue;
       }
-      console.error("[mentorship admin queue] create proposal failed", insertError);
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      console.error("[mentorship admin queue] create proposal failed", rpcError);
+      return NextResponse.json({ error: rpcError.message }, { status: 500 });
     }
 
-    if (!inserted?.id) {
+    const rpcRow = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as
+      | { pair_id?: string; reused?: boolean }
+      | null;
+
+    if (!rpcRow?.pair_id) {
       skippedNoMatch += 1;
       continue;
     }
 
+    if (rpcRow.reused) {
+      skippedExisting += 1;
+      continue;
+    }
+
+    const inserted = { id: rpcRow.pair_id };
     created += 1;
 
     try {

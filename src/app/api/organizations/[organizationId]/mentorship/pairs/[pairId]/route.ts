@@ -44,11 +44,6 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const svc = service as unknown as {
     from: (t: string) => {
       insert: (v: unknown) => Promise<{ error: { message: string } | null }>;
-      update: (v: unknown) => {
-        eq: (c: string, v: string) => {
-          eq: (c: string, v: string) => Promise<{ error: { message: string } | null }>;
-        };
-      };
     };
     rpc: (
       fn: string,
@@ -60,6 +55,20 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       fn: string,
       args: Record<string, unknown>
     ) => Promise<{ data: unknown; error: { message: string } | null }>;
+    from: (t: string) => {
+      update: (v: unknown) => {
+        eq: (c: string, v: string) => {
+          eq: (c: string, v: string) => {
+            select: (cols: string) => {
+              maybeSingle: () => Promise<{
+                data: { id: string } | null;
+                error: { message: string } | null;
+              }>;
+            };
+          };
+        };
+      };
+    };
   };
 
   const { data: pair } = await service
@@ -184,8 +193,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     });
   }
 
-  // decline
-  const { error: declineError } = await svc
+  // decline — guard against race: require status='proposed' at update time.
+  // Supabase returns zero rows (not an error) if another transaction already
+  // transitioned the pair (e.g. accept landed first). We treat that as 409.
+  const { data: declinedRow, error: declineError } = await userScopedSupabase
     .from("mentorship_pairs")
     .update({
       status: "declined",
@@ -193,11 +204,20 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       declined_reason: body.reason ?? null,
     })
     .eq("id", pairId)
-    .eq("status", "proposed");
+    .eq("status", "proposed")
+    .select("id")
+    .maybeSingle();
 
   if (declineError) {
     console.error("[mentorship pair PATCH] decline failed", declineError);
     return NextResponse.json({ error: declineError.message }, { status: 500 });
+  }
+
+  if (!declinedRow) {
+    return NextResponse.json(
+      { error: "cannot decline pair in current status" },
+      { status: 409 }
+    );
   }
 
   await svc.from("mentorship_audit_log").insert({
