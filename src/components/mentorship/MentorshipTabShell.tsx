@@ -1,35 +1,36 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { MentorshipTab } from "@/lib/mentorship/view-state";
 
 interface MentorshipTabShellProps {
-  initialTab: MentorshipTab;
+  activeTab: MentorshipTab;
   orgSlug: string;
-  activity: React.ReactNode;
-  directory: React.ReactNode;
-  proposals?: React.ReactNode;
+  content: React.ReactNode;
+  showProposalsTab: boolean;
   proposalCount?: number;
 }
 
 export function MentorshipTabShell({
-  initialTab,
+  activeTab,
   orgSlug,
-  activity,
-  directory,
-  proposals,
+  content,
+  showProposalsTab,
   proposalCount,
 }: MentorshipTabShellProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tMentorship = useTranslations("mentorship");
-  const tabs: MentorshipTab[] = proposals
+  const tabs: MentorshipTab[] = showProposalsTab
     ? ["activity", "directory", "proposals"]
     : ["activity", "directory"];
-  const resolvedInitialTab =
-    initialTab === "proposals" && !proposals ? "activity" : initialTab;
-  const [activeTab, setActiveTab] = useState<MentorshipTab>(resolvedInitialTab);
+  const [selectedTab, setSelectedTab] = useState<MentorshipTab>(activeTab);
+
+  useEffect(() => {
+    setSelectedTab(activeTab);
+  }, [activeTab]);
 
   const labelFor = (tab: MentorshipTab): string => {
     try {
@@ -44,13 +45,13 @@ export function MentorshipTabShell({
   };
 
   const buildTabUrl = (tab: MentorshipTab) => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(searchParams.toString());
     params.set("tab", tab);
     return `/${orgSlug}/mentorship?${params.toString()}`;
   };
 
   const handleTabClick = (tab: MentorshipTab) => {
-    setActiveTab(tab);
+    setSelectedTab(tab);
     router.replace(buildTabUrl(tab), { scroll: false });
   };
 
@@ -72,22 +73,16 @@ export function MentorshipTabShell({
     }
 
     const nextTab = tabs[nextIndex];
-    setActiveTab(nextTab);
+    setSelectedTab(nextTab);
     router.replace(buildTabUrl(nextTab), { scroll: false });
   };
 
   const tabButtonClass = (tab: MentorshipTab) =>
     `px-3 py-2 text-[13px] font-medium transition-all duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-      activeTab === tab
+      selectedTab === tab
         ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-foreground"
         : "text-muted-foreground/70 hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-px hover:after:bg-muted-foreground/20 transition-colors"
     }`;
-
-  const contentMap: Record<MentorshipTab, React.ReactNode> = {
-    activity,
-    directory,
-    proposals: proposals ?? null,
-  };
 
   return (
     <div className="space-y-0 animate-fade-in">
@@ -98,7 +93,7 @@ export function MentorshipTabShell({
               <button
                 onClick={() => handleTabClick(tab)}
                 aria-label={labelFor(tab)}
-                aria-selected={activeTab === tab}
+                aria-selected={selectedTab === tab}
                 role="tab"
                 className={tabButtonClass(tab)}
               >
@@ -114,7 +109,7 @@ export function MentorshipTabShell({
         </div>
       </div>
 
-      <div className="animate-fade-in">{contentMap[activeTab]}</div>
+      <div className="animate-fade-in">{content}</div>
     </div>
   );
 }
