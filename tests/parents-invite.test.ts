@@ -7,7 +7,7 @@
  * 3. Invite acceptance lifecycle (email in body, user creation, parent row creation)
  * 4. Known gap documentation (no user_organization_roles row created on accept)
  *
- * Run: node --test --loader ./tests/ts-loader.js tests/parents-invite.test.ts
+ * Run: node --import ./tests/register-ts-loader.mjs --test tests/parents-invite.test.ts
  */
 
 import { describe, it } from "node:test";

@@ -23,6 +23,6 @@ console.log(`Running ${testFiles.length} test files...`);
 
 execFileSync(
   process.execPath,
-  ["--test", "--loader", "./tests/ts-loader.js", ...testFiles],
+  ["--import", "./tests/register-ts-loader.mjs", "--test", ...testFiles],
   { stdio: "inherit", cwd: root }
 );
