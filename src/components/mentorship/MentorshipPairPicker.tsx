@@ -21,6 +21,7 @@ export function MentorshipPairPicker({
       {pairs.map((pair) => (
         <button
           key={pair.id}
+          data-testid={`mentorship-pair-chip-${pair.id}`}
           onClick={() => onPairChange(pair.id)}
           className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             selectedPairId === pair.id
