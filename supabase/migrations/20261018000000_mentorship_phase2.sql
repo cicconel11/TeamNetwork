@@ -162,7 +162,7 @@ create or replace function public.accept_mentorship_proposal(
   pair_id uuid,
   admin_override boolean default false
 )
-returns table(pair_id uuid, mentor_user_id uuid, mentee_user_id uuid, organization_id uuid, status text, accepted_at timestamptz)
+returns table(result_pair_id uuid, mentor_user_id uuid, mentee_user_id uuid, organization_id uuid, status text, accepted_at timestamptz)
 language plpgsql
 security definer
 set search_path = public
@@ -179,9 +179,9 @@ begin
 
   -- Serialize concurrent accepts
   select * into v_pair
-    from public.mentorship_pairs
-   where id = accept_mentorship_proposal.pair_id
-     and deleted_at is null
+    from public.mentorship_pairs mp
+   where mp.id = accept_mentorship_proposal.pair_id
+     and mp.deleted_at is null
    for update;
 
   if not found then
