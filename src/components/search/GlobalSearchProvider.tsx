@@ -16,6 +16,7 @@ export type GlobalSearchMode = "fast" | "ai";
 type GlobalSearchContextValue = {
   orgSlug: string;
   orgId: string;
+  currentProfileHref?: string;
   open: boolean;
   setOpen: (open: boolean) => void;
   openSearch: () => void;
@@ -34,10 +35,12 @@ export function useGlobalSearch() {
 export function GlobalSearchProvider({
   orgSlug,
   orgId,
+  currentProfileHref,
   children,
 }: {
   orgSlug: string;
   orgId: string;
+  currentProfileHref?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -80,8 +83,8 @@ export function GlobalSearchProvider({
   const openSearch = useCallback(() => setOpen(true), []);
 
   const value = useMemo(
-    () => ({ orgSlug, orgId, open, setOpen, openSearch }),
-    [orgSlug, orgId, open, openSearch],
+    () => ({ orgSlug, orgId, currentProfileHref, open, setOpen, openSearch }),
+    [orgSlug, orgId, currentProfileHref, open, openSearch],
   );
 
   return <GlobalSearchContext.Provider value={value}>{children}</GlobalSearchContext.Provider>;

@@ -11,9 +11,12 @@ import {
   Megaphone,
   MessageSquare,
   Search,
+  Settings,
+  User,
   Users,
   X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useGlobalSearch, type GlobalSearchMode } from "./GlobalSearchProvider";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
 import { detectIntent } from "@/lib/search/intent-fallback";
@@ -104,7 +107,7 @@ function entityLabel(entityType: string) {
 }
 
 export function GlobalSearchPalette() {
-  const { orgSlug, orgId, open, setOpen } = useGlobalSearch();
+  const { orgSlug, orgId, currentProfileHref, open, setOpen } = useGlobalSearch();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<GlobalSearchMode>("fast");
@@ -242,6 +245,25 @@ export function GlobalSearchPalette() {
     [orgId, mode, orgSlug, query, router, setOpen],
   );
 
+  const runAction = useCallback(
+    (id: string, href: string) => {
+      trackBehavioralEvent("search_action_click", { action: id }, orgId);
+      setOpen(false);
+      router.push(href);
+    },
+    [orgId, router, setOpen],
+  );
+
+  const actions = useMemo(() => {
+    const items: { id: string; label: string; href: string; icon: LucideIcon }[] = [];
+    if (currentProfileHref) {
+      items.push({ id: "profile", label: "Profile", href: currentProfileHref, icon: User });
+    }
+    items.push({ id: "calendar", label: "Calendar", href: `/${orgSlug}/calendar`, icon: CalendarDays });
+    items.push({ id: "settings", label: "Settings", href: `/${orgSlug}/settings/invites`, icon: Settings });
+    return items;
+  }, [currentProfileHref, orgSlug]);
+
   const announcementHint = mode === "ai" && /\bannouncement\b/i.test(query.trim());
 
   const dialogOverlay = isMobile
@@ -300,6 +322,27 @@ export function GlobalSearchPalette() {
       </div>
 
       <Command.List className="flex-1 min-h-0 overflow-y-auto p-2">
+        {actions.length > 0 && (
+          <Command.Group heading="Actions">
+            {actions.map((a) => {
+              const Icon = a.icon;
+              return (
+                <Command.Item
+                  key={a.id}
+                  value={`action:${a.id}`}
+                  onSelect={() => runAction(a.id, a.href)}
+                  className="flex cursor-pointer gap-3 rounded-lg px-2 py-2 text-left aria-selected:bg-muted aria-selected:text-org-secondary"
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <div className="line-clamp-1 text-sm font-medium text-foreground">{a.label}</div>
+                  </div>
+                </Command.Item>
+              );
+            })}
+          </Command.Group>
+        )}
+
         {query.trim().length === 0 && (
           <Command.Group heading="Recent">
             {recents.length === 0 ? (
