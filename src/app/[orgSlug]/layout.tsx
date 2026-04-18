@@ -283,7 +283,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
     <AnalyticsProvider>
     <AIPanelProvider autoOpen={isAdmin}>
-    <OrgGlobalSearch orgSlug={orgSlug} orgId={organization.id}>
+    <OrgGlobalSearch orgSlug={orgSlug} orgId={organization.id} currentProfileHref={currentProfileHref}>
     <div data-org-shell className="min-h-screen">
       <style
         dangerouslySetInnerHTML={{
