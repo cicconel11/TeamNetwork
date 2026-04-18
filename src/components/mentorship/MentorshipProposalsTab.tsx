@@ -101,7 +101,12 @@ export function MentorshipProposalsTab({
           </h3>
           <ul className="space-y-3">
             {incoming.map((p) => (
-              <li key={p.id} className="border border-[var(--border)] rounded-md p-3">
+              <li
+                key={p.id}
+                data-testid={`incoming-proposal-${p.id}`}
+                data-pair-status={p.status}
+                className="border border-[var(--border)] rounded-md p-3"
+              >
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-medium">
@@ -124,6 +129,7 @@ export function MentorshipProposalsTab({
                           onChange={(e) => setReasonText(e.target.value)}
                           placeholder={t("declineReasonPlaceholder")}
                           rows={2}
+                          data-testid={`proposal-decline-reason-${p.id}`}
                         />
                         <div className="flex gap-2 justify-end">
                           <Button
@@ -138,6 +144,7 @@ export function MentorshipProposalsTab({
                           </Button>
                           <Button
                             size="sm"
+                            data-testid={`proposal-confirm-decline-${p.id}`}
                             onClick={() => act(p.id, "decline", reasonText.trim() || undefined)}
                             isLoading={busyId === p.id}
                           >
@@ -150,6 +157,7 @@ export function MentorshipProposalsTab({
                         <Button
                           variant="ghost"
                           size="sm"
+                          data-testid={`proposal-decline-${p.id}`}
                           onClick={() => setReasonFor(p.id)}
                           disabled={busyId === p.id}
                         >
@@ -157,6 +165,7 @@ export function MentorshipProposalsTab({
                         </Button>
                         <Button
                           size="sm"
+                          data-testid={`proposal-accept-${p.id}`}
                           onClick={() => act(p.id, "accept")}
                           isLoading={busyId === p.id}
                         >
@@ -179,7 +188,12 @@ export function MentorshipProposalsTab({
           </h3>
           <ul className="space-y-3">
             {outgoing.map((p) => (
-              <li key={p.id} className="border border-[var(--border)] rounded-md p-3 flex items-center justify-between gap-2">
+              <li
+                key={p.id}
+                data-testid={`outgoing-proposal-${p.id}`}
+                data-pair-status={p.status}
+                className="border border-[var(--border)] rounded-md p-3 flex items-center justify-between gap-2"
+              >
                 <div>
                   <p className="text-sm font-medium">
                     {userMap[p.mentor_user_id] ?? t("unknownUser")}

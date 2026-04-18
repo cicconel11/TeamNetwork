@@ -100,6 +100,7 @@ export function MentorRequestDialog({
     <div
       role="dialog"
       aria-modal="true"
+      data-testid="mentor-request-dialog"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
@@ -152,11 +153,18 @@ export function MentorRequestDialog({
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitting}>
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="mentor-request-dialog-cancel"
+            onClick={onClose}
+            disabled={submitting}
+          >
             {t("cancel")}
           </Button>
           <Button
             size="sm"
+            data-testid="mentor-request-dialog-send"
             onClick={submit}
             isLoading={submitting}
             disabled={submitting || (!loading && score === null)}

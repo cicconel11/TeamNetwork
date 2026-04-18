@@ -393,6 +393,7 @@ export function MentorDirectory({
               return (
                 <div
                   key={mentor.id}
+                  data-testid={`mentor-card-${mentor.user_id}`}
                   className="group flex items-start gap-4 py-4 px-2 rounded-md hover:bg-[var(--muted)]/30 transition-colors duration-150"
                 >
                   <button
@@ -450,6 +451,7 @@ export function MentorDirectory({
                       {canRequestIntro && (
                         <Button
                           size="sm"
+                          data-testid={`mentor-card-${mentor.user_id}-request`}
                           onClick={() => setRequestMentor(toDetailData(mentor))}
                           disabled={atCapacity}
                         >
