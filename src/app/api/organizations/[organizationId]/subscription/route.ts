@@ -45,7 +45,6 @@ async function clearInvalidSubscription(
   organizationId: string,
   serviceSupabase: ReturnType<typeof createServiceClient>
 ) {
-  console.log("[subscription] Clearing invalid subscription ID for org:", organizationId);
   await serviceSupabase
     .from("organization_subscriptions")
     .update({

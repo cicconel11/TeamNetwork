@@ -252,13 +252,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("[media/upload-intent] Created", {
-      orgId: body.orgId,
-      mediaId: mediaRecord.id,
-      feature: body.feature,
-      hasPreviewUpload: Boolean(previewStoragePath),
-    });
-
     return NextResponse.json(
       {
         mediaId: mediaRecord.id,
