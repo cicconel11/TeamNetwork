@@ -24,23 +24,20 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
 
   const checkAuth = useCallback(async () => {
     const supabase = createClient();
-    
+
     try {
       // Use getSession() for reliability - middleware already handles route protection
       // getSession() reads from local cookies without server validation
       const { data: { session } } = await supabase.auth.getSession();
-      
-      console.log("[AdminGuard] Session check:", session?.user ? `user:${session.user.id.slice(0, 8)}` : "no-session");
-      
+
       if (!session?.user) {
-        console.log("[AdminGuard] No session found, redirecting to login");
         setAuthState("unauthenticated");
         router.replace(`/auth/login?redirect=/${orgSlug}`);
         return;
       }
-      
+
       setAuthState("authenticated");
-      
+
       // Check admin role for the user
       const { data: orgs, error: orgError } = await supabase
         .from("organizations")
@@ -50,7 +47,6 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
 
       const org = orgs?.[0];
       if (!org || orgError) {
-        console.log("[AdminGuard] Org not found:", orgSlug, orgError?.message);
         setIsAdmin(false);
         return;
       }
@@ -63,7 +59,6 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
         .maybeSingle();
 
       const normalized = normalizeRole((role?.role as UserRole | null) ?? null);
-      console.log("[AdminGuard] User role for org:", normalized || "none");
       setIsAdmin(normalized === "admin" && role?.status !== "revoked");
     } catch (err) {
       console.error("[AdminGuard] Error checking auth:", err);
@@ -74,11 +69,10 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
 
   useEffect(() => {
     checkAuth();
-    
+
     // Also listen for auth state changes
     const supabase = createClient();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      console.log("[AdminGuard] Auth state changed:", event, session?.user?.id?.slice(0, 8) || "no-user");
       if (event === "SIGNED_OUT") {
         setAuthState("unauthenticated");
         router.replace(`/auth/login?redirect=/${orgSlug}`);
@@ -88,7 +82,7 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
         checkAuth();
       }
     });
-    
+
     return () => {
       subscription.unsubscribe();
     };
@@ -136,4 +130,3 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
 
   return <>{children}</>;
 }
-

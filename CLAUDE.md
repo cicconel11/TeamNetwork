@@ -24,7 +24,7 @@ npm run test:schedules  # Test schedule domain verification and enrollment
 npm run test:e2e        # Run Playwright end-to-end tests
 ```
 
-Single test file: `node --test tests/your-test.test.ts` (uses `tests/ts-loader.js` for TypeScript).
+Single test file: `node --import ./tests/register-ts-loader.mjs --test tests/your-test.test.ts`.
 
 ### Stripe Webhook Testing (Local)
 ```bash

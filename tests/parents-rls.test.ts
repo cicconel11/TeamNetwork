@@ -9,7 +9,7 @@
  * (service client bypasses RLS for internal operations, auth client uses it).
  * These tests focus on the application-layer scoping.
  *
- * Run: node --test --loader ./tests/ts-loader.js tests/parents-rls.test.ts
+ * Run: node --import ./tests/register-ts-loader.mjs --test tests/parents-rls.test.ts
  */
 
 import { describe, it } from "node:test";

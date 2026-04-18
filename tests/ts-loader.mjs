@@ -1,7 +1,7 @@
-import ts from "typescript";
-import { readFile } from "fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import ts from "typescript";
 
 export async function resolve(specifier, context, defaultResolve) {
   if (specifier === "next/server") {
