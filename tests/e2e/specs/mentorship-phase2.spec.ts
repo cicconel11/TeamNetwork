@@ -152,7 +152,43 @@ test.describe("Mentorship Phase 2", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 2. Concurrent proposals are idempotent
+  // 2. Mentor declines proposal through authenticated route
+  // ---------------------------------------------------------------------------
+  test("mentor declines proposal, pair is updated, audit row is recorded", async () => {
+    const pair = await seedProposedPair(supabase, {
+      organizationId: orgId,
+      mentorUserId: mentor.userId,
+      menteeUserId: mentee.userId,
+    });
+
+    const result = await patchPair(mentorRequest, {
+      organizationId: orgId,
+      pairId: pair.id,
+      action: "decline",
+      reason: "No capacity right now",
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({
+      pair_id: pair.id,
+      status: "declined",
+    });
+
+    const persisted = await getPair(supabase, pair.id) as {
+      status?: string;
+      declined_at?: string | null;
+      declined_reason?: string | null;
+    };
+    expect(persisted?.status).toBe("declined");
+    expect(persisted?.declined_at).toBeTruthy();
+    expect(persisted?.declined_reason).toBe("No capacity right now");
+
+    const audit = await getAuditLogForPair(supabase, pair.id);
+    expect(audit.some((row) => row.kind === "proposal_declined")).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 3. Concurrent proposals are idempotent
   // ---------------------------------------------------------------------------
   test("5 parallel requests create exactly 1 mentorship_pair row", async () => {
     const fires = Array.from({ length: 5 }, () =>
@@ -186,7 +222,7 @@ test.describe("Mentorship Phase 2", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 3. Concurrent accepts — first wins (200), second conflicts (409)
+  // 4. Concurrent accepts — first wins (200), second conflicts (409)
   // ---------------------------------------------------------------------------
   test("2 concurrent accepts: one 200, one 409", async () => {
     const pair = await seedProposedPair(supabase, {
@@ -214,7 +250,7 @@ test.describe("Mentorship Phase 2", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 4. Cron expire — idempotent, audit-logged
+  // 5. Cron expire — idempotent, audit-logged
   // ---------------------------------------------------------------------------
   test("cron expires stale proposed pairs and is idempotent", async () => {
     const proposedAt = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
@@ -254,7 +290,7 @@ test.describe("Mentorship Phase 2", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 5. Cron auth
+  // 6. Cron auth
   // ---------------------------------------------------------------------------
   test("cron expire rejects missing or wrong bearer", async () => {
     const noHeader = await triggerCronExpire(anonRequest);
@@ -267,7 +303,7 @@ test.describe("Mentorship Phase 2", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 6. Admin run match round — idempotent
+  // 7. Admin run match round — idempotent
   // ---------------------------------------------------------------------------
   test("admin run_round proposes pairs and is idempotent", async ({ request: adminRequest }) => {
     // adminRequest comes from the default storageState (E2E admin).
