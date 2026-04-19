@@ -45,6 +45,7 @@ type AlumniRow = {
   user_id: string;
   industry: string | null;
   job_title: string | null;
+  position_title: string | null;
   current_company: string | null;
   current_city: string | null;
   graduation_year: number | null;
@@ -284,7 +285,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     peopleUserIds.length > 0
       ? service
           .from("alumni")
-          .select("user_id, industry, job_title, current_company, current_city, graduation_year")
+          .select("user_id, industry, job_title, position_title, current_company, current_city, graduation_year")
           .eq("organization_id", organizationId)
           .in("user_id", peopleUserIds)
       : Promise.resolve({ data: [] as AlumniRow[] }),
@@ -313,6 +314,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       expertiseAreas: profile.expertise_areas ?? [],
       industry: alumni?.industry ?? null,
       jobTitle: alumni?.job_title ?? null,
+      positionTitle: alumni?.position_title ?? null,
       currentCompany: alumni?.current_company ?? null,
       currentCity: alumni?.current_city ?? null,
       graduationYear: alumni?.graduation_year ?? null,
@@ -343,6 +345,17 @@ export async function POST(req: Request, { params }: RouteParams) {
           : [],
         preferredRoleFamilies: Array.isArray(intake.preferred_role_families)
           ? intake.preferred_role_families.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : [],
+        preferredSports: Array.isArray(intake.preferred_sports)
+          ? intake.preferred_sports.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : [],
+        preferredPositions: Array.isArray(intake.preferred_positions)
+          ? intake.preferred_positions.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : alumni?.position_title
+              ? [alumni.position_title]
+              : [],
+        requiredMentorAttributes: Array.isArray(intake.mentor_attributes_required)
+          ? intake.mentor_attributes_required.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
           : [],
         currentCity: alumni?.current_city ?? null,
         graduationYear: alumni?.graduation_year ?? null,

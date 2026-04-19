@@ -124,7 +124,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const { data: alumni } = await service
     .from("alumni")
-    .select("industry, job_title, current_company, current_city, graduation_year")
+    .select("industry, job_title, position_title, current_company, current_city, graduation_year")
     .eq("organization_id", organizationId)
     .eq("user_id", body.mentor_user_id)
     .maybeSingle();
@@ -136,6 +136,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     expertiseAreas: mentorProfile.expertise_areas ?? [],
     industry: (alumni?.industry as string | null) ?? null,
     jobTitle: (alumni as { job_title?: string | null } | null)?.job_title ?? null,
+    positionTitle: (alumni as { position_title?: string | null } | null)?.position_title ?? null,
     currentCompany: (alumni?.current_company as string | null) ?? null,
     currentCity: (alumni?.current_city as string | null) ?? null,
     graduationYear: (alumni?.graduation_year as number | null) ?? null,
@@ -161,7 +162,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json(
       {
         error:
-          "This mentor is not currently eligible for a structured mentorship request. Suggestions are based on shared location, industry, job field, and other meaningful similarities.",
+          "This mentor is not currently eligible for a structured mentorship request. Suggestions are based on shared sport, position, location, industry, job field, and other meaningful similarities.",
       },
       { status: 409 }
     );

@@ -122,7 +122,7 @@ export async function loadMentorInputs(
 
   const alumniRes = await sb
     .from("alumni")
-    .select("user_id, industry, job_title, current_company, current_city, graduation_year")
+    .select("user_id, industry, job_title, position_title, current_company, current_city, graduation_year")
     .eq("organization_id", orgId)
     .in("user_id", mentorUserIds);
 
@@ -140,6 +140,7 @@ export async function loadMentorInputs(
       expertiseAreas: (p.expertise_areas as string[] | null) ?? [],
       industry: (alumni.industry as string | null) ?? null,
       jobTitle: (alumni.job_title as string | null) ?? null,
+      positionTitle: (alumni.position_title as string | null) ?? null,
       currentCompany: (alumni.current_company as string | null) ?? null,
       currentCity: (alumni.current_city as string | null) ?? null,
       graduationYear: (alumni.graduation_year as number | null) ?? null,

@@ -2,6 +2,8 @@ export type MentorshipReasonCode =
   | "shared_topics"
   | "shared_industry"
   | "shared_role_family"
+  | "shared_sport"
+  | "shared_position"
   | "graduation_gap_fit"
   | "shared_city"
   | "shared_company";
@@ -10,6 +12,8 @@ export interface MentorshipWeights {
   shared_topics: number;
   shared_industry: number;
   shared_role_family: number;
+  shared_sport: number;
+  shared_position: number;
   graduation_gap_fit: number;
   shared_city: number;
   shared_company: number;
@@ -19,12 +23,16 @@ export const DEFAULT_MENTORSHIP_WEIGHTS: MentorshipWeights = {
   shared_topics: 24,
   shared_industry: 22,
   shared_role_family: 16,
+  shared_sport: 28,
+  shared_position: 18,
   graduation_gap_fit: 12,
   shared_city: 4,
   shared_company: 6,
 };
 
 export const MENTORSHIP_REASON_ORDER: MentorshipReasonCode[] = [
+  "shared_sport",
+  "shared_position",
   "shared_topics",
   "shared_industry",
   "shared_role_family",

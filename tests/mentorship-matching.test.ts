@@ -13,6 +13,7 @@ function mentor(overrides: Partial<MentorInput> & { userId: string }): MentorInp
     topics: [],
     industry: null,
     jobTitle: null,
+    positionTitle: null,
     currentCompany: null,
     currentCity: null,
     graduationYear: null,
@@ -90,6 +91,69 @@ describe("rankMentorsForMentee", () => {
     const ranked = rankMentorsForMentee(menteeBase, [topicMentor, cityMentor]);
     assert.strictEqual(ranked[0].mentorUserId, "topic");
     assert.ok(ranked[0].score > ranked[1].score);
+  });
+
+  it("hard-filters by same_sport when mentee requires it", () => {
+    const mentee: MenteeInput = {
+      ...menteeBase,
+      preferredSports: ["Basketball"],
+      requiredMentorAttributes: ["same_sport"],
+    };
+    const ranked = rankMentorsForMentee(mentee, [
+      mentor({
+        userId: "basketball-mentor",
+        topics: ["basketball", "leadership"],
+      }),
+      mentor({
+        userId: "football-mentor",
+        topics: ["football", "leadership"],
+      }),
+    ]);
+    assert.deepStrictEqual(ranked.map((row) => row.mentorUserId), ["basketball-mentor"]);
+    assert.ok(ranked[0].signals.some((signal) => signal.code === "shared_sport"));
+  });
+
+  it("scores shared_position from mentor position titles", () => {
+    const mentee: MenteeInput = {
+      ...menteeBase,
+      preferredPositions: ["Quarterback"],
+    };
+    const ranked = rankMentorsForMentee(mentee, [
+      mentor({
+        userId: "qb-mentor",
+        positionTitle: "Quarterback Coach",
+        topics: ["finance"],
+      }),
+      mentor({
+        userId: "pitcher-mentor",
+        positionTitle: "Pitcher",
+        topics: ["finance"],
+      }),
+    ]);
+    assert.strictEqual(ranked[0].mentorUserId, "qb-mentor");
+    assert.ok(ranked[0].signals.some((signal) => signal.code === "shared_position"));
+    assert.ok(!ranked[1].signals.some((signal) => signal.code === "shared_position"));
+  });
+
+  it("hard-filters same_industry when mentee marks it required", () => {
+    const mentee: MenteeInput = {
+      ...menteeBase,
+      preferredIndustries: ["Finance"],
+      requiredMentorAttributes: ["same_industry"],
+    };
+    const ranked = rankMentorsForMentee(mentee, [
+      mentor({
+        userId: "finance-mentor",
+        industry: "Finance",
+        topics: ["finance"],
+      }),
+      mentor({
+        userId: "tech-mentor",
+        industry: "Technology",
+        topics: ["finance"],
+      }),
+    ]);
+    assert.deepStrictEqual(ranked.map((row) => row.mentorUserId), ["finance-mentor"]);
   });
 
   it("graduation_gap_fit penalizes gap<3 or >15, max at 5-10", () => {
