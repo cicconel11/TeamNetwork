@@ -128,14 +128,17 @@ const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
     "list_donations",
     "get_org_stats",
     "suggest_connections",
+    "suggest_mentors",
   ],
-  members: ["list_members", "list_alumni", "list_parents", "get_org_stats", "suggest_connections"],
+  members: ["list_members", "list_alumni", "list_parents", "get_org_stats", "suggest_connections", "suggest_mentors"],
   analytics: ["get_org_stats"],
   events: ["list_events"],
 };
 
 const CONNECTION_PROMPT_PATTERN =
   /(?<!\w)(?:connection|connections|connect|networking|introduc(?:e|tion))(?!\w)/i;
+const MENTOR_PROMPT_PATTERN =
+  /(?<!\w)(?:mentor|mentors|mentee|mentees|pair\s+with|match\s+(?:me|us|them)\s+with)(?!\w)/i;
 const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
 const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
@@ -261,6 +264,22 @@ const CONNECTION_PASS2_TEMPLATE = [
   "- If state=ambiguous, ask the user which returned option they mean.",
   "- If state=not_found, say you couldn't find that person in the organization's member or alumni data and ask for a narrower identifier.",
   "- If state=no_suggestions, say you found the person but there is not enough strong professional overlap yet to recommend a connection.",
+].join("\n");
+
+const MENTOR_PASS2_TEMPLATE = [
+  "MENTOR ANSWER CONTRACT:",
+  "- If suggest_mentors returned state=resolved, respond using this exact shape:",
+  "  Top mentors for [mentee name]",
+  "  1. [Mentor Name] — [subtitle if present]",
+  "     Why: [signal label]: [value], [signal label]: [value]",
+  "- Use at most 5 suggestions.",
+  "- Use only the returned mentee, suggestions, reasons, and labels.",
+  "- Do not mention scores, UUIDs, or internal tool details.",
+  "- Do not add a concluding summary sentence.",
+  "- If state=ambiguous, ask the user which returned option they mean.",
+  "- If state=not_found, say you couldn't find that person in the organization.",
+  "- If state=no_suggestions, say you found the person but there are no eligible mentors matching their preferences.",
+  "- If state=unauthorized, say mentor suggestions are currently available to admins only.",
 ].join("\n");
 
 const DEFAULT_AI_ORG_RATE_LIMIT = 60;
@@ -509,6 +528,99 @@ function formatSuggestConnectionsResponse(data: unknown): string | null {
   for (const [index, suggestion] of suggestions.entries()) {
     lines.push(`${index + 1}. ${suggestion.displayLine}`);
     lines.push(`Why: ${suggestion.reasons.join(", ")}`);
+  }
+
+  return lines.join("\n");
+}
+
+interface SuggestMentorsDisplayPayload {
+  state?: unknown;
+  mentee?: { name?: unknown } | null;
+  suggestions?: unknown;
+  disambiguation_options?: unknown;
+}
+
+interface SuggestMentorsDisplaySuggestion {
+  mentor?: { name?: unknown; subtitle?: unknown } | null;
+  reasons?: Array<{ label?: unknown; value?: unknown }>;
+}
+
+function formatSuggestMentorsResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+
+  const payload = data as SuggestMentorsDisplayPayload;
+  const state = getNonEmptyString(payload.state);
+  if (!state) return null;
+
+  if (state === "unauthorized") {
+    return "Mentor suggestions are currently available to admins only.";
+  }
+
+  if (state === "not_found") {
+    return "I couldn't find that person in the organization. Please share a full name or email.";
+  }
+
+  if (state === "ambiguous") {
+    const options = Array.isArray(payload.disambiguation_options)
+      ? payload.disambiguation_options
+          .map((option) =>
+            option && typeof option === "object"
+              ? formatDisplayRow(option as { name?: unknown; subtitle?: unknown })
+              : null
+          )
+          .filter((option): option is string => Boolean(option))
+      : [];
+
+    if (options.length === 0) return null;
+
+    return `I found multiple matches. Which one did you mean?\n${options
+      .map((option) => `- ${option}`)
+      .join("\n")}`;
+  }
+
+  const menteeName = getNonEmptyString(payload.mentee?.name);
+  if (!menteeName) return null;
+
+  if (state === "no_suggestions") {
+    return `I found ${menteeName}, but there are no eligible mentors matching their preferences right now.`;
+  }
+
+  if (state !== "resolved" || !Array.isArray(payload.suggestions)) return null;
+
+  const suggestions = (payload.suggestions as SuggestMentorsDisplaySuggestion[])
+    .map((s) => {
+      if (!s || typeof s !== "object") return null;
+      const name = getNonEmptyString(s.mentor?.name);
+      if (!name) return null;
+
+      const subtitle = getNonEmptyString(s.mentor?.subtitle);
+      const displayLine = subtitle ? `${name} — ${subtitle}` : name;
+
+      const reasons = Array.isArray(s.reasons)
+        ? s.reasons
+            .map((r) => {
+              const label = getNonEmptyString(r?.label);
+              if (!label) return null;
+              const value = r?.value;
+              return value != null && value !== "" ? `${label}: ${value}` : label;
+            })
+            .filter((r): r is string => Boolean(r))
+        : [];
+
+      if (reasons.length === 0) return null;
+      return { displayLine, reasons };
+    })
+    .filter(
+      (s): s is { displayLine: string; reasons: string[] } => Boolean(s)
+    )
+    .slice(0, 5);
+
+  if (suggestions.length === 0) return null;
+
+  const lines = [`Top mentors for ${menteeName}`];
+  for (const [index, suggestion] of suggestions.entries()) {
+    lines.push(`${index + 1}. ${suggestion.displayLine}`);
+    lines.push(`   Why: ${suggestion.reasons.join(", ")}`);
   }
 
   return lines.join("\n");
@@ -1608,6 +1720,10 @@ function getPass1Tools(
     }
   }
 
+  if (effectiveSurface === "members" && MENTOR_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.suggest_mentors];
+  }
+
   if (effectiveSurface === "members" && CONNECTION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.suggest_connections];
   }
@@ -2385,6 +2501,8 @@ function formatDeterministicToolResponse(
   switch (name) {
     case "suggest_connections":
       return formatSuggestConnectionsResponse(data);
+    case "suggest_mentors":
+      return formatSuggestMentorsResponse(data);
     case "list_events":
       return formatEventsResponse(data);
     case "list_announcements":
@@ -5432,6 +5550,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             const connectionPass2 = successfulToolResults.some(
               (result) => result.name === "suggest_connections"
             );
+            const mentorPass2 = successfulToolResults.some(
+              (result) => result.name === "suggest_mentors"
+            );
             const memberRosterPass2 = successfulToolResults.some(
               (result) => result.name === "list_members"
             );
@@ -5440,6 +5561,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               : "";
             const pass2Instructions = [
               connectionPass2 ? CONNECTION_PASS2_TEMPLATE : null,
+              mentorPass2 ? MENTOR_PASS2_TEMPLATE : null,
               memberRosterPass2 ? MEMBER_LIST_PASS2_INSTRUCTION : null,
             ]
               .filter((value): value is string => Boolean(value))

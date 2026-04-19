@@ -42,6 +42,10 @@ const SOURCE_SELECTS: Record<SourceTable, string> = {
   discussion_replies: "id, thread_id, body, organization_id, deleted_at",
   job_postings:
     "id, title, company, description, location, location_type, organization_id, deleted_at",
+  mentor_profiles:
+    "id, user_id, bio, topics, organization_id",
+  form_submissions:
+    "id, form_id, user_id, responses, organization_id, deleted_at",
 };
 
 // ---------------------------------------------------------------------------
