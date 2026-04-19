@@ -36,6 +36,8 @@ export interface RarityStats {
   roleFamilyCounts: ReadonlyMap<string, number>;
   companyCounts: ReadonlyMap<string, number>;
   topicCounts: ReadonlyMap<string, number>;
+  sportCounts: ReadonlyMap<string, number>;
+  positionCounts: ReadonlyMap<string, number>;
 }
 
 export interface ScoreOptions {
@@ -51,6 +53,8 @@ export function buildRarityStats(mentors: readonly MentorSignals[]): RarityStats
   const roleFamily = new Map<string, number>();
   const company = new Map<string, number>();
   const topic = new Map<string, number>();
+  const sport = new Map<string, number>();
+  const position = new Map<string, number>();
 
   for (const m of mentors) {
     if (m.industry) industry.set(m.industry, (industry.get(m.industry) ?? 0) + 1);
@@ -59,6 +63,8 @@ export function buildRarityStats(mentors: readonly MentorSignals[]): RarityStats
       company.set(m.currentCompanyNorm, (company.get(m.currentCompanyNorm) ?? 0) + 1);
     }
     for (const t of m.topics) topic.set(t, (topic.get(t) ?? 0) + 1);
+    for (const s of m.sports) sport.set(s, (sport.get(s) ?? 0) + 1);
+    for (const p of m.positions) position.set(p, (position.get(p) ?? 0) + 1);
   }
 
   return {
@@ -67,6 +73,8 @@ export function buildRarityStats(mentors: readonly MentorSignals[]): RarityStats
     roleFamilyCounts: roleFamily,
     companyCounts: company,
     topicCounts: topic,
+    sportCounts: sport,
+    positionCounts: position,
   };
 }
 
@@ -94,8 +102,79 @@ export function scoreMentorForMentee(
   if (!mentor.acceptingNew) return null;
   if (mentor.currentMenteeCount >= mentor.maxMentees) return null;
 
+  const requiredAttributes = new Set(mentee.requiredMentorAttributes);
+  const sportOverlap = intersectNormalized(mentor.sports, mentee.preferredSports);
+  const positionOverlap = intersectNormalized(mentor.positions, mentee.preferredPositions);
+  const industryMatch = mentor.industry
+    ? mentee.preferredIndustries.includes(mentor.industry)
+    : false;
+  const roleFamilyMatch = mentor.roleFamily
+    ? mentee.preferredRoleFamilies.includes(mentor.roleFamily)
+    : false;
+  const cityMatch = Boolean(
+    mentor.currentCityNorm &&
+    mentee.currentCityNorm &&
+    mentor.currentCityNorm === mentee.currentCityNorm
+  );
+
+  if (requiredAttributes.has("same_sport") && mentee.preferredSports.length > 0 && sportOverlap.length === 0) {
+    return null;
+  }
+  if (
+    requiredAttributes.has("same_position") &&
+    mentee.preferredPositions.length > 0 &&
+    positionOverlap.length === 0
+  ) {
+    return null;
+  }
+  if (
+    requiredAttributes.has("same_industry") &&
+    mentee.preferredIndustries.length > 0 &&
+    !industryMatch
+  ) {
+    return null;
+  }
+  if (
+    requiredAttributes.has("same_role_family") &&
+    mentee.preferredRoleFamilies.length > 0 &&
+    !roleFamilyMatch
+  ) {
+    return null;
+  }
+  if (requiredAttributes.has("local") && mentee.currentCityNorm && !cityMatch) {
+    return null;
+  }
+
   const signals: MentorshipSignal[] = [];
   const total = rarity?.totalMentors ?? 0;
+
+  // shared_sport
+  if (sportOverlap.length > 0) {
+    let bestMultiplier = 1;
+    for (const sport of sportOverlap) {
+      const mult = rarityMultiplier(rarity?.sportCounts.get(sport), total);
+      if (mult > bestMultiplier) bestMultiplier = mult;
+    }
+    signals.push({
+      code: "shared_sport",
+      weight: Math.round(weights.shared_sport * bestMultiplier),
+      value: sportOverlap.join(","),
+    });
+  }
+
+  // shared_position
+  if (positionOverlap.length > 0) {
+    let bestMultiplier = 1;
+    for (const position of positionOverlap) {
+      const mult = rarityMultiplier(rarity?.positionCounts.get(position), total);
+      if (mult > bestMultiplier) bestMultiplier = mult;
+    }
+    signals.push({
+      code: "shared_position",
+      weight: Math.round(weights.shared_position * bestMultiplier),
+      value: positionOverlap.join(","),
+    });
+  }
 
   // shared_topics — mentor topics ∩ mentee focusAreas
   const topicOverlap = intersectNormalized(mentor.topics, mentee.focusAreas);
@@ -119,10 +198,7 @@ export function scoreMentorForMentee(
   }
 
   // shared_industry
-  if (
-    mentor.industry &&
-    mentee.preferredIndustries.includes(mentor.industry)
-  ) {
+  if (mentor.industry && industryMatch) {
     const mult = rarityMultiplier(rarity?.industryCounts.get(mentor.industry), total);
     signals.push({
       code: "shared_industry",
@@ -132,10 +208,7 @@ export function scoreMentorForMentee(
   }
 
   // shared_role_family
-  if (
-    mentor.roleFamily &&
-    mentee.preferredRoleFamilies.includes(mentor.roleFamily)
-  ) {
+  if (mentor.roleFamily && roleFamilyMatch) {
     const mult = rarityMultiplier(rarity?.roleFamilyCounts.get(mentor.roleFamily), total);
     signals.push({
       code: "shared_role_family",
@@ -158,11 +231,7 @@ export function scoreMentorForMentee(
   }
 
   // shared_city
-  if (
-    mentor.currentCityNorm &&
-    mentee.currentCityNorm &&
-    mentor.currentCityNorm === mentee.currentCityNorm
-  ) {
+  if (cityMatch) {
     signals.push({
       code: "shared_city",
       weight: weights.shared_city,

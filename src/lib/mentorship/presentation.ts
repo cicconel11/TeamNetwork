@@ -53,6 +53,8 @@ export function getMentorshipStatusTranslationKey(status: string): string {
 }
 
 const REASON_LABELS: Record<string, string> = {
+  shared_sport: "Shared sport",
+  shared_position: "Shared position",
   shared_topics: "Shared topics",
   shared_industry: "Shared industry",
   shared_role_family: "Shared role family",
