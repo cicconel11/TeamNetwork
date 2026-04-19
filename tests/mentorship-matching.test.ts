@@ -102,10 +102,12 @@ describe("rankMentorsForMentee", () => {
     const ranked = rankMentorsForMentee(mentee, [
       mentor({
         userId: "basketball-mentor",
+        nativeSports: ["Basketball"],
         topics: ["basketball", "leadership"],
       }),
       mentor({
         userId: "football-mentor",
+        nativeSports: ["Football"],
         topics: ["football", "leadership"],
       }),
     ]);
@@ -121,11 +123,13 @@ describe("rankMentorsForMentee", () => {
     const ranked = rankMentorsForMentee(mentee, [
       mentor({
         userId: "qb-mentor",
+        nativePositions: ["Quarterback"],
         positionTitle: "Quarterback Coach",
         topics: ["finance"],
       }),
       mentor({
         userId: "pitcher-mentor",
+        nativePositions: ["Pitcher"],
         positionTitle: "Pitcher",
         topics: ["finance"],
       }),
@@ -145,11 +149,13 @@ describe("rankMentorsForMentee", () => {
       mentor({
         userId: "finance-mentor",
         industry: "Finance",
+        nativeIndustries: ["Finance"],
         topics: ["finance"],
       }),
       mentor({
         userId: "tech-mentor",
         industry: "Technology",
+        nativeIndustries: ["Technology"],
         topics: ["finance"],
       }),
     ]);
@@ -225,9 +231,9 @@ describe("rankMentorsForMentee", () => {
     };
     const pool: MentorInput[] = [];
     for (let i = 0; i < 8; i++) {
-      pool.push(mentor({ userId: `fin-${i}`, industry: "Finance" }));
+      pool.push(mentor({ userId: `fin-${i}`, industry: "Finance", nativeIndustries: ["Finance"] }));
     }
-    pool.push(mentor({ userId: "aero-1", industry: "Aerospace" }));
+    pool.push(mentor({ userId: "aero-1", industry: "Aerospace", nativeIndustries: ["Aerospace"] }));
 
     const ranked = rankMentorsForMentee(mentee, pool);
     const aero = ranked.find((r) => r.mentorUserId === "aero-1");
@@ -333,6 +339,8 @@ describe("rankMentorsForMentee", () => {
         mentor({
           userId: "athletic-match",
           topics: ["basketball", "leadership"],
+          nativeSports: ["Basketball"],
+          nativePositions: ["Point Guard"],
           positionTitle: "Point Guard Coach",
         }),
         mentor({
@@ -356,6 +364,7 @@ describe("rankMentorsForMentee", () => {
         mentor({
           userId: "football-mentor",
           topics: ["football"],
+          nativeSports: ["Football"],
           positionTitle: "Quarterback",
         }),
       ]);
@@ -438,6 +447,8 @@ describe("rankMentorsForMentee", () => {
         mentor({
           userId: "full-athletic",
           topics: ["basketball"],
+          nativeSports: ["Basketball"],
+          nativePositions: ["Point Guard"],
           positionTitle: "Point Guard",
         }),
       ]);

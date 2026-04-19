@@ -29,7 +29,7 @@ interface MentorshipMeeting {
 interface MentorshipMeetingsTabProps {
   initialUpcoming: MentorshipMeeting[];
   initialPast: MentorshipMeeting[];
-  pairs: Array<{ id: string; mentorName: string; menteeName: string }>;
+  pairs: Array<{ id: string; mentorName: string; menteeName: string; mentorUserId?: string; menteeUserId?: string }>;
   initialPairId: string;
   isMentor: boolean;
   isAdmin: boolean;
@@ -62,6 +62,7 @@ export function MentorshipMeetingsTab({
   orgId,
   orgSlug,
   orgTimezone,
+  currentUserId,
 }: MentorshipMeetingsTabProps) {
   const [upcoming, setUpcoming] = useState<MentorshipMeeting[]>(initialUpcoming);
   const [past, setPast] = useState<MentorshipMeeting[]>(initialPast);
@@ -175,6 +176,7 @@ export function MentorshipMeetingsTab({
             pairs={pairs}
             selectedPairId={selectedPairId}
             onPairChange={handlePairChange}
+            currentUserId={currentUserId}
           />
         </div>
       )}
