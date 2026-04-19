@@ -10,9 +10,9 @@ import { CommentSection } from "@/components/feed/CommentSection";
 export default async function FeedPostDetailPage({
   params,
 }: {
-  params: { orgSlug: string; postId: string };
+  params: Promise<{ orgSlug: string; postId: string }>;
 }) {
-  const { orgSlug, postId } = params;
+  const { orgSlug, postId } = await params;
   const orgCtx = await getOrgContext(orgSlug);
 
   if (!orgCtx.organization) {
