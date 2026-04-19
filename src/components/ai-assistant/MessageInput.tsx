@@ -124,13 +124,13 @@ export function MessageInput({
                   <FileText className="h-3.5 w-3.5 shrink-0 text-org-secondary" />
                 )}
                 <span className="min-w-0 flex-1 truncate text-foreground">
-                  {isUploadingAttachment ? "Uploading..." : attachment?.fileName}
+                  {isUploadingAttachment ? "Uploading schedule file..." : attachment?.fileName}
                 </span>
                 {attachment && (
                   <button
                     onClick={onRemoveAttachment}
                     disabled={attachmentControlsDisabled}
-                    aria-label="Remove attachment"
+                    aria-label="Remove attached schedule file"
                     className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -157,7 +157,7 @@ export function MessageInput({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={attachmentControlsDisabled}
-            aria-label={attachment ? "Replace attachment" : "Attach file"}
+            aria-label={attachment ? "Replace attached schedule file" : "Attach schedule file"}
             className="shrink-0 rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:opacity-40"
           >
             <Paperclip className="h-4 w-4" />

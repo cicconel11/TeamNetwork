@@ -156,7 +156,7 @@ export function MessageList({
             <details className="rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-left">
               <summary className="cursor-pointer select-none list-none text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center justify-between">
-                  What I can do
+                  What I can do here
                   <span className="text-muted-foreground/50">+</span>
                 </span>
               </summary>
@@ -170,7 +170,7 @@ export function MessageList({
                 {capabilitySnapshot.unsupported.map((item) => (
                   <p key={item} className="flex items-start gap-2 text-muted-foreground/60">
                     <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/30" />
-                    Not yet: {item}
+                    Not yet: {item}.
                   </p>
                 ))}
               </div>
