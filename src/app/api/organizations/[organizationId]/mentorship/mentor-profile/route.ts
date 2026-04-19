@@ -127,7 +127,37 @@ export async function GET(req: Request, { params }: RouteParams) {
     );
   }
 
-  return NextResponse.json({ profile: (data as ProfileRow | null) ?? null });
+  const profile = (data as ProfileRow | null) ?? null;
+
+  // When no mentor profile exists yet, surface alumni-sourced defaults so the
+  // onboarding form isn't empty. Client treats these as editable suggestions.
+  let suggested: {
+    bio: string | null;
+    industries: string[];
+    role_families: string[];
+    positions: string[];
+  } | null = null;
+
+  if (!profile) {
+    const { data: alumniRow } = await service
+      .from("alumni")
+      .select("summary, headline, industry, job_title, position_title")
+      .eq("organization_id", organizationId)
+      .eq("user_id", targetUserId)
+      .maybeSingle();
+
+    if (alumniRow) {
+      const bio = alumniRow.summary?.trim() || alumniRow.headline?.trim() || null;
+      suggested = {
+        bio,
+        industries: alumniRow.industry ? [alumniRow.industry] : [],
+        role_families: alumniRow.job_title ? [alumniRow.job_title] : [],
+        positions: alumniRow.position_title ? [alumniRow.position_title] : [],
+      };
+    }
+  }
+
+  return NextResponse.json({ profile, suggested });
 }
 
 export async function PUT(req: Request, { params }: RouteParams) {

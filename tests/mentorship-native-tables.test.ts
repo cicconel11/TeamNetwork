@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const sql = await readFile(
+const nativeTablesSql = await readFile(
   new URL(
     "../supabase/migrations/20261019000000_mentorship_native_tables.sql",
     import.meta.url
@@ -10,9 +10,19 @@ const sql = await readFile(
   "utf8"
 );
 
+const menteeOptInSql = await readFile(
+  new URL(
+    "../supabase/migrations/20260419173736_mentee_preferences_seeking_opt_in.sql",
+    import.meta.url
+  ),
+  "utf8"
+);
+
+const sql = `${nativeTablesSql}\n${menteeOptInSql}`;
+
 function getPolicyBody(name: string): string {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = sql.match(
+  const match = nativeTablesSql.match(
     new RegExp(
       `create policy ${escapedName}[\\s\\S]*?(?=\\ndrop policy if exists|\\n-- =|\\ncommit;)`,
       "i"
@@ -30,6 +40,7 @@ test("mentee_preferences table created idempotently with uniqueness", () => {
 test("mentee_preferences columns cover matching contract", () => {
   for (const col of [
     "goals",
+    "seeking_mentorship",
     "preferred_topics",
     "preferred_industries",
     "preferred_role_families",
@@ -130,6 +141,7 @@ test("menteePreferencesSchema zod shape matches columns", async () => {
   const mod = await import("../src/lib/schemas/mentorship.ts");
   const parsed = mod.menteePreferencesSchema.parse({
     goals: "learn",
+    seeking_mentorship: true,
     preferred_topics: ["leadership"],
     preferred_industries: ["Technology"],
     preferred_role_families: ["Engineering"],
@@ -142,12 +154,14 @@ test("menteePreferencesSchema zod shape matches columns", async () => {
     geographic_pref: "NYC",
   });
   assert.equal(parsed.goals, "learn");
+  assert.equal(parsed.seeking_mentorship, true);
   assert.deepEqual(parsed.preferred_sports, ["basketball"]);
 });
 
 test("menteePreferencesSchema applies safe defaults on empty input", async () => {
   const mod = await import("../src/lib/schemas/mentorship.ts");
   const parsed = mod.menteePreferencesSchema.parse({});
+  assert.equal(parsed.seeking_mentorship, false);
   assert.deepEqual(parsed.preferred_topics, []);
   assert.deepEqual(parsed.communication_prefs, []);
 });
