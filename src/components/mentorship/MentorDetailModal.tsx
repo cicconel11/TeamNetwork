@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Avatar, Button } from "@/components/ui";
+import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
 
 export interface MentorDetailSignal {
   code: string;
@@ -74,22 +75,16 @@ export function MentorDetailModal({
   if (!isOpen || !mentor) return null;
 
   const chips = [...(mentor.topics ?? []), ...(mentor.expertise_areas ?? [])];
-  const reasonChips = (mentor.signals ?? []).filter((s) =>
-    REASON_CHIP_CODES.has(s.code)
-  );
+  const reasonChips = (mentor.signals ?? [])
+    .map((s) => ({ ...s, code: pickSignalCode(s) ?? s.code }))
+    .filter((s) => typeof s.code === "string" && REASON_CHIP_CODES.has(s.code));
   const requestDisabled =
     !canRequestIntro ||
     isRequestPending ||
     !mentor.accepting_new ||
     mentor.current_mentee_count >= mentor.max_mentees;
 
-  const reasonLabel = (code: string): string => {
-    try {
-      return t(`signal.${code}`);
-    } catch {
-      return code;
-    }
-  };
+  const reasonLabel = (code: string | null | undefined): string => labelMatchSignal(code, t);
 
   return (
     <div
