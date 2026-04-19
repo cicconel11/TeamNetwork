@@ -47,6 +47,7 @@ next-env.d.ts
 # playwright
 playwright/.auth/state.json
 playwright/.auth/e2e-state.json
+.playwright-mcp/
 
 .cursor/mcp.json
 

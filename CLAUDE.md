@@ -149,7 +149,7 @@ When I report a bug, don't start by trying to fix it. Start by writing a test th
 
 Before ANY structural refactor on a file >300 LOC, first remove all dead props, unused exports, unused imports, and debug logs. Commit this cleanup separately before starting the real work.
 
-Never attempt multi-file refactors in a single response. Break work into explicit phases. Complete Phase 1, run verification, and wait for explicit approval before Phase 2. Each phase must touch no more than 5 files.
+Break large refactors into explicit phases. Complete a phase, run verification, and wait for explicit approval before starting the next phase. Keep each phase to roughly 12 files or fewer so reviewers can hold the change in their head.
 
 ## Code Quality Bar
 
