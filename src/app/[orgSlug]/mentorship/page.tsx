@@ -102,13 +102,12 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
             : p.mentor_user_id === orgCtx.userId
         );
 
-  const filteredProposals =
-    isAdmin
-      ? proposalPairs
-      : proposalPairs.filter(
-          (p) => p.mentor_user_id === orgCtx.userId || p.mentee_user_id === orgCtx.userId
-        );
-  const proposalCount = filteredProposals.length;
+  const personalProposals = proposalPairs.filter(
+    (p) => p.mentor_user_id === orgCtx.userId || p.mentee_user_id === orgCtx.userId
+  );
+  const filteredProposals = personalProposals;
+  const proposalCount = personalProposals.length;
+  const adminPendingCount = proposalPairs.filter((p) => p.status === "proposed").length;
   const showProposalsTab = proposalCount > 0 || isAdmin;
   const activeTab: MentorshipTab =
     requestedTab === "proposals" && !showProposalsTab ? "activity" : requestedTab;
@@ -120,9 +119,8 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
       : visiblePairIds[0] ?? null;
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const [tNav, tMentorship, locale] = await Promise.all([
+  const [tNav, locale] = await Promise.all([
     getTranslations("nav.items"),
-    getTranslations("mentorship"),
     getLocale(),
   ]);
   const t = (key: string) => tNav(key);
@@ -209,6 +207,7 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
     const pairsForTabs = filteredPairs.map((pair) => ({
       id: pair.id,
       mentorUserId: pair.mentor_user_id,
+      menteeUserId: pair.mentee_user_id,
       mentorName:
         usersForClient.find((user) => user.id === pair.mentor_user_id)?.name || "Unknown",
       menteeName:
@@ -450,20 +449,19 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
     tabContent = (
       <MentorshipProposalsTab
         orgId={orgId}
+        orgSlug={orgSlug}
         currentUserId={currentUserId}
         isAdmin={isAdmin}
         proposals={proposalRows}
         userMap={userMap}
+        adminPendingCount={adminPendingCount}
       />
     );
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader
-        title={pageLabel}
-        description={tMentorship("editorialStrapline")}
-      />
+      <PageHeader title={pageLabel} />
 
       <Suspense fallback={<MentorshipPageSkeleton />}>
         <MentorshipTabShell
