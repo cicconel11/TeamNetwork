@@ -60,10 +60,14 @@ export async function GET(request: Request) {
     },
   }));
 
-  const auditTable = (service as unknown as {
-    from: (t: string) => { insert: (rows: unknown[]) => Promise<{ error: { message: string } | null }> };
-  }).from("mentorship_audit_log");
-  await auditTable.insert(auditRows);
+  try {
+    const auditTable = (service as unknown as {
+      from: (t: string) => { insert: (rows: unknown[]) => Promise<{ error: { message: string } | null }> };
+    }).from("mentorship_audit_log");
+    await auditTable.insert(auditRows);
+  } catch (auditErr) {
+    console.error("[cron/mentor-match-expire] audit log insert failed", auditErr);
+  }
 
   return NextResponse.json({ expired: rows.length });
 }

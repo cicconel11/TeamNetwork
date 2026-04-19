@@ -938,7 +938,31 @@
     "backToMentorship": "Back to mentorship",
     "createdShort": "created",
     "skippedExistingShort": "already paired",
-    "skippedNoMatchShort": "no structured match"
+    "skippedNoMatchShort": "no structured match",
+    "acceptingNewOnly": "Solo aceptando nuevos aprendices",
+    "allTopics": "Todos los temas",
+    "capacity": "Capacidad",
+    "classOf": "Promoción de {year}",
+    "close": "Cerrar",
+    "meetingPreferences": "Preferencias de reunión",
+    "notAcceptingShort": "No acepta",
+    "requestIntro": "Solicitar presentación",
+    "sortBy": "Ordenar por",
+    "sortName": "Nombre (A–Z)",
+    "sortRelevance": "Relevancia",
+    "sortYear": "Año de graduación",
+    "status_active": "Activo",
+    "status_completed": "Completado",
+    "status_paused": "Pausado",
+    "yearsExperience": "Años de experiencia",
+    "signal": {
+      "company_match": "Coincidencia de empresa",
+      "expertise_match": "Coincidencia de experiencia",
+      "grad_year_range": "Rango de año de graduación",
+      "industry_match": "Coincidencia de industria",
+      "location_match": "Coincidencia de ubicación",
+      "topic_match": "Coincidencia de tema"
+    }
   },
   "linkedin": {
     "profileUrl": "URL del perfil de LinkedIn",

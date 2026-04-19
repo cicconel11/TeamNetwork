@@ -938,7 +938,31 @@
     "backToMentorship": "Back to mentorship",
     "createdShort": "created",
     "skippedExistingShort": "already paired",
-    "skippedNoMatchShort": "no structured match"
+    "skippedNoMatchShort": "no structured match",
+    "acceptingNewOnly": "يقبل متدربين جدد فقط",
+    "allTopics": "جميع المواضيع",
+    "capacity": "السعة",
+    "classOf": "دفعة {year}",
+    "close": "إغلاق",
+    "meetingPreferences": "تفضيلات الاجتماع",
+    "notAcceptingShort": "لا يقبل",
+    "requestIntro": "طلب تعارف",
+    "sortBy": "ترتيب حسب",
+    "sortName": "الاسم (أ–ي)",
+    "sortRelevance": "الصلة",
+    "sortYear": "سنة التخرج",
+    "status_active": "نشط",
+    "status_completed": "مكتمل",
+    "status_paused": "متوقف",
+    "yearsExperience": "سنوات الخبرة",
+    "signal": {
+      "company_match": "تطابق الشركة",
+      "expertise_match": "تطابق الخبرة",
+      "grad_year_range": "نطاق سنة التخرج",
+      "industry_match": "تطابق المجال",
+      "location_match": "تطابق الموقع",
+      "topic_match": "تطابق الموضوع"
+    }
   },
   "linkedin": {
     "profileUrl": "رابط ملف LinkedIn",

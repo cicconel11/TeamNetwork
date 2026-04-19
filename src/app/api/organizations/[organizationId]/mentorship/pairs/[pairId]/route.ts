@@ -138,25 +138,32 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Accept failed" }, { status: 500 });
     }
 
-    // Chat bootstrap (idempotent)
+    // Chat bootstrap (idempotent, non-blocking)
     const chat = await ensureDirectChatGroup(service, {
       userAId: pair.mentor_user_id,
       userBId: pair.mentee_user_id,
       orgId: organizationId,
     });
+    if (!chat.ok) {
+      console.error("[mentorship pair PATCH] chat bootstrap failed for pair", pairId);
+    }
 
-    // Audit log
-    await svc.from("mentorship_audit_log").insert({
-      organization_id: organizationId,
-      actor_user_id: user.id,
-      kind: body.action === "override_approve" ? "admin_approved" : "proposal_accepted",
-      pair_id: pairId,
-      metadata: {
-        accepted_at: row.accepted_at ?? null,
-        chat_reused: chat.ok ? chat.reused : null,
-        chat_ok: chat.ok,
-      },
-    });
+    // Audit log — non-blocking
+    try {
+      await svc.from("mentorship_audit_log").insert({
+        organization_id: organizationId,
+        actor_user_id: user.id,
+        kind: body.action === "override_approve" ? "admin_approved" : "proposal_accepted",
+        pair_id: pairId,
+        metadata: {
+          accepted_at: row.accepted_at ?? null,
+          chat_reused: chat.ok ? chat.reused : null,
+          chat_ok: chat.ok,
+        },
+      });
+    } catch (auditErr) {
+      console.error("[mentorship pair PATCH] audit log insert failed", auditErr);
+    }
 
     // Notify mentee — non-blocking
     try {
@@ -189,6 +196,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       pair_id: pairId,
       chat_group_id: chat.ok ? chat.chatGroupId : null,
       reused_chat: chat.ok ? chat.reused : false,
+      chat_failed: !chat.ok,
       status: row.status ?? "accepted",
     });
   }
@@ -220,13 +228,17 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     );
   }
 
-  await svc.from("mentorship_audit_log").insert({
-    organization_id: organizationId,
-    actor_user_id: user.id,
-    kind: "proposal_declined",
-    pair_id: pairId,
-    metadata: { reason: body.reason ?? null },
-  });
+  try {
+    await svc.from("mentorship_audit_log").insert({
+      organization_id: organizationId,
+      actor_user_id: user.id,
+      kind: "proposal_declined",
+      pair_id: pairId,
+      metadata: { reason: body.reason ?? null },
+    });
+  } catch (auditErr) {
+    console.error("[mentorship pair PATCH] audit log insert failed", auditErr);
+  }
 
   // Notify mentee — non-blocking
   try {
