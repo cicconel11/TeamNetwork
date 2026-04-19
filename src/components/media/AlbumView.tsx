@@ -459,7 +459,7 @@ export function AlbumView({
           <div className="ml-auto flex items-center gap-2 shrink-0">
             {canEdit && items.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => setShowCoverPicker(true)}>
-                Set cover
+                Set cover photo
               </Button>
             )}
             {items.length > 0 && eligibleDeleteIds.length > 0 && (
