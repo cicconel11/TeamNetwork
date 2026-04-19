@@ -2978,9 +2978,11 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           fields: Json
+          form_kind: string
           id: string
           is_active: boolean | null
           organization_id: string
+          system_key: string | null
           title: string
           updated_at: string | null
         }
@@ -2990,9 +2992,11 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           fields?: Json
+          form_kind?: string
           id?: string
           is_active?: boolean | null
           organization_id: string
+          system_key?: string | null
           title: string
           updated_at?: string | null
         }
@@ -3002,9 +3006,11 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           fields?: Json
+          form_kind?: string
           id?: string
           is_active?: boolean | null
           organization_id?: string
+          system_key?: string | null
           title?: string
           updated_at?: string | null
         }
@@ -3672,43 +3678,64 @@ export type Database = {
       }
       mentor_profiles: {
         Row: {
+          accepting_new: boolean
           bio: string | null
           contact_email: string | null
           contact_linkedin: string | null
           contact_phone: string | null
           created_at: string
+          current_mentee_count: number
           expertise_areas: string[]
           id: string
           is_active: boolean
+          max_mentees: number
+          meeting_preferences: string[]
           organization_id: string
+          time_commitment: string | null
+          topics: string[]
           updated_at: string
           user_id: string
+          years_of_experience: number | null
         }
         Insert: {
+          accepting_new?: boolean
           bio?: string | null
           contact_email?: string | null
           contact_linkedin?: string | null
           contact_phone?: string | null
           created_at?: string
+          current_mentee_count?: number
           expertise_areas?: string[]
           id?: string
           is_active?: boolean
+          max_mentees?: number
+          meeting_preferences?: string[]
           organization_id: string
+          time_commitment?: string | null
+          topics?: string[]
           updated_at?: string
           user_id: string
+          years_of_experience?: number | null
         }
         Update: {
+          accepting_new?: boolean
           bio?: string | null
           contact_email?: string | null
           contact_linkedin?: string | null
           contact_phone?: string | null
           created_at?: string
+          current_mentee_count?: number
           expertise_areas?: string[]
           id?: string
           is_active?: boolean
+          max_mentees?: number
+          meeting_preferences?: string[]
           organization_id?: string
+          time_commitment?: string | null
+          topics?: string[]
           updated_at?: string
           user_id?: string
+          years_of_experience?: number | null
         }
         Relationships: [
           {
@@ -3723,6 +3750,51 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentorship_audit_log: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json
+          organization_id: string
+          pair_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          metadata?: Json
+          organization_id: string
+          pair_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json
+          organization_id?: string
+          pair_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentorship_audit_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentorship_audit_log_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "mentorship_pairs"
             referencedColumns: ["id"]
           },
         ]
@@ -3852,32 +3924,53 @@ export type Database = {
       }
       mentorship_pairs: {
         Row: {
+          accepted_at: string | null
           created_at: string
+          declined_at: string | null
+          declined_reason: string | null
           deleted_at: string | null
           id: string
+          match_score: number | null
+          match_signals: Json | null
           mentee_user_id: string
           mentor_user_id: string
           organization_id: string
+          proposed_at: string | null
+          proposed_by: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          accepted_at?: string | null
           created_at?: string
+          declined_at?: string | null
+          declined_reason?: string | null
           deleted_at?: string | null
           id?: string
+          match_score?: number | null
+          match_signals?: Json | null
           mentee_user_id: string
           mentor_user_id: string
           organization_id: string
+          proposed_at?: string | null
+          proposed_by?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          accepted_at?: string | null
           created_at?: string
+          declined_at?: string | null
+          declined_reason?: string | null
           deleted_at?: string | null
           id?: string
+          match_score?: number | null
+          match_signals?: Json | null
           mentee_user_id?: string
           mentor_user_id?: string
           organization_id?: string
+          proposed_at?: string | null
+          proposed_by?: string | null
           status?: string
           updated_at?: string
         }
@@ -3958,6 +4051,7 @@ export type Database = {
           email_enabled: boolean | null
           event_emails_enabled: boolean
           id: string
+          mentorship_emails_enabled: boolean
           organization_id: string
           phone_number: string | null
           sms_enabled: boolean | null
@@ -3974,6 +4068,7 @@ export type Database = {
           email_enabled?: boolean | null
           event_emails_enabled?: boolean
           id?: string
+          mentorship_emails_enabled?: boolean
           organization_id: string
           phone_number?: string | null
           sms_enabled?: boolean | null
@@ -3990,6 +4085,7 @@ export type Database = {
           email_enabled?: boolean | null
           event_emails_enabled?: boolean
           id?: string
+          mentorship_emails_enabled?: boolean
           organization_id?: string
           phone_number?: string | null
           sms_enabled?: boolean | null
@@ -4541,6 +4637,7 @@ export type Database = {
           primary_color: string | null
           require_invite_approval: boolean
           secondary_color: string | null
+          settings: Json
           slug: string
           stripe_connect_account_id: string | null
           timezone: string
@@ -4571,6 +4668,7 @@ export type Database = {
           primary_color?: string | null
           require_invite_approval?: boolean
           secondary_color?: string | null
+          settings?: Json
           slug: string
           stripe_connect_account_id?: string | null
           timezone?: string
@@ -4601,6 +4699,7 @@ export type Database = {
           primary_color?: string | null
           require_invite_approval?: boolean
           secondary_color?: string | null
+          settings?: Json
           slug?: string
           stripe_connect_account_id?: string | null
           timezone?: string
@@ -5609,6 +5708,53 @@ export type Database = {
         }
         Relationships: []
       }
+      user_onboarding_progress: {
+        Row: {
+          completed_items: Json
+          created_at: string
+          dismissed_at: string | null
+          id: string
+          organization_id: string
+          tour_completed_at: string | null
+          updated_at: string
+          user_id: string
+          visited_items: Json
+          welcome_seen_at: string | null
+        }
+        Insert: {
+          completed_items?: Json
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          organization_id: string
+          tour_completed_at?: string | null
+          updated_at?: string
+          user_id: string
+          visited_items?: Json
+          welcome_seen_at?: string | null
+        }
+        Update: {
+          completed_items?: Json
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          organization_id?: string
+          tour_completed_at?: string | null
+          updated_at?: string
+          user_id?: string
+          visited_items?: Json
+          welcome_seen_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_onboarding_progress_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_organization_roles: {
         Row: {
           created_at: string | null
@@ -5832,8 +5978,69 @@ export type Database = {
           },
         ]
       }
+      mentee_latest_intake: {
+        Row: {
+          data: Json | null
+          form_id: string | null
+          id: string | null
+          organization_id: string | null
+          submitted_at: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_submissions_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      accept_mentorship_proposal: {
+        Args: { admin_override?: boolean; pair_id: string }
+        Returns: {
+          accepted_at: string
+          mentee_user_id: string
+          mentor_user_id: string
+          organization_id: string
+          result_pair_id: string
+          status: string
+        }[]
+      }
+      admin_propose_pair: {
+        Args: {
+          p_actor_user_id?: string
+          p_match_score: number
+          p_match_signals: Json
+          p_mentee_user_id: string
+          p_mentor_user_id: string
+          p_organization_id: string
+        }
+        Returns: {
+          match_score: number
+          match_signals: Json
+          pair_id: string
+          reused: boolean
+          status: string
+        }[]
+      }
       aggregate_usage_events: {
         Args: { p_period_end: string; p_period_start: string }
         Returns: Json
@@ -5881,6 +6088,10 @@ export type Database = {
         Args: {
           announcement_row: Database["public"]["Tables"]["announcements"]["Row"]
         }
+        Returns: boolean
+      }
+      can_view_event: {
+        Args: { e: Database["public"]["Tables"]["events"]["Row"] }
         Returns: boolean
       }
       cancel_ai_pending_action: {
@@ -6091,7 +6302,7 @@ export type Database = {
         Returns: Json
       }
       filter_announcement_ids_for_user: {
-        Args: { p_org_id: string; p_announcement_ids: string[] }
+        Args: { p_announcement_ids: string[]; p_org_id: string }
         Returns: string[]
       }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
@@ -6180,12 +6391,20 @@ export type Database = {
         }
         Returns: Json
       }
+      is_alumni_directory_visible: {
+        Args: { p_alumni_id: string; p_org_id: string }
+        Returns: boolean
+      }
       is_chat_group_creator: { Args: { group_id: string }; Returns: boolean }
       is_chat_group_member: { Args: { group_id: string }; Returns: boolean }
       is_chat_group_moderator: { Args: { group_id: string }; Returns: boolean }
       is_enterprise_admin: { Args: { ent_id: string }; Returns: boolean }
       is_enterprise_member: { Args: { ent_id: string }; Returns: boolean }
       is_enterprise_owner: { Args: { ent_id: string }; Returns: boolean }
+      is_member_directory_visible: {
+        Args: { p_member_id: string; p_org_id: string }
+        Returns: boolean
+      }
       is_org_admin: { Args: { org_id: string }; Returns: boolean }
       is_org_member: { Args: { org_id: string }; Returns: boolean }
       log_analytics_event: {
@@ -6232,6 +6451,10 @@ export type Database = {
           similarity: number
         }[]
       }
+      mentorship_recompute_mentor_capacity: {
+        Args: { p_mentor_user_id: string; p_org_id: string }
+        Returns: undefined
+      }
       parents_bucket_limit: { Args: { p_bucket: string }; Returns: number }
       purge_ai_embedding_queue: {
         Args: { p_max_attempts?: number }
@@ -6251,6 +6474,15 @@ export type Database = {
       redeem_org_invite: { Args: { p_code: string }; Returns: Json }
       redeem_org_invite_by_token: { Args: { p_token: string }; Returns: Json }
       redeem_parent_invite: { Args: { p_code: string }; Returns: Json }
+      reinstate_alumni_to_active: {
+        Args: {
+          p_member_id: string
+          p_org_id: string
+          p_status?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       release_linkedin_manual_sync: {
         Args: { p_attempt_id: string }
         Returns: Json
@@ -6286,6 +6518,10 @@ export type Database = {
           quota_count: number
           quota_limit: number
         }[]
+      }
+      revoke_graduated_member: {
+        Args: { p_member_id: string; p_org_id: string; p_user_id: string }
+        Returns: Json
       }
       save_user_linkedin_url: {
         Args: { p_linkedin_url: string; p_user_id: string }
@@ -6334,6 +6570,8 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       sync_enterprise_nav_to_org: {
         Args: { p_enterprise_id: string; p_organization_id: string }
         Returns: boolean
@@ -6363,6 +6601,10 @@ export type Database = {
           p_photo_url: string
           p_user_id: string
         }
+        Returns: Json
+      }
+      transition_member_to_alumni: {
+        Args: { p_member_id: string; p_org_id: string; p_user_id: string }
         Returns: Json
       }
       update_error_baselines: { Args: never; Returns: undefined }
