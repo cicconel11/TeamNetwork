@@ -58,6 +58,11 @@ export interface MentorInput {
   orgId: string;
   topics?: string[] | null;
   expertiseAreas?: string[] | null;
+  /** Native canonical arrays from mentor_profiles (authoritative when present). */
+  nativeSports?: string[] | null;
+  nativePositions?: string[] | null;
+  nativeIndustries?: string[] | null;
+  nativeRoleFamilies?: string[] | null;
   industry?: string | null;
   jobTitle?: string | null;
   positionTitle?: string | null;
