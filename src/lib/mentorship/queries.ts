@@ -158,7 +158,7 @@ export async function loadMentorInputs(
 
 /**
  * Load native mentee_preferences row and merge with alumni profile facts
- * (city, company, graduation year, position fallback).
+ * (city, company, graduation year).
  *
  * Replaces `loadMenteeIntakeInput` as the canonical path once Phase 1 lands.
  * Returns MenteeInput shape — same contract as existing matcher.
@@ -195,7 +195,7 @@ export async function loadMenteePreferences(
       .maybeSingle(),
     sb
       .from("alumni")
-      .select("current_city, current_company, graduation_year, position_title")
+      .select("current_city, current_company, graduation_year")
       .eq("organization_id", orgId)
       .eq("user_id", menteeUserId)
       .maybeSingle(),
@@ -207,13 +207,6 @@ export async function loadMenteePreferences(
   const stringArr = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
 
-  const preferredPositions = (() => {
-    const explicit = stringArr(prefs?.preferred_positions);
-    if (explicit.length > 0) return explicit;
-    const pos = alumni?.position_title;
-    return typeof pos === "string" && pos.trim().length > 0 ? [pos] : [];
-  })();
-
   return {
     userId: menteeUserId,
     orgId,
@@ -221,7 +214,7 @@ export async function loadMenteePreferences(
     preferredIndustries: stringArr(prefs?.preferred_industries),
     preferredRoleFamilies: stringArr(prefs?.preferred_role_families),
     preferredSports: stringArr(prefs?.preferred_sports),
-    preferredPositions,
+    preferredPositions: stringArr(prefs?.preferred_positions),
     requiredMentorAttributes: stringArr(prefs?.required_attributes),
     currentCity: (alumni?.current_city as string | null) ?? null,
     graduationYear: (alumni?.graduation_year as number | null) ?? null,

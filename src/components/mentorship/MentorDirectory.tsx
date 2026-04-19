@@ -102,6 +102,10 @@ export function MentorDirectory({
   }, [selfExcluded]);
 
   useEffect(() => {
+    setPendingIds(pendingRequestMentorIds);
+  }, [pendingRequestMentorIds]);
+
+  useEffect(() => {
     if (sortMode !== "relevance" || !canRequestIntro) return;
     let cancelled = false;
     const run = async () => {
@@ -525,6 +529,8 @@ export function MentorDirectory({
       <MentorDetailModal
         mentor={detailMentor}
         isOpen={detailMentor !== null}
+        canRequestIntro={canRequestIntro}
+        isRequestPending={detailMentor ? hasPendingRequest(pendingIds, detailMentor.user_id) : false}
         onClose={() => setDetailMentor(null)}
         onRequestIntro={(m) => {
           setDetailMentor(null);

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   applyFilters,
   emptyFilters,
@@ -9,6 +10,19 @@ import {
   type DirectoryFilters,
   type DirectoryMentorLike,
 } from "../src/lib/mentorship/directory-helpers.ts";
+
+const mentorDirectorySource = await readFile(
+  new URL("../src/components/mentorship/MentorDirectory.tsx", import.meta.url),
+  "utf8"
+);
+const mentorDetailModalSource = await readFile(
+  new URL("../src/components/mentorship/MentorDetailModal.tsx", import.meta.url),
+  "utf8"
+);
+const queriesSource = await readFile(
+  new URL("../src/lib/mentorship/queries.ts", import.meta.url),
+  "utf8"
+);
 
 function mentor(overrides: Partial<DirectoryMentorLike> & { user_id: string }): DirectoryMentorLike {
   return {
@@ -128,4 +142,32 @@ test("hasActiveFilters: any non-default filter flips it on", () => {
   assert.equal(hasActiveFilters(filters({ sport: "basketball" })), true);
   assert.equal(hasActiveFilters(filters({ position: "point-guard" })), true);
   assert.equal(hasActiveFilters(filters({ acceptingOnly: false })), true);
+});
+
+test("directory syncs pending mentor ids from refreshed server props", () => {
+  assert.match(
+    mentorDirectorySource,
+    /useEffect\(\(\) => {\s*setPendingIds\(pendingRequestMentorIds\);\s*}, \[pendingRequestMentorIds\]\);/s
+  );
+});
+
+test("detail modal request CTA uses same pending and eligibility gating as cards", () => {
+  assert.match(mentorDirectorySource, /canRequestIntro=\{canRequestIntro\}/);
+  assert.match(mentorDirectorySource, /isRequestPending=\{detailMentor \? hasPendingRequest\(pendingIds, detailMentor\.user_id\) : false\}/);
+  assert.match(mentorDetailModalSource, /const requestDisabled =/);
+  assert.match(mentorDetailModalSource, /!canRequestIntro \|\|/);
+  assert.match(mentorDetailModalSource, /isRequestPending \|\|/);
+  assert.match(mentorDetailModalSource, /requestDisabled/);
+});
+
+test("native mentee preferences do not fall back to alumni position_title", () => {
+  const loadMenteePreferencesBlock = queriesSource.match(
+    /export async function loadMenteePreferences[\s\S]*?return \{[\s\S]*?\n  };\n}/
+  )?.[0];
+  assert.ok(loadMenteePreferencesBlock, "expected loadMenteePreferences source block");
+  assert.doesNotMatch(loadMenteePreferencesBlock, /position_title/);
+  assert.match(
+    loadMenteePreferencesBlock,
+    /preferredPositions: stringArr\(prefs\?\.preferred_positions\)/
+  );
 });

@@ -46,6 +46,8 @@ function humanizeReasonValue(value: string | number | undefined): string {
 interface MentorDetailModalProps {
   mentor: MentorDetailData | null;
   isOpen: boolean;
+  canRequestIntro: boolean;
+  isRequestPending: boolean;
   onClose: () => void;
   onRequestIntro: (mentor: MentorDetailData) => void;
 }
@@ -53,6 +55,8 @@ interface MentorDetailModalProps {
 export function MentorDetailModal({
   mentor,
   isOpen,
+  canRequestIntro,
+  isRequestPending,
   onClose,
   onRequestIntro,
 }: MentorDetailModalProps) {
@@ -73,6 +77,11 @@ export function MentorDetailModal({
   const reasonChips = (mentor.signals ?? []).filter((s) =>
     REASON_CHIP_CODES.has(s.code)
   );
+  const requestDisabled =
+    !canRequestIntro ||
+    isRequestPending ||
+    !mentor.accepting_new ||
+    mentor.current_mentee_count >= mentor.max_mentees;
 
   const reasonLabel = (code: string): string => {
     try {
@@ -185,9 +194,9 @@ export function MentorDetailModal({
           <Button
             size="sm"
             onClick={() => onRequestIntro(mentor)}
-            disabled={!mentor.accepting_new || mentor.current_mentee_count >= mentor.max_mentees}
+            disabled={requestDisabled}
           >
-            {t("requestIntro")}
+            {isRequestPending ? t("requestSent") : t("requestIntro")}
           </Button>
         </div>
       </div>
