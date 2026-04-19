@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui";
+import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
 import type { MentorDetailData } from "./MentorDetailModal";
 
 interface MatchSignal {
@@ -122,11 +123,11 @@ export function MentorRequestDialog({
             <p className="text-[var(--muted-foreground)]">{t("loadingSignals")}</p>
           ) : signals && signals.length > 0 ? (
             <ul className="space-y-1">
-              {signals.map((s) => {
-                let signalLabel = s.code;
-                try { signalLabel = t(`signal.${s.code}`); } catch { /* fall back */ }
+              {signals.map((s, idx) => {
+                const code = pickSignalCode(s);
+                const signalLabel = labelMatchSignal(code, t);
                 return (
-                <li key={s.code} className="flex justify-between">
+                <li key={`${code ?? "signal"}-${idx}`} className="flex justify-between">
                   <span className="text-[var(--foreground)]">
                     {signalLabel}
                     {s.value !== undefined && (
@@ -136,7 +137,9 @@ export function MentorRequestDialog({
                       </span>
                     )}
                   </span>
-                  <span className="text-[var(--muted-foreground)]">+{s.weight}</span>
+                  {typeof s.weight === "number" && (
+                    <span className="text-[var(--muted-foreground)]">+{s.weight}</span>
+                  )}
                 </li>
                 );
               })}
