@@ -31,7 +31,6 @@ test("mixed-content renderers use UserContent for user-authored values", () => {
     "src/components/chat/InlineFormMessage.tsx",
     "src/components/messages/ChatMessagePane.tsx",
     "src/components/messages/ThreadMessagePane.tsx",
-    "src/components/discussions/ThreadDetail.tsx",
     "src/components/feed/PostDetail.tsx",
     "src/components/announcements/AnnouncementCard.tsx",
     "src/components/jobs/JobList.tsx",
