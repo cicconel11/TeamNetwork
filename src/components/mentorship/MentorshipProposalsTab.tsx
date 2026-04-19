@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Badge, Button, EmptyState, Textarea } from "@/components/ui";
+import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
 
 export interface ProposalSignal {
   code: string;
@@ -25,18 +27,22 @@ export interface ProposalRow {
 
 interface MentorshipProposalsTabProps {
   orgId: string;
+  orgSlug: string;
   currentUserId: string;
   isAdmin: boolean;
   proposals: ProposalRow[];
   userMap: Record<string, string>;
+  adminPendingCount?: number;
 }
 
 export function MentorshipProposalsTab({
   orgId,
+  orgSlug,
   currentUserId,
   isAdmin,
   proposals,
   userMap,
+  adminPendingCount = 0,
 }: MentorshipProposalsTabProps) {
   const t = useTranslations("mentorship");
   const router = useRouter();
@@ -80,13 +86,7 @@ export function MentorshipProposalsTab({
     }
   };
 
-  const signalLabel = (code: string): string => {
-    try {
-      return t(`signal.${code}`);
-    } catch {
-      return code;
-    }
-  };
+  const signalLabel = (code: string | null): string => labelMatchSignal(code, t);
 
   const renderSignalChips = (signals: ProposalSignal[], testid: string) => {
     if (signals.length === 0) return null;
@@ -95,20 +95,25 @@ export function MentorshipProposalsTab({
         data-testid={testid}
         className="flex flex-wrap gap-1 mt-1.5"
       >
-        {signals.slice(0, 5).map((s, idx) => (
-          <li
-            key={`${s.code}-${idx}`}
-            className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-[var(--muted)]/40 text-[var(--muted-foreground)]"
-          >
-            {signalLabel(s.code)}
-            {s.value !== undefined && (
-              <span className="ml-1">· {String(s.value)}</span>
-            )}
-            <span className="ml-1 text-[var(--muted-foreground)]/70">
-              +{s.weight}
-            </span>
-          </li>
-        ))}
+        {signals.slice(0, 5).map((s, idx) => {
+          const code = pickSignalCode(s);
+          return (
+            <li
+              key={`${code ?? "signal"}-${idx}`}
+              className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-[var(--muted)]/40 text-[var(--muted-foreground)]"
+            >
+              {signalLabel(code)}
+              {s.value !== undefined && (
+                <span className="ml-1">· {String(s.value)}</span>
+              )}
+              {typeof s.weight === "number" && (
+                <span className="ml-1 text-[var(--muted-foreground)]/70">
+                  +{s.weight}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     );
   };
@@ -123,12 +128,27 @@ export function MentorshipProposalsTab({
     return <Badge variant={variant}>{statusLabel(status)}</Badge>;
   };
 
+  const adminQueueLink = (
+    <Link
+      href={`/${orgSlug}/mentorship/admin/matches`}
+      className="inline-flex items-center text-sm font-medium underline-offset-2 hover:underline"
+      data-testid="admin-match-queue-link"
+    >
+      {t("openMatchQueueLink", { count: adminPendingCount })}
+    </Link>
+  );
+
   if (proposals.length === 0) {
     return (
-      <EmptyState
-        title={t("noProposals")}
-        description={t("noProposalsDesc")}
-      />
+      <div className="space-y-4">
+        <EmptyState
+          title={t("noProposals")}
+          description={t("noProposalsDesc")}
+        />
+        {isAdmin && adminPendingCount > 0 && (
+          <div className="text-center">{adminQueueLink}</div>
+        )}
+      </div>
     );
   }
 
@@ -258,8 +278,8 @@ export function MentorshipProposalsTab({
         </section>
       )}
 
-      {isAdmin && proposals.length > 0 && outgoing.length === 0 && incoming.length === 0 && (
-        <p className="text-sm text-[var(--muted-foreground)]">{t("adminSeeAdminQueue")}</p>
+      {isAdmin && adminPendingCount > 0 && (
+        <div className="pt-2">{adminQueueLink}</div>
       )}
     </div>
   );
