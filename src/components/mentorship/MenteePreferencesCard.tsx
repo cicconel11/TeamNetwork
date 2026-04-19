@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button, Input, Select, Textarea } from "@/components/ui";
+import { Button, Input, Select, Textarea, ToggleSwitch } from "@/components/ui";
 
 type Preferences = {
   goals: string;
+  seeking_mentorship: boolean;
   preferred_topics: string[];
   preferred_industries: string[];
   preferred_role_families: string[];
@@ -24,6 +25,7 @@ interface MenteePreferencesCardProps {
 
 const EMPTY: Preferences = {
   goals: "",
+  seeking_mentorship: false,
   preferred_topics: [],
   preferred_industries: [],
   preferred_role_families: [],
@@ -113,6 +115,7 @@ export function MenteePreferencesCard({ orgId }: MenteePreferencesCardProps) {
           setHasRow(true);
           hydrate({
             goals: json.preferences.goals ?? "",
+            seeking_mentorship: json.preferences.seeking_mentorship ?? false,
             preferred_topics: json.preferences.preferred_topics ?? [],
             preferred_industries: json.preferences.preferred_industries ?? [],
             preferred_role_families: json.preferences.preferred_role_families ?? [],
@@ -181,6 +184,7 @@ export function MenteePreferencesCard({ orgId }: MenteePreferencesCardProps) {
       const json = (await res.json()) as { preferences: Partial<Preferences> };
       hydrate({
         goals: json.preferences.goals ?? "",
+        seeking_mentorship: json.preferences.seeking_mentorship ?? false,
         preferred_topics: json.preferences.preferred_topics ?? [],
         preferred_industries: json.preferences.preferred_industries ?? [],
         preferred_role_families: json.preferences.preferred_role_families ?? [],
@@ -202,11 +206,19 @@ export function MenteePreferencesCard({ orgId }: MenteePreferencesCardProps) {
     }
   };
 
-  if (loading) {
+  if (loading) return null;
+
+  if (hasRow && !expanded) {
     return (
-      <div className="rounded-md border border-[var(--border)] bg-[var(--muted)]/30 p-4 text-sm text-[var(--muted-foreground)]">
-        Loading your preferences…
-      </div>
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+      >
+        {form.seeking_mentorship
+          ? "Edit mentorship preferences"
+          : "Looking for a mentor? Edit your preferences"}
+      </button>
     );
   }
 
@@ -230,6 +242,19 @@ export function MenteePreferencesCard({ orgId }: MenteePreferencesCardProps) {
 
       {expanded && (
         <div className="space-y-4 pt-2 border-t border-[var(--border)]">
+          <div className="flex items-start gap-3 rounded-md border border-[var(--border)] bg-[var(--card)]/60 p-3">
+            <ToggleSwitch
+              checked={form.seeking_mentorship}
+              onChange={(checked) =>
+                setForm((p) => ({ ...p, seeking_mentorship: checked }))
+              }
+              label="Looking for a mentor"
+            />
+            <p className="text-xs text-[var(--muted-foreground)] pt-0.5">
+              Turn this on to appear to mentors and the matching engine. Turn off any time to pause.
+            </p>
+          </div>
+
           <div>
             <label className="block text-xs font-medium mb-1">Your mentorship goals</label>
             <Textarea

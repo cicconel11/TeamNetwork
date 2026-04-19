@@ -26,6 +26,7 @@ type PrefsRow = {
   organization_id: string;
   user_id: string;
   goals: string | null;
+  seeking_mentorship: boolean;
   preferred_topics: string[] | null;
   preferred_industries: string[] | null;
   preferred_role_families: string[] | null;
@@ -112,7 +113,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   const { data, error } = await sb
     .from("mentee_preferences")
     .select(
-      "id, organization_id, user_id, goals, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref, created_at, updated_at"
+      "id, organization_id, user_id, goals, seeking_mentorship, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref, created_at, updated_at"
     )
     .eq("organization_id", organizationId)
     .eq("user_id", targetUserId)
@@ -183,6 +184,7 @@ export async function PUT(req: Request, { params }: RouteParams) {
     organization_id: organizationId,
     user_id: user.id, // server-enforced; client cannot override
     goals: p.goals?.trim() ? p.goals.trim() : null,
+    seeking_mentorship: p.seeking_mentorship,
     preferred_topics: p.preferred_topics,
     preferred_industries: p.preferred_industries,
     preferred_role_families: p.preferred_role_families,
@@ -202,7 +204,7 @@ export async function PUT(req: Request, { params }: RouteParams) {
     .from("mentee_preferences")
     .upsert(row, { onConflict: "organization_id,user_id" })
     .select(
-      "id, organization_id, user_id, goals, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref, created_at, updated_at"
+      "id, organization_id, user_id, goals, seeking_mentorship, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref, created_at, updated_at"
     )
     .single();
 

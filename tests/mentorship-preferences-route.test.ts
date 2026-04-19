@@ -27,6 +27,7 @@ test("route is dynamic + nodejs runtime", () => {
 test("route enforces server-side user_id on write (no client override)", () => {
   // PUT body passed to upsert must have user_id: user.id from session
   assert.match(routeSource, /user_id: user\.id/);
+  assert.match(routeSource, /seeking_mentorship: p\.seeking_mentorship/);
   // Upsert target is the native table with correct conflict key
   assert.match(routeSource, /mentee_preferences/);
   assert.match(routeSource, /onConflict: "organization_id,user_id"/);
@@ -101,7 +102,13 @@ function simulate(req: SimReq): SimRes {
   }
   return {
     status: 200,
-    body: { preferences: { organization_id: req.organizationId, user_id: req.authUserId, ...parsed.data } },
+    body: {
+      preferences: {
+        organization_id: req.organizationId,
+        user_id: req.authUserId,
+        ...parsed.data,
+      },
+    },
   };
 }
 
@@ -179,6 +186,7 @@ test("PUT upserts; server-enforced user_id echoed back", () => {
     caller: { role: "active_member", status: "active" },
     body: {
       goals: "grow",
+      seeking_mentorship: true,
       preferred_topics: ["leadership"],
       preferred_sports: ["basketball"],
       required_attributes: ["same_sport"],
@@ -188,12 +196,13 @@ test("PUT upserts; server-enforced user_id echoed back", () => {
   const prefs = res.body.preferences as { user_id: string; organization_id: string };
   assert.equal(prefs.user_id, userId);
   assert.equal(prefs.organization_id, orgId);
+  assert.equal((res.body.preferences as { seeking_mentorship: boolean }).seeking_mentorship, true);
 });
 
 test("PUT repeat is idempotent (upsert contract)", () => {
   const userId = randomUUID();
   const orgId = randomUUID();
-  const body = { goals: "grow", preferred_topics: ["leadership"] };
+  const body = { goals: "grow", seeking_mentorship: true, preferred_topics: ["leadership"] };
   const a = simulate({
     method: "PUT",
     authUserId: userId,
@@ -211,6 +220,18 @@ test("PUT repeat is idempotent (upsert contract)", () => {
   assert.equal(a.status, 200);
   assert.equal(b.status, 200);
   assert.deepEqual(a.body.preferences, b.body.preferences);
+});
+
+test("PUT defaults seeking_mentorship to false when omitted", () => {
+  const res = simulate({
+    method: "PUT",
+    authUserId: randomUUID(),
+    organizationId: randomUUID(),
+    caller: { role: "active_member", status: "active" },
+    body: { preferred_topics: ["leadership"] },
+  });
+  assert.equal(res.status, 200);
+  assert.equal((res.body.preferences as { seeking_mentorship: boolean }).seeking_mentorship, false);
 });
 
 test("PUT by revoked caller is forbidden", () => {
