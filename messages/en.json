@@ -974,13 +974,29 @@
     "skippedExistingShort": "already paired",
     "skippedNoMatchShort": "no structured match",
     "signal": {
+      "shared_sport": "Same sport",
+      "shared_position": "Same position",
+      "shared_topics": "Shared topics",
+      "shared_industry": "Same industry",
+      "shared_role_family": "Same role family",
+      "graduation_gap_fit": "Graduation gap fit",
+      "shared_city": "Same city",
+      "shared_company": "Same company",
       "topic_match": "Topic match",
       "expertise_match": "Expertise match",
       "industry_match": "Industry match",
       "location_match": "Location match",
       "grad_year_range": "Graduation year range",
       "company_match": "Company match"
-    }
+    },
+    "openMatchQueueLink": "Open match queue · {count} pending",
+    "remindMentor": "Remind mentor",
+    "remindAllMentors": "Remind all mentors",
+    "reminderSent": "Reminder sent",
+    "remindersSent": "Reminders sent",
+    "reminderRateLimited": "Already reminded in last 24h",
+    "reminderSkipped": "No reminder sent",
+    "skippedRateLimited": "skipped (24h)"
   },
   "linkedin": {
     "profileUrl": "LinkedIn Profile URL",
