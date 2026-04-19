@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Badge, Button, EmptyState, Select, Textarea } from "@/components/ui";
+import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
 
 interface QueueRow {
   id: string;
@@ -24,7 +25,19 @@ interface QueueRow {
     current_mentee_count: number | null;
     accepting_new: boolean | null;
   } | null;
-  mentee_intake: Record<string, unknown> | null;
+  mentee_preferences: {
+    goals: string | null;
+    preferred_topics: string[] | null;
+    preferred_industries: string[] | null;
+    preferred_role_families: string[] | null;
+    preferred_sports: string[] | null;
+    preferred_positions: string[] | null;
+    required_attributes: string[] | null;
+    nice_to_have_attributes: string[] | null;
+    time_availability: string | null;
+    communication_prefs: string[] | null;
+    geographic_pref: string | null;
+  } | null;
 }
 
 interface AdminMatchQueueProps {
@@ -43,6 +56,9 @@ export function AdminMatchQueue({ orgId, orgSlug }: AdminMatchQueueProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [declineFor, setDeclineFor] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState("");
+  const [remindingMentorId, setRemindingMentorId] = useState<string | null>(null);
+  const [bulkReminding, setBulkReminding] = useState(false);
+  const [recentlyRemindedMentors, setRecentlyRemindedMentors] = useState<Set<string>>(new Set());
 
   const safeT = (key: string, fallback: string) => {
     try {
@@ -104,6 +120,76 @@ export function AdminMatchQueue({ orgId, orgSlug }: AdminMatchQueueProps) {
     }
   };
 
+  type RemindResponse = {
+    sent: Array<{ mentor_user_id: string; pending_count: number }>;
+    skipped: Array<{ mentor_user_id: string; reason: string }>;
+    error?: string;
+  };
+
+  const callRemind = async (payload: Record<string, unknown>): Promise<RemindResponse | null> => {
+    const res = await fetch(
+      `/api/organizations/${orgId}/mentorship/admin/remind`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    const json = (await res.json().catch(() => ({}))) as RemindResponse;
+    if (!res.ok) {
+      toast.error(json.error || safeT("actionFailed", "Action failed"));
+      return null;
+    }
+    return json;
+  };
+
+  const remindMentor = async (mentorUserId: string) => {
+    setRemindingMentorId(mentorUserId);
+    try {
+      const json = await callRemind({ mentor_user_id: mentorUserId });
+      if (!json) return;
+      if (json.sent.length > 0) {
+        setRecentlyRemindedMentors((prev) => new Set(prev).add(mentorUserId));
+        toast.success(safeT("reminderSent", "Reminder sent"));
+      } else if (json.skipped.some((s) => s.reason === "rate_limited")) {
+        setRecentlyRemindedMentors((prev) => new Set(prev).add(mentorUserId));
+        toast.info(safeT("reminderRateLimited", "Already reminded in last 24h"));
+      } else {
+        toast.info(safeT("reminderSkipped", "No reminder sent"));
+      }
+    } finally {
+      setRemindingMentorId(null);
+    }
+  };
+
+  const remindAll = async () => {
+    setBulkReminding(true);
+    try {
+      const json = await callRemind({ min_pending: 1 });
+      if (!json) return;
+      const sentCount = json.sent.length;
+      const rateCount = json.skipped.filter((s) => s.reason === "rate_limited").length;
+      if (sentCount > 0) {
+        setRecentlyRemindedMentors((prev) => {
+          const next = new Set(prev);
+          json.sent.forEach((s) => next.add(s.mentor_user_id));
+          json.skipped.forEach((s) => {
+            if (s.reason === "rate_limited") next.add(s.mentor_user_id);
+          });
+          return next;
+        });
+      }
+      toast.success(
+        `${safeT("remindersSent", "Reminders sent")}: ${sentCount}` +
+          (rateCount > 0
+            ? ` · ${rateCount} ${safeT("skippedRateLimited", "skipped (24h)")}`
+            : "")
+      );
+    } finally {
+      setBulkReminding(false);
+    }
+  };
+
   const act = async (
     pairId: string,
     action: "accept" | "decline" | "override_approve",
@@ -157,6 +243,16 @@ export function AdminMatchQueue({ orgId, orgSlug }: AdminMatchQueueProps) {
         <div className="flex items-end gap-2">
           <Button
             size="sm"
+            variant="ghost"
+            onClick={remindAll}
+            isLoading={bulkReminding}
+            disabled={rows.length === 0}
+            data-testid="admin-remind-all-mentors"
+          >
+            {safeT("remindAllMentors", "Remind all mentors")}
+          </Button>
+          <Button
+            size="sm"
             onClick={runMatchRound}
             isLoading={runningRound}
           >
@@ -192,7 +288,22 @@ export function AdminMatchQueue({ orgId, orgSlug }: AdminMatchQueueProps) {
           const signals = Array.isArray(row.match_signals)
             ? (row.match_signals as Array<{ code: string; weight: number; value?: string | number }>)
             : [];
-          const intake = row.mentee_intake as Record<string, unknown> | null;
+          const prefs = row.mentee_preferences;
+          const prefsRows: Array<[string, string]> = prefs
+            ? ([
+                ["goals", prefs.goals ?? ""],
+                ["preferred_topics", (prefs.preferred_topics ?? []).join(", ")],
+                ["preferred_industries", (prefs.preferred_industries ?? []).join(", ")],
+                ["preferred_role_families", (prefs.preferred_role_families ?? []).join(", ")],
+                ["preferred_sports", (prefs.preferred_sports ?? []).join(", ")],
+                ["preferred_positions", (prefs.preferred_positions ?? []).join(", ")],
+                ["required_attributes", (prefs.required_attributes ?? []).join(", ")],
+                ["nice_to_have_attributes", (prefs.nice_to_have_attributes ?? []).join(", ")],
+                ["time_availability", prefs.time_availability ?? ""],
+                ["communication_prefs", (prefs.communication_prefs ?? []).join(", ")],
+                ["geographic_pref", prefs.geographic_pref ?? ""],
+              ] as Array<[string, string]>).filter(([, v]) => v.length > 0)
+            : [];
           return (
             <li
               key={row.id}
@@ -223,33 +334,38 @@ export function AdminMatchQueue({ orgId, orgSlug }: AdminMatchQueueProps) {
               {signals.length > 0 && (
                 <ul className="text-xs space-y-0.5">
                   {signals.slice(0, 5).map((s, idx) => {
-                    let label = s.code;
-                    try {
-                      label = tMentorship(`signal.${s.code}`);
-                    } catch { /* fall back */ }
+                    const code = pickSignalCode(s);
+                    const label = labelMatchSignal(code, tMentorship);
                     return (
-                      <li key={`${s.code}-${idx}`} className="flex justify-between">
+                      <li key={`${code ?? "signal"}-${idx}`} className="flex justify-between">
                         <span className="text-[var(--foreground)]/80">
                           {label}
                           {s.value !== undefined && (
                             <span className="text-[var(--muted-foreground)]"> · {String(s.value)}</span>
                           )}
                         </span>
-                        <span className="text-[var(--muted-foreground)]">+{s.weight}</span>
+                        {typeof s.weight === "number" && (
+                          <span className="text-[var(--muted-foreground)]">+{s.weight}</span>
+                        )}
                       </li>
                     );
                   })}
                 </ul>
               )}
 
-              {intake && (
+              {prefsRows.length > 0 && (
                 <details className="text-xs">
                   <summary className="cursor-pointer text-[var(--muted-foreground)]">
-                    {safeT("viewMenteeIntake", "View mentee intake")}
+                    {safeT("viewMenteePreferences", "View mentee preferences")}
                   </summary>
-                  <pre className="mt-2 p-2 bg-[var(--muted)]/30 rounded overflow-x-auto text-[11px]">
-                    {JSON.stringify(intake, null, 2)}
-                  </pre>
+                  <dl className="mt-2 p-2 bg-[var(--muted)]/30 rounded text-[11px] grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                    {prefsRows.map(([k, v]) => (
+                      <div key={k} className="contents">
+                        <dt className="text-[var(--muted-foreground)]">{k}</dt>
+                        <dd className="text-[var(--foreground)]/90 break-words">{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 </details>
               )}
 
@@ -295,6 +411,23 @@ export function AdminMatchQueue({ orgId, orgSlug }: AdminMatchQueueProps) {
                 </div>
               ) : (
                 <div className="flex flex-wrap justify-end gap-2">
+                  {row.status === "proposed" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => remindMentor(row.mentor_user_id)}
+                      isLoading={remindingMentorId === row.mentor_user_id}
+                      disabled={recentlyRemindedMentors.has(row.mentor_user_id)}
+                      data-testid={`admin-remind-mentor-${row.mentor_user_id}`}
+                      title={
+                        recentlyRemindedMentors.has(row.mentor_user_id)
+                          ? safeT("reminderRateLimited", "Already reminded in last 24h")
+                          : undefined
+                      }
+                    >
+                      {safeT("remindMentor", "Remind mentor")}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
