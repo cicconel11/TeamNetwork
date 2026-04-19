@@ -31,6 +31,8 @@ export const menteeIntakeSchema = z.object({
   preferred_topics: z.array(z.string().trim().min(1)).default([]),
   preferred_industry: z.array(z.string().trim().min(1)).default([]),
   preferred_role_families: z.array(z.string().trim().min(1)).default([]),
+  preferred_sports: z.array(z.string().trim().min(1)).default([]),
+  preferred_positions: z.array(z.string().trim().min(1)).default([]),
   time_availability: z
     .enum(["1hr/month", "2hr/month", "4hr/month", "flexible"])
     .optional(),
