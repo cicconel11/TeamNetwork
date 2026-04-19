@@ -6641,6 +6641,7 @@ export type Database = {
         | "chat_participants_change"
         | "search_used"
         | "search_result_click"
+        | "search_action_click"
       chat_group_role: "admin" | "moderator" | "member"
       chat_message_status: "pending" | "approved" | "rejected"
       event_type:
@@ -6818,6 +6819,7 @@ export const Constants = {
         "chat_participants_change",
         "search_used",
         "search_result_click",
+        "search_action_click",
       ],
       chat_group_role: ["admin", "moderator", "member"],
       chat_message_status: ["pending", "approved", "rejected"],

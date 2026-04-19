@@ -169,6 +169,23 @@ const chatParticipantsPayloadSchema = analyticsCommonFieldsSchema.extend({
   result: z.string().max(50).optional(),
 });
 
+const searchUsedPayloadSchema = analyticsCommonFieldsSchema.extend({
+  query_length: z.number().int().nonnegative(),
+  result_count: z.number().int().nonnegative().optional(),
+  mode: z.string().max(50).optional(),
+});
+
+const searchResultClickPayloadSchema = analyticsCommonFieldsSchema.extend({
+  query_length: z.number().int().nonnegative(),
+  mode: z.string().max(50).optional(),
+  clicked_entity_type: z.string().max(50),
+  result_position: z.number().int().nonnegative(),
+});
+
+const searchActionClickPayloadSchema = analyticsCommonFieldsSchema.extend({
+  action: z.string().max(50),
+});
+
 export const analyticsEventSchema = z.discriminatedUnion("event_name", [
   z.object({ event_name: z.literal("app_open"), payload: appOpenPayloadSchema }),
   z.object({ event_name: z.literal("route_view"), payload: routeViewPayloadSchema }),
@@ -186,6 +203,9 @@ export const analyticsEventSchema = z.discriminatedUnion("event_name", [
   z.object({ event_name: z.literal("chat_thread_open"), payload: chatThreadOpenPayloadSchema }),
   z.object({ event_name: z.literal("chat_message_send"), payload: chatMessagePayloadSchema }),
   z.object({ event_name: z.literal("chat_participants_change"), payload: chatParticipantsPayloadSchema }),
+  z.object({ event_name: z.literal("search_used"), payload: searchUsedPayloadSchema }),
+  z.object({ event_name: z.literal("search_result_click"), payload: searchResultClickPayloadSchema }),
+  z.object({ event_name: z.literal("search_action_click"), payload: searchActionClickPayloadSchema }),
 ]);
 
 export type AnalyticsEventInput = z.infer<typeof analyticsEventSchema>;
