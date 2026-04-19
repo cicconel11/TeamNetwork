@@ -8,6 +8,7 @@ import { MentorshipTabShell } from "@/components/mentorship/MentorshipTabShell";
 import { MentorshipActivityTab } from "@/components/mentorship/MentorshipActivityTab";
 import { MentorshipProposalsTab } from "@/components/mentorship/MentorshipProposalsTab";
 import { MenteePreferencesCard } from "@/components/mentorship/MenteePreferencesCard";
+import { MentorProfileCard } from "@/components/mentorship/MentorProfileCard";
 import { MentorshipPageSkeleton } from "@/components/skeletons/pages/MentorshipPageSkeleton";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -257,6 +258,10 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
 
         {isMentee && <MenteePreferencesCard orgId={orgId} />}
 
+        {(orgCtx.role === "alumni" || orgCtx.role === "admin") && (
+          <MentorProfileCard orgId={orgId} />
+        )}
+
         <MentorshipActivityTab
           initialTasks={tasksRaw ?? []}
           initialUpcoming={upcomingMeetings}
@@ -277,24 +282,51 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
   }
 
   if (activeTab === "directory") {
-    const [{ data: currentUserProfile }, { data: mentorProfilesRaw }] = await Promise.all([
-      orgCtx.role === "alumni" && currentUserId
-        ? supabase
-            .from("mentor_profiles")
-            .select("id")
-            .eq("organization_id", orgId)
-            .eq("user_id", currentUserId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
+    const [
+      { data: mentorProfilesRaw },
+      { data: pendingPairsRaw },
+    ] = await Promise.all([
       supabase
         .from("mentor_profiles")
         .select("*, users!mentor_profiles_user_id_fkey(id, name, email)")
         .eq("organization_id", orgId)
         .eq("is_active", true),
+      canRequestIntro
+        ? supabase
+            .from("mentorship_pairs")
+            .select("mentor_user_id")
+            .eq("organization_id", orgId)
+            .eq("mentee_user_id", currentUserId)
+            .in("status", ["proposed", "accepted", "active", "paused"])
+            .is("deleted_at", null)
+        : Promise.resolve({ data: [] as Array<{ mentor_user_id: string }> }),
     ]);
 
-    const mentorProfiles = (mentorProfilesRaw ?? []) as MentorProfileRow[];
+    const mentorProfiles = (mentorProfilesRaw ?? []) as Array<
+      MentorProfileRow & {
+        sports?: string[] | null;
+        positions?: string[] | null;
+      }
+    >;
     const mentorUserIds = mentorProfiles.map((profile) => profile.user_id);
+    const pendingRequestMentorIds = (
+      (pendingPairsRaw ?? []) as Array<{ mentor_user_id: string }>
+    ).map((row) => row.mentor_user_id);
+    const sportOptions = Array.from(
+      new Set(
+        mentorProfiles
+          .flatMap((p) => p.sports ?? [])
+          .filter((s): s is string => typeof s === "string" && s.length > 0)
+      )
+    ).sort();
+    const positionOptions = Array.from(
+      new Set(
+        mentorProfiles
+          .flatMap((p) => p.positions ?? [])
+          .filter((s): s is string => typeof s === "string" && s.length > 0)
+      )
+    ).sort();
+    const orgHasAthleticData = sportOptions.length > 0 || positionOptions.length > 0;
     const { data: mentorAlumniRaw } =
       mentorUserIds.length > 0
         ? await supabase
@@ -324,6 +356,8 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
         current_city: alumni?.current_city || null,
         expertise_areas: profile.expertise_areas || null,
         topics: profile.topics ?? null,
+        sports: profile.sports ?? null,
+        positions: profile.positions ?? null,
         bio: profile.bio || null,
         contact_email: profile.contact_email || null,
         contact_linkedin: profile.contact_linkedin || null,
@@ -355,7 +389,10 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
         mentors={mentorsForDirectory}
         industries={industries}
         years={years}
-        showRegistration={orgCtx.role === "alumni" && !currentUserProfile}
+        sportOptions={sportOptions}
+        positionOptions={positionOptions}
+        orgHasAthleticData={orgHasAthleticData}
+        pendingRequestMentorIds={pendingRequestMentorIds}
         orgId={orgId}
         orgSlug={orgSlug}
         currentUserId={currentUserId}
@@ -401,6 +438,13 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
       proposed_at: proposal.proposed_at ?? null,
       declined_reason: proposal.declined_reason ?? null,
       match_score: proposal.match_score ?? null,
+      match_signals: Array.isArray(proposal.match_signals)
+        ? (proposal.match_signals as Array<{
+            code: string;
+            weight: number;
+            value?: string | number;
+          }>)
+        : [],
     }));
 
     tabContent = (

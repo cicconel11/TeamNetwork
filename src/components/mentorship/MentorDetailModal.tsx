@@ -4,6 +4,12 @@ import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Avatar, Button } from "@/components/ui";
 
+export interface MentorDetailSignal {
+  code: string;
+  weight: number;
+  value?: string | number;
+}
+
 export interface MentorDetailData {
   id: string;
   user_id: string;
@@ -21,6 +27,20 @@ export interface MentorDetailData {
   current_mentee_count: number;
   max_mentees: number;
   accepting_new: boolean;
+  signals?: MentorDetailSignal[];
+}
+
+const REASON_CHIP_CODES = new Set([
+  "shared_sport",
+  "shared_position",
+  "shared_industry",
+  "shared_role_family",
+]);
+
+function humanizeReasonValue(value: string | number | undefined): string {
+  if (value === undefined) return "";
+  const s = String(value);
+  return s.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 interface MentorDetailModalProps {
@@ -50,6 +70,17 @@ export function MentorDetailModal({
   if (!isOpen || !mentor) return null;
 
   const chips = [...(mentor.topics ?? []), ...(mentor.expertise_areas ?? [])];
+  const reasonChips = (mentor.signals ?? []).filter((s) =>
+    REASON_CHIP_CODES.has(s.code)
+  );
+
+  const reasonLabel = (code: string): string => {
+    try {
+      return t(`signal.${code}`);
+    } catch {
+      return code;
+    }
+  };
 
   return (
     <div
@@ -83,6 +114,28 @@ export function MentorDetailModal({
 
         {mentor.bio && (
           <p className="text-sm text-[var(--foreground)]/80">{mentor.bio}</p>
+        )}
+
+        {reasonChips.length > 0 && (
+          <div
+            className="flex flex-wrap gap-1"
+            data-testid="mentor-detail-reason-chips"
+          >
+            {reasonChips.map((sig, i) => (
+              <span
+                key={`${sig.code}-${i}`}
+                data-testid={`mentor-detail-reason-${sig.code}`}
+                className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20"
+              >
+                {reasonLabel(sig.code)}
+                {sig.value !== undefined && (
+                  <span className="ml-1 text-[var(--muted-foreground)]">
+                    · {humanizeReasonValue(sig.value)}
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
         )}
 
         {chips.length > 0 && (

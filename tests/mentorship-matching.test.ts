@@ -156,6 +156,40 @@ describe("rankMentorsForMentee", () => {
     assert.deepStrictEqual(ranked.map((row) => row.mentorUserId), ["finance-mentor"]);
   });
 
+  it("matches a native industry even when the overlap is not in slot 0", () => {
+    const mentee: MenteeInput = {
+      ...menteeBase,
+      preferredIndustries: ["Technology"],
+      requiredMentorAttributes: ["same_industry"],
+    };
+    const ranked = rankMentorsForMentee(mentee, [
+      mentor({
+        userId: "multi-industry",
+        nativeIndustries: ["Finance", "Technology"],
+        topics: ["finance"],
+      }),
+    ]);
+    assert.strictEqual(ranked.length, 1);
+    assert.ok(ranked[0].signals.some((signal) => signal.code === "shared_industry"));
+  });
+
+  it("matches a native role family even when the overlap is not in slot 0", () => {
+    const mentee: MenteeInput = {
+      ...menteeBase,
+      preferredRoleFamilies: ["Engineering"],
+      requiredMentorAttributes: ["same_role_family"],
+    };
+    const ranked = rankMentorsForMentee(mentee, [
+      mentor({
+        userId: "multi-role-family",
+        nativeRoleFamilies: ["Finance", "Engineering"],
+        topics: ["finance"],
+      }),
+    ]);
+    assert.strictEqual(ranked.length, 1);
+    assert.ok(ranked[0].signals.some((signal) => signal.code === "shared_role_family"));
+  });
+
   it("graduation_gap_fit penalizes gap<3 or >15, max at 5-10", () => {
     const m5 = mentor({ userId: "gap-5", graduationYear: 2020 }); // gap 5
     const m2 = mentor({ userId: "gap-2", graduationYear: 2023 }); // gap 2

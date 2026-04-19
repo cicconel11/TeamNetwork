@@ -6,6 +6,12 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Badge, Button, EmptyState, Textarea } from "@/components/ui";
 
+export interface ProposalSignal {
+  code: string;
+  weight: number;
+  value?: string | number;
+}
+
 export interface ProposalRow {
   id: string;
   status: string;
@@ -14,6 +20,7 @@ export interface ProposalRow {
   proposed_at: string | null;
   declined_reason: string | null;
   match_score: number | null;
+  match_signals: ProposalSignal[];
 }
 
 interface MentorshipProposalsTabProps {
@@ -73,6 +80,39 @@ export function MentorshipProposalsTab({
     }
   };
 
+  const signalLabel = (code: string): string => {
+    try {
+      return t(`signal.${code}`);
+    } catch {
+      return code;
+    }
+  };
+
+  const renderSignalChips = (signals: ProposalSignal[], testid: string) => {
+    if (signals.length === 0) return null;
+    return (
+      <ul
+        data-testid={testid}
+        className="flex flex-wrap gap-1 mt-1.5"
+      >
+        {signals.slice(0, 5).map((s, idx) => (
+          <li
+            key={`${s.code}-${idx}`}
+            className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-[var(--muted)]/40 text-[var(--muted-foreground)]"
+          >
+            {signalLabel(s.code)}
+            {s.value !== undefined && (
+              <span className="ml-1">· {String(s.value)}</span>
+            )}
+            <span className="ml-1 text-[var(--muted-foreground)]/70">
+              +{s.weight}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   const badgeForStatus = (status: string) => {
     const variant: "success" | "warning" | "muted" =
       status === "accepted"
@@ -120,6 +160,7 @@ export function MentorshipProposalsTab({
                   </div>
                   {badgeForStatus(p.status)}
                 </div>
+                {renderSignalChips(p.match_signals, `incoming-signals-${p.id}`)}
                 {p.status === "proposed" && (
                   <div className="mt-3 space-y-2">
                     {reasonFor === p.id ? (
@@ -194,10 +235,16 @@ export function MentorshipProposalsTab({
                 data-pair-status={p.status}
                 className="border border-[var(--border)] rounded-md p-3 flex items-center justify-between gap-2"
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">
                     {userMap[p.mentor_user_id] ?? t("unknownUser")}
                   </p>
+                  {p.match_score !== null && (
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {t("matchScore", { score: p.match_score })}
+                    </p>
+                  )}
+                  {renderSignalChips(p.match_signals, `outgoing-signals-${p.id}`)}
                   {p.status === "declined" && p.declined_reason && (
                     <p className="text-xs text-[var(--muted-foreground)] mt-1">
                       {p.declined_reason}

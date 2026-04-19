@@ -32,13 +32,31 @@ type MentorProfileRow = {
   user_id: string;
   topics: string[] | null;
   expertise_areas: string[] | null;
+  sports: string[] | null;
+  positions: string[] | null;
+  industries: string[] | null;
+  role_families: string[] | null;
   bio: string | null;
   max_mentees: number | null;
   current_mentee_count: number | null;
   accepting_new: boolean | null;
 };
 
-type IntakeRow = { user_id: string; data: Record<string, unknown> };
+type MenteePreferencesRow = {
+  user_id: string;
+  goals: string | null;
+  preferred_topics: string[] | null;
+  preferred_industries: string[] | null;
+  preferred_role_families: string[] | null;
+  preferred_sports: string[] | null;
+  preferred_positions: string[] | null;
+  required_attributes: string[] | null;
+  nice_to_have_attributes: string[] | null;
+  time_availability: string | null;
+  communication_prefs: string[] | null;
+  geographic_pref: string | null;
+};
+
 type UserRow = { id: string; name: string | null; email: string | null };
 type OrgMemberRow = { user_id: string; role: string; status: string };
 type AlumniRow = {
@@ -104,27 +122,35 @@ export async function GET(req: Request, { params }: RouteParams) {
     };
   };
 
-  const [{ data: users }, { data: intakeRowsRaw }, { data: mentorProfilesRaw }] = await Promise.all([
+  const [{ data: users }, { data: prefsRowsRaw }, { data: mentorProfilesRaw }] = await Promise.all([
     userIds.length > 0
       ? (service.from("users").select("id,name,email").in("id", userIds) as unknown as Promise<{ data: UserRow[] | null }>)
       : Promise.resolve({ data: [] as UserRow[] }),
     userIds.length > 0
-      ? svc.from("mentee_latest_intake").select("user_id, data").eq("organization_id", organizationId).in("user_id", userIds)
+      ? svc
+          .from("mentee_preferences")
+          .select(
+            "user_id, goals, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref"
+          )
+          .eq("organization_id", organizationId)
+          .in("user_id", userIds)
       : Promise.resolve({ data: [] as unknown[] }),
     userIds.length > 0
       ? svc
           .from("mentor_profiles")
-          .select("user_id, topics, expertise_areas, bio, max_mentees, current_mentee_count, accepting_new")
+          .select(
+            "user_id, topics, expertise_areas, sports, positions, industries, role_families, bio, max_mentees, current_mentee_count, accepting_new"
+          )
           .eq("organization_id", organizationId)
           .in("user_id", userIds)
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
-  const intakeRows = (intakeRowsRaw ?? []) as IntakeRow[];
+  const prefsRows = (prefsRowsRaw ?? []) as MenteePreferencesRow[];
   const mentorProfiles = (mentorProfilesRaw ?? []) as MentorProfileRow[];
 
   const userById = new Map((users ?? []).map((u) => [u.id, u]));
-  const intakeByUser = new Map(intakeRows.map((r) => [r.user_id, r.data]));
+  const prefsByUser = new Map(prefsRows.map((r) => [r.user_id, r]));
   const mentorByUser = new Map(mentorProfiles.map((p) => [p.user_id, p]));
 
   const enriched = rows.map((p) => ({
@@ -132,7 +158,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     mentor: mentorByUser.get(p.mentor_user_id) ?? null,
     mentor_user: userById.get(p.mentor_user_id) ?? null,
     mentee_user: userById.get(p.mentee_user_id) ?? null,
-    mentee_intake: intakeByUser.get(p.mentee_user_id) ?? null,
+    mentee_preferences: prefsByUser.get(p.mentee_user_id) ?? null,
   }));
 
   enriched.sort((a, b) => {
@@ -224,7 +250,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     svc
       .from("mentor_profiles")
       .select(
-        "user_id, topics, expertise_areas, max_mentees, current_mentee_count, accepting_new, is_active"
+        "user_id, topics, expertise_areas, sports, positions, industries, role_families, max_mentees, current_mentee_count, accepting_new, is_active"
       )
       .eq("organization_id", organizationId)
       .eq("is_active", true),
@@ -246,6 +272,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     user_id: string;
     topics: string[] | null;
     expertise_areas: string[] | null;
+    sports: string[] | null;
+    positions: string[] | null;
+    industries: string[] | null;
+    role_families: string[] | null;
     max_mentees: number | null;
     current_mentee_count: number | null;
     accepting_new: boolean | null;
@@ -274,14 +304,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const mentorUserIds = mentorProfiles.map((profile) => profile.user_id);
   const peopleUserIds = Array.from(new Set([...candidateMenteeIds, ...mentorUserIds]));
 
-  const [{ data: intakeRowsRaw }, { data: alumniRowsRaw }, { data: usersRaw }] = await Promise.all([
-    candidateMenteeIds.length > 0
-      ? svc
-          .from("mentee_latest_intake")
-          .select("user_id, data")
-          .eq("organization_id", organizationId)
-          .in("user_id", candidateMenteeIds)
-      : Promise.resolve({ data: [] as unknown[] }),
+  const [{ data: alumniRowsRaw }, { data: usersRaw }, { data: prefsRowsRaw }] = await Promise.all([
     peopleUserIds.length > 0
       ? service
           .from("alumni")
@@ -295,15 +318,24 @@ export async function POST(req: Request, { params }: RouteParams) {
           .select("id,name,email")
           .in("id", peopleUserIds)
       : Promise.resolve({ data: [] as UserRow[] }),
+    candidateMenteeIds.length > 0
+      ? svc
+          .from("mentee_preferences")
+          .select(
+            "user_id, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes"
+          )
+          .eq("organization_id", organizationId)
+          .in("user_id", candidateMenteeIds)
+      : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
-  const intakeRows = (intakeRowsRaw ?? []) as IntakeRow[];
   const alumniRows = (alumniRowsRaw ?? []) as AlumniRow[];
   const users = (usersRaw ?? []) as UserRow[];
+  const prefsRows = (prefsRowsRaw ?? []) as MenteePreferencesRow[];
 
-  const intakeByUser = new Map(intakeRows.map((row) => [row.user_id, row.data ?? {}]));
   const alumniByUser = new Map(alumniRows.map((row) => [row.user_id, row]));
   const userById = new Map(users.map((row) => [row.id, row]));
+  const prefsByUser = new Map(prefsRows.map((row) => [row.user_id, row]));
 
   const mentorInputs: MentorInput[] = mentorProfiles.map((profile) => {
     const alumni = alumniByUser.get(profile.user_id);
@@ -312,6 +344,10 @@ export async function POST(req: Request, { params }: RouteParams) {
       orgId: organizationId,
       topics: profile.topics ?? [],
       expertiseAreas: profile.expertise_areas ?? [],
+      nativeSports: profile.sports ?? [],
+      nativePositions: profile.positions ?? [],
+      nativeIndustries: profile.industries ?? [],
+      nativeRoleFamilies: profile.role_families ?? [],
       industry: alumni?.industry ?? null,
       jobTitle: alumni?.job_title ?? null,
       positionTitle: alumni?.position_title ?? null,
@@ -330,33 +366,27 @@ export async function POST(req: Request, { params }: RouteParams) {
   let skippedExisting = orgMembers.length - candidateMenteeIds.length;
   let notificationsSent = 0;
 
+  const stringArr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
+
   for (const menteeUserId of candidateMenteeIds) {
-    const intake = intakeByUser.get(menteeUserId) ?? {};
+    const prefs = prefsByUser.get(menteeUserId) ?? null;
     const alumni = alumniByUser.get(menteeUserId) ?? null;
+    const preferredPositions = (() => {
+      const explicit = stringArr(prefs?.preferred_positions);
+      if (explicit.length > 0) return explicit;
+      return alumni?.position_title ? [alumni.position_title] : [];
+    })();
     const matches = rankMentorsForMentee(
       {
         userId: menteeUserId,
         orgId: organizationId,
-        focusAreas: Array.isArray(intake.preferred_topics)
-          ? intake.preferred_topics.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          : [],
-        preferredIndustries: Array.isArray(intake.preferred_industry)
-          ? intake.preferred_industry.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          : [],
-        preferredRoleFamilies: Array.isArray(intake.preferred_role_families)
-          ? intake.preferred_role_families.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          : [],
-        preferredSports: Array.isArray(intake.preferred_sports)
-          ? intake.preferred_sports.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          : [],
-        preferredPositions: Array.isArray(intake.preferred_positions)
-          ? intake.preferred_positions.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          : alumni?.position_title
-              ? [alumni.position_title]
-              : [],
-        requiredMentorAttributes: Array.isArray(intake.mentor_attributes_required)
-          ? intake.mentor_attributes_required.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          : [],
+        focusAreas: stringArr(prefs?.preferred_topics),
+        preferredIndustries: stringArr(prefs?.preferred_industries),
+        preferredRoleFamilies: stringArr(prefs?.preferred_role_families),
+        preferredSports: stringArr(prefs?.preferred_sports),
+        preferredPositions,
+        requiredMentorAttributes: stringArr(prefs?.required_attributes),
         currentCity: alumni?.current_city ?? null,
         graduationYear: alumni?.graduation_year ?? null,
         currentCompany: alumni?.current_company ?? null,
