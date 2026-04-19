@@ -22,7 +22,7 @@ interface MentorshipTask {
 
 interface MentorshipTasksTabProps {
   initialTasks: MentorshipTask[];
-  pairs: Array<{ id: string; mentorName: string; menteeName: string }>;
+  pairs: Array<{ id: string; mentorName: string; menteeName: string; mentorUserId?: string; menteeUserId?: string }>;
   initialPairId: string;
   isMentor: boolean;
   isAdmin: boolean;
@@ -107,6 +107,7 @@ export function MentorshipTasksTab({
   initialPairId,
   isMentor,
   orgId,
+  currentUserId,
 }: MentorshipTasksTabProps) {
   const tMentorship = useTranslations("mentorship");
 
@@ -307,6 +308,7 @@ export function MentorshipTasksTab({
             pairs={pairs}
             selectedPairId={selectedPairId}
             onPairChange={handlePairChange}
+            currentUserId={currentUserId}
           />
         </div>
       )}

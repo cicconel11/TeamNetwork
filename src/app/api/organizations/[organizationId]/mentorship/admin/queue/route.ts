@@ -45,6 +45,7 @@ type MentorProfileRow = {
 type MenteePreferencesRow = {
   user_id: string;
   goals: string | null;
+  seeking_mentorship?: boolean | null;
   preferred_topics: string[] | null;
   preferred_industries: string[] | null;
   preferred_role_families: string[] | null;
@@ -322,7 +323,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       ? svc
           .from("mentee_preferences")
           .select(
-            "user_id, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes"
+            "user_id, seeking_mentorship, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes"
           )
           .eq("organization_id", organizationId)
           .in("user_id", candidateMenteeIds)
@@ -371,6 +372,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   for (const menteeUserId of candidateMenteeIds) {
     const prefs = prefsByUser.get(menteeUserId) ?? null;
+    if (!prefs?.seeking_mentorship) {
+      skippedNoMatch += 1;
+      continue;
+    }
     const alumni = alumniByUser.get(menteeUserId) ?? null;
     const preferredPositions = (() => {
       const explicit = stringArr(prefs?.preferred_positions);
