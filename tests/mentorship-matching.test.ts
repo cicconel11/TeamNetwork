@@ -287,4 +287,129 @@ describe("rankMentorsForMentee", () => {
     });
     assert.ok(overrideRanked[0].score > defaultRanked[0].score);
   });
+
+  describe("athletic smoke scenarios", () => {
+    it("Basketball + Point Guard mentee ranks athletic match above non-athletic match", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        preferredSports: ["Basketball"],
+        preferredPositions: ["Point Guard"],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "athletic-match",
+          topics: ["basketball", "leadership"],
+          positionTitle: "Point Guard Coach",
+        }),
+        mentor({
+          userId: "non-athletic",
+          topics: ["finance"],
+          positionTitle: "Investment Analyst",
+        }),
+      ]);
+      assert.strictEqual(ranked[0].mentorUserId, "athletic-match");
+      assert.ok(ranked[0].signals.some((s) => s.code === "shared_sport"));
+      assert.ok(ranked[0].signals.some((s) => s.code === "shared_position"));
+    });
+
+    it("same_sport required + football mentor is hard-filter-rejected for basketball mentee", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        preferredSports: ["Basketball"],
+        requiredMentorAttributes: ["same_sport"],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "football-mentor",
+          topics: ["football"],
+          positionTitle: "Quarterback",
+        }),
+      ]);
+      assert.strictEqual(ranked.length, 0);
+    });
+
+    it("generic job title 'Security Guard' does not match point-guard / shooting-guard positions", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        preferredPositions: ["Point Guard"],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "security-guard",
+          topics: [],
+          positionTitle: "Security Guard",
+          jobTitle: "Security Guard",
+        }),
+      ]);
+      assert.ok(
+        !ranked.some((r) => r.signals.some((s) => s.code === "shared_position")),
+        "Security Guard must not create a false athletic position match"
+      );
+    });
+
+    it("generic title 'Center Director' does not match basketball 'center' position", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        preferredPositions: ["Center"],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "center-director",
+          topics: [],
+          positionTitle: "Center Director",
+          jobTitle: "Center Director",
+        }),
+      ]);
+      assert.ok(
+        !ranked.some((r) => r.signals.some((s) => s.code === "shared_position")),
+        "Center Director must not create a false athletic position match"
+      );
+    });
+
+    it("generic non-athletic titles do not trigger sport signals", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        preferredSports: ["Basketball"],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "generic-1",
+          topics: [],
+          positionTitle: "Security Guard",
+        }),
+        mentor({
+          userId: "generic-2",
+          topics: [],
+          positionTitle: "Center Director",
+        }),
+        mentor({
+          userId: "generic-3",
+          topics: [],
+          positionTitle: "Managing Director",
+        }),
+      ]);
+      assert.ok(
+        !ranked.some((r) => r.signals.some((s) => s.code === "shared_sport")),
+        "Generic titles must not trigger shared_sport"
+      );
+    });
+
+    it("admin queue signals include shared_sport and shared_position for an athletic match", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        preferredSports: ["Basketball"],
+        preferredPositions: ["Point Guard"],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "full-athletic",
+          topics: ["basketball"],
+          positionTitle: "Point Guard",
+        }),
+      ]);
+      const codes = ranked[0].signals.map((s) => s.code);
+      assert.ok(codes.includes("shared_sport"));
+      assert.ok(codes.includes("shared_position"));
+    });
+  });
 });
