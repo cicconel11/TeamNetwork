@@ -11,7 +11,10 @@ import {
   withMediaAlbumsDraftColumnFallback,
 } from "@/lib/media/gallery-upload-server";
 import { batchGetGridPreviewUrls, MEDIA_LIST_CACHE_HEADERS } from "@/lib/media/urls";
-import { shouldExposeAlbumCover } from "@/lib/media/albums";
+import {
+  getAlbumFallbackCoverSelections,
+  shouldExposeAlbumCover,
+} from "@/lib/media/albums";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -240,16 +243,16 @@ async function enrichAlbumsWithCovers(
   albums: Record<string, unknown>[],
   headers: HeadersInit,
 ) {
-  const coversToFetch = albums
+  const explicitCoverIds = Array.from(new Set(albums
     .filter((album) => album.cover_media_id)
-    .map((album) => album.cover_media_id as string);
+    .map((album) => album.cover_media_id as string)));
 
-  const coverUrlMap = new Map<string, string>();
-  if (coversToFetch.length > 0) {
+  const explicitCoverUrlMap = new Map<string, string>();
+  if (explicitCoverIds.length > 0) {
     const { data: coverItems } = await serviceClient
       .from("media_items")
       .select("id, storage_path, preview_storage_path, mime_type, media_type, status")
-      .in("id", coversToFetch)
+      .in("id", explicitCoverIds)
       .is("deleted_at", null);
 
     if (coverItems && coverItems.length > 0) {
@@ -268,16 +271,84 @@ async function enrichAlbumsWithCovers(
       );
       for (const [id, urls] of urlMap) {
         if (urls.thumbnailUrl) {
-          coverUrlMap.set(id, urls.thumbnailUrl);
+          explicitCoverUrlMap.set(id, urls.thumbnailUrl);
         }
       }
     }
   }
 
+  const fallbackAlbumIds = albums
+    .filter((album) => {
+      const coverMediaId = album.cover_media_id as string | null | undefined;
+      return !coverMediaId || !explicitCoverUrlMap.has(coverMediaId);
+    })
+    .map((album) => album.id as string);
+
+  const fallbackCoverUrlMap = new Map<string, string>();
+  if (fallbackAlbumIds.length > 0) {
+    const { data: fallbackRows } = await serviceClient
+      .from("media_album_items")
+      .select(`
+        album_id,
+        media_item_id,
+        added_at,
+        media_items!inner(
+          storage_path,
+          preview_storage_path,
+          mime_type,
+          media_type,
+          status
+        )
+      `)
+      .in("album_id", fallbackAlbumIds)
+      .is("media_items.deleted_at", null)
+      .order("album_id", { ascending: true })
+      .order("added_at", { ascending: true })
+      .order("media_item_id", { ascending: true });
+
+    const fallbackSelections = getAlbumFallbackCoverSelections(
+      (fallbackRows ?? []).map((row) => {
+        const media = row.media_items as Record<string, unknown> | null;
+        return {
+          album_id: row.album_id as string,
+          media_item_id: row.media_item_id as string,
+          media_type: (media?.media_type as string | null) ?? null,
+          status: (media?.status as string | null) ?? null,
+          media_items: media
+            ? {
+              storage_path: (media.storage_path as string | null) ?? null,
+              preview_storage_path: (media.preview_storage_path as string | null) ?? null,
+              mime_type: (media.mime_type as string | null) ?? null,
+            }
+            : null,
+        };
+      }),
+    );
+
+    const fallbackUrlLookup = fallbackSelections.length > 0
+      ? await batchGetGridPreviewUrls(serviceClient, fallbackSelections.map((selection) => ({
+        id: selection.mediaId,
+        storage_path: selection.storage_path,
+        preview_storage_path: selection.preview_storage_path,
+        mime_type: selection.mime_type,
+        media_type: selection.media_type,
+      })))
+      : new Map();
+
+    for (const selection of fallbackSelections) {
+      const url = fallbackUrlLookup.get(selection.mediaId)?.thumbnailUrl;
+      if (url) {
+        fallbackCoverUrlMap.set(selection.albumId, url);
+      }
+    }
+  }
+
   const enriched = albums.map((album) => {
+    const coverMediaId = album.cover_media_id as string | null | undefined;
+    const explicitCoverUrl = coverMediaId ? (explicitCoverUrlMap.get(coverMediaId) ?? null) : null;
     const responseAlbum: Record<string, unknown> = {
       ...album,
-      cover_url: album.cover_media_id ? (coverUrlMap.get(album.cover_media_id as string) || null) : null,
+      cover_url: explicitCoverUrl ?? (fallbackCoverUrlMap.get(album.id as string) ?? null),
     };
     delete responseAlbum.is_upload_draft;
     return responseAlbum;

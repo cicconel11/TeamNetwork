@@ -6,6 +6,7 @@ import {
   canUploadDirectlyToAlbum,
   getAlbumBulkDeleteEligibleIds,
   getAlbumCoverPickerItems,
+  getAlbumFallbackCoverSelections,
   getAlbumCoverValidationError,
   getAlbumUpdatesAfterMediaDelete,
   resolveAlbumDeleteMode,
@@ -64,6 +65,105 @@ test("album list only exposes approved covers", () => {
   assert.equal(shouldExposeAlbumCover({ status: "pending" }), false);
   assert.equal(shouldExposeAlbumCover({ status: "rejected" }), false);
   assert.equal(shouldExposeAlbumCover(null), false);
+});
+
+test("album fallback covers use the first approved image in each album", () => {
+  assert.deepEqual(
+    getAlbumFallbackCoverSelections([
+      {
+        album_id: "album-1",
+        media_item_id: "video-first",
+        media_type: "video",
+        status: "approved",
+        media_items: {
+          storage_path: "albums/video.mp4",
+          preview_storage_path: null,
+          mime_type: "video/mp4",
+        },
+      },
+      {
+        album_id: "album-1",
+        media_item_id: "pending-image",
+        media_type: "image",
+        status: "pending",
+        media_items: {
+          storage_path: "albums/pending.jpg",
+          preview_storage_path: null,
+          mime_type: "image/jpeg",
+        },
+      },
+      {
+        album_id: "album-1",
+        media_item_id: "approved-image",
+        media_type: "image",
+        status: "approved",
+        media_items: {
+          storage_path: "albums/approved.jpg",
+          preview_storage_path: "albums/approved-preview.jpg",
+          mime_type: "image/jpeg",
+        },
+      },
+      {
+        album_id: "album-1",
+        media_item_id: "later-approved-image",
+        media_type: "image",
+        status: "approved",
+        media_items: {
+          storage_path: "albums/later.jpg",
+          preview_storage_path: null,
+          mime_type: "image/jpeg",
+        },
+      },
+      {
+        album_id: "album-2",
+        media_item_id: "album-2-first",
+        media_type: "image",
+        status: "approved",
+        media_items: {
+          storage_path: "albums/album-2.jpg",
+          preview_storage_path: null,
+          mime_type: "image/jpeg",
+        },
+      },
+    ]),
+    [
+      {
+        albumId: "album-1",
+        mediaId: "approved-image",
+        storage_path: "albums/approved.jpg",
+        preview_storage_path: "albums/approved-preview.jpg",
+        mime_type: "image/jpeg",
+        media_type: "image",
+      },
+      {
+        albumId: "album-2",
+        mediaId: "album-2-first",
+        storage_path: "albums/album-2.jpg",
+        preview_storage_path: null,
+        mime_type: "image/jpeg",
+        media_type: "image",
+      },
+    ],
+  );
+});
+
+test("album fallback covers skip rows without usable image storage", () => {
+  assert.deepEqual(
+    getAlbumFallbackCoverSelections([
+      {
+        album_id: "album-1",
+        media_item_id: "broken-image",
+        media_type: "image",
+        status: "approved",
+        media_items: {
+          storage_path: null,
+          preview_storage_path: null,
+          mime_type: "image/jpeg",
+        },
+      },
+    ]),
+    [],
+  );
 });
 
 test("album bulk delete permissions allow admins and item owners only", () => {

@@ -10,6 +10,16 @@ interface AlbumCoverCandidate {
   status: string | null;
 }
 
+interface AlbumFallbackCoverCandidate extends AlbumCoverCandidate {
+  album_id: string;
+  media_item_id: string;
+  media_items: {
+    storage_path: string | null;
+    preview_storage_path?: string | null;
+    mime_type?: string | null;
+  } | null;
+}
+
 interface AlbumItemLike {
   id: string;
   media_type: string;
@@ -24,6 +34,15 @@ interface AlbumLike {
 }
 
 export type AlbumDeleteMode = "album_only" | "album_and_media";
+
+export interface AlbumFallbackCoverSelection {
+  albumId: string;
+  mediaId: string;
+  storage_path: string;
+  preview_storage_path: string | null;
+  mime_type: string;
+  media_type: "image";
+}
 
 export function canUploadDirectlyToAlbum(canUpload: boolean, canEdit: boolean): boolean {
   return canUpload && canEdit;
@@ -80,6 +99,30 @@ export function shouldExposeAlbumCover(
   item: Pick<AlbumCoverCandidate, "status"> | null | undefined,
 ): boolean {
   return item?.status === "approved";
+}
+
+export function getAlbumFallbackCoverSelections<T extends AlbumFallbackCoverCandidate>(
+  items: T[],
+): AlbumFallbackCoverSelection[] {
+  const selected = new Map<string, AlbumFallbackCoverSelection>();
+
+  for (const item of items) {
+    if (selected.has(item.album_id)) continue;
+    if (item.media_type !== "image") continue;
+    if (!shouldExposeAlbumCover(item)) continue;
+    if (!item.media_items?.storage_path) continue;
+
+    selected.set(item.album_id, {
+      albumId: item.album_id,
+      mediaId: item.media_item_id,
+      storage_path: item.media_items.storage_path,
+      preview_storage_path: item.media_items.preview_storage_path ?? null,
+      mime_type: item.media_items.mime_type ?? "application/octet-stream",
+      media_type: "image",
+    });
+  }
+
+  return Array.from(selected.values());
 }
 
 export function getAlbumUpdatesAfterMediaDelete(
