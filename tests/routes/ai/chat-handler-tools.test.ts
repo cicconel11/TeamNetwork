@@ -341,6 +341,38 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
           ],
         });
       }
+      if (call.name === "list_available_mentors") {
+        return okToolResult({
+          state: "resolved",
+          total_available: 2,
+          mentors: [
+            {
+              mentor: {
+                user_id: "mentor-1",
+                name: "Dina Direct",
+                subtitle: "VP Product at Acme",
+              },
+              open_slots: 2,
+              current_mentee_count: 1,
+              max_mentees: 3,
+              sports: ["basketball"],
+              positions: ["point guard"],
+            },
+            {
+              mentor: {
+                user_id: "mentor-2",
+                name: "Sarah Chen",
+                subtitle: "Engineering Manager at Acme",
+              },
+              open_slots: 1,
+              current_mentee_count: 2,
+              max_mentees: 3,
+              sports: ["soccer"],
+              positions: ["midfielder"],
+            },
+          ],
+        });
+      }
       if (call.name === "find_navigation_targets") {
         return okToolResult({
           state: "resolved",
@@ -600,6 +632,7 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
     "list_parents",
     "get_org_stats",
     "suggest_connections",
+    "list_available_mentors",
     "suggest_mentors",
   ]);
   assert.equal(
@@ -726,6 +759,7 @@ test("ambiguous queries keep fallback surface tool set", async () => {
     "list_donations",
     "get_org_stats",
     "suggest_connections",
+    "list_available_mentors",
     "suggest_mentors",
   ]);
 });
@@ -1213,9 +1247,24 @@ test("action requests do not get forced into find_navigation_targets", async () 
     "list_parents",
     "get_org_stats",
     "suggest_connections",
+    "list_available_mentors",
     "suggest_mentors",
   ]);
   assert.equal(executeToolCallCalls[0].call.name, "list_members");
+});
+
+test("mentor availability requests route to list_available_mentors", async () => {
+  const response = await POST(makeRequest("Are there any mentors available?") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(toolNamesForCall(0), ["list_available_mentors"]);
+  assert.equal(executeToolCallCalls[0].call.name, "list_available_mentors");
+  assert.deepEqual(executeToolCallCalls[0].call.args, { limit: 5 });
+  assert.match(body, /There are 2 mentors currently available/i);
+  assert.match(body, /Dina Direct/);
 });
 
 test("create announcement requests only attach prepare_announcement on pass 1", async () => {
