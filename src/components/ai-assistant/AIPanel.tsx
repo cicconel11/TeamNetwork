@@ -167,7 +167,7 @@ function getStarterPrompts(pathname: string, surface: ReturnType<typeof routeToS
       return [
         "How many active members do we have?",
         "Show recent members",
-        "Open the members page",
+        "Suggest a mentor for a member",
       ];
     case "events":
       return [

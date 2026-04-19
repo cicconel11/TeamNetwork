@@ -15,7 +15,9 @@ export type SourceTable =
   | "discussion_threads"
   | "discussion_replies"
   | "events"
-  | "job_postings";
+  | "job_postings"
+  | "mentor_profiles"
+  | "form_submissions";
 
 /** Parent thread context passed for discussion_replies rendering. */
 export interface ParentThreadContext {
@@ -142,6 +144,34 @@ function renderJobPosting(record: Record<string, unknown>): ChunkInput[] {
   return splitIfNeeded(text, { title, company });
 }
 
+function renderMentorProfile(record: Record<string, unknown>): ChunkInput[] {
+  const bio = record.bio ? String(record.bio) : "";
+  const topics = Array.isArray(record.topics)
+    ? (record.topics as string[]).join(", ")
+    : "";
+  const industry = record.industry ? String(record.industry) : "";
+
+  const lines = ["Mentor profile"];
+  if (bio) lines.push(bio);
+  if (topics) lines.push(`Topics: ${topics}`);
+  if (industry) lines.push(`Industry: ${industry}`);
+
+  const text = lines.join("\n");
+  return splitIfNeeded(text, {});
+}
+
+function renderFormSubmission(record: Record<string, unknown>): ChunkInput[] {
+  const responses = record.responses ?? record.data;
+  const text =
+    typeof responses === "string"
+      ? responses
+      : responses && typeof responses === "object"
+        ? JSON.stringify(responses)
+        : "";
+  if (!text) return [];
+  return splitIfNeeded(`Form submission: ${text}`, {});
+}
+
 // ---------------------------------------------------------------------------
 // Splitting
 // ---------------------------------------------------------------------------
@@ -250,6 +280,10 @@ export function renderChunks(
       return renderDiscussionReply(record, parentContext);
     case "job_postings":
       return renderJobPosting(record);
+    case "mentor_profiles":
+      return renderMentorProfile(record);
+    case "form_submissions":
+      return renderFormSubmission(record);
     default: {
       const _exhaustive: never = sourceTable;
       throw new Error(`Unknown source table: ${_exhaustive}`);
