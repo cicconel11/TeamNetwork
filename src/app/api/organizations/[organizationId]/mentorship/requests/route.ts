@@ -202,6 +202,11 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Failed to load proposal" }, { status: 500 });
   }
 
+  if (inserted.match_score == null && match.score != null) {
+    console.error("[mentorship/requests] match_score not persisted for pair", rpcRow.pair_id,
+      "expected:", match.score);
+  }
+
   if (rpcRow.reused) {
     return NextResponse.json({ pair: inserted, reused: true }, { status: 200 });
   }
