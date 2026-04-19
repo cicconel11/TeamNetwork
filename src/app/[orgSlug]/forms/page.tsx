@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
-import { Card, Button, Badge, EmptyState } from "@/components/ui";
+import { Card, Button, Badge, EmptyState, InlineBanner } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -78,9 +78,14 @@ export default async function FormsPage({ params }: FormsPageProps) {
     // Build submission data for each form
     const formSubmissionData = typedForms.map((form) => ({
       formId: form.id,
-      count: countByForm.get(form.id) || 0,
-      lastSubmittedAt: lastSubmittedByForm.get(form.id) || null,
+      count: subsError ? null : (countByForm.get(form.id) || 0),
+      lastSubmittedAt: subsError ? null : (lastSubmittedByForm.get(form.id) || null),
     }));
+
+    const adminFetchFailures: string[] = [];
+    if (formsError) adminFetchFailures.push(pageLabel.toLowerCase());
+    if (subsError) adminFetchFailures.push("submissions");
+    if (docsError) adminFetchFailures.push(tForms("documentForms").toLowerCase());
 
     return (
       <div className="space-y-6 animate-fade-in">
@@ -129,12 +134,32 @@ export default async function FormsPage({ params }: FormsPageProps) {
           }
         />
 
-        <FormsAdminView
-          forms={typedForms}
-          formSubmissionData={formSubmissionData}
-          orgSlug={orgSlug}
-          pageLabel={pageLabel}
-        />
+        {adminFetchFailures.length > 0 && (
+          <InlineBanner variant="error">
+            Couldn&apos;t load {adminFetchFailures.join(", ")}. Some data on
+            this page may be missing. Refresh to try again.
+          </InlineBanner>
+        )}
+
+        {formsError ? (
+          <Card>
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-foreground">
+                Unable to load {pageLabel.toLowerCase()}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Refresh to try again.
+              </p>
+            </div>
+          </Card>
+        ) : (
+          <FormsAdminView
+            forms={typedForms}
+            formSubmissionData={formSubmissionData}
+            orgSlug={orgSlug}
+            pageLabel={pageLabel}
+          />
+        )}
 
         {/* Document Forms Section */}
         {typedDocs.length > 0 && (
@@ -235,11 +260,20 @@ export default async function FormsPage({ params }: FormsPageProps) {
       docSubsError.message,
     );
 
-  const submittedFormIds = new Set(submissions?.map((s) => s.form_id) || []);
+  const submissionStatusUnavailable = Boolean(subsError || docSubsError);
+  const submittedFormIds = new Set(
+    submissionStatusUnavailable ? [] : (submissions?.map((s) => s.form_id) || []),
+  );
   const submittedDocIds = new Set(
-    docSubmissions?.map((s) => s.document_id) || [],
+    submissionStatusUnavailable ? [] : (docSubmissions?.map((s) => s.document_id) || []),
   );
   const typedDocs = (documents || []) as FormDocument[];
+
+  const memberFetchFailures: string[] = [];
+  if (formsError) memberFetchFailures.push(pageLabel.toLowerCase());
+  if (docsError) memberFetchFailures.push(tForms("documentForms").toLowerCase());
+  if (subsError || docSubsError)
+    memberFetchFailures.push("your submission status");
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -248,7 +282,25 @@ export default async function FormsPage({ params }: FormsPageProps) {
         description={tForms("viewDescription", { label: pageLabel.toLowerCase() })}
       />
 
-      {forms && forms.length > 0 ? (
+      {memberFetchFailures.length > 0 && (
+        <InlineBanner variant="error">
+          Couldn&apos;t load {memberFetchFailures.join(", ")}. Refresh to try
+          again.
+        </InlineBanner>
+      )}
+
+      {formsError ? (
+        <Card>
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold text-foreground">
+              Unable to load {pageLabel.toLowerCase()}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Refresh to try again.
+            </p>
+          </div>
+        </Card>
+      ) : forms && forms.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {(forms as Form[]).map((form) => {
             const isSubmitted = submittedFormIds.has(form.id);
@@ -259,7 +311,9 @@ export default async function FormsPage({ params }: FormsPageProps) {
                     <h3 className="font-semibold text-foreground">
                       {form.title}
                     </h3>
-                    {isSubmitted && <Badge variant="success">{tCommon("submitted")}</Badge>}
+                    {!submissionStatusUnavailable && isSubmitted && (
+                      <Badge variant="success">{tCommon("submitted")}</Badge>
+                    )}
                   </div>
                   {form.description && (
                     <p className="text-sm text-muted-foreground line-clamp-2">
@@ -273,9 +327,9 @@ export default async function FormsPage({ params }: FormsPageProps) {
                     <Link href={`/${orgSlug}/forms/${form.id}`}>
                       <Button
                         size="sm"
-                        variant={isSubmitted ? "secondary" : "primary"}
+                        variant={submissionStatusUnavailable || isSubmitted ? "secondary" : "primary"}
                       >
-                        {isSubmitted ? tForms("viewEdit") : tForms("fillOut")}
+                        {submissionStatusUnavailable ? "Open" : isSubmitted ? tForms("viewEdit") : tForms("fillOut")}
                       </Button>
                     </Link>
                   </div>
@@ -325,7 +379,7 @@ export default async function FormsPage({ params }: FormsPageProps) {
                           {doc.title}
                         </h3>
                       </div>
-                      {isSubmitted && (
+                      {!submissionStatusUnavailable && isSubmitted && (
                         <Badge variant="success">{tCommon("submitted")}</Badge>
                       )}
                     </div>
@@ -338,9 +392,11 @@ export default async function FormsPage({ params }: FormsPageProps) {
                       <Link href={`/${orgSlug}/forms/documents/${doc.id}`}>
                         <Button
                           size="sm"
-                          variant={isSubmitted ? "secondary" : "primary"}
+                          variant={submissionStatusUnavailable || isSubmitted ? "secondary" : "primary"}
                         >
-                          {isSubmitted
+                          {submissionStatusUnavailable
+                            ? "Open"
+                            : isSubmitted
                             ? tForms("viewResubmit")
                             : tForms("downloadSubmit")}
                         </Button>

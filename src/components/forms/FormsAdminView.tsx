@@ -9,7 +9,7 @@ import type { Form } from "@/types/database";
 
 interface FormSubmissionData {
   formId: string;
-  count: number;
+  count: number | null;
   lastSubmittedAt: string | null;
 }
 
@@ -81,7 +81,7 @@ export function FormsAdminView({
             key={form.id}
             form={form}
             orgSlug={orgSlug}
-            submissionCount={subData?.count || 0}
+            submissionCount={subData?.count ?? null}
             lastSubmittedAt={subData?.lastSubmittedAt || null}
             onToggleActive={handleToggleActive}
             onDelete={handleDelete}

@@ -13,9 +13,9 @@ const MediaGallery = dynamic(
 export default async function MediaArchivePage({
   params,
 }: {
-  params: { orgSlug: string };
+  params: Promise<{ orgSlug: string }>;
 }) {
-  const { orgSlug } = params;
+  const { orgSlug } = await params;
   const orgCtx = await getOrgContext(orgSlug);
 
   if (!orgCtx.organization) {
