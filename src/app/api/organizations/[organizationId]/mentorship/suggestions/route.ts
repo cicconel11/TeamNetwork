@@ -7,8 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import {
   rankMentorsForMentee,
 } from "@/lib/mentorship/matching";
-import { loadMenteeIntakeInput } from "@/lib/mentorship/matching-signals";
-import { loadMentorInputs } from "@/lib/mentorship/queries";
+import { loadMentorInputs, loadMenteePreferences } from "@/lib/mentorship/queries";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -83,10 +82,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Suggestions are only available for active members" }, { status: 403 });
   }
 
-  const menteeInput = await loadMenteeIntakeInput(
-    service as unknown as Parameters<typeof loadMenteeIntakeInput>[0],
-    body.mentee_user_id,
-    organizationId
+  const menteeInput = await loadMenteePreferences(
+    service,
+    organizationId,
+    body.mentee_user_id
   );
   const merged = body.focus_areas && body.focus_areas.length > 0
     ? { ...menteeInput, focusAreas: [...(menteeInput.focusAreas ?? []), ...body.focus_areas] }

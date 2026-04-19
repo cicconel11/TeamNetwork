@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { rankMentorsForMentee, type MentorMatch } from "@/lib/mentorship/matching";
-import { loadMenteeIntakeInput, type MentorInput } from "@/lib/mentorship/matching-signals";
-import { loadMentorInputs } from "@/lib/mentorship/queries";
+import type { MentorInput } from "@/lib/mentorship/matching-signals";
+import { loadMentorInputs, loadMenteePreferences } from "@/lib/mentorship/queries";
 import { formatMentorshipReasonLabel } from "@/lib/mentorship/presentation";
 import type { MentorshipReasonCode } from "@/lib/mentorship/matching-weights";
 
@@ -235,12 +235,12 @@ export async function suggestMentors(
   const menteeUserId = resolution.userId;
   const menteeDisplay = resolution.display;
 
-  // 2. Load mentee intake + mentor inputs in parallel
+  // 2. Load mentee native preferences + mentor inputs in parallel
   const [menteeInput, mentorInputs] = await Promise.all([
-    loadMenteeIntakeInput(
-      supabase as unknown as Parameters<typeof loadMenteeIntakeInput>[0],
-      menteeUserId,
-      orgId
+    loadMenteePreferences(
+      supabase as unknown as Parameters<typeof loadMenteePreferences>[0],
+      orgId,
+      menteeUserId
     ),
     loadMentorInputs(supabase, orgId),
   ]);

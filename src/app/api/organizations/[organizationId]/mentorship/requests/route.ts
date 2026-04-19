@@ -8,7 +8,12 @@ import {
   rankMentorsForMentee,
   type MentorInput,
 } from "@/lib/mentorship/matching";
-import { loadMenteeIntakeInput } from "@/lib/mentorship/matching-signals";
+import { loadMenteePreferences } from "@/lib/mentorship/queries";
+import {
+  extractMenteeSignals,
+  extractMentorSignals,
+  intersectNormalized,
+} from "@/lib/mentorship/matching-signals";
 import { sendNotificationBlast } from "@/lib/notifications";
 import { proposalReceivedTemplate } from "@/lib/notifications/templates/mentorship/proposal_received";
 
@@ -68,6 +73,14 @@ export async function POST(req: Request, { params }: RouteParams) {
     ) => Promise<{ data: unknown; error: { code?: string; message: string } | null }>;
   };
 
+  // Self-request block (prompting bug fix #1)
+  if (body.mentor_user_id === user.id) {
+    return NextResponse.json(
+      { error: "You cannot request yourself", error_code: "self_request_blocked" },
+      { status: 422 }
+    );
+  }
+
   // Caller must be an active_member in this org
   const { data: callerRole } = await service
     .from("user_organization_roles")
@@ -79,7 +92,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Idempotent check: existing non-terminal pair
+  // Idempotent check: existing non-terminal pair — return typed rejection code
   const { data: existing } = await service
     .from("mentorship_pairs")
     .select("*")
@@ -91,19 +104,25 @@ export async function POST(req: Request, { params }: RouteParams) {
     .maybeSingle();
 
   if (existing) {
-    return NextResponse.json({ pair: existing, reused: true }, { status: 200 });
+    return NextResponse.json(
+      {
+        pair: existing,
+        reused: true,
+        error_code: "already_requested",
+        pair_id: existing.id,
+      },
+      { status: 200 }
+    );
   }
 
-  // Compute score/signals for this specific mentor
-  const menteeInput = await loadMenteeIntakeInput(
-    service as unknown as Parameters<typeof loadMenteeIntakeInput>[0],
-    user.id,
-    organizationId
-  );
+  // Compute score/signals for this specific mentor — native preferences path
+  const menteeInput = await loadMenteePreferences(service, organizationId, user.id);
 
   const { data: mentorProfileRaw } = await svc
     .from("mentor_profiles")
-    .select("user_id, topics, expertise_areas, max_mentees, current_mentee_count, accepting_new, is_active")
+    .select(
+      "user_id, topics, expertise_areas, sports, positions, industries, role_families, max_mentees, current_mentee_count, accepting_new, is_active"
+    )
     .eq("organization_id", organizationId)
     .eq("user_id", body.mentor_user_id)
     .maybeSingle();
@@ -112,6 +131,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     user_id: string;
     topics: string[] | null;
     expertise_areas: string[] | null;
+    sports: string[] | null;
+    positions: string[] | null;
+    industries: string[] | null;
+    role_families: string[] | null;
     max_mentees: number | null;
     current_mentee_count: number | null;
     accepting_new: boolean | null;
@@ -134,6 +157,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     orgId: organizationId,
     topics: mentorProfile.topics ?? [],
     expertiseAreas: mentorProfile.expertise_areas ?? [],
+    nativeSports: mentorProfile.sports ?? [],
+    nativePositions: mentorProfile.positions ?? [],
+    nativeIndustries: mentorProfile.industries ?? [],
+    nativeRoleFamilies: mentorProfile.role_families ?? [],
     industry: (alumni?.industry as string | null) ?? null,
     jobTitle: (alumni as { job_title?: string | null } | null)?.job_title ?? null,
     positionTitle: (alumni as { position_title?: string | null } | null)?.position_title ?? null,
@@ -145,6 +172,57 @@ export async function POST(req: Request, { params }: RouteParams) {
     acceptingNew: mentorProfile.accepting_new ?? true,
     isActive: true,
   };
+  const menteeSignals = extractMenteeSignals(menteeInput);
+  const mentorSignals = extractMentorSignals(mentorInput);
+
+  // Server-enforced hard-filter rejection codes. These mirror
+  // scoreMentorForMentee's filters but surface machine-readable error_codes so
+  // the UI can explain WHY a request was blocked (prompting bug fix #2).
+  const required = new Set(menteeSignals.requiredMentorAttributes);
+
+  if (
+    required.has("same_sport") &&
+    menteeSignals.preferredSports.length > 0 &&
+    intersectNormalized(mentorSignals.sports, menteeSignals.preferredSports).length === 0
+  ) {
+    return NextResponse.json(
+      { error: "Mentor does not share a required sport", error_code: "same_sport_required" },
+      { status: 422 }
+    );
+  }
+  if (
+    required.has("same_position") &&
+    menteeSignals.preferredPositions.length > 0 &&
+    intersectNormalized(mentorSignals.positions, menteeSignals.preferredPositions).length === 0
+  ) {
+    return NextResponse.json(
+      { error: "Mentor does not share a required position", error_code: "same_position_required" },
+      { status: 422 }
+    );
+  }
+  if (
+    required.has("same_industry") &&
+    menteeSignals.preferredIndustries.length > 0 &&
+    intersectNormalized(mentorSignals.industries, menteeSignals.preferredIndustries).length === 0
+  ) {
+    return NextResponse.json(
+      { error: "Mentor does not share a required industry", error_code: "same_industry_required" },
+      { status: 422 }
+    );
+  }
+  if (
+    required.has("same_role_family") &&
+    menteeSignals.preferredRoleFamilies.length > 0 &&
+    intersectNormalized(mentorSignals.roleFamilies, menteeSignals.preferredRoleFamilies).length === 0
+  ) {
+    return NextResponse.json(
+      {
+        error: "Mentor does not share a required job field",
+        error_code: "same_role_family_required",
+      },
+      { status: 422 }
+    );
+  }
 
   const { data: orgRowRaw } = await service
     .from("organizations")
