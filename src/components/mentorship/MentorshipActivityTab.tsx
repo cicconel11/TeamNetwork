@@ -57,7 +57,7 @@ interface MentorshipActivityTabProps {
   initialUpcoming: MentorshipMeeting[];
   initialPast: MentorshipMeeting[];
   initialLogs: MentorshipLog[];
-  pairs: Array<{ id: string; mentorUserId: string; mentorName: string; menteeName: string }>;
+  pairs: Array<{ id: string; mentorUserId: string; menteeUserId?: string; mentorName: string; menteeName: string }>;
   initialPairId: string;
   isAdmin: boolean;
   canLogActivity: boolean;
@@ -274,6 +274,7 @@ export function MentorshipActivityTab({
           pairs={pairs}
           selectedPairId={selectedPairId}
           onPairChange={handlePairChange}
+          currentUserId={currentUserId}
         />
       )}
 
