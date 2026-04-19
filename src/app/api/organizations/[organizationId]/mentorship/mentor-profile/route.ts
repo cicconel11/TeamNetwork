@@ -113,10 +113,9 @@ export async function GET(req: Request, { params }: RouteParams) {
     }
   }
 
-  const sb = service as unknown as SupabaseEscape;
-  const { data, error } = await sb
+  const { data, error } = await supabase
     .from("mentor_profiles")
-    .select(PROFILE_COLS)
+    .select("*")
     .eq("organization_id", organizationId)
     .eq("user_id", targetUserId)
     .maybeSingle();

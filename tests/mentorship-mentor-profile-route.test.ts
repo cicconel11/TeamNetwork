@@ -23,6 +23,10 @@ test("route uses native zod schema + native upsert conflict key", () => {
   assert.match(routeSource, /from\("mentor_profiles"\)/);
 });
 
+test("GET reads mentor_profiles via auth-bound wildcard select", () => {
+  assert.match(routeSource, /await supabase\s*\.from\("mentor_profiles"\)\s*\.select\("\*"\)/s);
+});
+
 test("route rate-limits read + write", () => {
   assert.match(routeSource, /mentor profile read/);
   assert.match(routeSource, /mentor profile write/);
