@@ -29,6 +29,12 @@ export type GridPreviewUrlResult = {
   thumbnailUrl: string | null;
 };
 
+// Truncate paths in logs to avoid leaking long filenames while keeping
+// enough prefix to identify which bucket folder the miss came from.
+function truncPath(p: string): string {
+  return p.length > 80 ? `${p.slice(0, 77)}...` : p;
+}
+
 async function signStoragePath(
   serviceClient: SupabaseClient,
   storagePath: string | null | undefined,
@@ -40,6 +46,11 @@ async function signStoragePath(
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRY);
 
   if (error || !data?.signedUrl) {
+    console.error("[media/urls] signStoragePath failed", {
+      bucket: BUCKET,
+      path: truncPath(storagePath),
+      error: error?.message ?? "no signedUrl returned",
+    });
     return null;
   }
 
@@ -77,17 +88,32 @@ export async function batchGetMediaBrowseUrls(
     .createSignedUrls(paths, SIGNED_URL_EXPIRY);
 
   if (error || !data) {
-    console.error("createSignedUrls failed (browse):", error?.message);
+    console.error("[media/urls] batchGetMediaBrowseUrls failed", {
+      bucket: BUCKET,
+      pathCount: paths.length,
+      samplePath: paths[0] ? truncPath(paths[0]) : null,
+      error: error?.message ?? "no data returned",
+    });
     for (const m of media) {
       results.set(m.id, { thumbnailUrl: null });
     }
     return results;
   }
 
+  let perItemFailures = 0;
   for (let i = 0; i < media.length; i++) {
     const item = data[i];
     const url = item?.error ? null : (item?.signedUrl ?? null);
+    if (!url) perItemFailures += 1;
     results.set(media[i].id, { thumbnailUrl: url });
+  }
+
+  if (perItemFailures > 0) {
+    console.error("[media/urls] batchGetMediaBrowseUrls partial miss", {
+      bucket: BUCKET,
+      pathCount: paths.length,
+      failureCount: perItemFailures,
+    });
   }
 
   return results;
@@ -126,17 +152,32 @@ export async function batchGetGridPreviewUrls(
     .createSignedUrls(paths, SIGNED_URL_EXPIRY);
 
   if (error || !data) {
-    console.error("createSignedUrls failed (grid):", error?.message);
+    console.error("[media/urls] batchGetGridPreviewUrls failed", {
+      bucket: BUCKET,
+      pathCount: paths.length,
+      samplePath: paths[0] ? truncPath(paths[0]) : null,
+      error: error?.message ?? "no data returned",
+    });
     for (const img of images) {
       results.set(img.id, { thumbnailUrl: null });
     }
     return results;
   }
 
+  let perItemFailures = 0;
   for (let i = 0; i < images.length; i++) {
     const item = data[i];
     const url = item?.error ? null : (item?.signedUrl ?? null);
+    if (!url) perItemFailures += 1;
     results.set(images[i].id, { thumbnailUrl: url });
+  }
+
+  if (perItemFailures > 0) {
+    console.error("[media/urls] batchGetGridPreviewUrls partial miss", {
+      bucket: BUCKET,
+      pathCount: paths.length,
+      failureCount: perItemFailures,
+    });
   }
 
   return results;
