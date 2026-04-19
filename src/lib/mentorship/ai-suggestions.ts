@@ -73,6 +73,10 @@ async function resolveMentee(
   | { state: "not_found" }
   | { state: "ambiguous"; options: DisplayReadyMentorPerson[] }
 > {
+  // Allow any active org member as a mentee (admin, active_member, alumni).
+  // The scoring library handles role-specific filtering downstream.
+  const MENTEE_ELIGIBLE_ROLES = ["active_member", "admin", "alumni"] as const;
+
   if (opts.menteeUserId) {
     const { data } = await supabase
       .from("user_organization_roles")
@@ -80,7 +84,7 @@ async function resolveMentee(
       .eq("organization_id", orgId)
       .eq("user_id", opts.menteeUserId)
       .eq("status", "active")
-      .eq("role", "active_member")
+      .in("role", [...MENTEE_ELIGIBLE_ROLES])
       .maybeSingle();
 
     if (!data) return { state: "not_found" };
@@ -105,7 +109,7 @@ async function resolveMentee(
       .select("user_id, users(name, email)")
       .eq("organization_id", orgId)
       .eq("status", "active")
-      .eq("role", "active_member");
+      .in("role", [...MENTEE_ELIGIBLE_ROLES]);
 
     const candidates = (rows ?? [])
       .map((r) => {
