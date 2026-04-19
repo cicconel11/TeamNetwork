@@ -6,18 +6,22 @@ import type { RetrievedChunk } from "@/lib/ai/rag-retriever";
 function createStubSupabase(rowsByTable: Record<string, { id: string; title: string | null }[]>) {
   return {
     from(table: string) {
-      return {
+      const builder = {
         select() {
-          return this;
+          return builder;
         },
         eq() {
-          return this;
+          return builder;
+        },
+        is() {
+          return builder;
         },
         in(_col: string, ids: string[]) {
           const rows = rowsByTable[table]?.filter((r) => ids.includes(r.id)) ?? [];
           return Promise.resolve({ data: rows });
         },
       };
+      return builder;
     },
   } as unknown as import("@supabase/supabase-js").SupabaseClient;
 }
@@ -60,7 +64,7 @@ describe("hydrateRagSearchResults", () => {
       chunks,
       orgSlug: "acme",
       orgId: "org-1",
-      serviceSupabase: service,
+      userSupabase: service,
     });
     assert.equal(hits.length, 1);
     assert.equal(hits[0].sourceTable, "job_postings");
@@ -87,7 +91,7 @@ describe("hydrateRagSearchResults", () => {
       chunks,
       orgSlug: "acme",
       orgId: "org-1",
-      serviceSupabase: service,
+      userSupabase: service,
     });
     assert.equal(hits.length, 1);
     assert.equal(hits[0].sourceTable, "discussion_threads");
