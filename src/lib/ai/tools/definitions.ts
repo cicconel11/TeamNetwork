@@ -1000,6 +1000,26 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  list_available_mentors: {
+    type: "function" as const,
+    function: {
+      name: "list_available_mentors" as const,
+      description:
+        "List mentors who are currently available for new mentees within the organization. Use for inventory-style questions like are any mentors available, who can take mentees right now, or which mentors still have open capacity.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max available mentors to return (default 5)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
 } as const;
 
 export const AI_TOOLS = [
@@ -1034,6 +1054,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.get_enterprise_org_capacity,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.suggest_mentors,
+  TOOL_BY_NAME.list_available_mentors,
   TOOL_BY_NAME.find_navigation_targets,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];
 

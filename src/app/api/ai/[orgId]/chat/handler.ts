@@ -128,9 +128,18 @@ const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
     "list_donations",
     "get_org_stats",
     "suggest_connections",
+    "list_available_mentors",
     "suggest_mentors",
   ],
-  members: ["list_members", "list_alumni", "list_parents", "get_org_stats", "suggest_connections", "suggest_mentors"],
+  members: [
+    "list_members",
+    "list_alumni",
+    "list_parents",
+    "get_org_stats",
+    "suggest_connections",
+    "list_available_mentors",
+    "suggest_mentors",
+  ],
   analytics: ["get_org_stats"],
   events: ["list_events"],
 };
@@ -139,6 +148,8 @@ const CONNECTION_PROMPT_PATTERN =
   /(?<!\w)(?:connection|connections|connect|networking|introduc(?:e|tion))(?!\w)/i;
 const MENTOR_PROMPT_PATTERN =
   /(?<!\w)(?:mentor|mentors|mentee|mentees|pair\s+with|match\s+(?:me|us|them)\s+with)(?!\w)/i;
+const MENTOR_AVAILABILITY_PROMPT_PATTERN =
+  /\b(?:available|availability|accepting(?:\s+new)?|open(?:\s+spots?)?|capacity|room\s+for\s+more)\b/i;
 const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
 const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
@@ -545,6 +556,21 @@ interface SuggestMentorsDisplaySuggestion {
   reasons?: Array<{ label?: unknown; value?: unknown }>;
 }
 
+interface ListAvailableMentorsDisplayPayload {
+  state?: unknown;
+  total_available?: unknown;
+  mentors?: unknown;
+}
+
+interface ListAvailableMentorsDisplayRow {
+  mentor?: { name?: unknown; subtitle?: unknown } | null;
+  open_slots?: unknown;
+  current_mentee_count?: unknown;
+  max_mentees?: unknown;
+  sports?: unknown;
+  positions?: unknown;
+}
+
 function formatSuggestMentorsResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
 
@@ -621,6 +647,73 @@ function formatSuggestMentorsResponse(data: unknown): string | null {
   for (const [index, suggestion] of suggestions.entries()) {
     lines.push(`${index + 1}. ${suggestion.displayLine}`);
     lines.push(`   Why: ${suggestion.reasons.join(", ")}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatListAvailableMentorsResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+
+  const payload = data as ListAvailableMentorsDisplayPayload;
+  const state = getNonEmptyString(payload.state);
+  if (!state) return null;
+
+  if (state === "no_results") {
+    return "There are no mentors currently available for new mentees right now.";
+  }
+
+  if (state !== "resolved" || !Array.isArray(payload.mentors)) return null;
+
+  const totalAvailable =
+    typeof payload.total_available === "number" ? payload.total_available : null;
+
+  const mentors = (payload.mentors as ListAvailableMentorsDisplayRow[])
+    .map((row) => {
+      const name = getNonEmptyString(row.mentor?.name);
+      if (!name) return null;
+
+      const subtitle = getNonEmptyString(row.mentor?.subtitle);
+      const displayLine = subtitle ? `${name} — ${subtitle}` : name;
+      const openSlots =
+        typeof row.open_slots === "number" && typeof row.max_mentees === "number"
+          ? `${row.open_slots} open spot${row.open_slots === 1 ? "" : "s"}`
+          : null;
+      const sports = Array.isArray(row.sports)
+        ? row.sports
+            .map((value) => getNonEmptyString(value))
+            .filter((value): value is string => Boolean(value))
+        : [];
+      const positions = Array.isArray(row.positions)
+        ? row.positions
+            .map((value) => getNonEmptyString(value))
+            .filter((value): value is string => Boolean(value))
+        : [];
+      const details = [
+        openSlots,
+        sports.length > 0 ? `Sports: ${sports.join(", ")}` : null,
+        positions.length > 0 ? `Positions: ${positions.join(", ")}` : null,
+      ].filter((value): value is string => Boolean(value));
+
+      return { displayLine, details };
+    })
+    .filter(
+      (mentor): mentor is { displayLine: string; details: string[] } => Boolean(mentor)
+    )
+    .slice(0, 5);
+
+  if (mentors.length === 0) return null;
+
+  const headline =
+    totalAvailable && totalAvailable > mentors.length
+      ? `There are ${totalAvailable} mentors currently available. Here are the top matches by open capacity:`
+      : `There are ${totalAvailable ?? mentors.length} mentors currently available:`;
+  const lines = [headline];
+  for (const [index, mentor] of mentors.entries()) {
+    lines.push(`${index + 1}. ${mentor.displayLine}`);
+    if (mentor.details.length > 0) {
+      lines.push(`   ${mentor.details.join(" • ")}`);
+    }
   }
 
   return lines.join("\n");
@@ -1721,6 +1814,9 @@ function getPass1Tools(
   }
 
   if (effectiveSurface === "members" && MENTOR_PROMPT_PATTERN.test(message)) {
+    if (MENTOR_AVAILABILITY_PROMPT_PATTERN.test(message)) {
+      return [AI_TOOL_MAP.list_available_mentors];
+    }
     return [AI_TOOL_MAP.suggest_mentors];
   }
 
@@ -2503,6 +2599,8 @@ function formatDeterministicToolResponse(
       return formatSuggestConnectionsResponse(data);
     case "suggest_mentors":
       return formatSuggestMentorsResponse(data);
+    case "list_available_mentors":
+      return formatListAvailableMentorsResponse(data);
     case "list_events":
       return formatEventsResponse(data);
     case "list_announcements":
