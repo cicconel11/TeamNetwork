@@ -110,7 +110,7 @@ export async function loadMentorInputs(
   const mentorProfilesRes = await sb
     .from("mentor_profiles")
     .select(
-      "user_id, topics, expertise_areas, max_mentees, current_mentee_count, accepting_new, is_active, meeting_preferences, years_of_experience"
+      "user_id, topics, expertise_areas, sports, positions, industries, role_families, max_mentees, current_mentee_count, accepting_new, is_active, meeting_preferences, years_of_experience"
     )
     .eq("organization_id", orgId)
     .eq("is_active", true);
@@ -138,6 +138,10 @@ export async function loadMentorInputs(
       orgId,
       topics: (p.topics as string[] | null) ?? [],
       expertiseAreas: (p.expertise_areas as string[] | null) ?? [],
+      nativeSports: (p.sports as string[] | null) ?? [],
+      nativePositions: (p.positions as string[] | null) ?? [],
+      nativeIndustries: (p.industries as string[] | null) ?? [],
+      nativeRoleFamilies: (p.role_families as string[] | null) ?? [],
       industry: (alumni.industry as string | null) ?? null,
       jobTitle: (alumni.job_title as string | null) ?? null,
       positionTitle: (alumni.position_title as string | null) ?? null,
@@ -150,4 +154,77 @@ export async function loadMentorInputs(
       isActive: true,
     };
   });
+}
+
+/**
+ * Load native mentee_preferences row and merge with alumni profile facts
+ * (city, company, graduation year, position fallback).
+ *
+ * Replaces `loadMenteeIntakeInput` as the canonical path once Phase 1 lands.
+ * Returns MenteeInput shape — same contract as existing matcher.
+ *
+ * Table is column-typed but generated DB types may lag the migration;
+ * explicit assertions used for safety.
+ */
+export async function loadMenteePreferences(
+  supabase: SupabaseClient<Database>,
+  orgId: string,
+  menteeUserId: string
+): Promise<import("@/lib/mentorship/matching-signals").MenteeInput> {
+  type QueryResult = Promise<{ data: unknown; error: unknown }>;
+  type EqChain = {
+    eq: (col: string, val: string) => EqChain & QueryResult & {
+      maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+    };
+    maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+  };
+  const sb = supabase as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => EqChain;
+    };
+  };
+
+  const [prefsRes, alumniRes] = await Promise.all([
+    sb
+      .from("mentee_preferences")
+      .select(
+        "goals, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref"
+      )
+      .eq("organization_id", orgId)
+      .eq("user_id", menteeUserId)
+      .maybeSingle(),
+    sb
+      .from("alumni")
+      .select("current_city, current_company, graduation_year, position_title")
+      .eq("organization_id", orgId)
+      .eq("user_id", menteeUserId)
+      .maybeSingle(),
+  ]);
+
+  const prefs = (prefsRes.data as Record<string, unknown> | null) ?? null;
+  const alumni = (alumniRes.data as Record<string, unknown> | null) ?? null;
+
+  const stringArr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
+
+  const preferredPositions = (() => {
+    const explicit = stringArr(prefs?.preferred_positions);
+    if (explicit.length > 0) return explicit;
+    const pos = alumni?.position_title;
+    return typeof pos === "string" && pos.trim().length > 0 ? [pos] : [];
+  })();
+
+  return {
+    userId: menteeUserId,
+    orgId,
+    focusAreas: stringArr(prefs?.preferred_topics),
+    preferredIndustries: stringArr(prefs?.preferred_industries),
+    preferredRoleFamilies: stringArr(prefs?.preferred_role_families),
+    preferredSports: stringArr(prefs?.preferred_sports),
+    preferredPositions,
+    requiredMentorAttributes: stringArr(prefs?.required_attributes),
+    currentCity: (alumni?.current_city as string | null) ?? null,
+    graduationYear: (alumni?.graduation_year as number | null) ?? null,
+    currentCompany: (alumni?.current_company as string | null) ?? null,
+  };
 }
