@@ -51,3 +51,21 @@ export function getMentorshipStatusTranslationKey(status: string): string {
       return "statusActive";
   }
 }
+
+const REASON_LABELS: Record<string, string> = {
+  shared_topics: "Shared topics",
+  shared_industry: "Shared industry",
+  shared_role_family: "Shared role family",
+  graduation_gap_fit: "Graduation gap fit",
+  shared_city: "Shared city",
+  shared_company: "Shared company",
+};
+
+/**
+ * Human-readable label for a mentorship reason code.
+ * Returns the code itself (title-cased) for unknown codes so new codes
+ * added to `matching-weights.ts` never silently disappear.
+ */
+export function formatMentorshipReasonLabel(code: string): string {
+  return REASON_LABELS[code] ?? code.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}

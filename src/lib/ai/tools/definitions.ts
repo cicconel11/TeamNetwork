@@ -93,6 +93,13 @@ export interface SuggestConnectionsArgs {
   limit?: number;
 }
 
+export interface SuggestMentorsArgs {
+  mentee_id?: string;
+  mentee_query?: string;
+  focus_areas?: string[];
+  limit?: number;
+}
+
 export interface ListAlumniArgs {
   limit?: number;
   graduation_year?: number;
@@ -958,6 +965,41 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  suggest_mentors: {
+    type: "function" as const,
+    function: {
+      name: "suggest_mentors" as const,
+      description:
+        "Suggest mentors for a mentee within the organization. Use for mentor matching, pairing requests, or 'who could mentor X' questions. Filters to mentors accepting new mentees. Returns auditable signals for every match — never invent reasons beyond tool output.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          mentee_id: {
+            type: "string" as const,
+            description: "User UUID of the mentee.",
+          },
+          mentee_query: {
+            type: "string" as const,
+            description:
+              "Name or email of the mentee when the user asked in natural language.",
+          },
+          focus_areas: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Optional topic overrides (falls back to mentee intake preferences).",
+          },
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max mentor suggestions to return (default 5)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
 } as const;
 
 export const AI_TOOLS = [
@@ -991,6 +1033,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.get_enterprise_quota,
   TOOL_BY_NAME.get_enterprise_org_capacity,
   TOOL_BY_NAME.suggest_connections,
+  TOOL_BY_NAME.suggest_mentors,
   TOOL_BY_NAME.find_navigation_targets,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];
 

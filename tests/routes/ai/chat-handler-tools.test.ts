@@ -600,6 +600,7 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
     "list_parents",
     "get_org_stats",
     "suggest_connections",
+    "suggest_mentors",
   ]);
   assert.equal(
     composeResponseCalls[1].tools,
@@ -725,6 +726,7 @@ test("ambiguous queries keep fallback surface tool set", async () => {
     "list_donations",
     "get_org_stats",
     "suggest_connections",
+    "suggest_mentors",
   ]);
 });
 
@@ -1211,6 +1213,7 @@ test("action requests do not get forced into find_navigation_targets", async () 
     "list_parents",
     "get_org_stats",
     "suggest_connections",
+    "suggest_mentors",
   ]);
   assert.equal(executeToolCallCalls[0].call.name, "list_members");
 });

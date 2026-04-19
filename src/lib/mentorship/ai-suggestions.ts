@@ -1,0 +1,316 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
+import { rankMentorsForMentee, type MentorMatch } from "@/lib/mentorship/matching";
+import { loadMenteeIntakeInput, type MentorInput } from "@/lib/mentorship/matching-signals";
+import { loadMentorInputs } from "@/lib/mentorship/queries";
+import { formatMentorshipReasonLabel } from "@/lib/mentorship/presentation";
+import type { MentorshipReasonCode } from "@/lib/mentorship/matching-weights";
+
+/* ------------------------------------------------------------------ */
+/*  Public types                                                      */
+/* ------------------------------------------------------------------ */
+
+export type SuggestMentorsState =
+  | "resolved"
+  | "ambiguous"
+  | "not_found"
+  | "no_suggestions"
+  | "unauthorized";
+
+export interface DisplayReadyMentorPerson {
+  user_id: string;
+  name: string;
+  subtitle: string | null;
+}
+
+export interface DisplayReadyMentorReason {
+  code: MentorshipReasonCode;
+  label: string;
+  weight: number;
+  value?: string | number;
+}
+
+export interface DisplayReadyMentorSuggestion {
+  mentor: DisplayReadyMentorPerson;
+  score: number;
+  reasons: DisplayReadyMentorReason[];
+}
+
+export interface SuggestMentorsResult {
+  state: SuggestMentorsState;
+  mentee: DisplayReadyMentorPerson | null;
+  suggestions: DisplayReadyMentorSuggestion[];
+  disambiguation_options?: DisplayReadyMentorPerson[];
+}
+
+/* ------------------------------------------------------------------ */
+/*  Options                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface SuggestMentorsOptions {
+  menteeUserId?: string;
+  menteeQuery?: string;
+  focusAreas?: string[];
+  limit?: number;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Internal helpers                                                  */
+/* ------------------------------------------------------------------ */
+
+interface MemberRow {
+  user_id: string;
+  name: string | null;
+  email: string | null;
+}
+
+async function resolveMentee(
+  supabase: SupabaseClient<Database>,
+  orgId: string,
+  opts: SuggestMentorsOptions
+): Promise<
+  | { state: "resolved"; userId: string; display: DisplayReadyMentorPerson }
+  | { state: "not_found" }
+  | { state: "ambiguous"; options: DisplayReadyMentorPerson[] }
+> {
+  if (opts.menteeUserId) {
+    const { data } = await supabase
+      .from("user_organization_roles")
+      .select("user_id, users(name, email)")
+      .eq("organization_id", orgId)
+      .eq("user_id", opts.menteeUserId)
+      .eq("status", "active")
+      .eq("role", "active_member")
+      .maybeSingle();
+
+    if (!data) return { state: "not_found" };
+
+    const u = Array.isArray(data.users) ? data.users[0] : data.users;
+    return {
+      state: "resolved",
+      userId: data.user_id,
+      display: {
+        user_id: data.user_id,
+        name: (u as MemberRow | null)?.name ?? "Member",
+        subtitle: null,
+      },
+    };
+  }
+
+  if (opts.menteeQuery) {
+    const query = opts.menteeQuery.toLowerCase().trim();
+
+    const { data: rows } = await supabase
+      .from("user_organization_roles")
+      .select("user_id, users(name, email)")
+      .eq("organization_id", orgId)
+      .eq("status", "active")
+      .eq("role", "active_member");
+
+    const candidates = (rows ?? [])
+      .map((r) => {
+        const u = Array.isArray(r.users) ? r.users[0] : r.users;
+        return {
+          user_id: r.user_id,
+          name: (u as MemberRow | null)?.name ?? null,
+          email: (u as MemberRow | null)?.email ?? null,
+        };
+      })
+      .filter((c) => {
+        const nameLower = c.name?.toLowerCase() ?? "";
+        const emailLower = c.email?.toLowerCase() ?? "";
+        return nameLower.includes(query) || emailLower.includes(query);
+      });
+
+    if (candidates.length === 0) return { state: "not_found" };
+
+    if (candidates.length === 1) {
+      const c = candidates[0];
+      return {
+        state: "resolved",
+        userId: c.user_id,
+        display: {
+          user_id: c.user_id,
+          name: c.name ?? c.email ?? "Member",
+          subtitle: null,
+        },
+      };
+    }
+
+    // Multiple matches — check for exact match
+    const exact = candidates.find(
+      (c) =>
+        c.name?.toLowerCase() === query || c.email?.toLowerCase() === query
+    );
+    if (exact) {
+      return {
+        state: "resolved",
+        userId: exact.user_id,
+        display: {
+          user_id: exact.user_id,
+          name: exact.name ?? exact.email ?? "Member",
+          subtitle: null,
+        },
+      };
+    }
+
+    return {
+      state: "ambiguous",
+      options: candidates.slice(0, 5).map((c) => ({
+        user_id: c.user_id,
+        name: c.name ?? c.email ?? "Member",
+        subtitle: c.email ?? null,
+      })),
+    };
+  }
+
+  return { state: "not_found" };
+}
+
+function buildDisplaySuggestions(
+  matches: MentorMatch[],
+  mentorLookup: Map<string, { name: string | null; email: string | null }>,
+  mentorInputLookup: Map<string, MentorInput>,
+  limit: number
+): DisplayReadyMentorSuggestion[] {
+  return matches.slice(0, limit).map((m) => {
+    const info = mentorLookup.get(m.mentorUserId);
+    const input = mentorInputLookup.get(m.mentorUserId);
+    const subtitle = [input?.jobTitle, input?.currentCompany]
+      .filter(Boolean)
+      .join(" at ") || null;
+
+    return {
+      mentor: {
+        user_id: m.mentorUserId,
+        name: info?.name ?? info?.email ?? "Mentor",
+        subtitle,
+      },
+      score: m.score,
+      reasons: m.signals.map((s) => ({
+        code: s.code,
+        label: formatMentorshipReasonLabel(s.code),
+        weight: s.weight,
+        value: s.value,
+      })),
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main function                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Suggest mentors for a mentee. Reuses Phase 1 scoring library.
+ * Pure SQL-based — no graph dependency.
+ */
+export async function suggestMentors(
+  supabase: SupabaseClient<Database>,
+  orgId: string,
+  opts: SuggestMentorsOptions
+): Promise<SuggestMentorsResult> {
+  const limit = opts.limit ?? 5;
+
+  // 1. Resolve mentee
+  const resolution = await resolveMentee(supabase, orgId, opts);
+
+  if (resolution.state === "not_found") {
+    return { state: "not_found", mentee: null, suggestions: [] };
+  }
+
+  if (resolution.state === "ambiguous") {
+    return {
+      state: "ambiguous",
+      mentee: null,
+      suggestions: [],
+      disambiguation_options: resolution.options,
+    };
+  }
+
+  const menteeUserId = resolution.userId;
+  const menteeDisplay = resolution.display;
+
+  // 2. Load mentee intake + mentor inputs in parallel
+  const [menteeInput, mentorInputs] = await Promise.all([
+    loadMenteeIntakeInput(
+      supabase as unknown as Parameters<typeof loadMenteeIntakeInput>[0],
+      menteeUserId,
+      orgId
+    ),
+    loadMentorInputs(supabase, orgId),
+  ]);
+
+  // Merge focus_areas override
+  const mergedMentee =
+    opts.focusAreas && opts.focusAreas.length > 0
+      ? { ...menteeInput, focusAreas: [...(menteeInput.focusAreas ?? []), ...opts.focusAreas] }
+      : menteeInput;
+
+  // 3. Exclude already-paired mentors
+  const { data: existingPairs } = await supabase
+    .from("mentorship_pairs")
+    .select("mentor_user_id")
+    .eq("organization_id", orgId)
+    .eq("mentee_user_id", menteeUserId)
+    .in("status", ["proposed", "accepted", "active", "paused"])
+    .is("deleted_at", null);
+
+  const excludeIds = new Set(
+    (existingPairs ?? []).map((r) => r.mentor_user_id as string)
+  );
+
+  // 4. Load org settings for weight overrides
+  const { data: orgRow } = await (supabase as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (c: string, v: string) => {
+          maybeSingle: () => Promise<{ data: { settings?: unknown } | null }>;
+        };
+      };
+    };
+  })
+    .from("organizations")
+    .select("settings")
+    .eq("id", orgId)
+    .maybeSingle();
+
+  // 5. Score via Phase 1 library
+  const matches = rankMentorsForMentee(mergedMentee, mentorInputs, {
+    orgSettings: orgRow?.settings ?? null,
+    excludeMentorUserIds: excludeIds,
+  });
+
+  if (matches.length === 0) {
+    return { state: "no_suggestions", mentee: menteeDisplay, suggestions: [] };
+  }
+
+  // 6. Build display-ready suggestions
+  // Load names for matched mentors
+  const matchedIds = matches.slice(0, limit).map((m) => m.mentorUserId);
+  const { data: mentorUsers } = await supabase
+    .from("user_organization_roles")
+    .select("user_id, users(name, email)")
+    .eq("organization_id", orgId)
+    .in("user_id", matchedIds);
+
+  const mentorLookup = new Map<string, { name: string | null; email: string | null }>();
+  for (const row of mentorUsers ?? []) {
+    const u = Array.isArray(row.users) ? row.users[0] : row.users;
+    mentorLookup.set(row.user_id, {
+      name: (u as MemberRow | null)?.name ?? null,
+      email: (u as MemberRow | null)?.email ?? null,
+    });
+  }
+
+  const mentorInputLookup = new Map<string, MentorInput>();
+  for (const mi of mentorInputs) {
+    mentorInputLookup.set(mi.userId, mi);
+  }
+
+  return {
+    state: "resolved",
+    mentee: menteeDisplay,
+    suggestions: buildDisplaySuggestions(matches, mentorLookup, mentorInputLookup, limit),
+  };
+}

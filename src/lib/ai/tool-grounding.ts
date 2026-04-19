@@ -596,6 +596,87 @@ function verifySuggestConnections(content: string, data: unknown): string[] {
   return failures;
 }
 
+interface SuggestMentorsGroundingData {
+  state?: unknown;
+  mentee?: { name?: unknown } | null;
+  suggestions?: Array<{
+    mentor?: { name?: unknown } | null;
+    reasons?: Array<{ code?: unknown; label?: unknown }>;
+  }>;
+}
+
+function extractMentorReasonCodes(line: string): string[] {
+  const matches = new Set<string>();
+  const normalized = line.toLowerCase();
+
+  if (/(shared topics?)/.test(normalized)) matches.add("shared_topics");
+  if (/(shared industry|same industry)/.test(normalized)) matches.add("shared_industry");
+  if (/(shared role family|same role family|similar role)/.test(normalized)) matches.add("shared_role_family");
+  if (/(graduation gap|years? ahead|graduation fit)/.test(normalized)) matches.add("graduation_gap_fit");
+  if (/(shared city|same city|both (?:live|based) in)/.test(normalized)) matches.add("shared_city");
+  if (/(shared company|same company)/.test(normalized)) matches.add("shared_company");
+
+  return [...matches];
+}
+
+function verifySuggestMentors(content: string, data: unknown): string[] {
+  if (!data || typeof data !== "object") {
+    return ["suggest_mentors returned non-object data"];
+  }
+
+  const payload = data as SuggestMentorsGroundingData;
+  const state = typeof payload.state === "string" ? payload.state : null;
+  const failures: string[] = [];
+
+  if (state === "unauthorized" || state === "not_found" || state === "ambiguous" || state === "no_suggestions") {
+    return failures;
+  }
+
+  if (state !== "resolved") {
+    failures.push(`suggest_mentors returned unexpected state: ${state}`);
+    return failures;
+  }
+
+  const suggestions = payload.suggestions ?? [];
+  if (suggestions.length === 0) return failures;
+
+  // Build a map of mentor names → their reason codes
+  const mentorReasonCodes = new Map<string, Set<string>>();
+  for (const s of suggestions) {
+    const name = typeof s.mentor?.name === "string" ? s.mentor.name.toLowerCase() : null;
+    if (!name) continue;
+
+    const codes = new Set<string>();
+    for (const r of s.reasons ?? []) {
+      if (typeof r.code === "string") codes.add(r.code);
+    }
+    mentorReasonCodes.set(name, codes);
+  }
+
+  // Verify that pass-2 response only references reason codes present in tool output
+  const lines = content.split("\n");
+  for (const line of lines) {
+    if (!line.trim()) continue;
+
+    const extractedCodes = extractMentorReasonCodes(line);
+    if (extractedCodes.length === 0) continue;
+
+    // Collect all available codes from all suggestions for this check
+    const allAvailableCodes = new Set<string>();
+    for (const codes of mentorReasonCodes.values()) {
+      for (const c of codes) allAvailableCodes.add(c);
+    }
+
+    for (const code of extractedCodes) {
+      if (!allAvailableCodes.has(code)) {
+        failures.push(`suggest_mentors response claimed unsupported reason ${code}`);
+      }
+    }
+  }
+
+  return failures;
+}
+
 export function verifyToolBackedResponse(input: {
   content: string;
   toolResults: SuccessfulToolSummary[];
@@ -629,6 +710,9 @@ export function verifyToolBackedResponse(input: {
         break;
       case "suggest_connections":
         failures.push(...verifySuggestConnections(input.content, result.data));
+        break;
+      case "suggest_mentors":
+        failures.push(...verifySuggestMentors(input.content, result.data));
         break;
       default:
         // No grounding check for this tool
