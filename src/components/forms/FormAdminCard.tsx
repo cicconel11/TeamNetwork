@@ -9,7 +9,7 @@ import type { Form } from "@/types/database";
 interface FormAdminCardProps {
   form: Form;
   orgSlug: string;
-  submissionCount: number;
+  submissionCount: number | null;
   lastSubmittedAt: string | null;
   onToggleActive: (formId: string, isActive: boolean) => void;
   onDelete: (formId: string) => void;
@@ -40,10 +40,14 @@ export function FormAdminCard({
           )}
           <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
             <span>{(form.fields as unknown[])?.length || 0} fields</span>
-            <span>
-              {submissionCount} submission{submissionCount !== 1 ? "s" : ""}
-            </span>
-            {lastSubmittedAt && (
+            {submissionCount === null ? (
+              <span>Submission data unavailable</span>
+            ) : (
+              <span>
+                {submissionCount} submission{submissionCount !== 1 ? "s" : ""}
+              </span>
+            )}
+            {submissionCount !== null && lastSubmittedAt && (
               <span>Last submitted {relativeTime(lastSubmittedAt)}</span>
             )}
           </div>
