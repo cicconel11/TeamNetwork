@@ -57,8 +57,12 @@ export function buildRarityStats(mentors: readonly MentorSignals[]): RarityStats
   const position = new Map<string, number>();
 
   for (const m of mentors) {
-    if (m.industry) industry.set(m.industry, (industry.get(m.industry) ?? 0) + 1);
-    if (m.roleFamily) roleFamily.set(m.roleFamily, (roleFamily.get(m.roleFamily) ?? 0) + 1);
+    for (const value of m.industries) {
+      industry.set(value, (industry.get(value) ?? 0) + 1);
+    }
+    for (const value of m.roleFamilies) {
+      roleFamily.set(value, (roleFamily.get(value) ?? 0) + 1);
+    }
     if (m.currentCompanyNorm) {
       company.set(m.currentCompanyNorm, (company.get(m.currentCompanyNorm) ?? 0) + 1);
     }
@@ -105,12 +109,10 @@ export function scoreMentorForMentee(
   const requiredAttributes = new Set(mentee.requiredMentorAttributes);
   const sportOverlap = intersectNormalized(mentor.sports, mentee.preferredSports);
   const positionOverlap = intersectNormalized(mentor.positions, mentee.preferredPositions);
-  const industryMatch = mentor.industry
-    ? mentee.preferredIndustries.includes(mentor.industry)
-    : false;
-  const roleFamilyMatch = mentor.roleFamily
-    ? mentee.preferredRoleFamilies.includes(mentor.roleFamily)
-    : false;
+  const industryOverlap = intersectNormalized(mentor.industries, mentee.preferredIndustries);
+  const roleFamilyOverlap = intersectNormalized(mentor.roleFamilies, mentee.preferredRoleFamilies);
+  const industryMatch = industryOverlap.length > 0;
+  const roleFamilyMatch = roleFamilyOverlap.length > 0;
   const cityMatch = Boolean(
     mentor.currentCityNorm &&
     mentee.currentCityNorm &&
@@ -198,22 +200,30 @@ export function scoreMentorForMentee(
   }
 
   // shared_industry
-  if (mentor.industry && industryMatch) {
-    const mult = rarityMultiplier(rarity?.industryCounts.get(mentor.industry), total);
+  if (industryOverlap.length > 0) {
+    let bestMultiplier = 1;
+    for (const value of industryOverlap) {
+      const mult = rarityMultiplier(rarity?.industryCounts.get(value), total);
+      if (mult > bestMultiplier) bestMultiplier = mult;
+    }
     signals.push({
       code: "shared_industry",
-      weight: Math.round(weights.shared_industry * mult),
-      value: mentor.industry,
+      weight: Math.round(weights.shared_industry * bestMultiplier),
+      value: industryOverlap.join(","),
     });
   }
 
   // shared_role_family
-  if (mentor.roleFamily && roleFamilyMatch) {
-    const mult = rarityMultiplier(rarity?.roleFamilyCounts.get(mentor.roleFamily), total);
+  if (roleFamilyOverlap.length > 0) {
+    let bestMultiplier = 1;
+    for (const value of roleFamilyOverlap) {
+      const mult = rarityMultiplier(rarity?.roleFamilyCounts.get(value), total);
+      if (mult > bestMultiplier) bestMultiplier = mult;
+    }
     signals.push({
       code: "shared_role_family",
-      weight: Math.round(weights.shared_role_family * mult),
-      value: mentor.roleFamily,
+      weight: Math.round(weights.shared_role_family * bestMultiplier),
+      value: roleFamilyOverlap.join(","),
     });
   }
 

@@ -18,7 +18,7 @@ interface MentorRequestDialogProps {
   currentUserId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (mentorUserId?: string) => void;
 }
 
 export function MentorRequestDialog({
@@ -87,7 +87,7 @@ export function MentorRequestDialog({
         return;
       }
       toast.success(t("requestSent"));
-      onSuccess();
+      onSuccess(mentor.user_id);
       onClose();
     } catch {
       toast.error(t("requestFailed"));

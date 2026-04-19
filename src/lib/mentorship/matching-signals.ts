@@ -24,6 +24,8 @@ export interface MentorSignals {
   userId: string;
   orgId: string;
   topics: string[]; // normalized
+  industries: string[]; // canonical
+  roleFamilies: string[]; // canonical
   industry: string | null; // canonical
   roleFamily: string | null; // canonical
   sports: string[];
@@ -75,53 +77,6 @@ export interface MentorInput {
   isActive?: boolean | null;
 }
 
-const ATHLETIC_SPORT_PATTERNS: Array<{ tag: string; pattern: RegExp }> = [
-  { tag: "basketball", pattern: /\bbasketball\b/ },
-  { tag: "football", pattern: /\bfootball\b/ },
-  { tag: "baseball", pattern: /\bbaseball\b/ },
-  { tag: "softball", pattern: /\bsoftball\b/ },
-  { tag: "soccer", pattern: /\bsoccer\b/ },
-  { tag: "volleyball", pattern: /\bvolleyball\b/ },
-  { tag: "lacrosse", pattern: /\blacrosse\b/ },
-  { tag: "track-and-field", pattern: /\b(track|track and field|cross country)\b/ },
-  { tag: "swimming", pattern: /\b(swim|swimming|diving)\b/ },
-  { tag: "tennis", pattern: /\btennis\b/ },
-  { tag: "golf", pattern: /\bgolf\b/ },
-  { tag: "wrestling", pattern: /\bwrestling\b/ },
-  { tag: "rowing", pattern: /\b(rowing|crew|coxswain)\b/ },
-  { tag: "field-hockey", pattern: /\bfield hockey\b/ },
-  { tag: "ice-hockey", pattern: /\b(ice hockey|hockey)\b/ },
-  { tag: "gymnastics", pattern: /\bgymnastics\b/ },
-];
-
-const ATHLETIC_POSITION_PATTERNS: Array<{ tag: string; pattern: RegExp }> = [
-  { tag: "quarterback", pattern: /\bquarterback\b|\bqb\b/ },
-  { tag: "running-back", pattern: /\brunning back\b|\brb\b/ },
-  { tag: "wide-receiver", pattern: /\bwide receiver\b|\bwr\b/ },
-  { tag: "tight-end", pattern: /\btight end\b|\bte\b/ },
-  { tag: "linebacker", pattern: /\blinebacker\b|\blb\b/ },
-  { tag: "defensive-back", pattern: /\b(defensive back|cornerback|safety)\b/ },
-  { tag: "lineman", pattern: /\b(offensive lineman|defensive lineman|lineman|left tackle|right tackle)\b/ },
-  { tag: "pitcher", pattern: /\bpitcher\b/ },
-  { tag: "catcher", pattern: /\bcatcher\b/ },
-  { tag: "infield", pattern: /\b(shortstop|second baseman|third baseman|first baseman|infielder)\b/ },
-  { tag: "outfield", pattern: /\b(outfielder|left field|center field|right field)\b/ },
-  { tag: "goalkeeper", pattern: /\b(goalkeeper|goalie|keeper)\b/ },
-  { tag: "defender", pattern: /\b(defender|fullback|center back)\b/ },
-  { tag: "midfielder", pattern: /\bmidfielder\b/ },
-  { tag: "forward", pattern: /\bforward\b/ },
-  { tag: "point-guard", pattern: /\bpoint guard\b/ },
-  { tag: "shooting-guard", pattern: /\bshooting guard\b/ },
-  { tag: "small-forward", pattern: /\bsmall forward\b/ },
-  { tag: "power-forward", pattern: /\bpower forward\b/ },
-  { tag: "center", pattern: /^center$|\bbasketball center\b/ },
-  { tag: "setter", pattern: /\bsetter\b/ },
-  { tag: "libero", pattern: /\blibero\b/ },
-  { tag: "outside-hitter", pattern: /\boutside hitter\b/ },
-  { tag: "middle-blocker", pattern: /\bmiddle blocker\b/ },
-  { tag: "coach", pattern: /\bcoach\b/ },
-];
-
 function uniqueNormalizedList(values: Array<string | null | undefined> | null | undefined): string[] {
   if (!values) return [];
   const seen = new Set<string>();
@@ -164,26 +119,6 @@ function canonicalRoleFamilyList(values: Array<string | null | undefined> | null
   return out;
 }
 
-function athleticTagList(
-  values: Array<string | null | undefined> | null | undefined,
-  patterns: Array<{ tag: string; pattern: RegExp }>
-): string[] {
-  if (!values) return [];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of values) {
-    const normalized = normalizeCareerText(raw);
-    if (!normalized) continue;
-    for (const { tag, pattern } of patterns) {
-      if (pattern.test(normalized) && !seen.has(tag)) {
-        seen.add(tag);
-        out.push(tag);
-      }
-    }
-  }
-  return out;
-}
-
 function normalizedAttributeKeyList(values: Array<string | null | undefined> | null | undefined): string[] {
   if (!values) return [];
   const seen = new Set<string>();
@@ -208,8 +143,8 @@ export function extractMenteeSignals(input: MenteeInput): MenteeSignals {
     focusAreas: uniqueNormalizedList(input.focusAreas),
     preferredIndustries: canonicalIndustryList(input.preferredIndustries),
     preferredRoleFamilies: canonicalRoleFamilyList(input.preferredRoleFamilies),
-    preferredSports: athleticTagList(input.preferredSports, ATHLETIC_SPORT_PATTERNS),
-    preferredPositions: athleticTagList(input.preferredPositions, ATHLETIC_POSITION_PATTERNS),
+    preferredSports: uniqueNormalizedList(input.preferredSports),
+    preferredPositions: uniqueNormalizedList(input.preferredPositions),
     requiredMentorAttributes: normalizedAttributeKeyList(input.requiredMentorAttributes),
     currentCity: input.currentCity?.trim() || null,
     currentCityNorm: normalizeCareerText(input.currentCity),
@@ -224,26 +159,19 @@ export function extractMentorSignals(input: MentorInput): MentorSignals {
     ...(input.topics ?? []),
     ...(input.expertiseAreas ?? []),
   ];
-  const athleticSource = [
-    ...topicSource,
-    input.jobTitle ?? null,
-    input.positionTitle ?? null,
-  ];
-  const industry = canonicalizeIndustry(input.industry);
-  const roleFamily = canonicalizeRoleFamily(
-    input.jobTitle ?? input.positionTitle ?? null,
-    input.currentCompany ?? null,
-    industry
-  );
+  const industries = canonicalIndustryList(input.nativeIndustries);
+  const roleFamilies = canonicalRoleFamilyList(input.nativeRoleFamilies);
 
   return {
     userId: input.userId,
     orgId: input.orgId,
     topics: uniqueNormalizedList(topicSource),
-    industry,
-    roleFamily,
-    sports: athleticTagList(athleticSource, ATHLETIC_SPORT_PATTERNS),
-    positions: athleticTagList(athleticSource, ATHLETIC_POSITION_PATTERNS),
+    industries,
+    roleFamilies,
+    industry: industries[0] ?? null,
+    roleFamily: roleFamilies[0] ?? null,
+    sports: uniqueNormalizedList(input.nativeSports),
+    positions: uniqueNormalizedList(input.nativePositions),
     currentCity: input.currentCity?.trim() || null,
     currentCityNorm: normalizeCareerText(input.currentCity),
     graduationYear: input.graduationYear ?? null,
@@ -264,86 +192,3 @@ export function intersectNormalized(a: string[], b: string[]): string[] {
   return out;
 }
 
-interface MenteeIntakeRow {
-  user_id: string | null;
-  organization_id: string | null;
-  data: Record<string, unknown> | null;
-}
-
-interface AlumniRow {
-  current_city: string | null;
-  current_company: string | null;
-  graduation_year: number | null;
-  position_title: string | null;
-}
-
-type LoadMenteeIntakeSupabase = {
-  from: (table: string) => {
-    select: (cols: string) => {
-      eq: (col: string, val: string) => {
-        eq: (col: string, val: string) => {
-          maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
-        };
-      };
-    };
-  };
-};
-
-function stringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
-}
-
-/**
- * Read the latest mentee_intake submission for a user and compose a MenteeInput
- * enriched with alumni profile facts (city, company, graduation year).
- *
- * Deterministic — latest submission wins via `mentee_latest_intake` view.
- * If no intake row, returns {userId, orgId} only so callers can still rank.
- */
-export async function loadMenteeIntakeInput(
-  supabase: LoadMenteeIntakeSupabase,
-  menteeUserId: string,
-  orgId: string
-): Promise<MenteeInput> {
-  const [{ data: intakeData }, { data: alumniData }] = await Promise.all([
-    supabase
-      .from("mentee_latest_intake")
-      .select("user_id, organization_id, data")
-      .eq("user_id", menteeUserId)
-      .eq("organization_id", orgId)
-      .maybeSingle(),
-    supabase
-      .from("alumni")
-      .select("current_city, current_company, graduation_year, position_title")
-      .eq("user_id", menteeUserId)
-      .eq("organization_id", orgId)
-      .maybeSingle(),
-  ]);
-
-  const intake = (intakeData as MenteeIntakeRow | null) ?? null;
-  const alumni = (alumniData as AlumniRow | null) ?? null;
-
-  const data = intake?.data ?? {};
-
-  return {
-    userId: menteeUserId,
-    orgId,
-    focusAreas: stringArray((data as Record<string, unknown>).preferred_topics),
-    preferredIndustries: stringArray((data as Record<string, unknown>).preferred_industry),
-    preferredRoleFamilies: stringArray(
-      (data as Record<string, unknown>).preferred_role_families
-    ),
-    preferredSports: stringArray((data as Record<string, unknown>).preferred_sports),
-    preferredPositions: (() => {
-      const explicit = stringArray((data as Record<string, unknown>).preferred_positions);
-      return explicit.length > 0 ? explicit : stringArray([alumni?.position_title ?? null]);
-    })(),
-    requiredMentorAttributes: stringArray(
-      (data as Record<string, unknown>).mentor_attributes_required
-    ),
-    currentCity: alumni?.current_city ?? null,
-    graduationYear: alumni?.graduation_year ?? null,
-    currentCompany: alumni?.current_company ?? null,
-  };
-}
