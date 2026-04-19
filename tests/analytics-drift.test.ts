@@ -97,9 +97,9 @@ describe("Analytics drift - schema/type alignment", () => {
     );
   });
 
-  it("BEHAVIORAL_EVENT_NAMES has exactly 16 entries", () => {
+  it("BEHAVIORAL_EVENT_NAMES has exactly 19 entries", () => {
     const names = extractBehavioralEventNames();
-    assert.strictEqual(names.length, 16);
+    assert.strictEqual(names.length, 19);
   });
 
   it("generated database analytics_event_name constants match BEHAVIORAL_EVENT_NAMES", () => {
@@ -133,17 +133,23 @@ describe("Analytics drift - call-site coverage", () => {
 
     for (const name of names) {
       try {
-        // Use grep -P with multiline or just search for the event name string
-        // near trackBehavioralEvent (may be on the next line in multiline calls)
+        // Events may be fired from the client via `trackBehavioralEvent` or
+        // from the server via `logBehavioralEventFromApi`. Consider either
+        // as a valid call site.
         const result = execSync(
-          `grep -rl '"${name}"' src/ --include='*.ts' --include='*.tsx' | xargs grep -l 'trackBehavioralEvent' 2>/dev/null || true`,
+          `grep -rl '"${name}"' src/ --include='*.ts' --include='*.tsx' | xargs grep -lE 'trackBehavioralEvent|logBehavioralEventFromApi' 2>/dev/null || true`,
           { encoding: "utf8" },
         );
-        // Filter out the events.ts definition file itself
         const files = result
           .trim()
           .split("\n")
-          .filter((f) => f && !f.includes("analytics/events.ts") && !f.includes("schemas/analytics.ts"));
+          .filter(
+            (f) =>
+              f &&
+              !f.includes("analytics/events.ts") &&
+              !f.includes("analytics/server-behavioral.ts") &&
+              !f.includes("schemas/analytics.ts"),
+          );
         if (files.length === 0) {
           missing.push(name);
         }
