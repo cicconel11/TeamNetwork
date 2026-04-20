@@ -57,6 +57,28 @@ function parseStatClaim(content: string, label: string): number | null {
   return null;
 }
 
+function parseCurrencyClaim(content: string, label: string): number | null {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim();
+    if (!new RegExp(`\\b${escaped}\\b`, "i").test(line)) {
+      continue;
+    }
+
+    const match = line.match(/\$([0-9][0-9,]*(?:\.[0-9]{1,2})?)/);
+    if (!match) {
+      continue;
+    }
+
+    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
+    if (Number.isFinite(parsed)) {
+      return Math.round(parsed);
+    }
+  }
+
+  return null;
+}
+
 function verifyOrgStats(content: string, data: unknown): string[] {
   if (!data || typeof data !== "object") {
     return ["get_org_stats returned non-object data"];
@@ -81,6 +103,59 @@ function verifyOrgStats(content: string, data: unknown): string[] {
     if (claimed !== null && claimed !== expected) {
       failures.push(`${label} claim ${claimed} did not match ${expected}`);
     }
+  }
+
+  return failures;
+}
+
+function verifyDonationAnalytics(content: string, data: unknown): string[] {
+  if (!data || typeof data !== "object") {
+    return ["get_donation_analytics returned non-object data"];
+  }
+
+  const payload = data as {
+    totals?: {
+      successful_donation_count?: unknown;
+      successful_amount_cents?: unknown;
+      average_successful_amount_cents?: unknown;
+      largest_successful_amount_cents?: unknown;
+    } | null;
+  };
+
+  if (!payload.totals || typeof payload.totals !== "object") {
+    return ["get_donation_analytics returned missing totals"];
+  }
+
+  const failures: string[] = [];
+  const successfulDonationCount = Number(payload.totals.successful_donation_count);
+  const raisedDollars = Number(payload.totals.successful_amount_cents) / 100;
+  const averageDollars = Number(payload.totals.average_successful_amount_cents) / 100;
+  const largestDollars = Number(payload.totals.largest_successful_amount_cents) / 100;
+
+  const countClaim = parseStatClaim(content, "successful donations");
+  if (countClaim !== null && countClaim !== successfulDonationCount) {
+    failures.push(
+      `successful donations claim ${countClaim} did not match ${successfulDonationCount}`
+    );
+  }
+
+  const raisedClaim = parseCurrencyClaim(content, "raised");
+  if (raisedClaim !== null && raisedClaim !== Math.round(raisedDollars)) {
+    failures.push(`raised claim $${raisedClaim} did not match $${Math.round(raisedDollars)}`);
+  }
+
+  const averageClaim = parseCurrencyClaim(content, "average successful donation");
+  if (averageClaim !== null && averageClaim !== Math.round(averageDollars)) {
+    failures.push(
+      `average successful donation claim $${averageClaim} did not match $${Math.round(averageDollars)}`
+    );
+  }
+
+  const largestClaim = parseCurrencyClaim(content, "largest successful donation");
+  if (largestClaim !== null && largestClaim !== Math.round(largestDollars)) {
+    failures.push(
+      `largest successful donation claim $${largestClaim} did not match $${Math.round(largestDollars)}`
+    );
   }
 
   return failures;
@@ -690,6 +765,9 @@ export function verifyToolBackedResponse(input: {
     switch (result.name) {
       case "get_org_stats":
         failures.push(...verifyOrgStats(input.content, result.data));
+        break;
+      case "get_donation_analytics":
+        failures.push(...verifyDonationAnalytics(input.content, result.data));
         break;
       case "list_members":
         if (!hasSuggestConnections) {

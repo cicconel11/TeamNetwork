@@ -282,6 +282,13 @@ const scrapeScheduleWebsiteSchema = z
 const extractSchedulePdfSchema = z.object({}).strict();
 
 const getOrgStatsSchema = z.object({}).strict();
+const getDonationAnalyticsSchema = z
+  .object({
+    window_days: z.number().int().min(7).max(3650).optional(),
+    bucket: z.enum(["day", "week", "month"]).optional(),
+    top_purposes_limit: z.number().int().min(1).max(10).optional(),
+  })
+  .strict();
 const getEnterpriseStatsSchema = z.object({}).strict();
 const getEnterpriseQuotaSchema = z.object({}).strict();
 const getEnterpriseOrgCapacitySchema = z.object({}).strict();
@@ -398,6 +405,7 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   scrape_schedule_website: scrapeScheduleWebsiteSchema,
   extract_schedule_pdf: extractSchedulePdfSchema,
   get_org_stats: getOrgStatsSchema,
+  get_donation_analytics: getDonationAnalyticsSchema,
   get_enterprise_stats: getEnterpriseStatsSchema,
   get_enterprise_quota: getEnterpriseQuotaSchema,
   get_enterprise_org_capacity: getEnterpriseOrgCapacitySchema,
@@ -2809,6 +2817,193 @@ async function getOrgStats(
   };
 }
 
+function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function startOfUtcWeek(date: Date): Date {
+  const day = date.getUTCDay();
+  const offset = day === 0 ? 6 : day - 1;
+  const start = startOfUtcDay(date);
+  start.setUTCDate(start.getUTCDate() - offset);
+  return start;
+}
+
+function startOfUtcMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function defaultDonationAnalyticsBucket(windowDays: number): "day" | "week" | "month" {
+  if (windowDays <= 31) return "day";
+  if (windowDays <= 180) return "week";
+  return "month";
+}
+
+function getDonationBucketStart(
+  date: Date,
+  bucket: "day" | "week" | "month"
+): Date {
+  switch (bucket) {
+    case "day":
+      return startOfUtcDay(date);
+    case "week":
+      return startOfUtcWeek(date);
+    case "month":
+      return startOfUtcMonth(date);
+  }
+}
+
+function formatDonationBucketLabel(
+  date: Date,
+  bucket: "day" | "week" | "month"
+): string {
+  const iso = date.toISOString().slice(0, 10);
+  if (bucket === "week") {
+    return `Week of ${iso}`;
+  }
+  if (bucket === "month") {
+    return iso.slice(0, 7);
+  }
+  return iso;
+}
+
+async function getDonationAnalytics(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof getDonationAnalyticsSchema>,
+  logContext: AiLogContext
+): Promise<ToolExecutionResult> {
+  const windowDays = args.window_days ?? 90;
+  const bucket = args.bucket ?? defaultDonationAnalyticsBucket(windowDays);
+  const topPurposesLimit = args.top_purposes_limit ?? 5;
+  const windowEnd = new Date();
+  const windowStart = startOfUtcDay(new Date(windowEnd));
+  windowStart.setUTCDate(windowStart.getUTCDate() - (windowDays - 1));
+
+  return safeToolQuery(logContext, async () => {
+    const { data, error } = await sb
+      .from("organization_donations")
+      .select("amount_cents, status, created_at, purpose")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .gte("created_at", windowStart.toISOString())
+      .order("created_at", { ascending: true });
+
+    if (!Array.isArray(data) || error) {
+      return { data, error };
+    }
+
+    const statusCounts = {
+      succeeded: 0,
+      failed: 0,
+      pending: 0,
+    };
+    let successfulAmountCents = 0;
+    let successfulDonationCount = 0;
+    let largestSuccessfulAmountCents = 0;
+    let latestSuccessfulDonationAt: string | null = null;
+
+    const bucketMap = new Map<
+      string,
+      { bucket_start: string; bucket_label: string; donation_count: number; amount_cents: number }
+    >();
+    const purposeMap = new Map<string, { purpose: string; donation_count: number; amount_cents: number }>();
+
+    for (const row of data) {
+      const amountCents = typeof row.amount_cents === "number" ? row.amount_cents : 0;
+      const status: keyof typeof statusCounts =
+        row.status === "succeeded" || row.status === "failed" || row.status === "pending"
+          ? row.status
+          : "pending";
+
+      statusCounts[status]++;
+
+      if (status !== "succeeded" || typeof row.created_at !== "string") {
+        continue;
+      }
+
+      const createdAt = new Date(row.created_at);
+      if (Number.isNaN(createdAt.getTime())) {
+        continue;
+      }
+
+      successfulAmountCents += amountCents;
+      successfulDonationCount++;
+      largestSuccessfulAmountCents = Math.max(largestSuccessfulAmountCents, amountCents);
+      latestSuccessfulDonationAt = row.created_at;
+
+      const bucketStart = getDonationBucketStart(createdAt, bucket);
+      const bucketKey = bucketStart.toISOString();
+      const existingBucket = bucketMap.get(bucketKey);
+      if (existingBucket) {
+        existingBucket.donation_count += 1;
+        existingBucket.amount_cents += amountCents;
+      } else {
+        bucketMap.set(bucketKey, {
+          bucket_start: bucketStart.toISOString(),
+          bucket_label: formatDonationBucketLabel(bucketStart, bucket),
+          donation_count: 1,
+          amount_cents: amountCents,
+        });
+      }
+
+      const purposeLabel =
+        typeof row.purpose === "string" && row.purpose.trim().length > 0
+          ? row.purpose.trim()
+          : "Unspecified";
+      const existingPurpose = purposeMap.get(purposeLabel);
+      if (existingPurpose) {
+        existingPurpose.donation_count += 1;
+        existingPurpose.amount_cents += amountCents;
+      } else {
+        purposeMap.set(purposeLabel, {
+          purpose: purposeLabel,
+          donation_count: 1,
+          amount_cents: amountCents,
+        });
+      }
+    }
+
+    const topPurposes = [...purposeMap.values()]
+      .sort((a, b) => {
+        if (b.amount_cents !== a.amount_cents) {
+          return b.amount_cents - a.amount_cents;
+        }
+        return b.donation_count - a.donation_count;
+      })
+      .slice(0, topPurposesLimit);
+
+    const trend = [...bucketMap.values()].sort((a, b) =>
+      a.bucket_start.localeCompare(b.bucket_start)
+    );
+
+    return {
+      data: {
+        window_days: windowDays,
+        window_start: windowStart.toISOString(),
+        window_end: windowEnd.toISOString(),
+        bucket,
+        totals: {
+          successful_donation_count: successfulDonationCount,
+          successful_amount_cents: successfulAmountCents,
+          average_successful_amount_cents:
+            successfulDonationCount > 0
+              ? Math.round(successfulAmountCents / successfulDonationCount)
+              : null,
+          largest_successful_amount_cents:
+            successfulDonationCount > 0 ? largestSuccessfulAmountCents : null,
+          overall_donation_count: data.length,
+          status_counts: statusCounts,
+          latest_successful_donation_at: latestSuccessfulDonationAt,
+        },
+        trend,
+        top_purposes: topPurposes,
+      },
+      error: null,
+    };
+  });
+}
+
 async function findNavigationTargets(
   sb: SB,
   orgId: string,
@@ -3358,6 +3553,13 @@ export async function executeToolCall(
           );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId, logContext);
+        case "get_donation_analytics":
+          return getDonationAnalytics(
+            sb,
+            ctx.orgId,
+            args as z.infer<typeof getDonationAnalyticsSchema>,
+            logContext
+          );
         case "get_enterprise_stats":
           return safeToolQuery(logContext, () => getEnterpriseStats(sb, ctx.enterpriseId!));
         case "get_enterprise_quota":

@@ -719,6 +719,72 @@ test("get_org_stats returns counts object", async () => {
   assert.equal(stats.upcoming_events, 3);
 });
 
+test("get_donation_analytics returns donation trend summary", async () => {
+  stub = createToolSupabaseStub({
+    organization_donations: {
+      select: {
+        data: [
+          {
+            organization_id: ORG_ID,
+            amount_cents: 12500,
+            status: "succeeded",
+            created_at: "2026-03-10T12:00:00Z",
+            purpose: "Alumni Campaign",
+            deleted_at: null,
+          },
+          {
+            organization_id: ORG_ID,
+            amount_cents: 5000,
+            status: "succeeded",
+            created_at: "2026-03-18T12:00:00Z",
+            purpose: "Scholarship",
+            deleted_at: null,
+          },
+          {
+            organization_id: ORG_ID,
+            amount_cents: 2500,
+            status: "pending",
+            created_at: "2026-03-20T12:00:00Z",
+            purpose: "Scholarship",
+            deleted_at: null,
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  ctx = makeCtx(stub as any);
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "get_donation_analytics",
+      args: { window_days: 3650, bucket: "week", top_purposes_limit: 2 },
+    })
+  );
+  const analytics = result.data as any;
+
+  assert.equal(analytics.window_days, 3650);
+  assert.equal(analytics.bucket, "week");
+  assert.equal(analytics.totals.successful_donation_count, 2);
+  assert.equal(analytics.totals.successful_amount_cents, 17500);
+  assert.equal(analytics.totals.status_counts.pending, 1);
+  assert.equal(analytics.top_purposes[0].purpose, "Alumni Campaign");
+  assert.ok(Array.isArray(analytics.trend));
+
+  const donationQuery = stub.queries.find((q) => q.table === "organization_donations");
+  assert.ok(donationQuery);
+  assert.equal(
+    donationQuery.columns,
+    "amount_cents, status, created_at, purpose"
+  );
+  assert.ok(
+    donationQuery.filters.some((f: any) => f.col === "organization_id" && f.val === ORG_ID)
+  );
+  assert.ok(
+    donationQuery.filters.some((f: any) => f.col === "created_at" && f.op === "gte")
+  );
+});
+
 test("list_announcements returns recent announcements", async () => {
   const result = expectOk(await executeToolCall(ctx, { name: "list_announcements", args: {} }));
 

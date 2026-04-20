@@ -70,7 +70,44 @@ const SURFACE_KEYWORDS: Record<Exclude<AiSurface, "general">, readonly string[]>
     "sub-org",
     "sub-orgs",
   ],
-  analytics: ["analytics", "metric", "metrics", "donation", "donations", "fundraising", "revenue", "expense", "expenses", "budget", "budgets", "financial", "finance", "donor", "donors", "billing", "quota", "capacity", "seat", "seats", "slot", "slots", "limit", "limits"],
+  analytics: [
+    "analytics",
+    "metric",
+    "metrics",
+    "donation",
+    "donations",
+    "fundraising",
+    "revenue",
+    "expense",
+    "expenses",
+    "budget",
+    "budgets",
+    "financial",
+    "finance",
+    "donor",
+    "donors",
+    "billing",
+    "quota",
+    "capacity",
+    "seat",
+    "seats",
+    "slot",
+    "slots",
+    "limit",
+    "limits",
+    "trend",
+    "trends",
+    "breakdown",
+    "dashboard",
+    "report",
+    "reporting",
+    "monthly",
+    "weekly",
+    "daily",
+    "average",
+    "largest",
+    "growth",
+  ],
   events: [
     "event",
     "events",
@@ -179,6 +216,15 @@ function hasNavigationPattern(normalized: string): boolean {
   return NAVIGATION_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
+function isAnalyticsReportingRequest(normalized: string): boolean {
+  const hasAnalyticsKeyword = countMatches(normalized, SURFACE_KEYWORDS.analytics) > 0;
+  const hasReportingLanguage =
+    /\b(?:trend|trends|breakdown|report|reporting|monthly|weekly|daily|by month|by week|by day|average|largest|growth|compare)\b/i
+      .test(normalized);
+
+  return hasAnalyticsKeyword && hasReportingLanguage;
+}
+
 function classifyIntentType(message: string, normalized: string): AiIntentType {
   if (isCasualMessage(message)) {
     return "casual";
@@ -186,7 +232,7 @@ function classifyIntentType(message: string, normalized: string): AiIntentType {
   if (hasActionKeywords(normalized)) {
     return "action_request";
   }
-  if (hasNavigationPattern(normalized)) {
+  if (hasNavigationPattern(normalized) && !isAnalyticsReportingRequest(normalized)) {
     return "navigation";
   }
   return "knowledge_query";

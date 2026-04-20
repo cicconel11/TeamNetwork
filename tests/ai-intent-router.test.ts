@@ -158,6 +158,13 @@ describe("resolveSurfaceRouting — intent type axis", () => {
     assert.equal(result.intent, "events_query");
   });
 
+  it("keeps analytics reporting asks as knowledge queries even with 'show me'", () => {
+    const result = resolveSurfaceRouting("Show me donation trends by month", "general");
+
+    assert.equal(result.intentType, "knowledge_query");
+    assert.equal(result.intent, "analytics_query");
+  });
+
   it("classifies 'take me to' as navigation", () => {
     const result = resolveSurfaceRouting("Take me to the analytics dashboard", "general");
 

@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 33 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 33);
+test("AI_TOOLS exports 34 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 34);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -43,6 +43,7 @@ test("TOOL_NAMES contains all tool names", () => {
     "scrape_schedule_website",
     "extract_schedule_pdf",
     "get_org_stats",
+    "get_donation_analytics",
     "get_enterprise_stats",
     "get_enterprise_quota",
     "get_enterprise_org_capacity",
@@ -131,6 +132,19 @@ test("get_org_stats has no required parameters", () => {
   const tool = AI_TOOLS.find((t) => t.function.name === "get_org_stats")!;
   const params = tool.function.parameters as ToolParameters;
   assert.equal(params.required, undefined);
+});
+
+test("get_donation_analytics supports reporting window and bucket controls", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "get_donation_analytics")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.window_days);
+  assert.equal(props.window_days.type, "integer");
+  assert.equal(props.window_days.maximum, 3650);
+  assert.ok(props.bucket);
+  assert.ok(props.top_purposes_limit);
+  assert.equal(props.top_purposes_limit.maximum, 10);
 });
 
 test("suggest_connections supports person_query or person_type plus person_id", () => {

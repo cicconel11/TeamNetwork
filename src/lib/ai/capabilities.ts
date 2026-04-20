@@ -124,7 +124,13 @@ export function getAssistantCapabilitySnapshot(
     case "expenses":
     case "analytics":
       return capabilitySnapshotForToolNames(
-        ["get_org_stats", "list_donations", "list_philanthropy_events", "find_navigation_targets"],
+        [
+          "get_org_stats",
+          "get_donation_analytics",
+          "list_donations",
+          "list_philanthropy_events",
+          "find_navigation_targets",
+        ],
         ["Export analytics or change financial settings"],
       );
   }
@@ -165,7 +171,7 @@ export function getAssistantCapabilitySnapshot(
       );
     case "analytics":
       return capabilitySnapshotForToolNames(
-        ["get_org_stats", "list_donations", "list_philanthropy_events"],
+        ["get_org_stats", "get_donation_analytics", "list_donations", "list_philanthropy_events"],
         ["Export analytics or change financial settings"],
       );
     default:

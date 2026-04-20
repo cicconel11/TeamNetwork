@@ -51,6 +51,61 @@ test("verifyToolBackedResponse flags unsupported org stats summaries", () => {
   assert.match(result.failures.join("\n"), /active members claim 99 did not match 23/i);
 });
 
+test("verifyToolBackedResponse accepts grounded donation analytics summaries", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 8",
+      "- Raised: $450",
+      "- Average successful donation: $56",
+      "- Largest successful donation: $125",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 8,
+            successful_amount_cents: 45000,
+            average_successful_amount_cents: 5625,
+            largest_successful_amount_cents: 12500,
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse flags unsupported donation analytics summaries", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 9",
+      "- Raised: $999",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 8,
+            successful_amount_cents: 45000,
+            average_successful_amount_cents: 5625,
+            largest_successful_amount_cents: 12500,
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /successful donations claim 9 did not match 8/i);
+  assert.match(result.failures.join("\n"), /raised claim \$999 did not match \$450/i);
+});
+
 test("verifyToolBackedResponse flags member names absent from tool rows", () => {
   const result = verifyToolBackedResponse({
     content: "- Jane Smith\n- Ghost Person",
