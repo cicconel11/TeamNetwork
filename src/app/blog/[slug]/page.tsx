@@ -219,7 +219,7 @@ export default async function BlogPostPage({
                 Privacy
               </Link>
               <Link
-                href="/#pricing"
+                href="/contact"
                 className="hover:text-landing-cream transition-colors"
               >
                 Pricing

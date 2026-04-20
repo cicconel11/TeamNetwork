@@ -41,7 +41,7 @@ export default function DemosPage() {
           </Link>
           <nav className="hidden md:flex items-center gap-8 text-sm">
             <Link href="/#features" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Features</Link>
-            <Link href="/#pricing" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Pricing</Link>
+            <Link href="/contact" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Pricing</Link>
             <Link href="/demos" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Demo</Link>
             <Link href="/#faq" className="text-landing-cream/70 hover:text-landing-cream transition-colors">FAQ</Link>
             <Link href="/terms" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Terms</Link>
@@ -138,7 +138,7 @@ export default function DemosPage() {
             <div className="flex items-center gap-8 text-sm text-landing-cream/50">
               <Link href="/terms" className="hover:text-landing-cream transition-colors">Terms</Link>
               <Link href="/privacy" className="hover:text-landing-cream transition-colors">Privacy</Link>
-              <Link href="/#pricing" className="hover:text-landing-cream transition-colors">Pricing</Link>
+              <Link href="/contact" className="hover:text-landing-cream transition-colors">Pricing</Link>
               <a href="mailto:support@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
             </div>
 

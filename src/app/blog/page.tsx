@@ -58,7 +58,7 @@ export default function BlogPage() {
               Features
             </Link>
             <Link
-              href="/#pricing"
+              href="/contact"
               className="text-landing-cream/70 hover:text-landing-cream transition-colors"
             >
               Pricing
@@ -191,7 +191,7 @@ export default function BlogPage() {
                 Privacy
               </Link>
               <Link
-                href="/#pricing"
+                href="/contact"
                 className="hover:text-landing-cream transition-colors"
               >
                 Pricing
