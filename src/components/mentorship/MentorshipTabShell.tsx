@@ -10,6 +10,7 @@ interface MentorshipTabShellProps {
   orgSlug: string;
   content: React.ReactNode;
   showProposalsTab: boolean;
+  showMatchesTab: boolean;
   proposalCount?: number;
 }
 
@@ -18,14 +19,18 @@ export function MentorshipTabShell({
   orgSlug,
   content,
   showProposalsTab,
+  showMatchesTab,
   proposalCount,
 }: MentorshipTabShellProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tMentorship = useTranslations("mentorship");
-  const tabs: MentorshipTab[] = showProposalsTab
-    ? ["activity", "directory", "proposals"]
-    : ["activity", "directory"];
+  const tabs: MentorshipTab[] = [
+    ...(showMatchesTab ? ["matches" as const] : []),
+    "activity",
+    "directory",
+    ...(showProposalsTab ? ["proposals" as const] : []),
+  ];
   const [selectedTab, setSelectedTab] = useState<MentorshipTab>(activeTab);
 
   useEffect(() => {
@@ -36,10 +41,12 @@ export function MentorshipTabShell({
     try {
       if (tab === "activity") return tMentorship("tabActivity");
       if (tab === "directory") return tMentorship("tabDirectory");
+      if (tab === "matches") return tMentorship("tabMatches");
       return tMentorship("tabProposals");
     } catch {
       if (tab === "activity") return "Activity";
       if (tab === "directory") return "Directory";
+      if (tab === "matches") return "My Matches";
       return "Proposals";
     }
   };

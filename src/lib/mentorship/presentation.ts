@@ -71,3 +71,67 @@ const REASON_LABELS: Record<string, string> = {
 export function formatMentorshipReasonLabel(code: string): string {
   return REASON_LABELS[code] ?? code.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/**
+ * Human-readable explanation sentence for a single match signal.
+ * Custom attributes (codes like "custom:sport") use the value field
+ * which contains "Label:matchedValue" (e.g., "Sport:Lacrosse").
+ */
+export function formatMatchExplanation(
+  signal: { code: string; value?: string | number }
+): string {
+  const { code, value } = signal;
+
+  // Custom attribute — value is "Label:matchedValue(s)"
+  if (code.startsWith("custom:") && typeof value === "string") {
+    const colonIdx = value.indexOf(":");
+    if (colonIdx > 0) {
+      const label = value.slice(0, colonIdx);
+      const matched = value.slice(colonIdx + 1);
+      const values = matched.split(",").filter(Boolean);
+      if (values.length === 1) return `Shared ${label.toLowerCase()}: ${values[0]}`;
+      return `Shared ${label.toLowerCase()}: ${values.join(", ")}`;
+    }
+    return `Shared: ${value}`;
+  }
+
+  // Built-in signals
+  switch (code) {
+    case "shared_topics": {
+      const topics = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      if (topics.length === 1) return `Shared topic: ${topics[0]}`;
+      if (topics.length > 1) return `Shared topics: ${topics.join(", ")}`;
+      return "Shared topics";
+    }
+    case "shared_industry":
+      return typeof value === "string" ? `Same industry: ${value}` : "Same industry";
+    case "shared_role_family":
+      return typeof value === "string" ? `Same career path: ${value}` : "Same career path";
+    case "graduation_gap_fit":
+      return typeof value === "number" ? `${value} years ahead in career` : "Good career gap";
+    case "shared_city":
+      return typeof value === "string" ? `Same city: ${value}` : "Same city";
+    case "shared_company":
+      return typeof value === "string" ? `Same company: ${value}` : "Same company";
+    default:
+      return formatMentorshipReasonLabel(code);
+  }
+}
+
+export type MatchQualityTier = "strong" | "good" | "possible";
+
+/**
+ * Map a raw score to a qualitative tier.
+ * Thresholds are percentage of theoretical max score.
+ */
+export function getMatchQualityTier(
+  score: number,
+  theoreticalMax: number
+): MatchQualityTier | null {
+  if (theoreticalMax <= 0) return null;
+  const pct = score / theoreticalMax;
+  if (pct >= 0.75) return "strong";
+  if (pct >= 0.50) return "good";
+  if (pct >= 0.25) return "possible";
+  return null; // below threshold — hide from results
+}

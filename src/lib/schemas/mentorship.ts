@@ -49,6 +49,27 @@ export const menteePreferencesSchema = z.object({
 export type MenteePreferencesForm = z.infer<typeof menteePreferencesSchema>;
 
 /**
+ * Mentee intake form (legacy seeded form path).
+ */
+export const menteeIntakeSchema = z.object({
+  goals: z.string().trim().min(1, "Goals are required").max(2000),
+  preferred_topics: z.array(z.string().trim().min(1)).default([]),
+  preferred_industry: z.array(z.string().trim().min(1)).default([]),
+  preferred_role_families: z.array(z.string().trim().min(1)).default([]),
+  time_availability: z
+    .enum(["1hr/month", "2hr/month", "4hr/month", "flexible"])
+    .optional(),
+  communication_prefs: z
+    .array(z.enum(["video", "phone", "in_person", "async"]))
+    .default([]),
+  geographic_pref: z.string().trim().max(200).optional().or(z.literal("")),
+  mentor_attributes_required: z.array(z.string().trim().min(1)).default([]),
+  mentor_attributes_nice_to_have: z.array(z.string().trim().min(1)).default([]),
+});
+
+export type MenteeIntakeForm = z.infer<typeof menteeIntakeSchema>;
+
+/**
  * Native mentor_profiles edit shape (Phase 3 inline card).
  */
 export const mentorProfileNativeSchema = z.object({
@@ -69,3 +90,26 @@ export const mentorProfileNativeSchema = z.object({
 });
 
 export type MentorProfileNativeForm = z.infer<typeof mentorProfileNativeSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Custom attribute definitions (org-level config)                   */
+/* ------------------------------------------------------------------ */
+
+export const customAttributeDefSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/, "Key must be lowercase alphanumeric with underscores, 1-31 chars"),
+  label: z.string().trim().min(1).max(100),
+  type: z.enum(["select", "multiselect", "text"]),
+  options: z.array(z.object({
+    label: z.string().trim().min(1).max(200),
+    value: z.string().trim().min(1).max(200),
+  })).max(50).optional(),
+  weight: z.number().min(0).max(100).default(0),
+  required: z.boolean().optional(),
+  mentorVisible: z.boolean().optional(),
+  menteeVisible: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
+
+export const customAttributeDefsSchema = z.array(customAttributeDefSchema).max(20);
+
+export type CustomAttributeDefForm = z.infer<typeof customAttributeDefSchema>;

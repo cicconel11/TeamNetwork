@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { Input, Textarea, Button } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { createMentorProfileSchema } from "@/lib/schemas/mentorship";
+import type { CustomAttributeDef } from "@/lib/mentorship/matching-weights";
 
 interface MentorRegistrationProps {
   orgId: string;
   orgSlug: string;
   onCancel: () => void;
+  customAttributeDefs?: readonly CustomAttributeDef[];
 }
 
-export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps) {
+export function MentorRegistration({ orgId, onCancel, customAttributeDefs = [] }: MentorRegistrationProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +25,9 @@ export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps)
     contact_linkedin: "",
     contact_phone: "",
   });
+  const [customAttrs, setCustomAttrs] = useState<Record<string, string | string[]>>({});
+
+  const visibleDefs = customAttributeDefs.filter((d) => d.mentorVisible !== false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,8 +58,22 @@ export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps)
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
 
-      // Insert mentor profile
-      const { error: insertError } = await supabase
+      // Build custom_attributes jsonb from dynamic form fields
+      const cleanCustomAttrs: Record<string, string | string[]> = {};
+      for (const [key, value] of Object.entries(customAttrs)) {
+        if (typeof value === "string" && value.trim()) {
+          cleanCustomAttrs[key] = value.trim();
+        } else if (Array.isArray(value) && value.length > 0) {
+          cleanCustomAttrs[key] = value;
+        }
+      }
+
+      // Insert mentor profile — custom_attributes not in generated types yet
+      const { error: insertError } = await (supabase as unknown as {
+        from: (t: string) => {
+          insert: (data: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+        };
+      })
         .from("mentor_profiles")
         .insert({
           organization_id: orgId,
@@ -65,6 +84,7 @@ export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps)
           contact_linkedin: formData.contact_linkedin || null,
           contact_phone: formData.contact_phone || null,
           is_active: true,
+          custom_attributes: Object.keys(cleanCustomAttrs).length > 0 ? cleanCustomAttrs : {},
         });
 
       if (insertError) {
@@ -138,6 +158,85 @@ export function MentorRegistration({ orgId, onCancel }: MentorRegistrationProps)
             />
           </div>
         </div>
+
+        {visibleDefs.length > 0 && (
+          <div className="pt-3">
+            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">Additional Information</h4>
+            <div className="space-y-4">
+              {visibleDefs
+                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                .map((def) => {
+                  if (def.type === "select" && def.options) {
+                    return (
+                      <div key={def.key}>
+                        <label className="block text-sm font-medium text-foreground mb-1">
+                          {def.label}{def.required && <span className="text-red-500 ml-0.5">*</span>}
+                        </label>
+                        <select
+                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                          value={(customAttrs[def.key] as string) || ""}
+                          onChange={(e) => setCustomAttrs({ ...customAttrs, [def.key]: e.target.value })}
+                          required={def.required}
+                        >
+                          <option value="">Select {def.label.toLowerCase()}...</option>
+                          {def.options.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (def.type === "multiselect" && def.options) {
+                    const selected = Array.isArray(customAttrs[def.key]) ? customAttrs[def.key] as string[] : [];
+                    return (
+                      <div key={def.key}>
+                        <label className="block text-sm font-medium text-foreground mb-1">
+                          {def.label}{def.required && <span className="text-red-500 ml-0.5">*</span>}
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {def.options.map((opt) => {
+                            const isChecked = selected.includes(opt.value);
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                                  isChecked
+                                    ? "bg-[var(--color-org-primary)] text-white border-transparent"
+                                    : "bg-background border-border text-foreground hover:bg-muted"
+                                }`}
+                                onClick={() => {
+                                  const next = isChecked
+                                    ? selected.filter((v) => v !== opt.value)
+                                    : [...selected, opt.value];
+                                  setCustomAttrs({ ...customAttrs, [def.key]: next });
+                                }}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (def.type === "text") {
+                    return (
+                      <Input
+                        key={def.key}
+                        label={def.label}
+                        placeholder={`Enter ${def.label.toLowerCase()}...`}
+                        value={(customAttrs[def.key] as string) || ""}
+                        onChange={(e) => setCustomAttrs({ ...customAttrs, [def.key]: e.target.value })}
+                        required={def.required}
+                      />
+                    );
+                  }
+                  return null;
+                })}
+            </div>
+          </div>
+        )}
 
         {error && (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
