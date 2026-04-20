@@ -13,6 +13,7 @@ interface MessageListProps {
   messages: AIPanelMessage[];
   loading: boolean;
   orgId: string;
+  emptyStateDescription?: string;
   streamingContent?: string;
   isStreaming?: boolean;
   previewAssistantContent?: string;
@@ -32,6 +33,7 @@ export function MessageList({
   messages,
   loading,
   orgId,
+  emptyStateDescription,
   streamingContent,
   isStreaming,
   previewAssistantContent,
@@ -130,7 +132,8 @@ export function MessageList({
               How can I help?
             </h3>
             <p className="text-sm text-muted-foreground">
-              Ask about your organization&apos;s members, events, discussions, or announcements.
+              {emptyStateDescription ??
+                "Ask about your organization&apos;s members, events, discussions, or announcements."}
             </p>
           </div>
 

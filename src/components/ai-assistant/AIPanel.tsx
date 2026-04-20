@@ -177,9 +177,9 @@ function getStarterPrompts(pathname: string, surface: ReturnType<typeof routeToS
       ];
     case "analytics":
       return [
-        "Show organization stats",
-        "Open donations",
-        "Take me to navigation settings",
+        "Show donation trends for the last 90 days",
+        "Break down donations by purpose",
+        "Which philanthropy events are coming up?",
       ];
     default:
       return [
@@ -215,10 +215,22 @@ function getInputPlaceholder(pathname: string, surface: ReturnType<typeof routeT
     case "events":
       return "Ask about events, or ask me to open the right page...";
     case "analytics":
-      return "Ask about stats, donations, or where to go in the app...";
+      return "Ask about trends, donation breakdowns, philanthropy activity, or reporting questions...";
     default:
       return "Ask about announcements, discussions, jobs, or where to go...";
   }
+}
+
+function getEmptyStateDescription(
+  pathname: string,
+  surface: ReturnType<typeof routeToSurface>
+): string {
+  const segment = getFeatureSegment(pathname);
+  if (segment === "donations" || segment === "philanthropy" || surface === "analytics") {
+    return "Ask about donation trends, fundraising performance, top purposes, or philanthropy activity.";
+  }
+
+  return "Ask about your organization's members, events, discussions, or announcements.";
 }
 
 async function normalizeScheduleUploadFile(file: File): Promise<File> {
@@ -252,6 +264,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const capabilitySnapshot = getAssistantCapabilitySnapshot(pathname, surface);
   const starterPrompts = getStarterPrompts(pathname, surface);
   const inputPlaceholder = getInputPlaceholder(pathname, surface);
+  const emptyStateDescription = getEmptyStateDescription(pathname, surface);
   const [view, setView] = useState<"chat" | "threads">("chat");
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<AIPanelThread[]>([]);
@@ -726,6 +739,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
               messages={messages}
               loading={messagesLoading}
               orgId={orgId}
+              emptyStateDescription={emptyStateDescription}
               streamingContent={currentContent}
               isStreaming={isStreaming}
               previewAssistantContent={pendingAssistantContent ?? undefined}

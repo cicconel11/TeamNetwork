@@ -282,6 +282,13 @@ const scrapeScheduleWebsiteSchema = z
 const extractSchedulePdfSchema = z.object({}).strict();
 
 const getOrgStatsSchema = z.object({}).strict();
+const getDonationAnalyticsSchema = z
+  .object({
+    window_days: z.number().int().min(7).max(3650).optional(),
+    bucket: z.enum(["day", "week", "month"]).optional(),
+    top_purposes_limit: z.number().int().min(1).max(10).optional(),
+  })
+  .strict();
 const getEnterpriseStatsSchema = z.object({}).strict();
 const getEnterpriseQuotaSchema = z.object({}).strict();
 const getEnterpriseOrgCapacitySchema = z.object({}).strict();
@@ -398,6 +405,7 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   scrape_schedule_website: scrapeScheduleWebsiteSchema,
   extract_schedule_pdf: extractSchedulePdfSchema,
   get_org_stats: getOrgStatsSchema,
+  get_donation_analytics: getDonationAnalyticsSchema,
   get_enterprise_stats: getEnterpriseStatsSchema,
   get_enterprise_quota: getEnterpriseQuotaSchema,
   get_enterprise_org_capacity: getEnterpriseOrgCapacitySchema,
@@ -2809,6 +2817,34 @@ async function getOrgStats(
   };
 }
 
+function defaultDonationAnalyticsBucket(windowDays: number): "day" | "week" | "month" {
+  if (windowDays <= 31) return "day";
+  if (windowDays <= 180) return "week";
+  return "month";
+}
+
+async function getDonationAnalytics(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof getDonationAnalyticsSchema>,
+  logContext: AiLogContext
+): Promise<ToolExecutionResult> {
+  const windowDays = args.window_days ?? 90;
+  const bucket = args.bucket ?? defaultDonationAnalyticsBucket(windowDays);
+  const topPurposesLimit = args.top_purposes_limit ?? 5;
+
+  return safeToolQuery(logContext, async () => {
+    const { data, error } = await sb.rpc("get_donation_analytics", {
+      p_org_id: orgId,
+      p_window_days: windowDays,
+      p_bucket: bucket,
+      p_top_purposes_limit: topPurposesLimit,
+    });
+
+    return { data, error };
+  });
+}
+
 async function findNavigationTargets(
   sb: SB,
   orgId: string,
@@ -3358,6 +3394,13 @@ export async function executeToolCall(
           );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId, logContext);
+        case "get_donation_analytics":
+          return getDonationAnalytics(
+            sb,
+            ctx.orgId,
+            args as z.infer<typeof getDonationAnalyticsSchema>,
+            logContext
+          );
         case "get_enterprise_stats":
           return safeToolQuery(logContext, () => getEnterpriseStats(sb, ctx.enterpriseId!));
         case "get_enterprise_quota":

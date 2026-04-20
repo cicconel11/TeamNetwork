@@ -174,6 +174,7 @@
       "useOrgDefault": "Utiliser la langue de l'organisation ({language})"
     },
     "description": "Gerez les invitations, abonnements et acces a l'organisation",
+    "bulkImport": "Importation en lot",
     "createInvite": "Creer une invitation",
     "requireApproval": "Exiger l'approbation pour les nouveaux membres",
     "requireApprovalDesc": "Lorsqu'active, les utilisateurs qui rejoignent via invitation doivent etre approuves avant d'obtenir l'acces. Vous pouvez egalement modifier cela par invitation.",

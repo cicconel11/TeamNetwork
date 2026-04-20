@@ -182,6 +182,8 @@ const ALUMNI_ROSTER_PROMPT_PATTERN =
   /(?<!\w)(?:alumni|alumnus|alumna|alumnae|graduates?|who\s+graduated|graduation\s+(?:year|class)|class\s+of\b)(?!\w)/i;
 const DONATION_STATS_PROMPT_PATTERN =
   /(?<!\w)(?:donation|donations|fundraising)\s+(?:metric|metrics|stats|statistics|total|totals|summary|overview|revenue|amount)(?!\w)/i;
+const DONATION_ANALYTICS_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:donation|donations|fundraising|revenue|donor|donors)(?!\w)[\s\S]{0,120}\b(?:trend|trends|breakdown|performance|average|largest|monthly|weekly|daily|by month|by week|by day|last\s+\d+\s+days?|recent)\b|(?<!\w)(?:trend|trends|breakdown|performance|average|largest|monthly|weekly|daily|by month|by week|by day|last\s+\d+\s+days?|recent)(?!\w)[\s\S]{0,120}\b(?:donation|donations|fundraising|revenue|donor|donors)\b|(?<!\w)(?:donation|donations|fundraising)(?!\w)[\s\S]{0,40}\b(?:metric|metrics|statistics)\b)/i;
 const DONATION_LIST_PROMPT_PATTERN =
   /(?<!\w)(?:donations?|fundraising\s+details|donation\s+history|who\s+donated|list\s+(?:the\s+)?donors?)(?!\w)/i;
 const PARENT_LIST_PROMPT_PATTERN =
@@ -556,6 +558,24 @@ interface SuggestMentorsDisplaySuggestion {
   reasons?: Array<{ label?: unknown; value?: unknown }>;
 }
 
+interface DonationAnalyticsDisplayPayload {
+  window_days?: unknown;
+  totals?: {
+    successful_donation_count?: unknown;
+    successful_amount_cents?: unknown;
+    average_successful_amount_cents?: unknown;
+    largest_successful_amount_cents?: unknown;
+    latest_successful_donation_at?: unknown;
+    status_counts?: {
+      succeeded?: unknown;
+      failed?: unknown;
+      pending?: unknown;
+    } | null;
+  } | null;
+  trend?: unknown;
+  top_purposes?: unknown;
+}
+
 interface ListAvailableMentorsDisplayPayload {
   state?: unknown;
   total_available?: unknown;
@@ -650,6 +670,120 @@ function formatSuggestMentorsResponse(data: unknown): string | null {
   }
 
   return lines.join("\n");
+}
+
+function formatDonationAnalyticsResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as DonationAnalyticsDisplayPayload;
+  const totals = payload.totals;
+  if (!totals || typeof totals !== "object") {
+    return null;
+  }
+
+  const windowDays =
+    typeof payload.window_days === "number" ? payload.window_days : null;
+  const lines = [
+    `Donation analytics${windowDays ? ` (${windowDays}-day window)` : ""}`,
+  ];
+
+  if (typeof totals.successful_donation_count === "number") {
+    lines.push(`- Successful donations: ${totals.successful_donation_count}`);
+  }
+  if (typeof totals.successful_amount_cents === "number") {
+    lines.push(`- Raised: $${(totals.successful_amount_cents / 100).toFixed(0)}`);
+  }
+  if (typeof totals.average_successful_amount_cents === "number") {
+    lines.push(
+      `- Average successful donation: $${(totals.average_successful_amount_cents / 100).toFixed(0)}`
+    );
+  }
+  if (typeof totals.largest_successful_amount_cents === "number") {
+    lines.push(
+      `- Largest successful donation: $${(totals.largest_successful_amount_cents / 100).toFixed(0)}`
+    );
+  }
+
+  if (totals.status_counts && typeof totals.status_counts === "object") {
+    const statusSummary = [
+      typeof totals.status_counts.succeeded === "number"
+        ? `${totals.status_counts.succeeded} succeeded`
+        : null,
+      typeof totals.status_counts.pending === "number"
+        ? `${totals.status_counts.pending} pending`
+        : null,
+      typeof totals.status_counts.failed === "number"
+        ? `${totals.status_counts.failed} failed`
+        : null,
+    ].filter((value): value is string => Boolean(value));
+
+    if (statusSummary.length > 0) {
+      lines.push(`- Status mix: ${statusSummary.join(" - ")}`);
+    }
+  }
+
+  const latestSuccessfulDonationAt = formatIsoDate(totals.latest_successful_donation_at);
+  if (latestSuccessfulDonationAt) {
+    lines.push(`- Latest successful donation: ${latestSuccessfulDonationAt}`);
+  }
+
+  const topPurposes = Array.isArray(payload.top_purposes)
+    ? payload.top_purposes
+        .map((row) => {
+          if (!row || typeof row !== "object") return null;
+          const purpose = getNonEmptyString((row as { purpose?: unknown }).purpose);
+          if (!purpose) return null;
+
+          const parts = [
+            typeof (row as { donation_count?: unknown }).donation_count === "number"
+              ? `${(row as { donation_count: number }).donation_count} donations`
+              : null,
+            typeof (row as { amount_cents?: unknown }).amount_cents === "number"
+              ? `$${(((row as { amount_cents: number }).amount_cents) / 100).toFixed(0)}`
+              : null,
+          ].filter((value): value is string => Boolean(value));
+
+          return `- ${purpose}${parts.length > 0 ? ` - ${parts.join(" - ")}` : ""}`;
+        })
+        .filter((row): row is string => Boolean(row))
+        .slice(0, 5)
+    : [];
+
+  if (topPurposes.length > 0) {
+    lines.push("Top purposes");
+    lines.push(...topPurposes);
+  }
+
+  const trendRows = Array.isArray(payload.trend)
+    ? payload.trend
+        .map((row) => {
+          if (!row || typeof row !== "object") return null;
+          const label = getNonEmptyString((row as { bucket_label?: unknown }).bucket_label);
+          if (!label) return null;
+
+          const parts = [
+            typeof (row as { donation_count?: unknown }).donation_count === "number"
+              ? `${(row as { donation_count: number }).donation_count} donations`
+              : null,
+            typeof (row as { amount_cents?: unknown }).amount_cents === "number"
+              ? `$${(((row as { amount_cents: number }).amount_cents) / 100).toFixed(0)}`
+              : null,
+          ].filter((value): value is string => Boolean(value));
+
+          return `- ${label}${parts.length > 0 ? ` - ${parts.join(" - ")}` : ""}`;
+        })
+        .filter((row): row is string => Boolean(row))
+        .slice(0, 8)
+    : [];
+
+  if (trendRows.length > 0) {
+    lines.push("Trend");
+    lines.push(...trendRows);
+  }
+
+  return lines.length > 1 ? lines.join("\n") : null;
 }
 
 function formatListAvailableMentorsResponse(data: unknown): string | null {
@@ -1484,7 +1618,14 @@ function formatAuditEventsResponse(data: unknown): string | null {
   return [`Recent enterprise audit events${total}`, ...rows].join("\n");
 }
 
-function formatDonationsResponse(data: unknown): string | null {
+interface DonationResponseOptions {
+  hideDonorNames?: boolean;
+}
+
+function formatDonationsResponse(
+  data: unknown,
+  options?: DonationResponseOptions,
+): string | null {
   if (!Array.isArray(data)) {
     return null;
   }
@@ -1499,7 +1640,9 @@ function formatDonationsResponse(data: unknown): string | null {
         return null;
       }
 
-      const donorName = getNonEmptyString((row as { donor_name?: unknown }).donor_name) ?? "Unknown";
+      const donorName = options?.hideDonorNames
+        ? "Anonymous donor"
+        : (getNonEmptyString((row as { donor_name?: unknown }).donor_name) ?? "Unknown");
       const amountDollars = typeof (row as { amount_dollars?: unknown }).amount_dollars === "number"
         ? `$${((row as { amount_dollars: number }).amount_dollars).toFixed(2)}`
         : null;
@@ -1836,6 +1979,10 @@ function getPass1Tools(
     return [AI_TOOL_MAP.list_philanthropy_events];
   }
 
+  if (DONATION_ANALYTICS_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.get_donation_analytics];
+  }
+
   if (
     DONATION_LIST_PROMPT_PATTERN.test(message) &&
     !MEMBER_COUNT_PROMPT_PATTERN.test(message) &&
@@ -1912,6 +2059,7 @@ function getForcedPass1ToolChoice(
     forcedToolName !== "prepare_event" &&
     forcedToolName !== "list_members" &&
     forcedToolName !== "get_org_stats" &&
+    forcedToolName !== "get_donation_analytics" &&
     forcedToolName !== "get_enterprise_stats" &&
     forcedToolName !== "get_enterprise_quota" &&
     forcedToolName !== "get_enterprise_org_capacity" &&
@@ -1950,6 +2098,7 @@ function isToolFirstEligible(
   return (
     toolName === "list_members" ||
     toolName === "get_org_stats" ||
+    toolName === "get_donation_analytics" ||
     toolName === "find_navigation_targets" ||
     toolName === "list_announcements" ||
     toolName === "list_chat_groups" ||
@@ -2590,9 +2739,31 @@ function formatDeterministicToolErrorResponse(
   return null;
 }
 
+async function resolveHideDonorNamesPreference(
+  serviceSupabase: { from: (table: string) => any },
+  orgId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await serviceSupabase
+      .from("organizations")
+      .select("hide_donor_names")
+      .eq("id", orgId)
+      .maybeSingle();
+
+    if (error) {
+      return true;
+    }
+
+    return Boolean((data as { hide_donor_names?: unknown } | null)?.hide_donor_names);
+  } catch {
+    return true;
+  }
+}
+
 function formatDeterministicToolResponse(
   name: string,
-  data: unknown
+  data: unknown,
+  options?: DonationResponseOptions,
 ): string | null {
   switch (name) {
     case "suggest_connections":
@@ -2631,6 +2802,8 @@ function formatDeterministicToolResponse(
       return formatExtractScheduleFileResponse(data);
     case "get_org_stats":
       return formatOrgStatsResponse(data);
+    case "get_donation_analytics":
+      return formatDonationAnalyticsResponse(data);
     case "get_enterprise_stats":
       return formatEnterpriseStatsResponse(data);
     case "get_enterprise_quota":
@@ -2644,7 +2817,7 @@ function formatDeterministicToolResponse(
     case "list_enterprise_alumni":
       return formatEnterpriseAlumniResponse(data);
     case "list_donations":
-      return formatDonationsResponse(data);
+      return formatDonationsResponse(data, options);
     case "list_managed_orgs":
       return formatManagedOrgsResponse(data);
     case "list_enterprise_audit_events":
@@ -5603,6 +5776,20 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             successfulToolResults.length === 1 &&
             successfulToolResults[0]?.name === "list_members" &&
             MEMBER_ROSTER_PROMPT_PATTERN.test(messageSafety.promptSafeMessage);
+          const needsDonorPrivacy = successfulToolResults.some(
+            (result) => result.name === "list_donations",
+          );
+          const hideDonorNames = needsDonorPrivacy
+            ? await resolveHideDonorNamesPreference(
+                ctx.serviceSupabase as { from: (table: string) => any },
+                ctx.orgId,
+              )
+            : false;
+          const deterministicDonationOptions =
+            successfulToolResults.length === 1 &&
+            successfulToolResults[0]?.name === "list_donations"
+              ? { hideDonorNames }
+              : undefined;
           const deterministicToolContent =
             toolResults.length === 1 &&
             successfulToolResults.length === 1 &&
@@ -5610,7 +5797,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             (successfulToolResults[0].name !== "list_members" || canUseDeterministicMemberRoster)
               ? formatDeterministicToolResponse(
                   successfulToolResults[0].name,
-                  successfulToolResults[0].data
+                  successfulToolResults[0].data,
+                  deterministicDonationOptions,
                 )
               : null;
           const singleToolError =
@@ -5712,6 +5900,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 const groundingResult = verifyToolBackedResponseFn({
                   content: pass2BufferedContent,
                   toolResults: successfulToolResults,
+                  orgContext: { hideDonorNames },
                 });
 
                 if (!groundingResult.grounded) {

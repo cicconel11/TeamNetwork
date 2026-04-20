@@ -174,6 +174,7 @@
       "useOrgDefault": "Usar idioma de la organizacion ({language})"
     },
     "description": "Administra invitaciones, suscripciones y acceso a la organizacion",
+    "bulkImport": "Importacion masiva",
     "createInvite": "Crear invitacion",
     "requireApproval": "Requerir aprobacion para nuevos miembros",
     "requireApprovalDesc": "Cuando esta activado, los usuarios que se unan mediante invitacion deben ser aprobados antes de obtener acceso. Tambien puedes anular esto por invitacion.",

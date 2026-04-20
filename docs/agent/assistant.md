@@ -8,9 +8,9 @@ Enterprise behavior is an extension of this same assistant, not a second pipelin
 
 Most organizations in the app are not on the enterprise plan. For non-enterprise organizations, the assistant must stay org-scoped and should not expose enterprise prompts, enterprise tools, or enterprise-wide answers. Even for enterprise-linked organizations, enterprise-wide answers are valid only for that caller's own enterprise context.
 
-The chat runtime is split into thin `route.ts` entrypoints and testable `handler.ts` factories for chat, thread, message, and pending-action endpoints. The main chat handler orchestrates auth, rate limiting, message safety, idempotency, surface and intent routing, execution policy decisions, optional RAG retrieval, prompt construction, SSE streaming, deterministic tool execution, grounding verification, persistence, and audit logging. Straightforward live-read turns can short-circuit to `tool_first` deterministic formatting paths (for example, `list_members`, `list_events`, `get_org_stats`, `suggest_connections`, and `find_navigation_targets`) to avoid an unnecessary second model pass.
+The chat runtime is split into thin `route.ts` entrypoints and testable `handler.ts` factories for chat, thread, message, and pending-action endpoints. The main chat handler orchestrates auth, rate limiting, message safety, idempotency, surface and intent routing, execution policy decisions, optional RAG retrieval, prompt construction, SSE streaming, deterministic tool execution, grounding verification, persistence, and audit logging. Straightforward live-read turns can short-circuit to `tool_first` deterministic formatting paths (for example, `list_members`, `list_events`, `get_org_stats`, `get_donation_analytics`, `suggest_connections`, and `find_navigation_targets`) to avoid an unnecessary second model pass.
 
-The shipped tool surface includes org read tools, enterprise read tools, and confirmation-gated write-preparation flows (announcements, jobs, direct/group chat messages, discussion threads/replies, and calendar events). Pending-action flows emit structured SSE events and require explicit confirm/cancel API calls before execution. The panel is route-aware, persists active thread per org/surface, and streams live tool status.
+The shipped tool surface includes org read tools, enterprise read tools, and confirmation-gated write-preparation flows (announcements, jobs, direct/group chat messages, discussion threads/replies, and calendar events). Org analytics now include both the shallow `get_org_stats` snapshot path and a richer `get_donation_analytics` reporting path for trend, breakdown, average, and top-purpose donation questions. Pending-action flows emit structured SSE events and require explicit confirm/cancel API calls before execution. The panel is route-aware, persists active thread per org/surface, and streams live tool status.
 
 Schedule-import support remains integrated into the same panel flow. Uploaded schedule files are private transient attachments, with parser-first extraction paths, deterministic extraction error codes, and cleanup routes for abandoned uploads.
 
@@ -209,5 +209,18 @@ The following features are deferred from v1 tool calling. Each is mapped to the 
 
 ### Data Analyst (SQL Generation)
 - **Paper:** Text-to-SQL Survey (`2410.06011`), APEX-SQL (`2602.16720`), TrustSQL (`2403.15879`)
-- **What:** Let admins ask ad-hoc data questions ("donation trend by month", "members who joined after January")
+- **What:** Extend ad-hoc data questions beyond the currently shipped fixed analytics RPCs (for example donation and member-growth trends) into schema-aware SQL generation.
 - **Design:** Schema-aware SQL generation with read-only sandbox. Must support abstaining from infeasible queries (TrustSQL pattern). LIDA pipeline (`2303.02927`) for chart generation.
+
+## Donation Analytics Tool
+
+`get_donation_analytics(window_days, bucket, top_purposes_limit)` summarizes `organization_donations` for an admin org. It is implemented as a single `SECURITY DEFINER` RPC (`public.get_donation_analytics`) and called from `src/lib/ai/tools/executor.ts`. The RPC buckets donations in the org's IANA timezone (`organizations.timezone`, falling back to `America/New_York`) so monthly/weekly breakdowns do not drift on UTC boundaries.
+
+- **Settled set:** `{ 'succeeded', 'recorded' }`. Both statuses count toward `successful_*` totals and trend/purpose aggregates. `status_counts.succeeded` is the merged settled count; `status_counts.recorded` and `status_counts.settled` are advisory keys for observability. The Node-side constant `SETTLED_DONATION_STATUSES` in `src/lib/payments/donation-status.ts` is the canonical mirror reused by the donations/philanthropy surfaces.
+- **Buckets:** defaults are `day` (≤31d), `week` (≤180d), `month` (>180d). Week labels use ISO Monday in org local time; month labels use `YYYY-MM` in org local time.
+- **Index:** partial composite `organization_donations (organization_id, created_at) WHERE deleted_at IS NULL` supports the range scan inside the RPC.
+- **Grounding:** the deterministic formatter emits `Donation analytics`, `Successful donations`, `Raised`, `Average successful donation`, `Largest successful donation`, `Top purposes`, and `Trend` labels. `verifyDonationAnalytics` in `src/lib/ai/tool-grounding.ts` requires the response to reference at least one of these labels and checks each trend row and top-purpose row against the RPC payload; unknown rows or mismatched amounts or donation counts flip `grounded=false` and the handler emits the fallback copy.
+
+## `list_donations` Privacy and Grounding
+
+`list_donations` coerces anonymous donors' name/email to `"Anonymous"` before returning rows. `verifyListDonations` additionally threads the `organizations.hide_donor_names` flag into the grounding pass: when enabled, any quoted donor name, email, or list-entry head that matches a real row is treated as an unauthorized leak and flips `grounded=false`. The handler also applies the same flag to deterministic `tool_first` donation rendering, replacing donor identities with `Anonymous donor`. Privacy lookup failures now fail closed and redact identities rather than defaulting to visible names.

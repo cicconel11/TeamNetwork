@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui";
+import { SETTLED_DONATION_STATUSES } from "@/lib/payments/donation-status";
 import type { OrganizationDonation } from "@/types/database";
 
 interface RecentDuesTableTranslations {
@@ -23,9 +24,8 @@ interface RecentDuesTableProps {
 }
 
 export function RecentDuesTable({ donations, isAdmin, isPublicView = false, translations: t }: RecentDuesTableProps) {
-  const SETTLED_STATUSES = ["succeeded", "recorded"];
   const visibleDonations = isPublicView
-    ? donations.filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
+    ? donations.filter((d) => (d.visibility || "public") === "public" && (SETTLED_DONATION_STATUSES as readonly string[]).includes(d.status))
     : donations;
 
   if (visibleDonations.length === 0) {

@@ -82,6 +82,11 @@ export interface ScrapeScheduleWebsiteArgs {
 export type ExtractSchedulePdfArgs = Record<string, never>;
 
 export type GetOrgStatsArgs = Record<string, never>;
+export interface GetDonationAnalyticsArgs {
+  window_days?: number;
+  bucket?: "day" | "week" | "month";
+  top_purposes_limit?: number;
+}
 export type GetEnterpriseStatsArgs = Record<string, never>;
 export type GetEnterpriseQuotaArgs = Record<string, never>;
 export type ListManagedOrgsArgs = Record<string, never>;
@@ -593,6 +598,38 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  get_donation_analytics: {
+    type: "function" as const,
+    function: {
+      name: "get_donation_analytics" as const,
+      description:
+        "Summarize donation performance for a recent time window. Returns successful donation totals, status mix, average and largest donations, trend buckets, and top purposes. Use for donation trends, fundraising performance, monthly breakdowns, and recent donation analytics.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          window_days: {
+            type: "integer" as const,
+            minimum: 7,
+            maximum: 3650,
+            description: "How many trailing days to analyze (default 90).",
+          },
+          bucket: {
+            type: "string" as const,
+            enum: ["day", "week", "month"],
+            description:
+              "Time bucket for trend rows. Defaults to day for short windows, week for medium windows, and month for long windows.",
+          },
+          top_purposes_limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 10,
+            description: "How many top donation purposes to include (default 5).",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   get_enterprise_stats: {
     type: "function" as const,
     function: {
@@ -1049,6 +1086,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.scrape_schedule_website,
   TOOL_BY_NAME.extract_schedule_pdf,
   TOOL_BY_NAME.get_org_stats,
+  TOOL_BY_NAME.get_donation_analytics,
   TOOL_BY_NAME.get_enterprise_stats,
   TOOL_BY_NAME.get_enterprise_quota,
   TOOL_BY_NAME.get_enterprise_org_capacity,

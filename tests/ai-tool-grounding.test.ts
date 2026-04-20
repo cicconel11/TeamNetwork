@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { verifyToolBackedResponse } from "../src/lib/ai/tool-grounding.ts";
+import { parseCurrencyClaim, verifyToolBackedResponse } from "../src/lib/ai/tool-grounding.ts";
 
 const FRESH_FRESHNESS = { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" } as const;
 
@@ -49,6 +49,61 @@ test("verifyToolBackedResponse flags unsupported org stats summaries", () => {
 
   assert.equal(result.grounded, false);
   assert.match(result.failures.join("\n"), /active members claim 99 did not match 23/i);
+});
+
+test("verifyToolBackedResponse accepts grounded donation analytics summaries", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 8",
+      "- Raised: $450",
+      "- Average successful donation: $56",
+      "- Largest successful donation: $125",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 8,
+            successful_amount_cents: 45000,
+            average_successful_amount_cents: 5625,
+            largest_successful_amount_cents: 12500,
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse flags unsupported donation analytics summaries", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 9",
+      "- Raised: $999",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 8,
+            successful_amount_cents: 45000,
+            average_successful_amount_cents: 5625,
+            largest_successful_amount_cents: 12500,
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /successful donations claim 9 did not match 8/i);
+  assert.match(result.failures.join("\n"), /raised claim \$999 did not match \$450/i);
 });
 
 test("verifyToolBackedResponse flags member names absent from tool rows", () => {
@@ -405,4 +460,291 @@ test("verifyToolBackedResponse flags inflated job posting count", () => {
 
   assert.equal(result.grounded, false);
   assert.ok(result.failures.some((f) => /job posting count claim 15/i.test(f)));
+});
+
+test("parseCurrencyClaim handles commas, decimals, and k suffix", () => {
+  const cases = [
+    { content: "- Raised: $1,234", label: "raised", expected: 1234 },
+    { content: "- Raised: $1.2k", label: "raised", expected: 1200 },
+    { content: "- Raised: $1234.56", label: "raised", expected: 1235 },
+    { content: "- Raised: $12.345", label: "raised", expected: null },
+    { content: "No amount here", label: "raised", expected: null },
+  ];
+  for (const tc of cases) {
+    assert.equal(
+      parseCurrencyClaim(tc.content, tc.label),
+      tc.expected,
+      `parseCurrencyClaim(${JSON.stringify(tc.content)})`
+    );
+  }
+});
+
+test("verifyToolBackedResponse flags hallucinated donation trend rows", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (180-day window)",
+      "- Successful donations: 1",
+      "- Raised: $100",
+      "Trend",
+      "- 2026-03 - 1 donations - $100",
+      "- 2026-04 - 5 donations - $5000",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 1,
+            successful_amount_cents: 10000,
+            average_successful_amount_cents: 10000,
+            largest_successful_amount_cents: 10000,
+          },
+          trend: [{ bucket_label: "2026-03", amount_cents: 10000, donation_count: 1 }],
+          top_purposes: [],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /trend row 2026-04/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags mismatched donation counts in trend rows", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (180-day window)",
+      "- Successful donations: 1",
+      "- Raised: $100",
+      "Trend",
+      "- 2026-03 - 99 donations - $100",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 1,
+            successful_amount_cents: 10000,
+            average_successful_amount_cents: 10000,
+            largest_successful_amount_cents: 10000,
+          },
+          trend: [{ bucket_label: "2026-03", amount_cents: 10000, donation_count: 1 }],
+          top_purposes: [],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /trend donation count claim 99 did not match 1/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags hallucinated top purposes", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 1",
+      "- Raised: $100",
+      "Top purposes",
+      "- Fake Drive - 9 donations - $9000",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 1,
+            successful_amount_cents: 10000,
+            average_successful_amount_cents: 10000,
+            largest_successful_amount_cents: 10000,
+          },
+          trend: [],
+          top_purposes: [
+            { purpose: "Alumni Campaign", amount_cents: 10000, donation_count: 1 },
+          ],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /top purpose fake drive/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags mismatched donation counts in top-purpose rows", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 1",
+      "- Raised: $100",
+      "Top purposes",
+      "- Alumni Campaign - 99 donations - $100",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 1,
+            successful_amount_cents: 10000,
+            average_successful_amount_cents: 10000,
+            largest_successful_amount_cents: 10000,
+          },
+          trend: [],
+          top_purposes: [
+            { purpose: "Alumni Campaign", amount_cents: 10000, donation_count: 1 },
+          ],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /top purpose donation count claim 99 did not match 1/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags freeform donation paraphrase lacking formatter labels", () => {
+  const result = verifyToolBackedResponse({
+    content: "You received 8 donations totaling $450 across the last quarter.",
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 8,
+            successful_amount_cents: 45000,
+            average_successful_amount_cents: 5625,
+            largest_successful_amount_cents: 12500,
+          },
+          trend: [],
+          top_purposes: [],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /did not reference formatter labels/i.test(f)));
+});
+
+test("verifyToolBackedResponse accepts currency k-suffix claim that matches cents", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 5",
+      "- Raised: $1.2k",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 5,
+            successful_amount_cents: 120000,
+            average_successful_amount_cents: 24000,
+            largest_successful_amount_cents: 50000,
+          },
+          trend: [],
+          top_purposes: [],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse accepts grounded list_donations output", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "Alumni Campaign" - $125 - jane@example.com',
+    toolResults: [
+      {
+        name: "list_donations",
+        data: [
+          {
+            donor_name: "Jane Doe",
+            donor_email: "jane@example.com",
+            amount_dollars: 125,
+            purpose: "Alumni Campaign",
+            status: "succeeded",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse flags hallucinated donor in list_donations", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "Ghost Donor" gave $125',
+    toolResults: [
+      {
+        name: "list_donations",
+        data: [
+          {
+            donor_name: "Jane Doe",
+            donor_email: "jane@example.com",
+            amount_dollars: 125,
+            purpose: "Alumni Campaign",
+            status: "succeeded",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /ghost donor/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags donation amount absent from tool rows", () => {
+  const result = verifyToolBackedResponse({
+    content: "Recent donation of $9999 from an anonymous supporter.",
+    toolResults: [
+      {
+        name: "list_donations",
+        data: [
+          {
+            donor_name: "Anonymous",
+            donor_email: null,
+            amount_dollars: 125,
+            purpose: "Alumni Campaign",
+            status: "succeeded",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /\$9999/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags donor leak when hide_donor_names is enabled", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "Jane Doe" - $125',
+    orgContext: { hideDonorNames: true },
+    toolResults: [
+      {
+        name: "list_donations",
+        data: [
+          {
+            donor_name: "Jane Doe",
+            donor_email: "jane@example.com",
+            amount_dollars: 125,
+            purpose: "Alumni Campaign",
+            status: "succeeded",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /jane doe.*leaked/i.test(f)));
 });
