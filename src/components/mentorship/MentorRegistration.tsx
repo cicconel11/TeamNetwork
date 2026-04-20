@@ -6,6 +6,7 @@ import { Input, Textarea, Button } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { createMentorProfileSchema } from "@/lib/schemas/mentorship";
 import type { CustomAttributeDef } from "@/lib/mentorship/matching-weights";
+import type { Database } from "@/types/database";
 
 interface MentorRegistrationProps {
   orgId: string;
@@ -165,27 +166,24 @@ export function MentorRegistration({ orgId, onCancel, customAttributeDefs = [] }
       // Determine bio_source
       const bioSource = aiDrafted && !bioEdited ? "ai_generated" : "manual";
 
-      // Insert mentor profile — custom_attributes, bio_source not in generated types yet
-      const { error: insertError } = await (supabase as unknown as {
-        from: (t: string) => {
-          insert: (data: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
-        };
-      })
+      const insertPayload: Database["public"]["Tables"]["mentor_profiles"]["Insert"] = {
+        organization_id: orgId,
+        user_id: user.id,
+        bio: formData.bio || null,
+        expertise_areas: expertiseArray.length > 0 ? expertiseArray : [],
+        contact_email: formData.contact_email || null,
+        contact_linkedin: formData.contact_linkedin || null,
+        contact_phone: formData.contact_phone || null,
+        is_active: true,
+        custom_attributes: Object.keys(cleanCustomAttrs).length > 0 ? cleanCustomAttrs : {},
+        bio_source: bioSource,
+        bio_generated_at: bioSource === "ai_generated" ? new Date().toISOString() : null,
+        bio_input_hash: inputHash,
+      };
+
+      const { error: insertError } = await supabase
         .from("mentor_profiles")
-        .insert({
-          organization_id: orgId,
-          user_id: user.id,
-          bio: formData.bio || null,
-          expertise_areas: expertiseArray.length > 0 ? expertiseArray : [],
-          contact_email: formData.contact_email || null,
-          contact_linkedin: formData.contact_linkedin || null,
-          contact_phone: formData.contact_phone || null,
-          is_active: true,
-          custom_attributes: Object.keys(cleanCustomAttrs).length > 0 ? cleanCustomAttrs : {},
-          bio_source: bioSource,
-          bio_generated_at: bioSource === "ai_generated" ? new Date().toISOString() : null,
-          bio_input_hash: inputHash,
-        });
+        .insert(insertPayload);
 
       if (insertError) {
         throw insertError;

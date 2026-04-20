@@ -3680,11 +3680,15 @@ export type Database = {
         Row: {
           accepting_new: boolean
           bio: string | null
+          bio_generated_at: string | null
+          bio_input_hash: string | null
+          bio_source: string | null
           contact_email: string | null
           contact_linkedin: string | null
           contact_phone: string | null
           created_at: string
           current_mentee_count: number
+          custom_attributes: Json
           expertise_areas: string[]
           id: string
           is_active: boolean
@@ -3700,11 +3704,15 @@ export type Database = {
         Insert: {
           accepting_new?: boolean
           bio?: string | null
+          bio_generated_at?: string | null
+          bio_input_hash?: string | null
+          bio_source?: string | null
           contact_email?: string | null
           contact_linkedin?: string | null
           contact_phone?: string | null
           created_at?: string
           current_mentee_count?: number
+          custom_attributes?: Json
           expertise_areas?: string[]
           id?: string
           is_active?: boolean
@@ -3720,11 +3728,15 @@ export type Database = {
         Update: {
           accepting_new?: boolean
           bio?: string | null
+          bio_generated_at?: string | null
+          bio_input_hash?: string | null
+          bio_source?: string | null
           contact_email?: string | null
           contact_linkedin?: string | null
           contact_phone?: string | null
           created_at?: string
           current_mentee_count?: number
+          custom_attributes?: Json
           expertise_areas?: string[]
           id?: string
           is_active?: boolean
@@ -3795,6 +3807,54 @@ export type Database = {
             columns: ["pair_id"]
             isOneToOne: false
             referencedRelation: "mentorship_pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentor_bio_backfill_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error: string | null
+          id: string
+          mentor_profile_id: string
+          organization_id: string
+          processed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          mentor_profile_id: string
+          organization_id: string
+          processed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          mentor_profile_id?: string
+          organization_id?: string
+          processed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentor_bio_backfill_queue_mentor_profile_id_fkey"
+            columns: ["mentor_profile_id"]
+            isOneToOne: false
+            referencedRelation: "mentor_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentor_bio_backfill_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -6050,11 +6110,25 @@ export type Database = {
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
       backfill_ai_embedding_queue: { Args: { p_org_id: string }; Returns: Json }
       backfill_graph_sync_queue: { Args: { p_org_id: string }; Returns: Json }
+      backfill_mentor_bio_queue: { Args: { p_org_id: string }; Returns: Json }
       backfill_ip_hashes: {
         Args: { salt: string }
         Returns: {
           table_name: string
           updated_count: number
+        }[]
+      }
+      dequeue_mentor_bio_backfill_queue: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          error: string | null
+          id: string
+          mentor_profile_id: string
+          organization_id: string
+          processed_at: string | null
+          updated_at: string
         }[]
       }
       bulk_import_alumni_rich: {
@@ -6376,6 +6450,10 @@ export type Database = {
         Args: { p_error: string; p_id: string }
         Returns: undefined
       }
+      increment_mentor_bio_backfill_attempts: {
+        Args: { p_error: string; p_id: string }
+        Returns: undefined
+      }
       init_ai_chat: {
         Args: {
           p_context_surface?: string
@@ -6464,6 +6542,7 @@ export type Database = {
       purge_expired_ai_semantic_cache: { Args: never; Returns: number }
       purge_expired_usage_events: { Args: never; Returns: Json }
       purge_graph_sync_queue: { Args: never; Returns: number }
+      purge_mentor_bio_backfill_queue: { Args: never; Returns: number }
       purge_old_data_access_logs: { Args: never; Returns: number }
       purge_old_enterprise_audit_logs: { Args: never; Returns: number }
       purge_ops_events: { Args: never; Returns: Json }

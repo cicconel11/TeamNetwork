@@ -4,9 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { generateMentorBio, type BioGenerationInput } from "@/lib/mentorship/bio-generator";
-import { canonicalizeIndustry, canonicalizeRoleFamily } from "@/lib/falkordb/career-signals";
-import { resolveMentorshipConfig } from "@/lib/mentorship/matching-weights";
+import { generateMentorBio } from "@/lib/mentorship/bio-generator";
+import { loadMentorBioContext } from "@/lib/mentorship/bio-backfill";
 import { logAiRequest } from "@/lib/ai/audit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -69,84 +68,12 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Fetch alumni data, org settings, and user info in parallel
-  // Alumni enrichment columns not in generated types — use type assertion
-  type AlumniQueryClient = {
-    from: (t: string) => {
-      select: (cols: string) => {
-        eq: (c: string, v: string) => {
-          eq: (c: string, v: string) => {
-            maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
-          };
-        };
-      };
-    };
-  };
-
-  const [alumniResult, orgResult, userResult] = await Promise.all([
-    (service as unknown as AlumniQueryClient)
-      .from("alumni")
-      .select("headline, summary, job_title, position_title, current_company, current_city, industry, graduation_year, major, school")
-      .eq("user_id", body.user_id)
-      .eq("organization_id", organizationId)
-      .maybeSingle(),
-    (service as unknown as AlumniQueryClient)
-      .from("organizations")
-      .select("settings, name")
-      .eq("id", organizationId)
-      .eq("id", organizationId) // dummy second eq for type compat
-      .maybeSingle(),
-    service
-      .from("user_organization_roles")
-      .select("user_id, users(name)")
-      .eq("user_id", body.user_id)
-      .eq("organization_id", organizationId)
-      .maybeSingle(),
-  ]);
-
-  const alumni = alumniResult.data;
-  const orgSettings = orgResult.data;
-  const userName = (() => {
-    const users = (userResult.data as unknown as { users: { name: string | null } | null })?.users;
-    return users?.name ?? "Member";
-  })();
-
-  if (!alumni && !orgSettings) {
-    // No data at all — return empty
+  const context = await loadMentorBioContext(service, organizationId, body.user_id);
+  if (!context) {
     return NextResponse.json({ bio: "", topics: [], expertiseAreas: [] });
   }
 
-  // Get custom attribute defs and mentor's custom attributes
-  const config = resolveMentorshipConfig(orgSettings?.settings);
-  const customAttrsForBio: Record<string, string> = {};
-  for (const def of config.customAttributeDefs) {
-    if (def.type === "text") continue;
-    // Check if there's an existing mentor profile with custom attrs
-    // (for bio regeneration on existing profiles)
-    // For new registrations, custom attrs will be empty
-  }
-
-  // Canonicalize
-  const rawIndustry = (alumni?.industry as string) ?? null;
-  const rawJobTitle = (alumni?.job_title as string) ?? (alumni?.position_title as string) ?? null;
-  const rawCompany = (alumni?.current_company as string) ?? null;
-  const industry = canonicalizeIndustry(rawIndustry);
-  const roleFamily = canonicalizeRoleFamily(rawJobTitle, rawCompany, industry);
-
-  const input: BioGenerationInput = {
-    name: userName,
-    jobTitle: rawJobTitle,
-    currentCompany: rawCompany,
-    industry,
-    roleFamily,
-    graduationYear: (alumni?.graduation_year as number) ?? null,
-    linkedinSummary: (alumni?.summary as string) ?? null,
-    linkedinHeadline: (alumni?.headline as string) ?? null,
-    customAttributes: Object.keys(customAttrsForBio).length > 0 ? customAttrsForBio : null,
-    orgName: (orgSettings?.name as string) ?? "",
-  };
-
-  const result = await generateMentorBio(input);
+  const result = await generateMentorBio(context.input);
 
   // Audit log (fire and forget)
   logAiRequest(
@@ -168,6 +95,6 @@ export async function POST(req: Request, { params }: RouteParams) {
     bio: result.bio,
     topics: result.topics,
     expertiseAreas: result.expertiseAreas,
-    inputHash: result.inputHash,
+    inputHash: context.nextInputHash,
   });
 }
