@@ -9,7 +9,6 @@ import { MentorshipActivityTab } from "@/components/mentorship/MentorshipActivit
 import { MentorshipProposalsTab } from "@/components/mentorship/MentorshipProposalsTab";
 import { MenteePreferencesCard } from "@/components/mentorship/MenteePreferencesCard";
 import { MentorProfileCard } from "@/components/mentorship/MentorProfileCard";
-import { MenteeIntakeBanner } from "@/components/mentorship/MenteeIntakeBanner";
 import { MentorshipMyMatches } from "@/components/mentorship/MentorshipMyMatches";
 import { MentorshipPageSkeleton } from "@/components/skeletons/pages/MentorshipPageSkeleton";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
@@ -58,8 +57,6 @@ type AlumniDirectoryRow = Pick<
   | "current_company"
   | "current_city"
 >;
-type FormLookupRow = { id: string };
-type MenteeLatestIntakeLookupRow = { id: string };
 const PROPOSAL_STATUSES = new Set(["proposed", "declined", "expired"]);
 
 export default async function MentorshipPage({ params, searchParams }: MentorshipPageProps) {
@@ -144,30 +141,11 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
     });
 
     const [
-      { data: intakeFormRaw },
-      { data: intakeSubmissionRaw },
       { data: usersRaw },
       { data: logsRaw },
       { data: tasksRaw },
       { data: meetingsRaw },
     ] = await Promise.all([
-      isMentee
-        ? supabase
-            .from("forms")
-            .select("id")
-            .eq("organization_id", orgId)
-            .eq("system_key", "mentee_intake_v1")
-            .is("deleted_at", null)
-            .maybeSingle()
-        : Promise.resolve({ data: null as FormLookupRow | null }),
-      isMentee && currentUserId
-        ? supabase
-            .from("mentee_latest_intake")
-            .select("id")
-            .eq("user_id", currentUserId)
-            .eq("organization_id", orgId)
-            .maybeSingle()
-        : Promise.resolve({ data: null as MenteeLatestIntakeLookupRow | null }),
       pairUserIds.size > 0
         ? supabase
             .from("user_organization_roles")
@@ -272,8 +250,6 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
     const pastMeetings = decryptedMeetings.filter(
       (meeting) => new Date(meeting.scheduled_end_at) <= now && !meeting.deleted_at
     );
-    const intakeFormId = intakeFormRaw?.id ?? null;
-    const hasIntakeSubmission = Boolean(intakeSubmissionRaw?.id);
     tabContent = (
       <>
         <MentorshipContextStrip
@@ -283,10 +259,6 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
           myMentorName={myMentorName}
           myLastLogDate={myLastLogDate}
         />
-
-        {isMentee && !hasIntakeSubmission && (
-          <MenteeIntakeBanner orgSlug={orgSlug} intakeFormId={intakeFormId} />
-        )}
 
         {isMentee && <MenteePreferencesCard orgId={orgId} />}
 
