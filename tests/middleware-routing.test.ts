@@ -34,6 +34,10 @@ describe("middleware routing decisions", () => {
     it("demos is public", () => assert.strictEqual(isPublicRoute("/demos"), true));
     it("terms is public", () => assert.strictEqual(isPublicRoute("/terms"), true));
     it("privacy is public", () => assert.strictEqual(isPublicRoute("/privacy"), true));
+    it("parent notification page is public", () =>
+      assert.strictEqual(isPublicRoute("/privacy/parent-notification"), true));
+    it("parents bill of rights is public", () =>
+      assert.strictEqual(isPublicRoute("/privacy/parents-bill-of-rights"), true));
     it("parents-join is public", () => assert.strictEqual(isPublicRoute("/app/parents-join"), true));
     it("org route is not public", () => assert.strictEqual(isPublicRoute("/my-org/members"), false));
     it("app is not public", () => assert.strictEqual(isPublicRoute("/app"), false));
