@@ -101,7 +101,7 @@ export default async function LandingPage() {
       <LandingHeader />
 
       {/* Hero - "The Emergence" */}
-      <section className="relative z-10 overflow-hidden px-6 pb-20 pt-12 sm:px-8 lg:px-6 lg:pt-20">
+      <section className="relative z-10 overflow-hidden px-6 pb-20 pt-12 sm:px-8 lg:px-6 lg:pb-16 lg:pt-10">
         {/* Animated paths — atmospheric background */}
         <BackgroundPaths />
 
@@ -128,7 +128,7 @@ export default async function LandingPage() {
                   alt=""
                   width={541}
                   height={303}
-                  className="h-auto w-[min(100%,300px)] drop-shadow-[0_0_40px_rgba(34,197,94,0.15)] sm:w-[360px] lg:w-[420px]"
+                  className="h-auto w-[min(100%,260px)] drop-shadow-[0_0_40px_rgba(34,197,94,0.15)] sm:w-[320px] lg:w-[340px]"
                   aria-hidden="true"
                   priority
                 />
@@ -138,7 +138,7 @@ export default async function LandingPage() {
                 One platform. Every member,<br className="hidden sm:block" /> past and present.
               </p>
 
-              <p className="hero-animate mx-auto mb-10 max-w-lg text-base leading-relaxed text-landing-cream/80 sm:text-lg lg:mx-0">
+              <p className="hero-animate mx-auto mb-8 max-w-lg text-base leading-relaxed text-landing-cream/80 sm:text-lg lg:mx-0 lg:mb-6">
                 Directories, events, donations, philanthropy, and records — all in one place. Built for{" "}
                 <span className="font-medium text-landing-cream">sports teams</span>,{" "}
                 <span className="font-medium text-landing-cream">Greek life</span>,{" "}
@@ -146,16 +146,16 @@ export default async function LandingPage() {
               </p>
 
               <div className="hero-animate flex flex-col items-stretch gap-4 sm:flex-row sm:justify-center lg:justify-start">
-                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="cta-glow bg-landing-green-dark px-6 py-5 text-base font-semibold text-white hover:bg-[#15803d] sm:px-8 sm:py-6">
+                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="cta-glow bg-landing-green-dark px-6 py-4 text-base font-semibold text-white hover:bg-[#15803d] sm:px-8 sm:py-5">
                   Create Your Organization
                 </ButtonLink>
-                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="border border-landing-cream/20 bg-landing-cream/10 px-6 py-5 text-base text-landing-cream hover:bg-landing-cream/20 sm:px-8 sm:py-6">
+                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="border border-landing-cream/20 bg-landing-cream/10 px-6 py-4 text-base text-landing-cream hover:bg-landing-cream/20 sm:px-8 sm:py-5">
                   Join an Organization
                 </ButtonLink>
               </div>
 
               {/* Already a member */}
-              <div className="hero-animate mt-6">
+              <div className="hero-animate mt-4">
                 <Link href="/auth/login" className="text-sm text-landing-cream/50 transition-colors hover:text-landing-cream/70">
                   Already a member? <span className="underline underline-offset-2">Sign in</span>
                 </Link>
