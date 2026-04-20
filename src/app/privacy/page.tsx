@@ -118,7 +118,8 @@ const privacySections: PrivacySection[] = [
     number: "8",
     title: "Your Rights and Choices",
     paragraphs: [
-      "Depending on your location, you may have certain rights regarding your personal information:",
+      "Depending on your location, you may have certain rights regarding your personal information.",
+      "If your account is associated with a school or district, the school remains the records holder for FERPA purposes. Parents and students should generally direct education-record requests to the school first, and we route school-scoped requests through the school owner when required.",
     ],
     bullets: [
       "Access: Request access to the personal information we hold about you.",
@@ -126,7 +127,8 @@ const privacySections: PrivacySection[] = [
       "Deletion: Request deletion of your personal information, subject to certain exceptions.",
       "Data Portability: Request a copy of your data in a portable format.",
       "Opt-Out: Unsubscribe from marketing communications at any time.",
-      "To exercise these rights, please contact us at support@myteamnetwork.com.",
+      "General privacy questions: privacy@myteamnetwork.com.",
+      "School-linked FERPA requests: contact your school administrator or district privacy office first.",
     ],
   },
   {
@@ -149,7 +151,7 @@ const privacySections: PrivacySection[] = [
     title: "Usage Analytics and Personalization",
     paragraphs: [
       "With your explicit opt-in consent, we collect minimal, privacy-first usage analytics. Behavioral analytics are disabled by default until you accept the in-app consent prompt for a specific organization.",
-      "Consent is stored per organization and may be withdrawn at any time by contacting support.",
+      "Consent is stored per organization and may be withdrawn at any time by contacting privacy@myteamnetwork.com.",
     ],
     bullets: [
       "What we track (opt-in only): Page/route views, navigation and CTA clicks, feature-level events (e.g., directory view, event open, RSVP update), device class, app version, and a daily-rotating session ID.",
@@ -166,7 +168,7 @@ const privacySections: PrivacySection[] = [
     title: "Children's Privacy",
     paragraphs: [
       "The Service is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. Users who disclose they are under 13 during signup are blocked at our age gate before any personal information is collected or any account is created.",
-      "If we learn that we have collected personal information from a child under 13, we will take steps to delete that information promptly. If you believe we have collected information from a child under 13, please contact us at support@myteamnetwork.com.",
+      "If we learn that we have collected information from a child under 13 despite that gate, we will take steps to delete it promptly. If you believe this happened, contact privacy@myteamnetwork.com.",
     ],
   },
   {
@@ -193,7 +195,7 @@ const privacySections: PrivacySection[] = [
     title: "Contact Us",
     paragraphs: [
       "If you have any questions about this Privacy Policy or our data practices, please contact us:",
-      "Email: support@myteamnetwork.com",
+      "Email: privacy@myteamnetwork.com",
     ],
   },
 ];
@@ -242,7 +244,7 @@ export default function PrivacyPage() {
             Legal
           </div>
           <h1 className="font-display text-4xl sm:text-5xl font-bold mb-4">Privacy Policy</h1>
-          <p className="text-landing-cream/50">Last Updated: February 10, 2026</p>
+          <p className="text-landing-cream/50">Last Updated: April 20, 2026</p>
         </div>
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-12">
@@ -300,6 +302,52 @@ export default function PrivacyPage() {
               </section>
             ))}
 
+            <section className="scroll-mt-28 bg-landing-green/10 rounded-2xl p-6 lg:p-8 border border-landing-green/20">
+              <div className="space-y-4">
+                <div className="inline-flex items-center rounded-full bg-landing-green/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-landing-green">
+                  School Privacy
+                </div>
+                <h2 className="font-display text-2xl font-bold text-landing-cream">
+                  Parent Notification and New York Student Privacy
+                </h2>
+                <p className="text-landing-cream/70 leading-relaxed">
+                  For school and district customers, TeamNetwork operates as a service provider to the educational agency.
+                  Parents and eligible students should usually send education-record requests to the school, which remains
+                  the records holder under FERPA. We maintain a documented intake and routing workflow so school-owned
+                  requests can be acknowledged, tracked, and resolved against internal response targets.
+                </p>
+                <p className="text-landing-cream/70 leading-relaxed">
+                  New York districts often require parent-facing transparency before contract signature. The materials
+                  below surface our plain-language parent notice and the New York Data Privacy and Security summary we
+                  expect to pair with district contract paperwork.
+                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Link
+                    href="/privacy/parent-notification"
+                    className="rounded-2xl border border-landing-cream/10 bg-landing-navy-light/60 p-5 transition-colors hover:border-landing-green/40 hover:bg-landing-navy-light"
+                  >
+                    <p className="text-sm uppercase tracking-[0.16em] text-landing-green/80">Parent Notice</p>
+                    <h3 className="mt-2 font-display text-xl text-landing-cream">Parent Notification Policy</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-landing-cream/60">
+                      Plain-language explanation of what student information TeamNetwork uses, how it is protected, and
+                      how parents should route FERPA questions through the school.
+                    </p>
+                  </Link>
+                  <Link
+                    href="/privacy/parents-bill-of-rights"
+                    className="rounded-2xl border border-landing-cream/10 bg-landing-navy-light/60 p-5 transition-colors hover:border-landing-green/40 hover:bg-landing-navy-light"
+                  >
+                    <p className="text-sm uppercase tracking-[0.16em] text-landing-green/80">New York</p>
+                    <h3 className="mt-2 font-display text-xl text-landing-cream">Parents&apos; Bill of Rights</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-landing-cream/60">
+                      Summary page for New York Education Law § 2-d expectations, complaint routing, and the controls we
+                      apply when a district asks for contract-specific privacy disclosures.
+                    </p>
+                  </Link>
+                </div>
+              </div>
+            </section>
+
             {/* Back to top */}
             <div className="pt-8 text-center">
               <a 
@@ -331,7 +379,7 @@ export default function PrivacyPage() {
               <Link href="/" className="hover:text-landing-cream transition-colors">Home</Link>
               <Link href="/contact" className="hover:text-landing-cream transition-colors">Pricing</Link>
               <Link href="/terms" className="hover:text-landing-cream transition-colors">Terms</Link>
-              <a href="mailto:support@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
+              <a href="mailto:privacy@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
             </div>
             
             <p className="text-sm text-landing-cream/30">

@@ -7,6 +7,7 @@ import {
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { deleteAccountSchema } from "@/lib/schemas/auth";
 import { resolveEnterpriseOwnershipCheck } from "@/lib/auth/enterprise-ownership-check";
+import { createDsrRequest } from "@/lib/compliance";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -169,20 +170,23 @@ export async function DELETE(request: Request) {
     const deletionDate = new Date();
     deletionDate.setDate(deletionDate.getDate() + GRACE_PERIOD_DAYS);
 
-    // Create or update deletion request using raw RPC to handle missing table gracefully
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: upsertError } = await (serviceSupabase as any)
+    // Create or update deletion request using the existing deletion queue table.
+    const deletionRequestedAt = new Date().toISOString();
+
+    const { data: deletionRequest, error: upsertError } = await serviceSupabase
       .from("user_deletion_requests")
       .upsert(
         {
           user_id: user.id,
-          requested_at: new Date().toISOString(),
+          requested_at: deletionRequestedAt,
           scheduled_deletion_at: deletionDate.toISOString(),
           status: "pending",
           cancelled_at: null,
         },
         { onConflict: "user_id" }
-      );
+      )
+      .select("id")
+      .single();
 
     if (upsertError) {
       // Table might not exist yet
@@ -194,6 +198,30 @@ export async function DELETE(request: Request) {
       }
       throw upsertError;
     }
+
+    const requesterName =
+      typeof user.user_metadata?.full_name === "string"
+        ? user.user_metadata.full_name
+        : typeof user.user_metadata?.name === "string"
+          ? user.user_metadata.name
+          : null;
+
+    await createDsrRequest({
+      subjectUserId: user.id,
+      subjectIdentifier: user.email ?? null,
+      subjectIdentifierType: user.email ? "email" : null,
+      requesterName,
+      requesterEmail: user.email ?? null,
+      requesterRelationship: "student",
+      requestType: "delete",
+      source: "student_self",
+      status: "acknowledged",
+      acknowledgementMethod: "portal",
+      receivedAt: deletionRequestedAt,
+      acknowledgedAt: deletionRequestedAt,
+      resolutionNotes: "Self-service deletion queued with 30-day grace period.",
+      linkedDeletionRequestId: deletionRequest?.id ?? null,
+    });
 
     // Send confirmation email
     if (resend && user.email) {

@@ -7,6 +7,7 @@ import {
   buildRateLimitResponse,
 } from "@/lib/security/rate-limit";
 import { logDataAccess } from "@/lib/audit/data-access-log";
+import { createDsrRequest } from "@/lib/compliance";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -620,6 +621,30 @@ export async function GET(request: Request) {
       actorUserId: user.id,
       resourceType: "data_export",
       request,
+    });
+
+    const requesterName =
+      typeof user.user_metadata?.full_name === "string"
+        ? user.user_metadata.full_name
+        : typeof user.user_metadata?.name === "string"
+          ? user.user_metadata.name
+          : null;
+
+    await createDsrRequest({
+      subjectUserId: user.id,
+      subjectIdentifier: user.email ?? null,
+      subjectIdentifierType: user.email ? "email" : null,
+      requesterName,
+      requesterEmail: user.email ?? null,
+      requesterRelationship: "student",
+      requestType: "export",
+      source: "student_self",
+      status: "resolved",
+      acknowledgementMethod: "portal",
+      resolutionMethod: "portal",
+      acknowledgedAt: exportData.exportedAt,
+      resolvedAt: exportData.exportedAt,
+      resolutionNotes: "Self-service export completed in portal.",
     });
 
     // Send notification email

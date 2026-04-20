@@ -114,7 +114,7 @@ For questions about your child's information in TeamNetwork:
 1. **First, contact your school administrator** - They manage your child's organization membership
 2. **School contact information** - Available through your school's main office
 
-For general questions about TeamNetwork's privacy practices, schools may contact us at [PRIVACY_EMAIL].
+For general questions about TeamNetwork's privacy practices, schools may contact us at privacy@myteamnetwork.com.
 
 ---
 

@@ -94,10 +94,6 @@ test.describe("FERPA API: Rate Limiting Headers", () => {
   test("export-data returns rate limit headers on 401", async ({ request }) => {
     const response = await request.get("/api/user/export-data");
 
-    // Rate limiting should still apply even for unauth requests
-    // Check if rate limit headers are present (they track by IP)
-    const headers = response.headers();
-
     // The endpoint uses checkRateLimit which adds headers
     // But 401 might not include them - verify behavior
     expect(response.status()).toBe(401);
