@@ -5,7 +5,8 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
 import { FAQ_ITEMS } from "@/lib/pricing";
-import { PricingSection } from "@/components/marketing/PricingSection";
+// Pricing section temporarily hidden while restructuring — re-enable when ready.
+// import { PricingSection } from "@/components/marketing/PricingSection";
 import {
   BackToTop,
   BackgroundPaths,
@@ -258,10 +259,7 @@ export default async function LandingPage() {
 
       <div className="h-px bg-gradient-to-r from-transparent via-landing-cream/10 to-transparent" />
 
-      {/* Pricing */}
-      <PricingSection />
-
-      <div className="h-px bg-gradient-to-r from-transparent via-landing-cream/10 to-transparent" />
+      {/* Pricing — temporarily hidden while restructuring. Restore <PricingSection /> and surrounding divider when ready. */}
 
       {/* Our Commitment — "The Rulebook" */}
       <section id="terms-summary" className="relative z-10 py-24 px-6">
@@ -394,7 +392,7 @@ export default async function LandingPage() {
                 <p className="text-xs uppercase tracking-[0.15em] text-landing-cream/30 font-medium mb-3">Product</p>
                 <nav className="flex flex-col gap-2 text-sm">
                   <Link href="#features" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Features</Link>
-                  <Link href="#pricing" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Pricing</Link>
+                  <Link href="/contact" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Pricing</Link>
                   <Link href="/demos" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Demos</Link>
                   <Link href="/pricing/calculator" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Pricing calculator</Link>
                 </nav>

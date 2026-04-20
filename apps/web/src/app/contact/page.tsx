@@ -3,8 +3,8 @@ import Link from "next/link";
 import "../landing-styles.css";
 
 export const metadata: Metadata = {
-  title: "Contact Sales — TeamNetwork",
-  description: "Get in touch to learn more about TeamNetwork for your enterprise.",
+  title: "Contact for Pricing — TeamNetwork",
+  description: "Reach out for current TeamNetwork pricing and plan details.",
 };
 
 export default function ContactPage() {
@@ -29,25 +29,25 @@ export default function ContactPage() {
           </div>
 
           <h1 className="font-display text-3xl font-bold text-landing-cream mb-3">
-            Contact Sales
+            Contact for Pricing
           </h1>
           <p className="text-landing-cream/60 mb-8 text-sm leading-relaxed">
-            Interested in TeamNetwork Enterprise for your organization? Drop us a
-            line and we&apos;ll get back to you within one business day.
+            We&apos;re restructuring our plans. Reach out and we&apos;ll share
+            current pricing tailored to your organization within one business day.
           </p>
 
           <a
-            href="mailto:sales@myteamnetwork.com?subject=Enterprise%20Inquiry"
+            href="mailto:sales@myteamnetwork.com?subject=Pricing%20Inquiry"
             className="inline-block w-full bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-semibold py-3 px-8 rounded-xl transition-all text-sm mb-4"
           >
             Email Sales &rarr;
           </a>
 
           <Link
-            href="/#pricing"
+            href="/"
             className="block text-landing-cream/40 hover:text-landing-cream/70 transition-colors text-sm"
           >
-            &larr; Back to pricing
+            &larr; Back to home
           </Link>
         </div>
       </div>
