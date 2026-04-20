@@ -5776,15 +5776,19 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             successfulToolResults.length === 1 &&
             successfulToolResults[0]?.name === "list_members" &&
             MEMBER_ROSTER_PROMPT_PATTERN.test(messageSafety.promptSafeMessage);
+          const needsDonorPrivacy = successfulToolResults.some(
+            (result) => result.name === "list_donations",
+          );
+          const hideDonorNames = needsDonorPrivacy
+            ? await resolveHideDonorNamesPreference(
+                ctx.serviceSupabase as { from: (table: string) => any },
+                ctx.orgId,
+              )
+            : false;
           const deterministicDonationOptions =
             successfulToolResults.length === 1 &&
             successfulToolResults[0]?.name === "list_donations"
-              ? {
-                  hideDonorNames: await resolveHideDonorNamesPreference(
-                    ctx.serviceSupabase as { from: (table: string) => any },
-                    ctx.orgId,
-                  ),
-                }
+              ? { hideDonorNames }
               : undefined;
           const deterministicToolContent =
             toolResults.length === 1 &&
@@ -5893,14 +5897,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           if (groundedToolSummary) {
             try {
               await runTimedStage(stageTimings, "grounding", async () => {
-                const hideDonorNames = successfulToolResults.some(
-                  (result) => result.name === "list_donations"
-                )
-                  ? await resolveHideDonorNamesPreference(
-                      ctx.serviceSupabase as { from: (table: string) => any },
-                      ctx.orgId,
-                    )
-                  : false;
                 const groundingResult = verifyToolBackedResponseFn({
                   content: pass2BufferedContent,
                   toolResults: successfulToolResults,

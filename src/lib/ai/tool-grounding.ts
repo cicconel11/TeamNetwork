@@ -141,24 +141,21 @@ interface DonationAnalyticsVerifyPayload {
   top_purposes?: unknown;
 }
 
-interface BucketRow {
-  bucket_label: string;
+interface StatRow {
+  label: string;
   amount_cents: number;
   donation_count: number;
 }
 
-interface PurposeRow {
-  purpose: string;
-  amount_cents: number;
-  donation_count: number;
-}
-
-function collectBucketRows(value: unknown): Map<string, BucketRow> {
-  const map = new Map<string, BucketRow>();
+function collectStatRows(
+  value: unknown,
+  labelField: "bucket_label" | "purpose",
+): Map<string, StatRow> {
+  const map = new Map<string, StatRow>();
   if (!Array.isArray(value)) return map;
   for (const row of value) {
     if (!row || typeof row !== "object") continue;
-    const label = (row as { bucket_label?: unknown }).bucket_label;
+    const label = (row as Record<string, unknown>)[labelField];
     const cents = (row as { amount_cents?: unknown }).amount_cents;
     const donationCount = (row as { donation_count?: unknown }).donation_count;
     if (
@@ -169,31 +166,7 @@ function collectBucketRows(value: unknown): Map<string, BucketRow> {
       continue;
     }
     map.set(normalizeIdentifier(label), {
-      bucket_label: label,
-      amount_cents: cents,
-      donation_count: donationCount,
-    });
-  }
-  return map;
-}
-
-function collectPurposeRows(value: unknown): Map<string, PurposeRow> {
-  const map = new Map<string, PurposeRow>();
-  if (!Array.isArray(value)) return map;
-  for (const row of value) {
-    if (!row || typeof row !== "object") continue;
-    const purpose = (row as { purpose?: unknown }).purpose;
-    const cents = (row as { amount_cents?: unknown }).amount_cents;
-    const donationCount = (row as { donation_count?: unknown }).donation_count;
-    if (
-      typeof purpose !== "string" ||
-      typeof cents !== "number" ||
-      typeof donationCount !== "number"
-    ) {
-      continue;
-    }
-    map.set(normalizeIdentifier(purpose), {
-      purpose,
+      label,
       amount_cents: cents,
       donation_count: donationCount,
     });
@@ -298,8 +271,8 @@ function verifyDonationAnalytics(content: string, data: unknown): string[] {
     );
   }
 
-  const trendMap = collectBucketRows(payload.trend);
-  const purposeMap = collectPurposeRows(payload.top_purposes);
+  const trendMap = collectStatRows(payload.trend, "bucket_label");
+  const purposeMap = collectStatRows(payload.top_purposes, "purpose");
 
   let inTrendSection = false;
   let inPurposesSection = false;
