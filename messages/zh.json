@@ -126,6 +126,7 @@
     "createAccountBtn": "创建账户",
     "continueWithGoogle": "使用 Google 继续",
     "continueWithLinkedIn": "使用 LinkedIn 继续",
+    "continueWithMicrosoft": "使用 Microsoft 继续",
     "orContinueWithEmail": "或使用邮箱继续",
     "emailLabel": "邮箱",
     "emailPlaceholder": "you@example.com",

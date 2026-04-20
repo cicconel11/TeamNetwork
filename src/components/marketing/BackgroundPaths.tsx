@@ -3,17 +3,24 @@
 import { motion } from "framer-motion";
 
 function FloatingPaths({ position }: { position: number }) {
-  const paths = Array.from({ length: 40 }, (_, i) => ({
-    id: i,
-    d: `M-${600 - i * 10 * position} -${189 + i * 12}C-${
-      600 - i * 10 * position
-    } -${189 + i * 12} -${312 - i * 10 * position} ${216 - i * 12} ${
-      400 - i * 10 * position
-    } ${343 - i * 12}C${1100 - i * 10 * position} ${470 - i * 12} ${
-      1400 - i * 10 * position
-    } ${875 - i * 12} ${1400 - i * 10 * position} ${875 - i * 12}`,
-    width: 0.4 + i * 0.02,
-  }));
+  const paths = Array.from({ length: 40 }, (_, i) => {
+    const drift = i * 10 * position;
+    const x0 = -(600 - drift);
+    const y0 = -(189 + i * 12);
+    const x1 = -(312 - drift);
+    const y1 = 216 - i * 12;
+    const x2 = 400 - drift;
+    const y2 = 343 - i * 12;
+    const x3 = 1100 - drift;
+    const y3 = 470 - i * 12;
+    const x4 = 1400 - drift;
+    const y4 = 875 - i * 12;
+    return {
+      id: i,
+      d: `M${x0} ${y0}C${x0} ${y0} ${x1} ${y1} ${x2} ${y2}C${x3} ${y3} ${x4} ${y4} ${x4} ${y4}`,
+      width: 0.4 + i * 0.02,
+    };
+  });
 
   return (
     <svg

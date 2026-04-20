@@ -9,6 +9,11 @@ import {
   useEffect,
 } from "react";
 import ReactHCaptcha from "@hcaptcha/react-hcaptcha";
+import {
+  getCaptchaErrorMessage,
+  isLocalDevelopmentHostname,
+  shouldAutoRetryCaptchaError,
+} from "./hcaptcha-utils";
 
 // Must be a top-level constant for Next.js to inline at build time
 const HCAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
@@ -46,11 +51,15 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
     ref
   ) => {
     const captchaRef = useRef<ReactHCaptcha>(null);
+    const retryTimeoutRef = useRef<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     // Use provided siteKey or fall back to environment variable
     const resolvedSiteKey = siteKey || HCAPTCHA_SITE_KEY;
+    const isLocalDevelopment = isLocalDevelopmentHostname(
+      typeof window === "undefined" ? undefined : window.location.hostname,
+    );
 
     // Expose execute and reset methods via ref
     useImperativeHandle(ref, () => ({
@@ -76,10 +85,24 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
 
     const handleError = useCallback(
       (event: string) => {
-        setError(event);
+        const nextError = getCaptchaErrorMessage(event, isLocalDevelopment);
+
+        setError(nextError);
         onError?.(event);
+
+        if (shouldAutoRetryCaptchaError(event, isLocalDevelopment)) {
+          if (retryTimeoutRef.current !== null) {
+            window.clearTimeout(retryTimeoutRef.current);
+          }
+
+          retryTimeoutRef.current = window.setTimeout(() => {
+            captchaRef.current?.resetCaptcha();
+            setError(null);
+            retryTimeoutRef.current = null;
+          }, 750);
+        }
       },
-      [onError]
+      [isLocalDevelopment, onError]
     );
 
     const handleLoad = useCallback(() => {
@@ -95,7 +118,12 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
           setTimedOut(true);
         }
       }, 8000);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        if (retryTimeoutRef.current !== null) {
+          window.clearTimeout(retryTimeoutRef.current);
+        }
+      };
     }, [isLoading]);
 
     // Development mode bypass — only when no real site key is configured
@@ -179,7 +207,7 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
             role="alert"
             aria-live="polite"
           >
-            Captcha error: {error}
+            {error}
           </div>
         )}
 
