@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, Card, Select, Input } from "@/components/ui";
+import { Badge, Button, Card, Input, Select, Textarea } from "@/components/ui";
 
 interface BulkOrgInviteFormProps {
   orgId: string;
@@ -21,6 +21,19 @@ interface BulkInviteResponse {
   invite: { id: string; code: string; token: string | null; link: string };
   summary: { success: number; failed: number; skipped: number; total: number };
   results: EmailResult[];
+}
+
+const MAX_EMAILS_PER_BATCH = 100;
+
+function formatExpiryLabel(value: string) {
+  if (!value) return "No expiration";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export function BulkOrgInviteForm({ orgId, onComplete, onCancel }: BulkOrgInviteFormProps) {
@@ -42,13 +55,25 @@ export function BulkOrgInviteForm({ orgId, onComplete, onCancel }: BulkOrgInvite
 
     return text
       .split(/[\n,;]+/)
-      .map((e) => e.trim().toLowerCase())
-      .filter((e) => {
-        if (e.length === 0 || !e.includes("@") || seen.has(e)) return false;
-        seen.add(e);
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => {
+        if (entry.length === 0 || !entry.includes("@") || seen.has(entry)) return false;
+        seen.add(entry);
         return true;
       });
   };
+
+  const emails = useMemo(() => parseEmails(emailText), [emailText]);
+  const previewEmails = emails.slice(0, 6);
+  const remainingPreviewCount = Math.max(0, emails.length - previewEmails.length);
+  const selectedRoleLabel =
+    role === "active_member"
+      ? tRoles("activeMember")
+      : role === "admin"
+        ? tRoles("admin")
+        : role === "alumni"
+          ? tRoles("alumni")
+          : tRoles("parent");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,18 +82,18 @@ export function BulkOrgInviteForm({ orgId, onComplete, onCancel }: BulkOrgInvite
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      const lines = text.split("\n").filter((l) => l.trim());
+      const lines = text.split("\n").filter((line) => line.trim());
       const firstLine = lines[0]?.toLowerCase() ?? "";
       const hasHeader = firstLine.includes("email");
       const dataLines = hasHeader ? lines.slice(1) : lines;
 
-      const emails = dataLines
+      const uploadedEmails = dataLines
         .map((line) => line.split(",")[0]?.trim().replace(/^["']|["']$/g, ""))
-        .filter((e) => e && e.includes("@"));
+        .filter((entry) => entry && entry.includes("@"));
 
       setEmailText((prev) => {
         const existing = prev.trim();
-        return existing ? `${existing}\n${emails.join("\n")}` : emails.join("\n");
+        return existing ? `${existing}\n${uploadedEmails.join("\n")}` : uploadedEmails.join("\n");
       });
     };
     reader.readAsText(file);
@@ -76,16 +101,14 @@ export function BulkOrgInviteForm({ orgId, onComplete, onCancel }: BulkOrgInvite
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const emails = parseEmails(emailText);
-
   const handleSubmit = async () => {
     if (emails.length === 0) {
       setError("Enter at least one email address");
       return;
     }
 
-    if (emails.length > 100) {
-      setError("Maximum 100 emails per batch");
+    if (emails.length > MAX_EMAILS_PER_BATCH) {
+      setError(`Maximum ${MAX_EMAILS_PER_BATCH} emails per batch`);
       return;
     }
 
@@ -116,168 +139,316 @@ export function BulkOrgInviteForm({ orgId, onComplete, onCancel }: BulkOrgInvite
     }
   };
 
-  const copyLink = (link: string) => {
-    navigator.clipboard.writeText(link);
+  const copyLink = async (link: string) => {
+    await navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Show results after successful submission
   if (response) {
     const { summary, invite, emailsDelivered, results } = response;
 
     return (
-      <Card className="p-6 mb-6">
-        <h3 className="font-semibold text-foreground mb-4">Bulk Invite Results</h3>
-
-        {!emailsDelivered && (
-          <div className="mb-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-300 mb-2">
-              Email not configured — share this link directly
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-sm bg-background px-3 py-2 rounded-lg border border-border truncate">
-                {invite.link}
-              </code>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => copyLink(invite.link)}
-              >
-                {copied ? tCommon("copied") : "Copy Link"}
-              </Button>
+      <Card className="mb-6 overflow-hidden border-border/80 bg-card/95 p-0 shadow-sm">
+        <div className="border-b border-border/70 px-6 py-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Bulk invite results</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review delivery outcomes and share the fallback invite link if email delivery is unavailable.
+              </p>
             </div>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-              Invite code: <span className="font-mono font-bold">{invite.code}</span> ({summary.total} uses)
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="success">{summary.success} sent</Badge>
+              {summary.failed > 0 && <Badge variant="warning">{summary.failed} failed</Badge>}
+              {summary.skipped > 0 && <Badge variant="muted">{summary.skipped} skipped</Badge>}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 border-b border-border/70 px-6 py-5 sm:grid-cols-3">
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 p-4">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">
+              Delivered
             </p>
+            <p className="mt-2 text-3xl font-semibold text-foreground">{summary.success}</p>
           </div>
-        )}
-
-        {emailsDelivered && (
-          <div className={`mb-4 p-3 rounded-xl text-sm ${
-            summary.failed > 0
-              ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300"
-              : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-          }`}>
-            {summary.failed === 0
-              ? `All ${summary.success} emails sent successfully.`
-              : `${summary.success} sent, ${summary.failed} failed.`}
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">
+              Failed
+            </p>
+            <p className="mt-2 text-3xl font-semibold text-foreground">{summary.failed}</p>
           </div>
-        )}
-
-        {emailsDelivered && results.length > 0 && (
-          <div className="mb-4 max-h-48 overflow-y-auto border border-border rounded-lg">
-            <table className="w-full text-sm">
-              <thead className="bg-muted sticky top-0">
-                <tr>
-                  <th className="px-3 py-2 text-left text-muted-foreground">Email</th>
-                  <th className="px-3 py-2 text-left text-muted-foreground">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r, idx) => (
-                  <tr key={idx} className="border-t border-border">
-                    <td className="px-3 py-2 truncate max-w-[200px]">{r.email}</td>
-                    <td className="px-3 py-2">
-                      <span className={`text-xs font-medium ${
-                        r.status === "sent"
-                          ? "text-emerald-600"
-                          : r.status === "skipped"
-                            ? "text-muted-foreground"
-                            : "text-red-600"
-                      }`}>
-                        {r.status}
-                      </span>
-                      {r.error && (
-                        <span className="text-xs text-muted-foreground ml-1">— {r.error}</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="rounded-2xl border border-border bg-muted/30 p-4">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Batch size
+            </p>
+            <p className="mt-2 text-3xl font-semibold text-foreground">{summary.total}</p>
           </div>
-        )}
+        </div>
 
-        <div className="flex gap-3">
-          <Button onClick={onComplete}>Done</Button>
+        <div className="space-y-5 px-6 py-5">
+          {!emailsDelivered && (
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/8 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                    Email delivery is not configured in this environment.
+                  </p>
+                  <p className="mt-1 text-sm text-amber-700/80 dark:text-amber-200/80">
+                    Share the invite link directly with your recipients.
+                  </p>
+                </div>
+                <Badge variant="warning">Fallback link required</Badge>
+              </div>
+              <div className="mt-4 flex flex-col gap-2 lg:flex-row lg:items-center">
+                <code className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground">
+                  <span className="block truncate">{invite.link}</span>
+                </code>
+                <Button variant="secondary" onClick={() => void copyLink(invite.link)}>
+                  {copied ? tCommon("copied") : tInvites("copyLink")}
+                </Button>
+              </div>
+              <p className="mt-3 text-xs text-amber-700/80 dark:text-amber-200/80">
+                Invite code: <span className="font-mono font-semibold">{invite.code}</span>
+              </p>
+            </div>
+          )}
+
+          {emailsDelivered && (
+            <div
+              className={`rounded-2xl border p-4 text-sm ${
+                summary.failed > 0
+                  ? "border-amber-500/25 bg-amber-500/8 text-amber-700 dark:text-amber-300"
+                  : "border-emerald-500/25 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300"
+              }`}
+            >
+              {summary.failed === 0
+                ? `All ${summary.success} invites were sent successfully.`
+                : `${summary.success} invites were sent. ${summary.failed} could not be delivered.`}
+            </div>
+          )}
+
+          {results.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-border">
+              <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
+                <h4 className="text-sm font-medium text-foreground">Recipient results</h4>
+                <span className="text-xs text-muted-foreground">{results.length} rows</span>
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-background/95 backdrop-blur">
+                    <tr className="border-b border-border">
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Email</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.map((resultRow, idx) => (
+                      <tr key={`${resultRow.email}-${idx}`} className="border-b border-border/70 last:border-b-0">
+                        <td className="max-w-[260px] truncate px-4 py-3 text-foreground">{resultRow.email}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant={
+                                resultRow.status === "sent"
+                                  ? "success"
+                                  : resultRow.status === "failed"
+                                    ? "error"
+                                    : "muted"
+                              }
+                            >
+                              {resultRow.status}
+                            </Badge>
+                            {resultRow.error && (
+                              <span className="text-xs text-muted-foreground">{resultRow.error}</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-border/70 px-6 py-4">
+          <Button variant="secondary" onClick={onCancel}>
+            {tCommon("close")}
+          </Button>
+          <Button onClick={onComplete}>{tCommon("done")}</Button>
         </div>
       </Card>
     );
   }
 
   return (
-    <Card className="p-6 mb-6">
-      <h3 className="font-semibold text-foreground mb-4">Bulk Invite</h3>
-
-      <p className="text-sm text-muted-foreground mb-4">
-        Enter email addresses (one per line, or comma/semicolon separated) or upload a CSV.
-        A single invite code will be created with one use per email.
-      </p>
-
-      {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-          {error}
+    <Card className="mb-6 overflow-hidden border-border/80 bg-card/95 p-0 shadow-sm">
+      <div className="border-b border-border/70 px-6 py-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Bulk invite</h3>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Paste email addresses or upload a CSV to create one invite batch with a unique recipient list.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="muted">Role: {selectedRoleLabel}</Badge>
+            <Badge variant={emails.length > MAX_EMAILS_PER_BATCH ? "warning" : "primary"}>
+              {emails.length}/{MAX_EMAILS_PER_BATCH} recipients
+            </Badge>
+            <Badge variant="muted">Expires: {formatExpiryLabel(expiresAt)}</Badge>
+          </div>
         </div>
-      )}
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <Select
-          label={tCommon("role")}
-          value={role}
-          onChange={(e) => setRole(e.target.value as typeof role)}
-          options={[
-            { value: "active_member", label: tRoles("activeMember") },
-            { value: "admin", label: tRoles("admin") },
-            { value: "alumni", label: tRoles("alumni") },
-            { value: "parent", label: tRoles("parent") },
-          ]}
-        />
-        <Input
-          label={tInvites("expiresOn")}
-          type="date"
-          value={expiresAt}
-          onChange={(e) => setExpiresAt(e.target.value)}
-        />
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">CSV File</label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.txt"
-            onChange={handleFileChange}
-            className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-muted file:text-foreground hover:file:bg-muted/80"
+      <div className="grid gap-6 px-6 py-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.95fr)]">
+        <div className="space-y-5">
+          {error && (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Select
+              label={tCommon("role")}
+              value={role}
+              onChange={(e) => setRole(e.target.value as typeof role)}
+              options={[
+                { value: "active_member", label: tRoles("activeMember") },
+                { value: "admin", label: tRoles("admin") },
+                { value: "alumni", label: tRoles("alumni") },
+                { value: "parent", label: tRoles("parent") },
+              ]}
+            />
+            <Input
+              label={tInvites("expiresOn")}
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+            />
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-foreground">Import file</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex min-h-[42px] w-full items-center justify-between rounded-xl border border-dashed border-border bg-muted/25 px-4 py-3 text-left text-sm text-foreground transition hover:border-org-secondary/50 hover:bg-muted/40"
+              >
+                <span>
+                  Upload CSV or TXT
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    First column should contain email addresses.
+                  </span>
+                </span>
+                <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <Textarea
+            label={`Email addresses (${emails.length})`}
+            value={emailText}
+            onChange={(e) => setEmailText(e.target.value)}
+            placeholder="jane@example.com&#10;john@example.com&#10;coach@example.com"
+            rows={10}
+            helperText="Separate addresses with new lines, commas, or semicolons. Duplicate addresses are removed automatically."
+            className="min-h-[220px]"
           />
+
+          {emails.length > 0 && (
+            <div className="rounded-2xl border border-border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-medium text-foreground">Recipient preview</h4>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    We detected {emails.length} unique email{emails.length === 1 ? "" : "s"} in this batch.
+                  </p>
+                </div>
+                {emails.length > MAX_EMAILS_PER_BATCH && (
+                  <Badge variant="warning">Trim to {MAX_EMAILS_PER_BATCH} or fewer recipients</Badge>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {previewEmails.map((email) => (
+                  <span
+                    key={email}
+                    className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground"
+                  >
+                    {email}
+                  </span>
+                ))}
+                {remainingPreviewCount > 0 && (
+                  <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
+                    +{remainingPreviewCount} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-border bg-muted/20 p-4">
+            <h4 className="text-sm font-medium text-foreground">How bulk invites work</h4>
+            <ul className="mt-3 space-y-3 text-sm text-muted-foreground">
+              <li className="flex gap-3">
+                <span className="mt-0.5 h-2 w-2 rounded-full bg-org-secondary" />
+                One invite batch is created for the selected role and expiration date.
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-0.5 h-2 w-2 rounded-full bg-org-secondary" />
+                Each email gets one use in the batch invite.
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-0.5 h-2 w-2 rounded-full bg-org-secondary" />
+                CSV uploads append recipients to anything you already pasted.
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <h4 className="text-sm font-medium text-foreground">Recommended CSV format</h4>
+            <div className="mt-3 overflow-hidden rounded-xl border border-border bg-muted/20">
+              <div className="border-b border-border px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                Example
+              </div>
+              <pre className="overflow-x-auto px-3 py-3 text-xs text-foreground">email
+jane@example.com
+john@example.com
+coach@example.com</pre>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-foreground mb-2">
-          Email Addresses ({emails.length})
-        </label>
-        <textarea
-          value={emailText}
-          onChange={(e) => setEmailText(e.target.value)}
-          placeholder="jane@example.com&#10;john@example.com&#10;..."
-          rows={6}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        {emails.length > 100 && (
-          <p className="text-xs text-red-600 mt-1">Maximum 100 emails per batch</p>
-        )}
-      </div>
-
-      <div className="flex gap-3">
-        <Button
-          onClick={handleSubmit}
-          isLoading={isSubmitting}
-          disabled={emails.length === 0 || emails.length > 100}
-        >
-          Send {emails.length} Invites
-        </Button>
-        <Button variant="secondary" onClick={onCancel}>
-          {tCommon("cancel")}
-        </Button>
+      <div className="flex flex-col gap-3 border-t border-border/70 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">
+          Bulk invite links can be shared manually if email delivery is unavailable.
+        </p>
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={onCancel}>
+            {tCommon("cancel")}
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            isLoading={isSubmitting}
+            disabled={emails.length === 0 || emails.length > MAX_EMAILS_PER_BATCH}
+          >
+            Send {emails.length} invite{emails.length === 1 ? "" : "s"}
+          </Button>
+        </div>
       </div>
     </Card>
   );

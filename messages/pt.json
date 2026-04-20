@@ -174,6 +174,7 @@
       "useOrgDefault": "Usar idioma da organizacao ({language})"
     },
     "description": "Gerencie convites, assinaturas e acesso a organizacao",
+    "bulkImport": "Importacao em massa",
     "createInvite": "Criar convite",
     "requireApproval": "Exigir aprovacao para novos membros",
     "requireApprovalDesc": "Quando ativado, usuarios que ingressarem por convite precisam ser aprovados antes de obter acesso. Voce tambem pode configurar isso por convite.",

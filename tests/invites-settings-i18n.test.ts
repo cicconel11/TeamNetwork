@@ -27,6 +27,7 @@ test("invites settings page uses existing translated keys and common fallback te
     "utf8",
   );
 
+  assert.match(source, /tSettings\("bulkImport"\)/);
   assert.match(source, /tSettings\("requireApprovalDesc"\)/);
   assert.match(source, /tCommon\("noPendingApprovals"\)/);
   assert.match(source, /tSettings\("reviewPending"\)/);
@@ -34,18 +35,25 @@ test("invites settings page uses existing translated keys and common fallback te
   assert.doesNotMatch(source, /tSettings\("reviewPendingMembers"\)/);
 });
 
-test("all supported locales provide invite approval count text without English stopgaps", () => {
+test("all supported locales provide invites settings labels without English stopgaps", () => {
   const englishMessages = readJson("messages/en.json");
   const englishCount = getNestedValue(englishMessages, "settings.pendingApprovalsCount");
+  const englishBulkImport = getNestedValue(englishMessages, "settings.bulkImport");
 
   for (const locale of SUPPORTED_LOCALES) {
     const messages = readJson(`messages/${locale}.json`);
     const pendingCount = getNestedValue(messages, "settings.pendingApprovalsCount");
+    const bulkImport = getNestedValue(messages, "settings.bulkImport");
 
     assert.notEqual(
       pendingCount,
       undefined,
       `${locale} is missing settings.pendingApprovalsCount`,
+    );
+    assert.notEqual(
+      bulkImport,
+      undefined,
+      `${locale} is missing settings.bulkImport`,
     );
 
     if (locale !== "en") {
@@ -53,6 +61,11 @@ test("all supported locales provide invite approval count text without English s
         pendingCount,
         englishCount,
         `${locale} is still falling back to English for settings.pendingApprovalsCount`,
+      );
+      assert.notEqual(
+        bulkImport,
+        englishBulkImport,
+        `${locale} is still falling back to English for settings.bulkImport`,
       );
     }
 
