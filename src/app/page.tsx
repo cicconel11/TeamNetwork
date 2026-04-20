@@ -382,7 +382,7 @@ export default async function LandingPage() {
           </p>
 
           <p className="scroll-reveal text-sm text-landing-cream/40 mb-10">
-            Free to get started. No credit card required.
+            Start with a free trial. Credit card required.
           </p>
 
           <div className="scroll-reveal flex flex-col sm:flex-row gap-4 justify-center">
