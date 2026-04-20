@@ -92,9 +92,10 @@ COPPA and FERPA both require a rights-request path, even when most substantive r
 
 - **Intake:** `privacy@myteamnetwork.com` + support form.
 - **Verification:** match requester email to `auth.users`; confirm role/relationship.
-- **Deletion path:** enqueue a `user_deletion_requests` row (30-day grace, existing pipeline).
-- **SLA target:** acknowledge ≤10 days, resolve ≤30 days.
-- **Audit:** log in `data_access_log` / `compliance_audit_log`.
+- **System of record:** `dsr_requests` captures intake source, requester relationship, acknowledgement method, resolution method, and SLA dates.
+- **Deletion path:** enqueue a `user_deletion_requests` row (30-day grace, existing pipeline) and link it from `dsr_requests`.
+- **SLA target:** acknowledge ≤10 days. School-routed FERPA requests target resolution ≤45 days; platform-led deletion requests continue through the existing deletion queue.
+- **Audit:** keep execution evidence in `data_access_log` / `compliance_audit_log` and link that work back to `dsr_requests`.
 
 ## Quick Reference Checklist
 - [x] Age Gate Implemented — See `docs/compliance_plans/COPPA_Age_Gate_Plan.md`

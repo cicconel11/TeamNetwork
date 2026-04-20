@@ -224,6 +224,7 @@ The live schema covers:
 |-------|---------|-------|
 | `breach_incidents` | Security/privacy incident tracking | Discovery/containment/resolution timestamps, severity tier, notification log. Backs `docs/Incident_Response_Runbook.md` |
 | `data_access_log` | Record-level access telemetry | Who accessed which resource when (for FERPA / NY Ed Law 2-d audit). IP stored hashed |
+| `dsr_requests` | Unified rights-request intake and SLA tracking | Records requester relationship, source, acknowledgement/resolution method, school owner, SLA dates, and links to deletion/audit artifacts |
 | `user_agreements` | User acceptance of ToS / Privacy / DSA versions | `user_id`, `agreement_type`, `version`, `accepted_at` |
 
 ### AI Feedback (Oct 2026)
