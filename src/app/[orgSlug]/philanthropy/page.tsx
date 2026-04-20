@@ -10,13 +10,12 @@ import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { buildDonationPurposeTotals } from "@/lib/payments/donation-purpose-totals";
+import { SETTLED_DONATION_STATUSES } from "@/lib/payments/donation-status";
 import { getLocale, getTranslations } from "next-intl/server";
 import { PhilanthropyFilter } from "@/components/philanthropy/PhilanthropyFilter";
 import { ExportCsvButton } from "@/components/shared";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonationStat, OrganizationDonation } from "@/types/database";
-
-const SETTLED_STATUSES = ["succeeded", "recorded"];
 
 interface PhilanthropyPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -83,7 +82,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
     : hideDonorNames
       ? []
       : allDonationRows
-          .filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status))
+          .filter((d) => (d.visibility || "public") === "public" && (SETTLED_DONATION_STATUSES as readonly string[]).includes(d.status))
           .map((d) => ({ ...d, donor_email: null }));
 
   const totalRaised = canSeeDonors

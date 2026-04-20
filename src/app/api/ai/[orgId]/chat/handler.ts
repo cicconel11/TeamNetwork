@@ -5851,9 +5851,27 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           if (groundedToolSummary) {
             try {
               await runTimedStage(stageTimings, "grounding", async () => {
+                let hideDonorNames = false;
+                const needsDonorPrivacy = successfulToolResults.some(
+                  (result) => result.name === "list_donations"
+                );
+                if (needsDonorPrivacy) {
+                  try {
+                    const { data: orgRow } = await ctx.serviceSupabase
+                      .from("organizations")
+                      .select("hide_donor_names")
+                      .eq("id", ctx.orgId)
+                      .maybeSingle();
+                    hideDonorNames =
+                      Boolean((orgRow as { hide_donor_names?: unknown } | null)?.hide_donor_names);
+                  } catch {
+                    hideDonorNames = false;
+                  }
+                }
                 const groundingResult = verifyToolBackedResponseFn({
                   content: pass2BufferedContent,
                   toolResults: successfulToolResults,
+                  orgContext: { hideDonorNames },
                 });
 
                 if (!groundingResult.grounded) {

@@ -209,5 +209,18 @@ The following features are deferred from v1 tool calling. Each is mapped to the 
 
 ### Data Analyst (SQL Generation)
 - **Paper:** Text-to-SQL Survey (`2410.06011`), APEX-SQL (`2602.16720`), TrustSQL (`2403.15879`)
-- **What:** Let admins ask ad-hoc data questions ("donation trend by month", "members who joined after January")
+- **What:** Extend ad-hoc data questions beyond the currently shipped fixed analytics RPCs (for example donation and member-growth trends) into schema-aware SQL generation.
 - **Design:** Schema-aware SQL generation with read-only sandbox. Must support abstaining from infeasible queries (TrustSQL pattern). LIDA pipeline (`2303.02927`) for chart generation.
+
+## Donation Analytics Tool
+
+`get_donation_analytics(window_days, bucket, top_purposes_limit)` summarizes `organization_donations` for an admin org. It is implemented as a single `SECURITY DEFINER` RPC (`public.get_donation_analytics`) and called from `src/lib/ai/tools/executor.ts`. The RPC buckets donations in the org's IANA timezone (`organizations.timezone`, falling back to `America/New_York`) so monthly/weekly breakdowns do not drift on UTC boundaries.
+
+- **Settled set:** `{ 'succeeded', 'recorded' }`. Both statuses count toward `successful_*` totals and trend/purpose aggregates. `status_counts.succeeded` is the merged settled count; `status_counts.recorded` and `status_counts.settled` are advisory keys for observability. The Node-side constant `SETTLED_DONATION_STATUSES` in `src/lib/payments/donation-status.ts` is the canonical mirror reused by the donations/philanthropy surfaces.
+- **Buckets:** defaults are `day` (≤31d), `week` (≤180d), `month` (>180d). Week labels use ISO Monday in org local time; month labels use `YYYY-MM` in org local time.
+- **Index:** partial composite `organization_donations (organization_id, created_at) WHERE deleted_at IS NULL` supports the range scan inside the RPC.
+- **Grounding:** the deterministic formatter emits `Donation analytics`, `Successful donations`, `Raised`, `Average successful donation`, `Largest successful donation`, `Top purposes`, and `Trend` labels. `verifyDonationAnalytics` in `src/lib/ai/tool-grounding.ts` requires the response to reference at least one of these labels and checks each trend row and top-purpose row against the RPC payload; unknown rows or mismatched amounts flip `grounded=false` and the handler emits the fallback copy.
+
+## `list_donations` Privacy and Grounding
+
+`list_donations` coerces anonymous donors' name/email to `"Anonymous"` before returning rows. `verifyListDonations` additionally threads the `organizations.hide_donor_names` flag into the grounding pass: when enabled, any quoted donor name, email, or list-entry head that matches a real row is treated as an unauthorized leak and flips `grounded=false`. The handler loads this flag via `ctx.serviceSupabase` once per request when list_donations was executed.

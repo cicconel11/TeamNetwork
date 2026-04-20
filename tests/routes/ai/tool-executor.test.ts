@@ -719,37 +719,42 @@ test("get_org_stats returns counts object", async () => {
   assert.equal(stats.upcoming_events, 3);
 });
 
-test("get_donation_analytics returns donation trend summary", async () => {
+test("get_donation_analytics forwards args to the RPC and returns its payload", async () => {
+  const capturedParams: Array<Record<string, unknown>> = [];
   stub = createToolSupabaseStub({
-    organization_donations: {
-      select: {
-        data: [
-          {
-            organization_id: ORG_ID,
-            amount_cents: 12500,
-            status: "succeeded",
-            created_at: "2026-03-10T12:00:00Z",
-            purpose: "Alumni Campaign",
-            deleted_at: null,
+    rpc: {
+      get_donation_analytics: (params: Record<string, unknown>) => {
+        capturedParams.push(params);
+        return {
+          window_days: 3650,
+          window_start: "2016-04-20T04:00:00.000Z",
+          window_end: "2026-04-20T04:00:00.000Z",
+          bucket: "week",
+          timezone: "America/New_York",
+          totals: {
+            successful_donation_count: 11,
+            successful_amount_cents: 72500,
+            average_successful_amount_cents: 6590,
+            largest_successful_amount_cents: 12500,
+            overall_donation_count: 12,
+            status_counts: {
+              succeeded: 11,
+              pending: 1,
+              failed: 0,
+              recorded: 9,
+              settled: 11,
+            },
+            latest_successful_donation_at: "2026-03-20T12:00:00.000Z",
           },
-          {
-            organization_id: ORG_ID,
-            amount_cents: 5000,
-            status: "succeeded",
-            created_at: "2026-03-18T12:00:00Z",
-            purpose: "Scholarship",
-            deleted_at: null,
-          },
-          {
-            organization_id: ORG_ID,
-            amount_cents: 2500,
-            status: "pending",
-            created_at: "2026-03-20T12:00:00Z",
-            purpose: "Scholarship",
-            deleted_at: null,
-          },
-        ],
-        error: null,
+          trend: [
+            { bucket_start: "2026-03-09T04:00:00.000Z", bucket_label: "Week of 2026-03-09", donation_count: 1, amount_cents: 12500 },
+          ],
+          top_purposes: [
+            { purpose: "Alumni Campaign", donation_count: 1, amount_cents: 12500 },
+            { purpose: "Scholarship", donation_count: 10, amount_cents: 60000 },
+          ],
+          latest_successful_donation_at: "2026-03-20T12:00:00.000Z",
+        };
       },
     },
   });
@@ -763,26 +768,58 @@ test("get_donation_analytics returns donation trend summary", async () => {
   );
   const analytics = result.data as any;
 
+  assert.equal(capturedParams.length, 1);
+  assert.deepEqual(capturedParams[0], {
+    p_org_id: ORG_ID,
+    p_window_days: 3650,
+    p_bucket: "week",
+    p_top_purposes_limit: 2,
+  });
   assert.equal(analytics.window_days, 3650);
   assert.equal(analytics.bucket, "week");
-  assert.equal(analytics.totals.successful_donation_count, 2);
-  assert.equal(analytics.totals.successful_amount_cents, 17500);
-  assert.equal(analytics.totals.status_counts.pending, 1);
+  assert.equal(analytics.totals.successful_donation_count, 11);
+  assert.equal(analytics.totals.status_counts.succeeded, 11);
+  assert.equal(analytics.totals.status_counts.recorded, 9);
   assert.equal(analytics.top_purposes[0].purpose, "Alumni Campaign");
   assert.ok(Array.isArray(analytics.trend));
+});
 
-  const donationQuery = stub.queries.find((q) => q.table === "organization_donations");
-  assert.ok(donationQuery);
-  assert.equal(
-    donationQuery.columns,
-    "amount_cents, status, created_at, purpose"
-  );
-  assert.ok(
-    donationQuery.filters.some((f: any) => f.col === "organization_id" && f.val === ORG_ID)
-  );
-  assert.ok(
-    donationQuery.filters.some((f: any) => f.col === "created_at" && f.op === "gte")
-  );
+test("get_donation_analytics applies bucket defaults based on window", async () => {
+  const capturedParams: Array<Record<string, unknown>> = [];
+  stub = createToolSupabaseStub({
+    rpc: {
+      get_donation_analytics: (params: Record<string, unknown>) => {
+        capturedParams.push(params);
+        return {
+          window_days: params.p_window_days,
+          bucket: params.p_bucket,
+          timezone: "America/New_York",
+          totals: {
+            successful_donation_count: 0,
+            successful_amount_cents: 0,
+            average_successful_amount_cents: null,
+            largest_successful_amount_cents: null,
+            overall_donation_count: 0,
+            status_counts: { succeeded: 0, pending: 0, failed: 0, recorded: 0, settled: 0 },
+            latest_successful_donation_at: null,
+          },
+          trend: [],
+          top_purposes: [],
+          latest_successful_donation_at: null,
+        };
+      },
+    },
+  });
+  ctx = makeCtx(stub as any);
+
+  await executeToolCall(ctx, { name: "get_donation_analytics", args: { window_days: 7 } });
+  await executeToolCall(ctx, { name: "get_donation_analytics", args: { window_days: 90 } });
+  await executeToolCall(ctx, { name: "get_donation_analytics", args: { window_days: 365 } });
+
+  assert.equal(capturedParams[0].p_bucket, "day");
+  assert.equal(capturedParams[1].p_bucket, "week");
+  assert.equal(capturedParams[2].p_bucket, "month");
+  assert.equal(capturedParams[0].p_top_purposes_limit, 5);
 });
 
 test("list_announcements returns recent announcements", async () => {

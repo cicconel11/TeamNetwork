@@ -7,6 +7,7 @@ import { RecentDuesTable } from "./RecentDuesTable";
 import { PurposeDotLeaders } from "./PurposeDotLeaders";
 import { DonationDrawer } from "./DonationDrawer";
 import { buildDonationPurposeTotals } from "@/lib/payments/donation-purpose-totals";
+import { SETTLED_DONATION_STATUSES } from "@/lib/payments/donation-status";
 import type { OrganizationDonation } from "@/types/database";
 
 interface PhilanthropyDashboardClientProps {
@@ -38,11 +39,9 @@ export function PhilanthropyDashboardClient({
   const [isSavingPrivacy, setIsSavingPrivacy] = useState(false);
   const tDonations = useTranslations("donations");
 
-  const SETTLED_STATUSES = ["succeeded", "recorded"];
-
   const activePurposeTotals = isSimulatingPublic
     ? buildDonationPurposeTotals(
-        donations.filter((d) => (d.visibility || "public") === "public" && SETTLED_STATUSES.includes(d.status)),
+        donations.filter((d) => (d.visibility || "public") === "public" && (SETTLED_DONATION_STATUSES as readonly string[]).includes(d.status)),
         tDonations("generalSupport"),
       )
     : purposeTotals;

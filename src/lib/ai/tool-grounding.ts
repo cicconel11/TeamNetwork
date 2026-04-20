@@ -57,26 +57,48 @@ function parseStatClaim(content: string, label: string): number | null {
   return null;
 }
 
-function parseCurrencyClaim(content: string, label: string): number | null {
+// Returns whole dollars from a currency claim adjacent to `label`. Supports
+// comma thousands separators, 1–2 decimal places, and a trailing k/K suffix
+// (e.g. "$1.2k" → 1200). Three-or-more decimal places fail to match and the
+// function returns null so verifiers can flag them as unsupported.
+export function parseCurrencyClaim(content: string, label: string): number | null {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = /\$([0-9][0-9,]*(?:\.[0-9]{1,2})?)(k|K)?(?![0-9.])/;
   for (const rawLine of content.split("\n")) {
     const line = rawLine.trim();
     if (!new RegExp(`\\b${escaped}\\b`, "i").test(line)) {
       continue;
     }
 
-    const match = line.match(/\$([0-9][0-9,]*(?:\.[0-9]{1,2})?)/);
+    const match = line.match(pattern);
     if (!match) {
       continue;
     }
 
     const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-    if (Number.isFinite(parsed)) {
-      return Math.round(parsed);
+    if (!Number.isFinite(parsed)) {
+      continue;
     }
+    const scaled = match[2] ? parsed * 1000 : parsed;
+    return Math.round(scaled);
   }
 
   return null;
+}
+
+// Extract every "$<amount>" token in content, returning whole-dollar values.
+// Handles commas and optional k/K suffix. Skips malformed tokens.
+function extractAllCurrencyDollars(content: string): number[] {
+  const result: number[] = [];
+  const globalPattern = /\$([0-9][0-9,]*(?:\.[0-9]{1,2})?)(k|K)?(?![0-9.])/g;
+  let match: RegExpExecArray | null;
+  while ((match = globalPattern.exec(content)) !== null) {
+    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
+    if (!Number.isFinite(parsed)) continue;
+    const scaled = match[2] ? parsed * 1000 : parsed;
+    result.push(Math.round(scaled));
+  }
+  return result;
 }
 
 function verifyOrgStats(content: string, data: unknown): string[] {
@@ -108,22 +130,106 @@ function verifyOrgStats(content: string, data: unknown): string[] {
   return failures;
 }
 
+interface DonationAnalyticsVerifyPayload {
+  totals?: {
+    successful_donation_count?: unknown;
+    successful_amount_cents?: unknown;
+    average_successful_amount_cents?: unknown;
+    largest_successful_amount_cents?: unknown;
+  } | null;
+  trend?: unknown;
+  top_purposes?: unknown;
+}
+
+interface BucketRow {
+  bucket_label: string;
+  amount_cents: number;
+}
+
+interface PurposeRow {
+  purpose: string;
+  amount_cents: number;
+}
+
+function collectBucketRows(value: unknown): Map<string, BucketRow> {
+  const map = new Map<string, BucketRow>();
+  if (!Array.isArray(value)) return map;
+  for (const row of value) {
+    if (!row || typeof row !== "object") continue;
+    const label = (row as { bucket_label?: unknown }).bucket_label;
+    const cents = (row as { amount_cents?: unknown }).amount_cents;
+    if (typeof label !== "string" || typeof cents !== "number") continue;
+    map.set(normalizeIdentifier(label), { bucket_label: label, amount_cents: cents });
+  }
+  return map;
+}
+
+function collectPurposeRows(value: unknown): Map<string, PurposeRow> {
+  const map = new Map<string, PurposeRow>();
+  if (!Array.isArray(value)) return map;
+  for (const row of value) {
+    if (!row || typeof row !== "object") continue;
+    const purpose = (row as { purpose?: unknown }).purpose;
+    const cents = (row as { amount_cents?: unknown }).amount_cents;
+    if (typeof purpose !== "string" || typeof cents !== "number") continue;
+    map.set(normalizeIdentifier(purpose), { purpose, amount_cents: cents });
+  }
+  return map;
+}
+
+// Formatter row shape: `- <label> - <N> donations - $<amount>`.
+// Matches both trend rows and top-purpose rows. Returns null when line is not
+// a formatter row.
+function parseFormatterStatsRow(
+  line: string
+): { label: string; donationCount: number; amountDollars: number } | null {
+  const stripped = line.replace(/^([-*]|\d+\.)\s+/, "").trim();
+  const match = stripped.match(
+    /^(.+?)\s*-\s*(\d+)\s+donations?\s*-\s*\$([0-9][0-9,]*(?:\.[0-9]{1,2})?)(k|K)?\b/i
+  );
+  if (!match) return null;
+  const amount = Number.parseFloat(match[3].replace(/,/g, ""));
+  if (!Number.isFinite(amount)) return null;
+  const scaled = match[4] ? amount * 1000 : amount;
+  return {
+    label: match[1].trim(),
+    donationCount: Number(match[2]),
+    amountDollars: Math.round(scaled),
+  };
+}
+
+const DONATION_ANALYTICS_CANONICAL_LABELS = [
+  "donation analytics",
+  "successful donations",
+  "raised",
+  "average successful donation",
+  "largest successful donation",
+  "trend",
+  "top purposes",
+  "status mix",
+  "latest successful donation",
+];
+
+function contentIsGroundingFallback(content: string): boolean {
+  // Matches copy emitted by getGroundingFallbackForTools — a static paraphrase
+  // warning. Detect via shared sentinel phrase; ungrounded fallback bypasses
+  // strict verification because it is deterministic server-controlled text.
+  return /couldn[’']t verify|could not verify|unable to verify/i.test(content);
+}
+
 function verifyDonationAnalytics(content: string, data: unknown): string[] {
   if (!data || typeof data !== "object") {
     return ["get_donation_analytics returned non-object data"];
   }
 
-  const payload = data as {
-    totals?: {
-      successful_donation_count?: unknown;
-      successful_amount_cents?: unknown;
-      average_successful_amount_cents?: unknown;
-      largest_successful_amount_cents?: unknown;
-    } | null;
-  };
+  const payload = data as DonationAnalyticsVerifyPayload;
 
   if (!payload.totals || typeof payload.totals !== "object") {
     return ["get_donation_analytics returned missing totals"];
+  }
+
+  if (contentIsGroundingFallback(content)) {
+    return [];
   }
 
   const failures: string[] = [];
@@ -131,6 +237,16 @@ function verifyDonationAnalytics(content: string, data: unknown): string[] {
   const raisedDollars = Number(payload.totals.successful_amount_cents) / 100;
   const averageDollars = Number(payload.totals.average_successful_amount_cents) / 100;
   const largestDollars = Number(payload.totals.largest_successful_amount_cents) / 100;
+
+  const lowered = content.toLowerCase();
+  const referencesCanonicalLabel = DONATION_ANALYTICS_CANONICAL_LABELS.some((label) =>
+    lowered.includes(label)
+  );
+
+  const referencesAnyNumber = /\b\d+\b/.test(content) || /\$\d/.test(content);
+  if (referencesAnyNumber && !referencesCanonicalLabel) {
+    failures.push("donation analytics response did not reference formatter labels");
+  }
 
   const countClaim = parseStatClaim(content, "successful donations");
   if (countClaim !== null && countClaim !== successfulDonationCount) {
@@ -156,6 +272,155 @@ function verifyDonationAnalytics(content: string, data: unknown): string[] {
     failures.push(
       `largest successful donation claim $${largestClaim} did not match $${Math.round(largestDollars)}`
     );
+  }
+
+  const trendMap = collectBucketRows(payload.trend);
+  const purposeMap = collectPurposeRows(payload.top_purposes);
+
+  let inTrendSection = false;
+  let inPurposesSection = false;
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const normalizedHeader = line.replace(/[*_`~>#:]/g, "").trim().toLowerCase();
+    if (normalizedHeader === "trend") {
+      inTrendSection = true;
+      inPurposesSection = false;
+      continue;
+    }
+    if (normalizedHeader === "top purposes") {
+      inPurposesSection = true;
+      inTrendSection = false;
+      continue;
+    }
+    if (!/^([-*]|\d+\.)\s+/.test(line)) continue;
+
+    const parsed = parseFormatterStatsRow(line);
+    if (!parsed) continue;
+
+    if (inTrendSection) {
+      const key = normalizeIdentifier(parsed.label);
+      const row = trendMap.get(key);
+      if (!row) {
+        failures.push(`trend row ${parsed.label} was not present in tool data`);
+        continue;
+      }
+      const expected = Math.round(row.amount_cents / 100);
+      if (expected !== parsed.amountDollars) {
+        failures.push(
+          `trend amount claim $${parsed.amountDollars} did not match $${expected} for ${parsed.label}`
+        );
+      }
+    } else if (inPurposesSection) {
+      const key = normalizeIdentifier(parsed.label);
+      const row = purposeMap.get(key);
+      if (!row) {
+        failures.push(`top purpose ${parsed.label} was not present in tool data`);
+        continue;
+      }
+      const expected = Math.round(row.amount_cents / 100);
+      if (expected !== parsed.amountDollars) {
+        failures.push(
+          `top purpose amount claim $${parsed.amountDollars} did not match $${expected} for ${parsed.label}`
+        );
+      }
+    }
+  }
+
+  return failures;
+}
+
+interface ListDonationsRow {
+  donor_name?: unknown;
+  donor_email?: unknown;
+  amount_dollars?: unknown;
+  purpose?: unknown;
+}
+
+export interface ListDonationsGroundingContext {
+  hideDonorNames?: boolean;
+}
+
+function verifyListDonations(
+  content: string,
+  data: unknown,
+  context: ListDonationsGroundingContext | undefined
+): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_donations returned non-array data"];
+  }
+
+  if (contentIsGroundingFallback(content)) {
+    return [];
+  }
+
+  const rows = data as ListDonationsRow[];
+  const donorNames = new Set<string>();
+  const donorEmails = new Set<string>();
+  const amountDollars = new Set<number>();
+
+  for (const row of rows) {
+    const name = typeof row.donor_name === "string" ? row.donor_name.trim() : "";
+    if (name && name.toLowerCase() !== "anonymous") {
+      donorNames.add(normalizeIdentifier(name));
+    }
+    const email = typeof row.donor_email === "string" ? row.donor_email.trim() : "";
+    if (email && email.toLowerCase() !== "anonymous") {
+      donorEmails.add(normalizeIdentifier(email));
+    }
+    if (typeof row.amount_dollars === "number" && Number.isFinite(row.amount_dollars)) {
+      amountDollars.add(Math.round(row.amount_dollars));
+    }
+  }
+
+  const failures: string[] = [];
+  const hideDonorNames = context?.hideDonorNames === true;
+
+  const quotedNames = extractQuotedTitles(content);
+  for (const quoted of quotedNames) {
+    const normalized = normalizeIdentifier(quoted);
+    if (hideDonorNames && donorNames.has(normalized)) {
+      failures.push(`donor name ${quoted} leaked while hide_donor_names is enabled`);
+      continue;
+    }
+    if (!hideDonorNames && !donorNames.has(normalized)) {
+      // Quoted strings that are not donor names may be purposes; accept if
+      // they match a purpose.
+      const purposes = new Set(
+        rows
+          .map((row) => (typeof row.purpose === "string" ? normalizeIdentifier(row.purpose) : null))
+          .filter((v): v is string => Boolean(v))
+      );
+      if (!purposes.has(normalized)) {
+        failures.push(`donor name ${quoted} was not present in tool rows`);
+      }
+    }
+  }
+
+  for (const email of extractEmails(content)) {
+    if (hideDonorNames) {
+      failures.push(`donor email ${email} leaked while hide_donor_names is enabled`);
+      continue;
+    }
+    if (!donorEmails.has(normalizeIdentifier(email))) {
+      failures.push(`donor email ${email} was not present in tool rows`);
+    }
+  }
+
+  for (const claimedDollars of extractAllCurrencyDollars(content)) {
+    if (claimedDollars === 0) continue;
+    if (!amountDollars.has(claimedDollars)) {
+      failures.push(`donation amount claim $${claimedDollars} was not present in tool rows`);
+    }
+  }
+
+  if (hideDonorNames) {
+    for (const candidate of extractListEntryHeads(content)) {
+      const normalized = normalizeIdentifier(candidate);
+      if (donorNames.has(normalized)) {
+        failures.push(`donor name ${candidate} leaked while hide_donor_names is enabled`);
+      }
+    }
   }
 
   return failures;
@@ -752,10 +1017,15 @@ function verifySuggestMentors(content: string, data: unknown): string[] {
   return failures;
 }
 
-export function verifyToolBackedResponse(input: {
+export interface VerifyToolBackedResponseInput {
   content: string;
   toolResults: SuccessfulToolSummary[];
-}): ToolGroundingResult {
+  orgContext?: { hideDonorNames?: boolean };
+}
+
+export function verifyToolBackedResponse(
+  input: VerifyToolBackedResponseInput
+): ToolGroundingResult {
   const failures: string[] = [];
   const hasSuggestConnections = input.toolResults.some(
     (result) => result.name === "suggest_connections"
@@ -768,6 +1038,13 @@ export function verifyToolBackedResponse(input: {
         break;
       case "get_donation_analytics":
         failures.push(...verifyDonationAnalytics(input.content, result.data));
+        break;
+      case "list_donations":
+        failures.push(
+          ...verifyListDonations(input.content, result.data, {
+            hideDonorNames: input.orgContext?.hideDonorNames === true,
+          })
+        );
         break;
       case "list_members":
         if (!hasSuggestConnections) {
