@@ -510,6 +510,36 @@ test("verifyToolBackedResponse flags hallucinated donation trend rows", () => {
   assert.ok(result.failures.some((f) => /trend row 2026-04/i.test(f)));
 });
 
+test("verifyToolBackedResponse flags mismatched donation counts in trend rows", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (180-day window)",
+      "- Successful donations: 1",
+      "- Raised: $100",
+      "Trend",
+      "- 2026-03 - 99 donations - $100",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 1,
+            successful_amount_cents: 10000,
+            average_successful_amount_cents: 10000,
+            largest_successful_amount_cents: 10000,
+          },
+          trend: [{ bucket_label: "2026-03", amount_cents: 10000, donation_count: 1 }],
+          top_purposes: [],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /trend donation count claim 99 did not match 1/i.test(f)));
+});
+
 test("verifyToolBackedResponse flags hallucinated top purposes", () => {
   const result = verifyToolBackedResponse({
     content: [
@@ -540,6 +570,38 @@ test("verifyToolBackedResponse flags hallucinated top purposes", () => {
 
   assert.equal(result.grounded, false);
   assert.ok(result.failures.some((f) => /top purpose fake drive/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags mismatched donation counts in top-purpose rows", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 1",
+      "- Raised: $100",
+      "Top purposes",
+      "- Alumni Campaign - 99 donations - $100",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 1,
+            successful_amount_cents: 10000,
+            average_successful_amount_cents: 10000,
+            largest_successful_amount_cents: 10000,
+          },
+          trend: [],
+          top_purposes: [
+            { purpose: "Alumni Campaign", amount_cents: 10000, donation_count: 1 },
+          ],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /top purpose donation count claim 99 did not match 1/i.test(f)));
 });
 
 test("verifyToolBackedResponse flags freeform donation paraphrase lacking formatter labels", () => {

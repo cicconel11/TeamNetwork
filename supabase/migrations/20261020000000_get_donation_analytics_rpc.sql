@@ -83,6 +83,7 @@ BEGIN
     WHERE d.organization_id = p_org_id
       AND d.deleted_at IS NULL
       AND d.created_at >= v_window_start
+      AND d.created_at <= v_window_end
   ),
   settled AS (
     SELECT * FROM windowed WHERE status IN ('succeeded', 'recorded')

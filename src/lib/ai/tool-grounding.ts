@@ -144,11 +144,13 @@ interface DonationAnalyticsVerifyPayload {
 interface BucketRow {
   bucket_label: string;
   amount_cents: number;
+  donation_count: number;
 }
 
 interface PurposeRow {
   purpose: string;
   amount_cents: number;
+  donation_count: number;
 }
 
 function collectBucketRows(value: unknown): Map<string, BucketRow> {
@@ -158,8 +160,19 @@ function collectBucketRows(value: unknown): Map<string, BucketRow> {
     if (!row || typeof row !== "object") continue;
     const label = (row as { bucket_label?: unknown }).bucket_label;
     const cents = (row as { amount_cents?: unknown }).amount_cents;
-    if (typeof label !== "string" || typeof cents !== "number") continue;
-    map.set(normalizeIdentifier(label), { bucket_label: label, amount_cents: cents });
+    const donationCount = (row as { donation_count?: unknown }).donation_count;
+    if (
+      typeof label !== "string" ||
+      typeof cents !== "number" ||
+      typeof donationCount !== "number"
+    ) {
+      continue;
+    }
+    map.set(normalizeIdentifier(label), {
+      bucket_label: label,
+      amount_cents: cents,
+      donation_count: donationCount,
+    });
   }
   return map;
 }
@@ -171,8 +184,19 @@ function collectPurposeRows(value: unknown): Map<string, PurposeRow> {
     if (!row || typeof row !== "object") continue;
     const purpose = (row as { purpose?: unknown }).purpose;
     const cents = (row as { amount_cents?: unknown }).amount_cents;
-    if (typeof purpose !== "string" || typeof cents !== "number") continue;
-    map.set(normalizeIdentifier(purpose), { purpose, amount_cents: cents });
+    const donationCount = (row as { donation_count?: unknown }).donation_count;
+    if (
+      typeof purpose !== "string" ||
+      typeof cents !== "number" ||
+      typeof donationCount !== "number"
+    ) {
+      continue;
+    }
+    map.set(normalizeIdentifier(purpose), {
+      purpose,
+      amount_cents: cents,
+      donation_count: donationCount,
+    });
   }
   return map;
 }
@@ -305,10 +329,15 @@ function verifyDonationAnalytics(content: string, data: unknown): string[] {
         failures.push(`trend row ${parsed.label} was not present in tool data`);
         continue;
       }
-      const expected = Math.round(row.amount_cents / 100);
-      if (expected !== parsed.amountDollars) {
+      const expectedAmount = Math.round(row.amount_cents / 100);
+      if (row.donation_count !== parsed.donationCount) {
         failures.push(
-          `trend amount claim $${parsed.amountDollars} did not match $${expected} for ${parsed.label}`
+          `trend donation count claim ${parsed.donationCount} did not match ${row.donation_count} for ${parsed.label}`
+        );
+      }
+      if (expectedAmount !== parsed.amountDollars) {
+        failures.push(
+          `trend amount claim $${parsed.amountDollars} did not match $${expectedAmount} for ${parsed.label}`
         );
       }
     } else if (inPurposesSection) {
@@ -318,10 +347,15 @@ function verifyDonationAnalytics(content: string, data: unknown): string[] {
         failures.push(`top purpose ${parsed.label} was not present in tool data`);
         continue;
       }
-      const expected = Math.round(row.amount_cents / 100);
-      if (expected !== parsed.amountDollars) {
+      const expectedAmount = Math.round(row.amount_cents / 100);
+      if (row.donation_count !== parsed.donationCount) {
         failures.push(
-          `top purpose amount claim $${parsed.amountDollars} did not match $${expected} for ${parsed.label}`
+          `top purpose donation count claim ${parsed.donationCount} did not match ${row.donation_count} for ${parsed.label}`
+        );
+      }
+      if (expectedAmount !== parsed.amountDollars) {
+        failures.push(
+          `top purpose amount claim $${parsed.amountDollars} did not match $${expectedAmount} for ${parsed.label}`
         );
       }
     }

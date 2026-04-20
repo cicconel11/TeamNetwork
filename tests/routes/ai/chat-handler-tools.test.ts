@@ -3330,6 +3330,169 @@ test("list_donations takes the forced tool-first fast path and skips pass 2", as
   assert.match(body, /"type":"done"/);
 });
 
+test("list_donations deterministic responses redact donor names when hide_donor_names is enabled", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getAiOrgContext: async () => ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: supabaseStub,
+        serviceSupabase: {
+          from(table: string) {
+            if (table !== "organizations") {
+              return supabaseStub.from(table);
+            }
+            return {
+              select() {
+                return this;
+              },
+              eq() {
+                return this;
+              },
+              maybeSingle: async () => ({
+                data: { hide_donor_names: true },
+                error: null,
+              }),
+            };
+          },
+          rpc: async (_fn: string, params: any) => ({
+            data: {
+              thread_id:
+                params.p_thread_id ??
+                buildThreadId(++supabaseStub.state.threadCount),
+              user_msg_id: "user-1",
+            },
+            error: null,
+          }),
+        },
+      }),
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_donations",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+        throw new Error("list_donations should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            id: "donation-1",
+            donor_name: "John McKillop",
+            donor_email: "john@example.com",
+            amount_dollars: 125.00,
+            status: "succeeded",
+            created_at: "2026-03-20T12:00:00Z",
+            purpose: "Alumni Campaign",
+            anonymous: false,
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("What donations have we received?") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.match(body, /Donations/);
+  assert.match(body, /Anonymous donor/);
+  assert.match(body, /\$125\.00/);
+  assert.match(body, /Alumni Campaign/);
+  assert.doesNotMatch(body, /John McKillop/);
+  assert.doesNotMatch(body, /john@example\.com/);
+});
+
+test("list_donations deterministic responses fail closed on donor-privacy lookup errors", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getAiOrgContext: async () => ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: supabaseStub,
+        serviceSupabase: {
+          from(table: string) {
+            if (table !== "organizations") {
+              return supabaseStub.from(table);
+            }
+            return {
+              select() {
+                return this;
+              },
+              eq() {
+                return this;
+              },
+              maybeSingle: async () => {
+                throw new Error("organizations lookup failed");
+              },
+            };
+          },
+          rpc: async (_fn: string, params: any) => ({
+            data: {
+              thread_id:
+                params.p_thread_id ??
+                buildThreadId(++supabaseStub.state.threadCount),
+              user_msg_id: "user-1",
+            },
+            error: null,
+          }),
+        },
+      }),
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_donations",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+        throw new Error("list_donations should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            id: "donation-1",
+            donor_name: "John McKillop",
+            donor_email: "john@example.com",
+            amount_dollars: 125.00,
+            status: "succeeded",
+            created_at: "2026-03-20T12:00:00Z",
+            purpose: "Alumni Campaign",
+            anonymous: false,
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("What donations have we received?") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.match(body, /Donations/);
+  assert.match(body, /Anonymous donor/);
+  assert.doesNotMatch(body, /John McKillop/);
+  assert.doesNotMatch(body, /john@example\.com/);
+});
+
 test("get_donation_analytics takes the forced tool-first fast path and skips pass 2", async () => {
   POST = createChatPostHandler(
     buildDefaultDeps({

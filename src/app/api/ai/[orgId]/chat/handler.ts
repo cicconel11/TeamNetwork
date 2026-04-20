@@ -1618,7 +1618,14 @@ function formatAuditEventsResponse(data: unknown): string | null {
   return [`Recent enterprise audit events${total}`, ...rows].join("\n");
 }
 
-function formatDonationsResponse(data: unknown): string | null {
+interface DonationResponseOptions {
+  hideDonorNames?: boolean;
+}
+
+function formatDonationsResponse(
+  data: unknown,
+  options?: DonationResponseOptions,
+): string | null {
   if (!Array.isArray(data)) {
     return null;
   }
@@ -1633,7 +1640,9 @@ function formatDonationsResponse(data: unknown): string | null {
         return null;
       }
 
-      const donorName = getNonEmptyString((row as { donor_name?: unknown }).donor_name) ?? "Unknown";
+      const donorName = options?.hideDonorNames
+        ? "Anonymous donor"
+        : (getNonEmptyString((row as { donor_name?: unknown }).donor_name) ?? "Unknown");
       const amountDollars = typeof (row as { amount_dollars?: unknown }).amount_dollars === "number"
         ? `$${((row as { amount_dollars: number }).amount_dollars).toFixed(2)}`
         : null;
@@ -2730,9 +2739,31 @@ function formatDeterministicToolErrorResponse(
   return null;
 }
 
+async function resolveHideDonorNamesPreference(
+  serviceSupabase: { from: (table: string) => any },
+  orgId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await serviceSupabase
+      .from("organizations")
+      .select("hide_donor_names")
+      .eq("id", orgId)
+      .maybeSingle();
+
+    if (error) {
+      return true;
+    }
+
+    return Boolean((data as { hide_donor_names?: unknown } | null)?.hide_donor_names);
+  } catch {
+    return true;
+  }
+}
+
 function formatDeterministicToolResponse(
   name: string,
-  data: unknown
+  data: unknown,
+  options?: DonationResponseOptions,
 ): string | null {
   switch (name) {
     case "suggest_connections":
@@ -2786,7 +2817,7 @@ function formatDeterministicToolResponse(
     case "list_enterprise_alumni":
       return formatEnterpriseAlumniResponse(data);
     case "list_donations":
-      return formatDonationsResponse(data);
+      return formatDonationsResponse(data, options);
     case "list_managed_orgs":
       return formatManagedOrgsResponse(data);
     case "list_enterprise_audit_events":
@@ -5745,6 +5776,16 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             successfulToolResults.length === 1 &&
             successfulToolResults[0]?.name === "list_members" &&
             MEMBER_ROSTER_PROMPT_PATTERN.test(messageSafety.promptSafeMessage);
+          const deterministicDonationOptions =
+            successfulToolResults.length === 1 &&
+            successfulToolResults[0]?.name === "list_donations"
+              ? {
+                  hideDonorNames: await resolveHideDonorNamesPreference(
+                    ctx.serviceSupabase as { from: (table: string) => any },
+                    ctx.orgId,
+                  ),
+                }
+              : undefined;
           const deterministicToolContent =
             toolResults.length === 1 &&
             successfulToolResults.length === 1 &&
@@ -5752,7 +5793,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             (successfulToolResults[0].name !== "list_members" || canUseDeterministicMemberRoster)
               ? formatDeterministicToolResponse(
                   successfulToolResults[0].name,
-                  successfulToolResults[0].data
+                  successfulToolResults[0].data,
+                  deterministicDonationOptions,
                 )
               : null;
           const singleToolError =
@@ -5851,23 +5893,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           if (groundedToolSummary) {
             try {
               await runTimedStage(stageTimings, "grounding", async () => {
-                let hideDonorNames = false;
-                const needsDonorPrivacy = successfulToolResults.some(
+                const hideDonorNames = successfulToolResults.some(
                   (result) => result.name === "list_donations"
-                );
-                if (needsDonorPrivacy) {
-                  try {
-                    const { data: orgRow } = await ctx.serviceSupabase
-                      .from("organizations")
-                      .select("hide_donor_names")
-                      .eq("id", ctx.orgId)
-                      .maybeSingle();
-                    hideDonorNames =
-                      Boolean((orgRow as { hide_donor_names?: unknown } | null)?.hide_donor_names);
-                  } catch {
-                    hideDonorNames = false;
-                  }
-                }
+                )
+                  ? await resolveHideDonorNamesPreference(
+                      ctx.serviceSupabase as { from: (table: string) => any },
+                      ctx.orgId,
+                    )
+                  : false;
                 const groundingResult = verifyToolBackedResponseFn({
                   content: pass2BufferedContent,
                   toolResults: successfulToolResults,
