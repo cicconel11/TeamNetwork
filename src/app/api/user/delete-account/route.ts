@@ -7,7 +7,7 @@ import {
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { deleteAccountSchema } from "@/lib/schemas/auth";
 import { resolveEnterpriseOwnershipCheck } from "@/lib/auth/enterprise-ownership-check";
-import { createDsrRequest } from "@/lib/compliance";
+import { createDsrRequest, updateDsrRequestByDeletionLink } from "@/lib/compliance";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -439,6 +439,14 @@ export async function POST(request: Request) {
     if (updateError) {
       throw updateError;
     }
+
+    await updateDsrRequestByDeletionLink({
+      linkedDeletionRequestId: deletionRequest.id!,
+      status: "cancelled",
+      resolvedAt: new Date().toISOString(),
+      resolutionMethod: "portal",
+      resolutionNotes: "User cancelled deletion during grace period.",
+    });
 
     // Send confirmation email
     if (resend && user.email) {
