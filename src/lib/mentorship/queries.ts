@@ -110,7 +110,7 @@ export async function loadMentorInputs(
   const mentorProfilesRes = await sb
     .from("mentor_profiles")
     .select(
-      "user_id, topics, expertise_areas, sports, positions, industries, role_families, max_mentees, current_mentee_count, accepting_new, is_active, meeting_preferences, years_of_experience"
+      "user_id, topics, expertise_areas, sports, positions, industries, role_families, max_mentees, current_mentee_count, accepting_new, is_active, meeting_preferences, years_of_experience, custom_attributes"
     )
     .eq("organization_id", orgId)
     .eq("is_active", true);
@@ -152,6 +152,7 @@ export async function loadMentorInputs(
       currentMenteeCount: (p.current_mentee_count as number | null) ?? 0,
       acceptingNew: (p.accepting_new as boolean | null) ?? true,
       isActive: true,
+      customAttributes: (p.custom_attributes as Record<string, string | string[]> | null) ?? null,
     };
   });
 }

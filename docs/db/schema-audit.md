@@ -138,7 +138,8 @@ The live schema covers:
 | Table | Purpose | Notes |
 |-------|---------|-------|
 | `job_postings` | Job board posts | Org-scoped, `industry`, `experience_level` fields |
-| `mentor_profiles` | Alumni mentor directory | `UNIQUE(user_id, org_id)`, `expertise_areas` array, `is_active` flag |
+| `mentor_profiles` | Alumni mentor directory | `UNIQUE(user_id, org_id)`, `expertise_areas` array, `custom_attributes` JSONB, `bio_source`, `bio_generated_at`, `bio_input_hash`, `is_active` flag |
+| `mentor_bio_backfill_queue` | Async mentor bio regeneration queue | Service-role-only queue for org-wide AI bio backfills; pending rows deduped by `(organization_id, mentor_profile_id)` |
 | `mentorship_pairs` | Mentor–mentee pairings | Org-scoped pair records. Soft-delete via `deleted_at` |
 | `mentorship_logs` | Mentorship session logs | `entry_date`, `notes`, `progress_metric` per pair. Soft-delete via `deleted_at` |
 

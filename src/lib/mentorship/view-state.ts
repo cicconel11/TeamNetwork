@@ -1,6 +1,6 @@
-export type MentorshipTab = 'activity' | 'directory' | 'proposals';
+export type MentorshipTab = 'activity' | 'directory' | 'proposals' | 'matches';
 
-const VALID_TABS = ['activity', 'directory', 'proposals'] as const;
+const VALID_TABS = ['activity', 'directory', 'proposals', 'matches'] as const;
 
 function isMentorshipTab(raw: string): raw is MentorshipTab {
   return (VALID_TABS as readonly string[]).includes(raw);

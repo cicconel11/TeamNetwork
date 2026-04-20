@@ -1,11 +1,12 @@
 import {
-  DEFAULT_MENTORSHIP_WEIGHTS,
   graduationGapMultiplier,
   MENTORSHIP_REASON_ORDER,
+  type BuiltInReasonCode,
   type MentorshipReasonCode,
   type MentorshipWeights,
+  type CustomAttributeDef,
   rarityMultiplier,
-  resolveMentorshipWeights,
+  resolveMentorshipConfig,
 } from "@/lib/mentorship/matching-weights";
 import {
   extractMenteeSignals,
@@ -38,6 +39,8 @@ export interface RarityStats {
   topicCounts: ReadonlyMap<string, number>;
   sportCounts: ReadonlyMap<string, number>;
   positionCounts: ReadonlyMap<string, number>;
+  /** Custom attribute key → value → count across all mentors */
+  customAttributeCounts: ReadonlyMap<string, ReadonlyMap<string, number>>;
 }
 
 export interface ScoreOptions {
@@ -55,6 +58,7 @@ export function buildRarityStats(mentors: readonly MentorSignals[]): RarityStats
   const topic = new Map<string, number>();
   const sport = new Map<string, number>();
   const position = new Map<string, number>();
+  const customAttr = new Map<string, Map<string, number>>();
 
   for (const m of mentors) {
     for (const value of m.industries) {
@@ -69,6 +73,16 @@ export function buildRarityStats(mentors: readonly MentorSignals[]): RarityStats
     for (const t of m.topics) topic.set(t, (topic.get(t) ?? 0) + 1);
     for (const s of m.sports) sport.set(s, (sport.get(s) ?? 0) + 1);
     for (const p of m.positions) position.set(p, (position.get(p) ?? 0) + 1);
+    for (const [key, values] of Object.entries(m.customAttributes)) {
+      let keyMap = customAttr.get(key);
+      if (!keyMap) {
+        keyMap = new Map();
+        customAttr.set(key, keyMap);
+      }
+      for (const v of values) {
+        keyMap.set(v, (keyMap.get(v) ?? 0) + 1);
+      }
+    }
   }
 
   return {
@@ -79,21 +93,32 @@ export function buildRarityStats(mentors: readonly MentorSignals[]): RarityStats
     topicCounts: topic,
     sportCounts: sport,
     positionCounts: position,
+    customAttributeCounts: customAttr,
   };
 }
 
+function signalSortKey(code: MentorshipReasonCode): number {
+  const builtInIdx = MENTORSHIP_REASON_ORDER.indexOf(code as BuiltInReasonCode);
+  // Built-in codes sort by their defined order; custom codes sort after all built-in
+  return builtInIdx >= 0 ? builtInIdx : MENTORSHIP_REASON_ORDER.length;
+}
+
 function orderSignals(signals: MentorshipSignal[]): MentorshipSignal[] {
-  return [...signals].sort(
-    (a, b) =>
-      MENTORSHIP_REASON_ORDER.indexOf(a.code) - MENTORSHIP_REASON_ORDER.indexOf(b.code)
-  );
+  return [...signals].sort((a, b) => {
+    const aKey = signalSortKey(a.code);
+    const bKey = signalSortKey(b.code);
+    if (aKey !== bKey) return aKey - bKey;
+    // Custom codes: sort alphabetically
+    return a.code.localeCompare(b.code);
+  });
 }
 
 export function scoreMentorForMentee(
   mentee: MenteeSignals,
   mentor: MentorSignals,
   weights: MentorshipWeights,
-  rarity: RarityStats | null
+  rarity: RarityStats | null,
+  customAttributeDefs?: readonly CustomAttributeDef[]
 ): MentorMatch | null {
   // Hard filter: same tenant
   if (mentor.orgId !== mentee.orgId) return null;
@@ -263,6 +288,55 @@ export function scoreMentorForMentee(
     });
   }
 
+  // Custom attributes — iterate org-defined defs (not stored keys) to avoid
+  // scoring orphaned attributes from deleted defs
+  if (customAttributeDefs) {
+    for (const def of customAttributeDefs) {
+      if (def.type === "text") continue; // display-only
+      const customWeightKey = `custom:${def.key}` as const;
+      const baseWeight = weights[customWeightKey] ?? def.weight ?? 0;
+      if (baseWeight <= 0) continue;
+
+      const mentorValues = mentor.customAttributes[def.key];
+      const menteeValues = mentee.customAttributes[def.key];
+      if (!mentorValues?.length || !menteeValues?.length) continue;
+
+      if (def.type === "select") {
+        // Exact match on first value
+        const match = mentorValues[0] && menteeValues.includes(mentorValues[0]);
+        if (match) {
+          const attrCounts = rarity?.customAttributeCounts.get(def.key);
+          const mult = rarityMultiplier(attrCounts?.get(mentorValues[0]), total);
+          signals.push({
+            code: customWeightKey,
+            weight: Math.round(baseWeight * mult),
+            value: `${def.label}:${mentorValues[0]}`,
+          });
+        }
+      } else if (def.type === "multiselect") {
+        // Set intersection with overlap scaling (same as shared_topics)
+        const overlap = intersectNormalized(mentorValues, menteeValues);
+        if (overlap.length > 0) {
+          const attrCounts = rarity?.customAttributeCounts.get(def.key);
+          let bestMult = 1;
+          for (const v of overlap) {
+            const m = rarityMultiplier(attrCounts?.get(v), total);
+            if (m > bestMult) bestMult = m;
+          }
+          const overlapFactor = Math.min(overlap.length, 3);
+          const weight = Math.round(
+            baseWeight * bestMult * (0.6 + 0.2 * overlapFactor)
+          );
+          signals.push({
+            code: customWeightKey,
+            weight,
+            value: `${def.label}:${overlap.join(",")}`,
+          });
+        }
+      }
+    }
+  }
+
   if (signals.length === 0) return null;
 
   const score = signals.reduce((sum, s) => sum + s.weight, 0);
@@ -283,8 +357,9 @@ export function rankMentorsForMentee(
   mentorInputs: readonly MentorInput[],
   options: ScoreOptions = {}
 ): MentorMatch[] {
-  const weights =
-    options.weights ?? resolveMentorshipWeights(options.orgSettings) ?? DEFAULT_MENTORSHIP_WEIGHTS;
+  const config = resolveMentorshipConfig(options.orgSettings);
+  const weights = options.weights ?? config.weights;
+  const customDefs = config.customAttributeDefs;
 
   const mentee = extractMenteeSignals(menteeInput);
   // Org-isolation: drop any mentor not in mentee's org BEFORE rarity stats so
@@ -298,7 +373,7 @@ export function rankMentorsForMentee(
   const matches: MentorMatch[] = [];
   for (const mentor of mentors) {
     if (excluded.has(mentor.userId)) continue;
-    const match = scoreMentorForMentee(mentee, mentor, weights, rarity);
+    const match = scoreMentorForMentee(mentee, mentor, weights, rarity, customDefs);
     if (match) matches.push(match);
   }
 
@@ -317,4 +392,12 @@ export type {
   MentorSignals,
   MenteeSignals,
 } from "@/lib/mentorship/matching-signals";
-export type { MentorshipReasonCode, MentorshipWeights } from "@/lib/mentorship/matching-weights";
+export type {
+  MentorshipReasonCode,
+  BuiltInReasonCode,
+  CustomReasonCode,
+  MentorshipWeights,
+  BuiltInMentorshipWeights,
+  CustomAttributeDef,
+  ResolvedMentorshipConfig,
+} from "@/lib/mentorship/matching-weights";
