@@ -71,7 +71,7 @@ export const FAQ_ITEMS = [
   },
   {
     question: "Is there a free trial?",
-    answer: "Every organization starts with a free trial — no credit card required. You can explore the full platform, invite members, and set up your community before committing to a paid plan.",
+    answer: "Every organization can start with a free trial. A credit card is required up front, and billing begins when the trial ends unless you cancel.",
   },
   {
     question: "What happens to my data if I cancel?",
