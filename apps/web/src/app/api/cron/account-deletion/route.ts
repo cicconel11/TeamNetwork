@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { validateCronAuth } from "@/lib/security/cron-auth";
+import { updateDsrRequestByDeletionLink } from "@/lib/compliance";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -77,6 +78,18 @@ export async function GET(request: Request) {
           console.error("[cron/account-deletion] Failed to update request status:", req.id, updateError.message);
           failed++;
           continue;
+        }
+
+        try {
+          await updateDsrRequestByDeletionLink({
+            linkedDeletionRequestId: req.id,
+            status: "resolved",
+            resolvedAt: new Date().toISOString(),
+            resolutionMethod: "portal",
+            resolutionNotes: "Account deleted after grace period by scheduled cron.",
+          });
+        } catch (dsrErr) {
+          console.error("[cron/account-deletion] Failed to update linked DSR row:", req.id, dsrErr);
         }
 
         succeeded++;

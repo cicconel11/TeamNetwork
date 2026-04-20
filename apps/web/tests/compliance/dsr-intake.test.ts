@@ -19,6 +19,10 @@ const deleteRoute = readFileSync(
   join(process.cwd(), "src/app/api/user/delete-account/route.ts"),
   "utf8",
 );
+const deletionCronRoute = readFileSync(
+  join(process.cwd(), "src/app/api/cron/account-deletion/route.ts"),
+  "utf8",
+);
 const privacyPage = readFileSync(
   join(process.cwd(), "src/app/privacy/page.tsx"),
   "utf8",
@@ -50,6 +54,11 @@ describe("DSR intake schema", () => {
     assert.match(dsrMigration, /\(SELECT auth\.role\(\)\) = 'service_role'/i);
   });
 
+  it("hardens the compliance-role helper search_path", () => {
+    assert.match(dsrMigration, /CREATE OR REPLACE FUNCTION public\.has_dsr_compliance_role\(\)/i);
+    assert.match(dsrMigration, /SET search_path = ''/i);
+  });
+
   it("adds a due-soon reporting function restricted to service_role", () => {
     assert.match(dsrMigration, /CREATE OR REPLACE FUNCTION public\.get_dsr_requests_due_soon/i);
     assert.match(dsrMigration, /now\(\) >= open_requests\.escalation_threshold/i);
@@ -72,6 +81,26 @@ describe("DSR intake wiring", () => {
     assert.match(deleteRoute, /requestType:\s*"delete"/);
     assert.match(deleteRoute, /acknowledgementMethod:\s*"portal"/);
     assert.match(deleteRoute, /linkedDeletionRequestId:/);
+  });
+
+  it("marks linked DSR rows cancelled when a user cancels account deletion", () => {
+    assert.match(deleteRoute, /await updateDsrRequestByDeletionLink\(/);
+    assert.match(deleteRoute, /status:\s*"cancelled"/);
+    assert.match(deleteRoute, /resolvedAt:\s*new Date\(\)\.toISOString\(\)/);
+    assert.match(deleteRoute, /resolutionMethod:\s*"portal"/);
+  });
+
+  it("marks linked DSR rows resolved when the deletion cron finishes", () => {
+    assert.match(deletionCronRoute, /await updateDsrRequestByDeletionLink\(/);
+    assert.match(deletionCronRoute, /status:\s*"resolved"/);
+    assert.match(deletionCronRoute, /resolvedAt:\s*new Date\(\)\.toISOString\(\)/);
+    assert.match(deletionCronRoute, /resolutionMethod:\s*"portal"/);
+  });
+
+  it("updates linked DSR rows through a helper that ignores soft-deleted requests", () => {
+    assert.match(dsrHelper, /export async function updateDsrRequestByDeletionLink/i);
+    assert.match(dsrHelper, /\.eq\("linked_deletion_request_id", input\.linkedDeletionRequestId\)/);
+    assert.match(dsrHelper, /\.is\("deleted_at", null\)/);
   });
 });
 

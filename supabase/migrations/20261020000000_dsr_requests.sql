@@ -100,6 +100,7 @@ CREATE OR REPLACE FUNCTION public.has_dsr_compliance_role()
 RETURNS boolean
 LANGUAGE sql
 STABLE
+SET search_path = ''
 AS $$
   SELECT COALESCE(
     (SELECT auth.jwt() ->> 'app_role') = 'compliance'

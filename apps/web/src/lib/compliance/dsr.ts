@@ -103,6 +103,47 @@ export async function createDsrRequest(input: CreateDsrRequestInput): Promise<vo
   }
 }
 
+export interface UpdateDsrByDeletionLinkInput {
+  linkedDeletionRequestId: string;
+  status: DsrRequestStatus;
+  resolvedAt?: string | null;
+  resolutionMethod?: DsrMethod | null;
+  resolutionNotes?: string | null;
+}
+
+export async function updateDsrRequestByDeletionLink(
+  input: UpdateDsrByDeletionLinkInput,
+): Promise<void> {
+  const supabase = createServiceClient();
+
+  const patch: Record<string, unknown> = { status: input.status };
+  const resolvedAt =
+    input.resolvedAt !== undefined
+      ? input.resolvedAt
+      : input.status === "resolved" || input.status === "cancelled"
+        ? new Date().toISOString()
+        : undefined;
+
+  if (resolvedAt !== undefined) patch.resolved_at = resolvedAt;
+  if (input.resolutionMethod !== undefined) patch.resolution_method = input.resolutionMethod;
+  if (input.resolutionNotes !== undefined) patch.resolution_notes = input.resolutionNotes;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("dsr_requests")
+    .update(patch)
+    .eq("linked_deletion_request_id", input.linkedDeletionRequestId)
+    .is("deleted_at", null);
+
+  if (error) {
+    if (typeof error === "object" && error && "code" in error && error.code === "42P01") {
+      console.warn("[compliance/dsr] dsr_requests table is not available yet");
+      return;
+    }
+    throw error;
+  }
+}
+
 export async function getDsrRequestsDueSoon(
   orgId: string,
   windowDays = 7,

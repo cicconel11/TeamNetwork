@@ -7,7 +7,9 @@ export {
 export {
   createDsrRequest,
   getDsrRequestsDueSoon,
+  updateDsrRequestByDeletionLink,
   type CreateDsrRequestInput,
+  type UpdateDsrByDeletionLinkInput,
   type DsrDueSoonRow,
   type DsrIdentifierType,
   type DsrMethod,
