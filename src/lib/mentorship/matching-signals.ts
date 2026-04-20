@@ -18,6 +18,7 @@ export interface MenteeSignals {
   graduationYear: number | null;
   currentCompany: string | null;
   currentCompanyNorm: string | null;
+  customAttributes: Record<string, string[]>; // always string[], normalized
 }
 
 export interface MentorSignals {
@@ -39,6 +40,7 @@ export interface MentorSignals {
   currentMenteeCount: number;
   acceptingNew: boolean;
   isActive: boolean;
+  customAttributes: Record<string, string[]>; // always string[], normalized
 }
 
 export interface MenteeInput {
@@ -53,6 +55,7 @@ export interface MenteeInput {
   currentCity?: string | null;
   graduationYear?: number | null;
   currentCompany?: string | null;
+  customAttributes?: Record<string, string | string[]> | null;
 }
 
 export interface MentorInput {
@@ -75,6 +78,7 @@ export interface MentorInput {
   currentMenteeCount?: number | null;
   acceptingNew?: boolean | null;
   isActive?: boolean | null;
+  customAttributes?: Record<string, string | string[]> | null;
 }
 
 function uniqueNormalizedList(values: Array<string | null | undefined> | null | undefined): string[] {
@@ -136,6 +140,22 @@ function normalizedAttributeKeyList(values: Array<string | null | undefined> | n
   return out;
 }
 
+function normalizeCustomAttributes(
+  raw: Record<string, string | string[]> | null | undefined
+): Record<string, string[]> {
+  if (!raw) return {};
+  const result: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") {
+      const norm = normalizeCareerText(value);
+      if (norm) result[key] = [norm];
+    } else if (Array.isArray(value)) {
+      result[key] = uniqueNormalizedList(value);
+    }
+  }
+  return result;
+}
+
 export function extractMenteeSignals(input: MenteeInput): MenteeSignals {
   return {
     userId: input.userId,
@@ -151,6 +171,7 @@ export function extractMenteeSignals(input: MenteeInput): MenteeSignals {
     graduationYear: input.graduationYear ?? null,
     currentCompany: input.currentCompany?.trim() || null,
     currentCompanyNorm: normalizeCareerText(input.currentCompany),
+    customAttributes: normalizeCustomAttributes(input.customAttributes),
   };
 }
 
@@ -181,6 +202,7 @@ export function extractMentorSignals(input: MentorInput): MentorSignals {
     currentMenteeCount: input.currentMenteeCount ?? 0,
     acceptingNew: input.acceptingNew ?? true,
     isActive: input.isActive ?? true,
+    customAttributes: normalizeCustomAttributes(input.customAttributes),
   };
 }
 
@@ -191,4 +213,96 @@ export function intersectNormalized(a: string[], b: string[]): string[] {
   for (const v of a) if (set.has(v)) out.push(v);
   return out;
 }
+interface MenteeIntakeRow {
+  user_id: string | null;
+  organization_id: string | null;
+  data: Record<string, unknown> | null;
+}
 
+interface AlumniRow {
+  current_city: string | null;
+  current_company: string | null;
+  graduation_year: number | null;
+}
+
+type LoadMenteeIntakeSupabase = {
+  from: (table: string) => {
+    select: (cols: string) => {
+      eq: (col: string, val: string) => {
+        eq: (col: string, val: string) => {
+          maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+};
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+}
+
+/**
+ * Read the latest mentee_intake submission for a user and compose a MenteeInput
+ * enriched with alumni profile facts (city, company, graduation year).
+ *
+ * Deterministic — latest submission wins via `mentee_latest_intake` view.
+ * If no intake row, returns {userId, orgId} only so callers can still rank.
+ */
+export async function loadMenteeIntakeInput(
+  supabase: LoadMenteeIntakeSupabase,
+  menteeUserId: string,
+  orgId: string
+): Promise<MenteeInput> {
+  const [{ data: intakeData }, { data: alumniData }] = await Promise.all([
+    supabase
+      .from("mentee_latest_intake")
+      .select("user_id, organization_id, data")
+      .eq("user_id", menteeUserId)
+      .eq("organization_id", orgId)
+      .maybeSingle(),
+    supabase
+      .from("alumni")
+      .select("current_city, current_company, graduation_year")
+      .eq("user_id", menteeUserId)
+      .eq("organization_id", orgId)
+      .maybeSingle(),
+  ]);
+
+  const intake = (intakeData as MenteeIntakeRow | null) ?? null;
+  const alumni = (alumniData as AlumniRow | null) ?? null;
+
+  const data = intake?.data ?? {};
+
+  // Extract custom attributes from intake data — any key not in the built-in
+  // field set is treated as a potential custom attribute value
+  const BUILT_IN_INTAKE_KEYS = new Set([
+    "preferred_topics", "preferred_industry", "preferred_role_families",
+    "goals", "time_availability", "communication_prefs", "geographic_pref",
+    "mentor_attributes_required", "mentor_attributes_nice_to_have",
+  ]);
+  const customAttrs: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+    if (BUILT_IN_INTAKE_KEYS.has(k)) continue;
+    if (typeof v === "string" && v.trim()) {
+      customAttrs[k] = v.trim();
+    } else if (Array.isArray(v)) {
+      const arr = v.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+      if (arr.length > 0) customAttrs[k] = arr;
+    }
+  }
+
+  return {
+    userId: menteeUserId,
+    orgId,
+    focusAreas: stringArray((data as Record<string, unknown>).preferred_topics),
+    preferredIndustries: stringArray((data as Record<string, unknown>).preferred_industry),
+    preferredRoleFamilies: stringArray(
+      (data as Record<string, unknown>).preferred_role_families
+    ),
+    currentCity: alumni?.current_city ?? null,
+    graduationYear: alumni?.graduation_year ?? null,
+    currentCompany: alumni?.current_company ?? null,
+    customAttributes: Object.keys(customAttrs).length > 0 ? customAttrs : null,
+  };
+}

@@ -4,10 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import {
-  rankMentorsForMentee,
-} from "@/lib/mentorship/matching";
-import { loadMentorInputs, loadMenteePreferences } from "@/lib/mentorship/queries";
+import { suggestMentors } from "@/lib/mentorship/ai-suggestions";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -50,6 +48,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const service = createServiceClient();
 
+  // Auth: caller must be admin or the mentee themselves (active_member)
   const membershipUserIds =
     user.id === body.mentee_user_id ? [user.id] : [user.id, body.mentee_user_id];
 
@@ -82,47 +81,35 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Suggestions are only available for active members" }, { status: 403 });
   }
 
-  const menteeInput = await loadMenteePreferences(
-    service,
+  const result = await suggestMentors(
+    service as unknown as import("@supabase/supabase-js").SupabaseClient<Database>,
     organizationId,
-    body.mentee_user_id
+    {
+      menteeUserId: body.mentee_user_id,
+      focusAreas: body.focus_areas,
+      limit: body.limit ?? 10,
+    }
   );
-  const merged = body.focus_areas && body.focus_areas.length > 0
-    ? { ...menteeInput, focusAreas: [...(menteeInput.focusAreas ?? []), ...body.focus_areas] }
-    : menteeInput;
 
-  const mentorInputs = await loadMentorInputs(service, organizationId);
+  if (result.state === "not_found") {
+    return NextResponse.json({ error: "Mentee not found" }, { status: 404 });
+  }
 
-  // Exclude mentors already paired with this mentee
-  const { data: existingPairs } = await service
-    .from("mentorship_pairs")
-    .select("mentor_user_id")
-    .eq("organization_id", organizationId)
-    .eq("mentee_user_id", body.mentee_user_id)
-    .in("status", ["proposed", "accepted", "active", "paused"])
-    .is("deleted_at", null);
+  const matches = result.suggestions.map((suggestion) => ({
+    mentorUserId: suggestion.mentor.user_id,
+    score: suggestion.score,
+    signals: suggestion.reasons.map((reason) => ({
+      code: reason.code,
+      label: reason.label,
+      weight: reason.weight,
+      value: reason.value,
+    })),
+    mentor: suggestion.mentor,
+    reasons: suggestion.reasons.map((reason) => ({
+      code: reason.code,
+      label: reason.label,
+    })),
+  }));
 
-  const exclude = new Set((existingPairs ?? []).map((r) => r.mentor_user_id as string));
-
-  const { data: orgRowRaw } = await (service as unknown as {
-    from: (t: string) => {
-      select: (cols: string) => {
-        eq: (c: string, v: string) => {
-          maybeSingle: () => Promise<{ data: { settings?: unknown } | null }>;
-        };
-      };
-    };
-  })
-    .from("organizations")
-    .select("settings")
-    .eq("id", organizationId)
-    .maybeSingle();
-
-  const matches = rankMentorsForMentee(merged, mentorInputs, {
-    orgSettings: orgRowRaw?.settings ?? null,
-    excludeMentorUserIds: exclude,
-  });
-
-  const limit = body.limit ?? 10;
-  return NextResponse.json({ matches: matches.slice(0, limit) });
+  return NextResponse.json({ matches });
 }

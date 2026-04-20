@@ -9,6 +9,7 @@ import { MentorshipActivityTab } from "@/components/mentorship/MentorshipActivit
 import { MentorshipProposalsTab } from "@/components/mentorship/MentorshipProposalsTab";
 import { MenteePreferencesCard } from "@/components/mentorship/MenteePreferencesCard";
 import { MentorProfileCard } from "@/components/mentorship/MentorProfileCard";
+import { MentorshipMyMatches } from "@/components/mentorship/MentorshipMyMatches";
 import { MentorshipPageSkeleton } from "@/components/skeletons/pages/MentorshipPageSkeleton";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -105,12 +106,15 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
   const personalProposals = proposalPairs.filter(
     (p) => p.mentor_user_id === orgCtx.userId || p.mentee_user_id === orgCtx.userId
   );
-  const filteredProposals = personalProposals;
+  const filteredProposals = isAdmin ? proposalPairs : personalProposals;
   const proposalCount = personalProposals.length;
   const adminPendingCount = proposalPairs.filter((p) => p.status === "proposed").length;
   const showProposalsTab = proposalCount > 0 || isAdmin;
+  const showMatchesTab = isMentee;
   const activeTab: MentorshipTab =
-    requestedTab === "proposals" && !showProposalsTab ? "activity" : requestedTab;
+    requestedTab === "proposals" && !showProposalsTab ? "activity"
+    : requestedTab === "matches" && !showMatchesTab ? "activity"
+    : requestedTab;
 
   const visiblePairIds = filteredPairs.map((p) => p.id);
   const initialPairId =
@@ -119,8 +123,9 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
       : visiblePairIds[0] ?? null;
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const [tNav, locale] = await Promise.all([
+  const [tNav, tMentorship, locale] = await Promise.all([
     getTranslations("nav.items"),
+    getTranslations("mentorship"),
     getLocale(),
   ]);
   const t = (key: string) => tNav(key);
@@ -459,9 +464,31 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
     );
   }
 
+  if (activeTab === "matches" && showMatchesTab) {
+    // Check if mentee has submitted intake form
+    const { data: intakeCheck } = await supabase
+      .from("mentee_latest_intake")
+      .select("id")
+      .eq("user_id", currentUserId)
+      .eq("organization_id", orgId)
+      .maybeSingle();
+
+    tabContent = (
+      <MentorshipMyMatches
+        organizationId={orgId}
+        organizationSlug={orgSlug}
+        userId={currentUserId}
+        hasIntakeSubmission={Boolean(intakeCheck?.id)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title={pageLabel} />
+      <PageHeader
+        title={pageLabel}
+        description={tMentorship("editorialStrapline")}
+      />
 
       <Suspense fallback={<MentorshipPageSkeleton />}>
         <MentorshipTabShell
@@ -469,6 +496,7 @@ export default async function MentorshipPage({ params, searchParams }: Mentorshi
           orgSlug={orgSlug}
           content={tabContent}
           showProposalsTab={showProposalsTab}
+          showMatchesTab={showMatchesTab}
           proposalCount={proposalCount}
         />
       </Suspense>
