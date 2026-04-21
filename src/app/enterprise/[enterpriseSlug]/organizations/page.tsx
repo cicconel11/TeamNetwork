@@ -115,12 +115,19 @@ export default async function OrganizationsPage({ params }: OrganizationsPagePro
               </Link>
             )}
             {permissions.canCreateSubOrg && (
-              <Link href={`/enterprise/${enterpriseSlug}/organizations/new`}>
-                <Button>
-                  <PlusIcon className="h-4 w-4" />
-                  Create New
-                </Button>
-              </Link>
+              <>
+                <Link href={`/enterprise/${enterpriseSlug}/organizations/batch`}>
+                  <Button variant="secondary">
+                    Create Multiple
+                  </Button>
+                </Link>
+                <Link href={`/enterprise/${enterpriseSlug}/organizations/new`}>
+                  <Button>
+                    <PlusIcon className="h-4 w-4" />
+                    Create New
+                  </Button>
+                </Link>
+              </>
             )}
           </div>
         }

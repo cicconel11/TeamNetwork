@@ -223,6 +223,21 @@ export function CreateSubOrgForm({
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
+                Purpose
+              </label>
+              <textarea
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={2}
+                placeholder="Why does this organization exist? (visible to members)"
+                maxLength={500}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Optional — helps members understand the organization&apos;s mission
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
                 {tEnterprise("createSubOrg.brandColor")}
               </label>
               <div className="flex items-center gap-4">

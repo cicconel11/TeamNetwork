@@ -1,0 +1,152 @@
+"use client";
+
+import { Button } from "@/components/ui";
+import type { OrgFormData, MemberAssignment, EnterpriseMember } from "./BatchOrgWizard";
+
+interface BatchOrgReviewStepProps {
+  organizations: OrgFormData[];
+  memberAssignments: MemberAssignment[];
+  members: EnterpriseMember[];
+  quota: {
+    currentCount: number;
+    maxAllowed: number | null;
+  };
+  isSubmitting: boolean;
+  onSubmit: () => void;
+}
+
+export function BatchOrgReviewStep({
+  organizations,
+  memberAssignments,
+  members,
+  quota,
+  isSubmitting,
+  onSubmit,
+}: BatchOrgReviewStepProps) {
+  const memberLookup = new Map(members.map((m) => [m.userId, m]));
+
+  const getAssignment = (orgIndex: number) =>
+    memberAssignments.find((a) => a.orgIndex === orgIndex);
+
+  const totalMembers = memberAssignments.reduce(
+    (sum, a) => sum + (a.existingMembers?.length ?? 0),
+    0
+  );
+  const totalInvites = memberAssignments.reduce(
+    (sum, a) => sum + (a.emailInvites?.length ?? 0),
+    0
+  );
+  const totalMoves = memberAssignments.reduce(
+    (sum, a) => sum + (a.existingMembers?.filter((m) => m.action === "move").length ?? 0),
+    0
+  );
+
+  const afterCount = quota.currentCount + organizations.length;
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-1">
+        <h3 className="text-sm font-medium text-gray-900 dark:text-white">Summary</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <div>
+            <p className="text-gray-500 dark:text-gray-400">Organizations</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white">{organizations.length}</p>
+          </div>
+          <div>
+            <p className="text-gray-500 dark:text-gray-400">Members assigned</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white">{totalMembers}</p>
+          </div>
+          <div>
+            <p className="text-gray-500 dark:text-gray-400">Email invites</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white">{totalInvites}</p>
+          </div>
+          <div>
+            <p className="text-gray-500 dark:text-gray-400">After creation</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white">
+              {afterCount}{quota.maxAllowed != null ? ` / ${quota.maxAllowed}` : ""} orgs
+            </p>
+          </div>
+        </div>
+        {totalMoves > 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+            {totalMoves} member(s) will be moved (removed from their current organization)
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        {organizations.map((org, index) => {
+          const assignment = getAssignment(index);
+          const assignedCount = assignment?.existingMembers?.length ?? 0;
+          const inviteCount = assignment?.emailInvites?.length ?? 0;
+
+          return (
+            <div
+              key={index}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-2"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="h-4 w-4 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: org.primaryColor }}
+                />
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                    {org.name}
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    /{org.slug}
+                    {org.purpose && ` · ${org.purpose}`}
+                  </p>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 text-right">
+                  {assignedCount > 0 && <span>{assignedCount} members</span>}
+                  {assignedCount > 0 && inviteCount > 0 && <span> + </span>}
+                  {inviteCount > 0 && <span>{inviteCount} invites</span>}
+                  {assignedCount === 0 && inviteCount === 0 && <span>No members</span>}
+                </div>
+              </div>
+
+              {/* Show assigned member names */}
+              {assignment?.existingMembers && assignment.existingMembers.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {assignment.existingMembers.slice(0, 5).map((m) => {
+                    const member = memberLookup.get(m.userId);
+                    return (
+                      <span
+                        key={m.userId}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
+                          m.action === "move"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                            : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                        }`}
+                      >
+                        {member?.fullName || member?.email || m.userId.slice(0, 8)}
+                        <span className="ml-1 opacity-60">{m.action}</span>
+                      </span>
+                    );
+                  })}
+                  {assignment.existingMembers.length > 5 && (
+                    <span className="text-xs text-gray-400">
+                      +{assignment.existingMembers.length - 5} more
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-center pt-2">
+        <Button
+          onClick={onSubmit}
+          disabled={isSubmitting}
+          className="px-8"
+        >
+          {isSubmitting ? "Creating Organizations..." : `Create ${organizations.length} Organization${organizations.length > 1 ? "s" : ""}`}
+        </Button>
+      </div>
+    </div>
+  );
+}
