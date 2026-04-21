@@ -61,19 +61,19 @@ export function buildRarityStats(mentors: readonly MentorSignals[]): RarityStats
   const customAttr = new Map<string, Map<string, number>>();
 
   for (const m of mentors) {
-    for (const value of m.industries) {
+    for (const value of m.industries ?? []) {
       industry.set(value, (industry.get(value) ?? 0) + 1);
     }
-    for (const value of m.roleFamilies) {
+    for (const value of m.roleFamilies ?? []) {
       roleFamily.set(value, (roleFamily.get(value) ?? 0) + 1);
     }
     if (m.currentCompanyNorm) {
       company.set(m.currentCompanyNorm, (company.get(m.currentCompanyNorm) ?? 0) + 1);
     }
-    for (const t of m.topics) topic.set(t, (topic.get(t) ?? 0) + 1);
-    for (const s of m.sports) sport.set(s, (sport.get(s) ?? 0) + 1);
-    for (const p of m.positions) position.set(p, (position.get(p) ?? 0) + 1);
-    for (const [key, values] of Object.entries(m.customAttributes)) {
+    for (const t of m.topics ?? []) topic.set(t, (topic.get(t) ?? 0) + 1);
+    for (const s of m.sports ?? []) sport.set(s, (sport.get(s) ?? 0) + 1);
+    for (const p of m.positions ?? []) position.set(p, (position.get(p) ?? 0) + 1);
+    for (const [key, values] of Object.entries(m.customAttributes ?? {})) {
       let keyMap = customAttr.get(key);
       if (!keyMap) {
         keyMap = new Map();

@@ -206,11 +206,16 @@ export function extractMentorSignals(input: MentorInput): MentorSignals {
   };
 }
 
-export function intersectNormalized(a: string[], b: string[]): string[] {
-  if (a.length === 0 || b.length === 0) return [];
-  const set = new Set(b);
+export function intersectNormalized(
+  a: string[] | null | undefined,
+  b: string[] | null | undefined
+): string[] {
+  const aa = a ?? [];
+  const bb = b ?? [];
+  if (aa.length === 0 || bb.length === 0) return [];
+  const set = new Set(bb);
   const out: string[] = [];
-  for (const v of a) if (set.has(v)) out.push(v);
+  for (const v of aa) if (set.has(v)) out.push(v);
   return out;
 }
 interface MenteeIntakeRow {

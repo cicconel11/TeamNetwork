@@ -1,7 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui";
-import type { OrgFormData, MemberAssignment, EnterpriseMember } from "./BatchOrgWizard";
+import { shouldRedirectAfterBatchCreate } from "@/lib/enterprise/batch-org-wizard";
+import type {
+  OrgFormData,
+  MemberAssignment,
+  EnterpriseMember,
+  BatchOrgSubmissionResult,
+} from "./BatchOrgWizard";
 
 interface BatchOrgReviewStepProps {
   organizations: OrgFormData[];
@@ -12,6 +18,8 @@ interface BatchOrgReviewStepProps {
     maxAllowed: number | null;
   };
   isSubmitting: boolean;
+  submitDisabledReason?: string | null;
+  submissionResult?: BatchOrgSubmissionResult | null;
   onSubmit: () => void;
 }
 
@@ -21,6 +29,8 @@ export function BatchOrgReviewStep({
   members,
   quota,
   isSubmitting,
+  submitDisabledReason,
+  submissionResult,
   onSubmit,
 }: BatchOrgReviewStepProps) {
   const memberLookup = new Map(members.map((m) => [m.userId, m]));
@@ -42,6 +52,16 @@ export function BatchOrgReviewStep({
   );
 
   const afterCount = quota.currentCount + organizations.length;
+  const shouldShowSubmissionResult = Boolean(
+    submissionResult && !shouldRedirectAfterBatchCreate(submissionResult.summary)
+  );
+  const failedOrganizations = submissionResult?.organizations.filter(
+    (organization) => organization.out_status !== "created"
+  ) ?? [];
+  const failedMembers = submissionResult?.memberResults.filter((result) => !result.ok) ?? [];
+  const failedInvites = submissionResult?.inviteResults.filter(
+    (result) => result.status === "failed"
+  ) ?? [];
 
   return (
     <div className="space-y-6">
@@ -73,6 +93,76 @@ export function BatchOrgReviewStep({
           </p>
         )}
       </div>
+
+      {shouldShowSubmissionResult && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 p-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-medium text-amber-900 dark:text-amber-100">
+              Batch Results
+            </h3>
+            <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+              {submissionResult?.summary?.orgsCreated ?? 0} organization(s) created,
+              {" "}{submissionResult?.summary?.orgsFailed ?? 0} failed,
+              {" "}{submissionResult?.summary?.membersFailed ?? 0} member assignment(s) failed,
+              {" "}{submissionResult?.summary?.invitesFailed ?? 0} invite(s) failed.
+            </p>
+          </div>
+
+          {failedOrganizations.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
+                Failed organizations
+              </p>
+              <div className="space-y-1">
+                {failedOrganizations.slice(0, 10).map((organization) => (
+                  <p
+                    key={`${organization.out_slug}:${organization.out_status}`}
+                    className="text-xs text-amber-800 dark:text-amber-200"
+                  >
+                    /{organization.out_slug}: {organization.out_status}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {failedMembers.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
+                Failed member assignments
+              </p>
+              <div className="space-y-1">
+                {failedMembers.slice(0, 10).map((result) => (
+                  <p
+                    key={`${result.orgSlug}:${result.userId}:${result.action}`}
+                    className="text-xs text-amber-800 dark:text-amber-200"
+                  >
+                    /{result.orgSlug}: {result.userId} ({result.action}){result.error ? ` — ${result.error}` : ""}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {failedInvites.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
+                Failed invites
+              </p>
+              <div className="space-y-1">
+                {failedInvites.slice(0, 10).map((result) => (
+                  <p
+                    key={`${result.orgSlug}:${result.email}:${result.role}`}
+                    className="text-xs text-amber-800 dark:text-amber-200"
+                  >
+                    /{result.orgSlug}: {result.email} ({result.role}){result.error ? ` — ${result.error}` : ""}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-3">
         {organizations.map((org, index) => {
@@ -141,12 +231,17 @@ export function BatchOrgReviewStep({
       <div className="flex justify-center pt-2">
         <Button
           onClick={onSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || Boolean(submitDisabledReason)}
           className="px-8"
         >
           {isSubmitting ? "Creating Organizations..." : `Create ${organizations.length} Organization${organizations.length > 1 ? "s" : ""}`}
         </Button>
       </div>
+      {submitDisabledReason && (
+        <p className="text-center text-xs text-red-600 dark:text-red-400">
+          {submitDisabledReason}
+        </p>
+      )}
     </div>
   );
 }

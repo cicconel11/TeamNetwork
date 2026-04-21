@@ -41,7 +41,8 @@ export function BatchOrgMemberPicker({
     if (selectedMap.has(member.userId)) {
       onChange(selectedMembers.filter((m) => m.userId !== member.userId));
     } else {
-      const sourceOrg = member.organizations[0];
+      const sourceOrg =
+        member.organizations.length === 1 ? member.organizations[0] : null;
       onChange([
         ...selectedMembers,
         {
@@ -60,6 +61,18 @@ export function BatchOrgMemberPicker({
       )
     );
   };
+
+  const updateSourceOrg = (userId: string, sourceOrgId: string) => {
+    onChange(
+      selectedMembers.map((m) =>
+        m.userId === userId ? { ...m, sourceOrgId } : m
+      )
+    );
+  };
+
+  const unresolvedSelections = selectedMembers.filter(
+    (selectedMember) => !selectedMember.sourceOrgId.trim()
+  ).length;
 
   return (
     <div className="space-y-2">
@@ -80,6 +93,10 @@ export function BatchOrgMemberPicker({
           filteredMembers.map((member) => {
             const selected = selectedMap.get(member.userId);
             const isSelected = !!selected;
+            const missingSourceSelection =
+              isSelected &&
+              member.organizations.length > 1 &&
+              !selected!.sourceOrgId.trim();
 
             return (
               <div
@@ -108,29 +125,49 @@ export function BatchOrgMemberPicker({
                 </div>
 
                 {isSelected && (
-                  <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => updateAction(member.userId, "copy")}
-                      className={`px-2 py-1 text-xs rounded ${
-                        selected!.action === "copy"
-                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                          : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                      }`}
-                    >
-                      Copy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateAction(member.userId, "move")}
-                      className={`px-2 py-1 text-xs rounded ${
-                        selected!.action === "move"
-                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                          : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                      }`}
-                    >
-                      Move
-                    </button>
+                  <div className="flex items-center gap-2">
+                    {member.organizations.length > 1 && (
+                      <select
+                        value={selected!.sourceOrgId}
+                        onChange={(e) => updateSourceOrg(member.userId, e.target.value)}
+                        className={`text-xs rounded bg-white dark:bg-gray-800 px-1 py-1 text-gray-700 dark:text-gray-300 ${
+                          missingSourceSelection
+                            ? "border border-red-400 dark:border-red-500"
+                            : "border border-gray-300 dark:border-gray-600"
+                        }`}
+                      >
+                        <option value="">Select source org</option>
+                        {member.organizations.map((org) => (
+                          <option key={org.orgId} value={org.orgId}>
+                            {org.orgName}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => updateAction(member.userId, "copy")}
+                        className={`px-2 py-1 text-xs rounded ${
+                          selected!.action === "copy"
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                            : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                        }`}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateAction(member.userId, "move")}
+                        className={`px-2 py-1 text-xs rounded ${
+                          selected!.action === "move"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                            : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                        }`}
+                      >
+                        Move
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -140,11 +177,18 @@ export function BatchOrgMemberPicker({
       </div>
 
       {selectedMembers.length > 0 && (
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          {selectedMembers.length} selected
-          {" "}({selectedMembers.filter((m) => m.action === "move").length} move,
-          {" "}{selectedMembers.filter((m) => m.action === "copy").length} copy)
-        </p>
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {selectedMembers.length} selected
+            {" "}({selectedMembers.filter((m) => m.action === "move").length} move,
+            {" "}{selectedMembers.filter((m) => m.action === "copy").length} copy)
+          </p>
+          {unresolvedSelections > 0 && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              Select a source organization for {unresolvedSelections} member{unresolvedSelections === 1 ? "" : "s"} before continuing.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

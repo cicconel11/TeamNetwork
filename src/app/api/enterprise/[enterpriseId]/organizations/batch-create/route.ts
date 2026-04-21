@@ -13,7 +13,17 @@ import {
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { canEnterpriseAddSubOrgs } from "@/lib/enterprise/quota";
 import { batchCreateOrgsSchema } from "@/lib/schemas/enterprise";
-import { transferMemberRole } from "@/lib/enterprise/transfer-member";
+import {
+  transferMemberRole,
+  validateTransferRequests,
+} from "@/lib/enterprise/transfer-member";
+import { findBatchAssignmentIssues } from "@/lib/enterprise/batch-org-assignments";
+import { sendBatchOrgInvites } from "@/lib/enterprise/batch-org-invites";
+import {
+  extractEnterpriseOrgLimitInfo,
+  isEnterpriseOrgLimitRpcError,
+} from "@/lib/enterprise/org-limit-errors";
+import { sendEmail } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,6 +66,57 @@ export async function POST(req: Request, { params }: RouteParams) {
       maxBodyBytes: 65_536,
     });
     const { organizations, memberAssignments } = body;
+    const assignmentIssues = findBatchAssignmentIssues(
+      organizations.length,
+      memberAssignments ?? []
+    );
+
+    if (assignmentIssues.length > 0) {
+      return respond(
+        {
+          error: assignmentIssues[0],
+          details: assignmentIssues,
+        },
+        400
+      );
+    }
+
+    // Check if any moves are requested — require owner role (before creating any orgs)
+    if (memberAssignments && memberAssignments.length > 0) {
+      const hasMoves = memberAssignments.some(
+        (a) => a.existingMembers?.some((m) => m.action === "move")
+      );
+
+      if (hasMoves && ctx.role !== "owner") {
+        return respond(
+          { error: "Moving members between organizations requires enterprise owner role" },
+          403
+        );
+      }
+    }
+
+    const existingTransfers =
+      memberAssignments?.flatMap((assignment) => assignment.existingMembers ?? []) ?? [];
+
+    if (existingTransfers.length > 0) {
+      const transferValidation = await validateTransferRequests({
+        serviceSupabase: ctx.serviceSupabase,
+        enterpriseId: ctx.enterpriseId,
+        actorUserId: ctx.userId,
+        actorRole: ctx.role,
+        transfers: existingTransfers,
+      });
+
+      if (!transferValidation.ok) {
+        return respond(
+          {
+            error: transferValidation.error,
+            details: transferValidation.details,
+          },
+          transferValidation.status
+        );
+      }
+    }
 
     // Hard cap quota check for entire batch
     const quotaCheck = await canEnterpriseAddSubOrgs(
@@ -110,9 +171,27 @@ export async function POST(req: Request, { params }: RouteParams) {
           409
         );
       }
-      if (rpcError.code === "P0001" && rpcError.message?.includes("org limit")) {
+      if (isEnterpriseOrgLimitRpcError(rpcError)) {
+        const latestQuota = await canEnterpriseAddSubOrgs(
+          ctx.enterpriseId,
+          organizations.length
+        );
+        const fallbackQuota = extractEnterpriseOrgLimitInfo(rpcError.message);
+
         return respond(
-          { error: "Organization limit exceeded", needsUpgrade: true },
+          {
+            error: "Organization limit exceeded",
+            needsUpgrade: true,
+            currentCount: latestQuota.error
+              ? fallbackQuota?.currentCount ?? null
+              : latestQuota.currentCount,
+            maxAllowed: latestQuota.error
+              ? fallbackQuota?.maxAllowed ?? null
+              : latestQuota.maxAllowed,
+            remaining: latestQuota.error
+              ? fallbackQuota?.remaining ?? null
+              : latestQuota.remaining,
+          },
           402
         );
       }
@@ -138,18 +217,6 @@ export async function POST(req: Request, { params }: RouteParams) {
     }> = [];
 
     if (memberAssignments && memberAssignments.length > 0) {
-      // Check if any moves are requested — require owner role
-      const hasMoves = memberAssignments.some(
-        (a) => a.existingMembers?.some((m) => m.action === "move")
-      );
-
-      if (hasMoves && ctx.role !== "owner") {
-        return respond(
-          { error: "Moving members between organizations requires enterprise owner role" },
-          403
-        );
-      }
-
       // Process in batches of 10
       for (const assignment of memberAssignments) {
         if (assignment.orgIndex >= organizations.length) continue;
@@ -169,6 +236,7 @@ export async function POST(req: Request, { params }: RouteParams) {
               batch.map((m) =>
                 transferMemberRole({
                   serviceSupabase: ctx.serviceSupabase,
+                  enterpriseId: ctx.enterpriseId,
                   userId: m.userId,
                   sourceOrgId: m.sourceOrgId,
                   targetOrgId,
@@ -204,46 +272,47 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     // Process email invites — generate invite codes (V1: no email sending)
-    const inviteResults: Array<{
-      orgSlug: string;
-      email: string;
-      code: string | null;
-      ok: boolean;
-      error?: string;
-    }> = [];
+    const inviteResults = await sendBatchOrgInvites({
+      baseUrl: new URL(req.url).origin,
+      emailDeliveryEnabled: Boolean(process.env.RESEND_API_KEY),
+      targets:
+        memberAssignments?.flatMap((assignment) => {
+          if (assignment.orgIndex >= organizations.length) return [];
+          if (!assignment.emailInvites || assignment.emailInvites.length === 0) return [];
 
-    if (memberAssignments) {
-      for (const assignment of memberAssignments) {
-        if (assignment.orgIndex >= organizations.length) continue;
-        if (!assignment.emailInvites || assignment.emailInvites.length === 0) continue;
+          const organization = organizations[assignment.orgIndex];
+          const targetOrgId = slugToOrgId.get(organization.slug);
+          if (!targetOrgId) return [];
 
-        const orgSlug = organizations[assignment.orgIndex].slug;
-        const targetOrgId = slugToOrgId.get(orgSlug);
-        if (!targetOrgId) continue;
-
-        for (const invite of assignment.emailInvites) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: inviteData, error: inviteError } = await (ctx.serviceSupabase as any).rpc(
-            "create_enterprise_invite",
+          return [
             {
-              p_enterprise_id: ctx.enterpriseId,
-              p_organization_id: targetOrgId,
-              p_role: invite.role,
-              p_uses: 1,
-              p_expires_at: null,
-            }
-          ) as { data: { code: string } | null; error: { message?: string } | null };
+              orgId: targetOrgId,
+              orgSlug: organization.slug,
+              orgName: organization.name,
+              recipients: assignment.emailInvites,
+            },
+          ];
+        }) ?? [],
+      createInvite: async ({ orgId, role, uses }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase as any).rpc("create_org_invite", {
+          p_organization_id: orgId,
+          p_role: role,
+          p_uses: uses,
+          p_expires_at: null,
+          p_require_approval: null,
+        }) as {
+          data: { code: string; token?: string | null } | null;
+          error: { message?: string } | null;
+        };
 
-          inviteResults.push({
-            orgSlug,
-            email: invite.email,
-            code: inviteData?.code ?? null,
-            ok: !inviteError,
-            error: inviteError?.message,
-          });
-        }
-      }
-    }
+        return {
+          invite: data,
+          error: error?.message,
+        };
+      },
+      sendEmailFn: sendEmail,
+    });
 
     // Audit log per org created
     const requestContext = extractRequestContext(req);
@@ -270,8 +339,10 @@ export async function POST(req: Request, { params }: RouteParams) {
           orgsFailed: failedOrgs.length,
           membersProcessed: memberResults.length,
           membersFailed: memberResults.filter((r) => !r.ok).length,
-          invitesCreated: inviteResults.filter((r) => r.ok).length,
-          invitesFailed: inviteResults.filter((r) => !r.ok).length,
+          invitesCreated: inviteResults.filter((r) => r.status === "sent").length,
+          invitesSent: inviteResults.filter((r) => r.status === "sent").length,
+          invitesFailed: inviteResults.filter((r) => r.status === "failed").length,
+          invitesSkipped: inviteResults.filter((r) => r.status === "skipped").length,
         },
       },
       201

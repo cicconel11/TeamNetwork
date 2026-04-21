@@ -6,6 +6,13 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui";
+import { findBatchAssignmentIssues } from "@/lib/enterprise/batch-org-assignments";
+import {
+  fetchAllEnterpriseMembers,
+  shouldRedirectAfterBatchCreate,
+  type BatchOrgSubmissionResult as WizardSubmissionResult,
+  type EnterpriseMemberRecord,
+} from "@/lib/enterprise/batch-org-wizard";
 import { BatchOrgDefineStep } from "./BatchOrgDefineStep";
 import { BatchOrgAssignStep } from "./BatchOrgAssignStep";
 import { BatchOrgReviewStep } from "./BatchOrgReviewStep";
@@ -38,17 +45,8 @@ export interface MemberAssignment {
   }>;
 }
 
-export interface EnterpriseMember {
-  userId: string;
-  email: string;
-  fullName: string;
-  organizations: Array<{
-    orgId: string;
-    orgName: string;
-    orgSlug: string;
-    role: string;
-  }>;
-}
+export type EnterpriseMember = EnterpriseMemberRecord;
+export type BatchOrgSubmissionResult = WizardSubmissionResult;
 
 interface QuotaInfo {
   currentCount: number;
@@ -81,6 +79,7 @@ export function BatchOrgWizard({
   const [memberAssignments, setMemberAssignments] = useState<MemberAssignment[]>([]);
   const [members, setMembers] = useState<EnterpriseMember[]>([]);
   const [membersLoaded, setMembersLoaded] = useState(false);
+  const [submissionResult, setSubmissionResult] = useState<BatchOrgSubmissionResult | null>(null);
 
   const methods = useForm<BatchFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,16 +111,38 @@ export function BatchOrgWizard({
   const loadMembers = useCallback(async () => {
     if (membersLoaded) return;
     try {
-      const res = await fetch(`/api/enterprise/${enterpriseId}/members?limit=100`);
-      const data = await res.json();
-      if (data.members) {
-        setMembers(data.members);
-        setMembersLoaded(true);
-      }
+      const allMembers = await fetchAllEnterpriseMembers(async (after) => {
+        const params = new URLSearchParams({ limit: "100" });
+        if (after) {
+          params.set("after", after);
+        }
+
+        const res = await fetch(`/api/enterprise/${enterpriseId}/members?${params.toString()}`);
+        if (!res.ok) {
+          throw new Error("Failed to load enterprise members");
+        }
+
+        const data = await res.json();
+        return {
+          members: Array.isArray(data.members) ? data.members : [],
+          nextCursor: typeof data.nextCursor === "string" ? data.nextCursor : null,
+        };
+      });
+
+      setMembers(allMembers);
+      setMembersLoaded(true);
     } catch {
       // Members load is best-effort
     }
   }, [enterpriseId, membersLoaded]);
+
+  const getAssignmentIssue = useCallback(() => {
+    const issues = findBatchAssignmentIssues(
+      methods.getValues("organizations").length,
+      memberAssignments
+    );
+    return issues[0] ?? null;
+  }, [memberAssignments, methods]);
 
   const handleNext = async () => {
     setError(null);
@@ -145,23 +166,42 @@ export function BatchOrgWizard({
       loadMembers();
       setStep(2);
     } else if (step === 2) {
+      const assignmentIssue = getAssignmentIssue();
+      if (assignmentIssue) {
+        setError(assignmentIssue);
+        return;
+      }
       setStep(3);
     }
   };
 
   const handleBack = () => {
     setError(null);
+    if (step === 3) {
+      setSubmissionResult(null);
+    }
     if (step === 2) setStep(1);
     else if (step === 3) setStep(2);
   };
 
   const handleSkipToReview = () => {
     setError(null);
+    const assignmentIssue = getAssignmentIssue();
+    if (assignmentIssue) {
+      setError(assignmentIssue);
+      return;
+    }
     setStep(3);
   };
 
   const handleSubmit = async () => {
     setError(null);
+    setSubmissionResult(null);
+    const assignmentIssue = getAssignmentIssue();
+    if (assignmentIssue) {
+      setError(assignmentIssue);
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -196,7 +236,20 @@ export function BatchOrgWizard({
         return;
       }
 
-      router.push(`/enterprise/${enterpriseSlug}/organizations?created=${data.summary?.orgsCreated ?? 0}`);
+      const result: BatchOrgSubmissionResult = {
+        organizations: Array.isArray(data.organizations) ? data.organizations : [],
+        memberResults: Array.isArray(data.memberResults) ? data.memberResults : [],
+        inviteResults: Array.isArray(data.inviteResults) ? data.inviteResults : [],
+        summary: data.summary,
+      };
+
+      if (shouldRedirectAfterBatchCreate(result.summary)) {
+        router.push(`/enterprise/${enterpriseSlug}/organizations?created=${result.summary?.orgsCreated ?? 0}`);
+        return;
+      }
+
+      setSubmissionResult(result);
+      setError("Organizations were created, but some assignments or invites failed. Review the results below.");
     } catch {
       setError("An unexpected error occurred");
     } finally {
@@ -205,6 +258,7 @@ export function BatchOrgWizard({
   };
 
   const organizations = methods.watch("organizations");
+  const assignmentIssue = getAssignmentIssue();
 
   return (
     <FormProvider {...methods}>
@@ -261,6 +315,8 @@ export function BatchOrgWizard({
             members={members}
             quota={quota}
             isSubmitting={isSubmitting}
+            submitDisabledReason={assignmentIssue}
+            submissionResult={submissionResult}
             onSubmit={handleSubmit}
           />
         </div>
@@ -286,7 +342,7 @@ export function BatchOrgWizard({
               </Button>
             )}
             {step === 3 && (
-              <Button onClick={handleSubmit} disabled={isSubmitting}>
+              <Button onClick={handleSubmit} disabled={isSubmitting || Boolean(assignmentIssue)}>
                 {isSubmitting ? "Creating..." : "Create All Organizations"}
               </Button>
             )}

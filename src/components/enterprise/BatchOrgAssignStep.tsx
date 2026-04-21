@@ -40,10 +40,18 @@ export function BatchOrgAssignStep({
 
   const handleEmailsChange = (orgIndex: number, text: string) => {
     setEmailInputs((prev) => ({ ...prev, [orgIndex]: text }));
+    const seen = new Set<string>();
     const emails = text
       .split(/[\n,;]+/)
       .map((e) => e.trim().toLowerCase())
-      .filter((e) => e.includes("@"));
+      .filter((email) => {
+        if (!email.includes("@") || seen.has(email)) {
+          return false;
+        }
+
+        seen.add(email);
+        return true;
+      });
 
     updateAssignment(orgIndex, {
       emailInvites: emails.map((email) => ({ email, role: "active_member" as const })),
@@ -61,7 +69,7 @@ export function BatchOrgAssignStep({
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        Optionally assign existing members or invite new ones. You can skip this step and add members later.
+        Optionally assign existing members or send email invites. You can skip this step and add members later.
       </p>
 
       {/* Org tabs */}
@@ -120,7 +128,7 @@ export function BatchOrgAssignStep({
               />
               {getAssignment(orgIndex).emailInvites.length > 0 && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {getAssignment(orgIndex).emailInvites.length} email(s) will receive invite codes
+                  {getAssignment(orgIndex).emailInvites.length} email(s) will receive invite links
                 </p>
               )}
             </div>
