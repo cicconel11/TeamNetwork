@@ -124,13 +124,13 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Get unique user IDs (limited)
   const userIds = Array.from(userRolesMap.keys()).slice(0, limit);
 
-  // Fetch user details
+  // Fetch user details from users table
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: users, error: usersError } = await (ctx.serviceSupabase as any)
-    .from("profiles")
-    .select("id, email, full_name")
+    .from("users")
+    .select("id, email, name")
     .in("id", userIds) as {
-      data: Array<{ id: string; email: string | null; full_name: string | null }> | null;
+      data: Array<{ id: string; email: string | null; name: string | null }> | null;
       error: unknown;
     };
 
@@ -148,7 +148,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     return {
       userId,
       email: userInfo?.email ?? "",
-      fullName: userInfo?.full_name ?? "",
+      fullName: userInfo?.name ?? "",
       organizations: userRoles
         .filter((r) => orgLookup.has(r.organization_id))
         .map((r) => {
