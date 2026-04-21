@@ -21,6 +21,7 @@ const createSubOrgSchema = z.object({
     .trim()
     .toLowerCase()
     .regex(/^[a-z0-9-]{3,64}$/, "Use 3-64 lowercase letters, numbers, or hyphens"),
+  purpose: z.string().trim().max(500, "Purpose must be 500 characters or fewer").optional().or(z.literal("")),
   primaryColor: hexColorSchema,
   billingType: z.literal("enterprise_managed"),
 });
@@ -96,6 +97,7 @@ export function CreateSubOrgForm({
         body: JSON.stringify({
           name: data.name,
           slug: data.slug,
+          purpose: data.purpose || undefined,
           primary_color: data.primaryColor,
           billingType: data.billingType,
         }),
@@ -144,7 +146,9 @@ export function CreateSubOrgForm({
         body: JSON.stringify({
           name: pendingFormData.name,
           slug: pendingFormData.slug,
+          purpose: pendingFormData.purpose || undefined,
           primary_color: pendingFormData.primaryColor,
+          expectedCurrentQuantity: upgradeInfo?.maxAllowed,
           billingType: pendingFormData.billingType,
         }),
       });
@@ -166,9 +170,6 @@ export function CreateSubOrgForm({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong during upgrade");
-      setShowUpgradeModal(false);
-      setPendingFormData(null);
-      setUpgradeInfo(null);
     } finally {
       setIsUpgrading(false);
     }
@@ -230,6 +231,7 @@ export function CreateSubOrgForm({
                 rows={2}
                 placeholder="Why does this organization exist? (visible to members)"
                 maxLength={500}
+                {...register("purpose")}
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Optional — helps members understand the organization&apos;s mission

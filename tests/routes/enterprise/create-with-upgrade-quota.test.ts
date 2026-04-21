@@ -1,111 +1,132 @@
 import test from "node:test";
-import assert from "node:assert";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { resolveCurrentQuantity } from "@/lib/enterprise/quota-logic";
 
-/**
- * Tests for create-with-upgrade route quota handling:
- * - Pre-creation seatQuota.error → 503
- * - Post-creation updatedQuota.error → 201 with subscription: null fallback
- *
- * Simulates the logic in create-with-upgrade/route.ts
- */
-
-interface SeatQuotaInfo {
-  currentCount: number;
-  maxAllowed: number | null;
-  error?: string;
-}
-
-interface CreateWithUpgradeResult {
+interface AdjustmentOutcome {
+  ok: boolean;
   status: number;
   body: Record<string, unknown>;
 }
 
-/**
- * Simulates the pre-creation and post-creation quota checks
- * in create-with-upgrade/route.ts.
- */
-function simulateCreateWithUpgrade(
-  preCreationQuota: SeatQuotaInfo,
-  postCreationQuota: SeatQuotaInfo | null
-): CreateWithUpgradeResult {
-  // Pre-creation check: only error means infra failure (503)
-  if (preCreationQuota.error) {
+interface CreateOutcome {
+  ok: boolean;
+  status: number;
+  body: Record<string, unknown>;
+}
+
+function simulateCreateWithUpgrade(params: {
+  rawQuantity: number | null;
+  currentManagedOrgCount: number;
+  freeBaseline: number;
+  expectedCurrentQuantity?: number;
+  adjustment: AdjustmentOutcome;
+  creation: CreateOutcome;
+}) {
+  const currentQuantity = resolveCurrentQuantity(
+    params.rawQuantity,
+    params.currentManagedOrgCount,
+    params.freeBaseline
+  );
+
+  const adjustmentRequest = {
+    newQuantity: currentQuantity + 1,
+    expectedCurrentQuantity: params.expectedCurrentQuantity,
+  };
+
+  if (!params.adjustment.ok) {
     return {
-      status: 503,
-      body: { error: "Unable to verify seat limit. Please try again." },
+      status: params.adjustment.status,
+      body: params.adjustment.body,
+      adjustmentRequest,
+      createCalled: false,
     };
   }
 
-  // ... org creation happens here (always succeeds in this simulation) ...
-
-  // Post-creation quota fetch for response (lines 193-201 in route)
-  if (!postCreationQuota || postCreationQuota.error) {
+  if (!params.creation.ok) {
     return {
-      status: 201,
-      body: {
-        organization: { id: "new-org" },
-        subscription: null,
-      },
+      status: params.creation.status,
+      body: params.creation.body,
+      adjustmentRequest,
+      createCalled: true,
     };
   }
 
   return {
     status: 201,
-    body: {
-      organization: { id: "new-org" },
-      subscription: {
-        currentCount: postCreationQuota.currentCount,
-        maxAllowed: postCreationQuota.maxAllowed,
-        availableSeats: postCreationQuota.maxAllowed !== null
-          ? postCreationQuota.maxAllowed - postCreationQuota.currentCount
-          : null,
-        freeOrgs: 3,
-        billableOrgs: Math.max(0, postCreationQuota.currentCount - 3),
-        totalCents: Math.max(0, postCreationQuota.currentCount - 3) * 15000,
-      },
-    },
+    body: params.creation.body,
+    adjustmentRequest,
+    createCalled: true,
   };
 }
 
-test("returns 503 when pre-creation quota check has infra error", () => {
-  const result = simulateCreateWithUpgrade(
-    { currentCount: 0, maxAllowed: null, error: "internal_error" },
-    null
-  );
-  assert.strictEqual(result.status, 503);
-  assert.ok((result.body.error as string).includes("Unable to verify"));
+test("create-with-upgrade increments quantity before creating the org", () => {
+  const result = simulateCreateWithUpgrade({
+    rawQuantity: 4,
+    currentManagedOrgCount: 4,
+    freeBaseline: 3,
+    expectedCurrentQuantity: 4,
+    adjustment: {
+      ok: true,
+      status: 200,
+      body: {
+        success: true,
+        subscription: { quantity: 5 },
+      },
+    },
+    creation: {
+      ok: true,
+      status: 201,
+      body: { organization: { id: "org-1", slug: "new-org" } },
+    },
+  });
+
+  assert.equal(result.status, 201);
+  assert.deepEqual(result.adjustmentRequest, {
+    newQuantity: 5,
+    expectedCurrentQuantity: 4,
+  });
+  assert.equal(result.createCalled, true);
+  assert.deepEqual(result.body, {
+    organization: { id: "org-1", slug: "new-org" },
+  });
 });
 
-test("returns 201 with subscription: null when post-creation quota fetch fails", () => {
-  const result = simulateCreateWithUpgrade(
-    { currentCount: 3, maxAllowed: null },
-    { currentCount: 4, maxAllowed: null, error: "internal_error" }
-  );
-  assert.strictEqual(result.status, 201);
-  assert.strictEqual(result.body.subscription, null);
-  assert.ok(result.body.organization);
+test("create-with-upgrade returns 409 on stale expectedCurrentQuantity and creates nothing", () => {
+  const result = simulateCreateWithUpgrade({
+    rawQuantity: 4,
+    currentManagedOrgCount: 4,
+    freeBaseline: 3,
+    expectedCurrentQuantity: 4,
+    adjustment: {
+      ok: false,
+      status: 409,
+      body: {
+        error: "Seat quantity changed. Please refresh and try again.",
+        currentQuantity: 5,
+      },
+    },
+    creation: {
+      ok: true,
+      status: 201,
+      body: { organization: { id: "org-ignored" } },
+    },
+  });
+
+  assert.equal(result.status, 409);
+  assert.equal(result.createCalled, false);
+  assert.equal(result.body.error, "Seat quantity changed. Please refresh and try again.");
 });
 
-test("returns 201 with full subscription info on success", () => {
-  const result = simulateCreateWithUpgrade(
-    { currentCount: 3, maxAllowed: null },
-    { currentCount: 4, maxAllowed: null }
+test("create-with-upgrade route uses resolveCurrentQuantity and the shared billing adjust helper", () => {
+  const routePath = path.join(
+    process.cwd(),
+    "src/app/api/enterprise/[enterpriseId]/organizations/create-with-upgrade/route.ts"
   );
-  assert.strictEqual(result.status, 201);
-  assert.ok(result.body.subscription !== null);
-  const sub = result.body.subscription as Record<string, unknown>;
-  assert.strictEqual(sub.currentCount, 4);
-  assert.strictEqual(sub.freeOrgs, 3);
-  assert.strictEqual(sub.billableOrgs, 1);
-  assert.strictEqual(sub.totalCents, 15000);
-  assert.strictEqual(sub.availableSeats, null); // maxAllowed is null
-});
+  const source = readFileSync(routePath, "utf8");
 
-test("pre-creation check runs before post-creation check", () => {
-  // Even if post-creation would succeed, a pre-creation error blocks creation
-  const result = simulateCreateWithUpgrade(
-    { currentCount: 0, maxAllowed: null, error: "internal_error" },
-    { currentCount: 1, maxAllowed: null }
-  );
-  assert.strictEqual(result.status, 503);
+  assert.match(source, /resolveCurrentQuantity\(/);
+  assert.match(source, /adjustEnterpriseSubOrgQuantity\(/);
+  assert.match(source, /newQuantity:\s*currentQuantity\s*\+\s*1/);
 });

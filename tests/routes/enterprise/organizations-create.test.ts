@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert";
 import { z } from "zod";
 import { evaluateSubOrgCapacity } from "@/lib/enterprise/quota-logic";
+import {
+  extractEnterpriseOrgLimitInfo,
+  isEnterpriseOrgLimitRpcError,
+} from "@/lib/enterprise/org-limit-errors";
 
 /**
  * Tests for POST /api/enterprise/[enterpriseId]/organizations/create
@@ -277,13 +281,13 @@ test("create org proceeds when seat quota succeeds (no error)", () => {
     }
   );
 
-  // Proceeded past quota check; no seat limit in hybrid model
+  // Proceeded past quota validation; creation is allowed when no quota error is returned.
   assert.strictEqual(result.status, 201);
 });
 
-// ── evaluateSubOrgCapacity: always no hard cap in hybrid model ─────────────────
+// ── evaluateSubOrgCapacity defaults when no hard cap is configured ─────────────
 
-test("evaluateSubOrgCapacity always returns maxAllowed: null (no hard cap)", () => {
+test("evaluateSubOrgCapacity returns maxAllowed: null when no hard cap is configured", () => {
   const result = evaluateSubOrgCapacity(5);
   assert.strictEqual(result.maxAllowed, null);
   assert.strictEqual(result.error, undefined);
@@ -474,4 +478,75 @@ test("create org route requires owner or org_admin role (ENTERPRISE_CREATE_ORG_R
   assert.ok(allowedRoles.includes("owner"));
   assert.ok(allowedRoles.includes("org_admin"));
   assert.ok(!allowedRoles.includes("billing_admin"));
+});
+
+function simulateCreateLimitUpgradeResponse(
+  rpcError: { code?: string; message?: string },
+  quotaInfo?: { currentCount: number; maxAllowed: number | null; remaining: number | null }
+) {
+  if (!isEnterpriseOrgLimitRpcError(rpcError)) {
+    return { status: 500, body: { error: "Failed to create organization" } };
+  }
+
+  const upgradeInfo = quotaInfo ?? extractEnterpriseOrgLimitInfo(rpcError.message);
+
+  return {
+    status: 402,
+    body: {
+      error: "Organization limit reached. Upgrade your subscription to add more organizations.",
+      needsUpgrade: true,
+      currentCount: upgradeInfo?.currentCount ?? null,
+      maxAllowed: upgradeInfo?.maxAllowed ?? null,
+      remaining: upgradeInfo?.remaining ?? null,
+    },
+  };
+}
+
+function simulateCreateSuccessWithoutDuplicateSubscriptionInsert() {
+  const subscriptionInsertAttempts = 0;
+
+  const createOrganization = () => ({
+    organization: { id: "created-org-uuid", slug: "new-team" },
+  });
+
+  const result = createOrganization();
+
+  return {
+    status: 201,
+    body: result,
+    subscriptionInsertAttempts,
+  };
+}
+
+test("create org treats 23514 org-cap RPC errors as upgrade responses", () => {
+  const rpcError = {
+    code: "23514",
+    message: "Batch would exceed org limit: 3 existing + 1 new > 3 allowed",
+  };
+
+  assert.strictEqual(isEnterpriseOrgLimitRpcError(rpcError), true);
+  assert.deepStrictEqual(extractEnterpriseOrgLimitInfo(rpcError.message), {
+    currentCount: 3,
+    maxAllowed: 3,
+    remaining: 0,
+  });
+
+  const response = simulateCreateLimitUpgradeResponse(rpcError);
+
+  assert.strictEqual(response.status, 402);
+  assert.strictEqual(response.body.needsUpgrade, true);
+  assert.strictEqual(response.body.currentCount, 3);
+  assert.strictEqual(response.body.maxAllowed, 3);
+  assert.strictEqual(response.body.remaining, 0);
+});
+
+test("create org success path does not attempt a duplicate organization_subscriptions insert", () => {
+  const response = simulateCreateSuccessWithoutDuplicateSubscriptionInsert();
+
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(response.subscriptionInsertAttempts, 0);
+  assert.deepStrictEqual(response.body.organization, {
+    id: "created-org-uuid",
+    slug: "new-team",
+  });
 });

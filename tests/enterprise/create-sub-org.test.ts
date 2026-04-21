@@ -1,174 +1,179 @@
 import { describe, it } from "node:test";
-import assert from "node:assert";
+import assert from "node:assert/strict";
+import {
+  createEnterpriseSubOrg,
+  ensureEnterpriseSlugAvailable,
+} from "@/lib/enterprise/create-sub-org";
 
-/**
- * Tests for the createEnterpriseSubOrg() shared helper.
- *
- * Uses the simulation pattern (same as adoption.test.ts) to replicate
- * the exact branching logic from src/lib/enterprise/create-sub-org.ts.
- */
+type TableRow = { id: string } | null;
 
-type CreateSubOrgResult =
-  | { ok: true; org: Record<string, unknown> }
-  | { ok: false; error: string; status: number };
+function createSlugCheckSupabase(params: {
+  organization?: TableRow;
+  enterprise?: TableRow;
+  organizationError?: { message?: string } | null;
+  enterpriseError?: { message?: string } | null;
+}) {
+  return {
+    from(table: string) {
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                maybeSingle: async () => {
+                  if (table === "organizations") {
+                    return {
+                      data: params.organization ?? null,
+                      error: params.organizationError ?? null,
+                    };
+                  }
 
-/**
- * Simulates createEnterpriseSubOrg (create-sub-org.ts).
- *
- * Replicates the exact branching:
- *   - existingOrg/existingEnterprise → { error: "Slug is already taken", status: 409 }
- *   - orgError with code 23505 → { error: "Slug is already taken", status: 409 }
- *   - orgError (other) → { error: "Unable to create organization", status: 400 }
- *   - roleError → rollback org → { error: "Failed to assign admin role", status: 400 }
- *   - subError → rollback role + org → { error: "Failed to create org subscription", status: 500 }
- *   - success → { ok: true, org }
- */
-function simulateCreateEnterpriseSubOrg(params: {
-  existingOrg: { id: string } | null;
-  existingEnterprise: { id: string } | null;
-  orgInsertResult: { data: Record<string, unknown> | null; error: { code?: string; message?: string } | null };
-  roleInsertError: Error | null;
-  subInsertError: Error | null;
-}): CreateSubOrgResult {
-  const { existingOrg, existingEnterprise, orgInsertResult, roleInsertError, subInsertError } = params;
-
-  // Parallel slug check
-  if (existingOrg || existingEnterprise) {
-    return { ok: false, error: "Slug is already taken", status: 409 };
-  }
-
-  // Org insert
-  const { data: newOrg, error: orgError } = orgInsertResult;
-  if (orgError || !newOrg) {
-    if (orgError?.code === "23505") {
-      return { ok: false, error: "Slug is already taken", status: 409 };
-    }
-    return { ok: false, error: "Unable to create organization", status: 400 };
-  }
-
-  // Role insert (rollback org on failure)
-  if (roleInsertError) {
-    return { ok: false, error: "Failed to assign admin role", status: 400 };
-  }
-
-  // Subscription insert (rollback role + org on failure)
-  if (subInsertError) {
-    return { ok: false, error: "Failed to create organization subscription", status: 500 };
-  }
-
-  return { ok: true, org: newOrg };
+                  return {
+                    data: params.enterprise ?? null,
+                    error: params.enterpriseError ?? null,
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
 }
 
-const sampleOrg = { id: "org-new-1", name: "Test", slug: "test-slug" };
+function createRpcSupabase(params: {
+  rpcResult?: Array<{ out_slug: string; out_org_id: string | null; out_status: string }> | null;
+  rpcError?: { code?: string; message?: string } | null;
+  fetchedOrg?: Record<string, unknown> | null;
+}) {
+  return {
+    async rpc() {
+      return {
+        data: params.rpcResult ?? null,
+        error: params.rpcError ?? null,
+      };
+    },
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                single: async () => ({ data: params.fetchedOrg ?? null }),
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+describe("ensureEnterpriseSlugAvailable", () => {
+  it("rejects slugs already used by enterprises", async () => {
+    const result = await ensureEnterpriseSlugAvailable(
+      createSlugCheckSupabase({
+        enterprise: { id: "ent-1" },
+      }),
+      "shared-slug"
+    );
+
+    assert.equal(result.available, false);
+    assert.equal(result.status, 409);
+    assert.equal(result.error, "Slug is already taken");
+  });
+
+  it("returns a verification error when slug lookup fails", async () => {
+    const result = await ensureEnterpriseSlugAvailable(
+      createSlugCheckSupabase({
+        organizationError: { message: "network" },
+      }),
+      "shared-slug"
+    );
+
+    assert.equal(result.available, false);
+    assert.equal(result.status, 500);
+    assert.equal(result.error, "Failed to verify slug availability");
+  });
+});
 
 describe("createEnterpriseSubOrg", () => {
-  it("successful creation (org + role + subscription)", () => {
-    const result = simulateCreateEnterpriseSubOrg({
-      existingOrg: null,
-      existingEnterprise: null,
-      orgInsertResult: { data: sampleOrg, error: null },
-      roleInsertError: null,
-      subInsertError: null,
+  const baseParams = {
+    enterpriseId: "ent-1",
+    userId: "user-1",
+    name: "Alpha Org",
+    slug: "alpha-org",
+    enterprisePrimaryColor: "#1e3a5f",
+  };
+
+  it("maps shared-namespace slug conflicts to a 409", async () => {
+    const result = await createEnterpriseSubOrg({
+      ...baseParams,
+      serviceSupabase: createRpcSupabase({
+        rpcError: {
+          code: "23505",
+          message: 'Slug "alpha-org" is already taken',
+        },
+      }),
     });
 
-    assert.ok(result.ok);
-    assert.strictEqual(result.org.id, "org-new-1");
+    assert.equal(result.ok, false);
+    if (result.ok) throw new Error("expected slug conflict");
+    assert.equal(result.kind, "slug_conflict");
+    assert.equal(result.status, 409);
+    assert.equal(result.error, "Slug is already taken");
   });
 
-  it("slug conflict via pre-check (org exists) → 409", () => {
-    const result = simulateCreateEnterpriseSubOrg({
-      existingOrg: { id: "existing-org" },
-      existingEnterprise: null,
-      orgInsertResult: { data: null, error: null },
-      roleInsertError: null,
-      subInsertError: null,
+  it("maps RPC org-cap failures to upgrade-needed metadata", async () => {
+    const result = await createEnterpriseSubOrg({
+      ...baseParams,
+      serviceSupabase: createRpcSupabase({
+        rpcError: {
+          code: "23514",
+          message: "Batch would exceed org limit: 4 existing + 1 new > 4 allowed",
+        },
+      }),
     });
 
-    assert.ok(!result.ok);
-    assert.strictEqual(result.status, 409);
-    assert.ok(result.error.includes("Slug is already taken"));
+    assert.equal(result.ok, false);
+    if (result.ok) throw new Error("expected org limit failure");
+    assert.equal(result.kind, "org_limit");
+    assert.equal(result.status, 402);
+    assert.deepEqual(result.quota, {
+      currentCount: 4,
+      maxAllowed: 4,
+      remaining: 0,
+    });
   });
 
-  it("slug conflict via pre-check (enterprise slug exists) → 409", () => {
-    const result = simulateCreateEnterpriseSubOrg({
-      existingOrg: null,
-      existingEnterprise: { id: "existing-ent" },
-      orgInsertResult: { data: null, error: null },
-      roleInsertError: null,
-      subInsertError: null,
+  it("returns the fetched organization after a successful single-item batch RPC", async () => {
+    const result = await createEnterpriseSubOrg({
+      ...baseParams,
+      serviceSupabase: createRpcSupabase({
+        rpcResult: [
+          {
+            out_slug: "alpha-org",
+            out_org_id: "org-1",
+            out_status: "created",
+          },
+        ],
+        fetchedOrg: {
+          id: "org-1",
+          slug: "alpha-org",
+          name: "Alpha Org",
+        },
+      }),
     });
 
-    assert.ok(!result.ok);
-    assert.strictEqual(result.status, 409);
-  });
-
-  it("slug conflict at DB level (unique constraint 23505) → 409", () => {
-    const result = simulateCreateEnterpriseSubOrg({
-      existingOrg: null,
-      existingEnterprise: null,
-      orgInsertResult: { data: null, error: { code: "23505", message: "duplicate key" } },
-      roleInsertError: null,
-      subInsertError: null,
+    assert.equal(result.ok, true);
+    if (!result.ok) throw new Error("expected success");
+    assert.equal(result.orgId, "org-1");
+    assert.equal(result.slug, "alpha-org");
+    assert.deepEqual(result.org, {
+      id: "org-1",
+      slug: "alpha-org",
+      name: "Alpha Org",
     });
-
-    assert.ok(!result.ok);
-    assert.strictEqual(result.status, 409);
-    assert.ok(result.error.includes("Slug is already taken"));
-  });
-
-  it("org insert failure (non-unique error) → 400", () => {
-    const result = simulateCreateEnterpriseSubOrg({
-      existingOrg: null,
-      existingEnterprise: null,
-      orgInsertResult: { data: null, error: { message: "some other error" } },
-      roleInsertError: null,
-      subInsertError: null,
-    });
-
-    assert.ok(!result.ok);
-    assert.strictEqual(result.status, 400);
-    assert.strictEqual(result.error, "Unable to create organization");
-  });
-
-  it("role insert failure → org cleaned up, 400", () => {
-    const result = simulateCreateEnterpriseSubOrg({
-      existingOrg: null,
-      existingEnterprise: null,
-      orgInsertResult: { data: sampleOrg, error: null },
-      roleInsertError: new Error("role insert failed"),
-      subInsertError: null,
-    });
-
-    assert.ok(!result.ok);
-    assert.strictEqual(result.status, 400);
-    assert.ok(result.error.includes("Failed to assign admin role"));
-  });
-
-  it("subscription insert failure → org + role cleaned up, 500", () => {
-    const result = simulateCreateEnterpriseSubOrg({
-      existingOrg: null,
-      existingEnterprise: null,
-      orgInsertResult: { data: sampleOrg, error: null },
-      roleInsertError: null,
-      subInsertError: new Error("sub insert failed"),
-    });
-
-    assert.ok(!result.ok);
-    assert.strictEqual(result.status, 500);
-    assert.ok(result.error.includes("Failed to create organization subscription"));
-  });
-
-  it("org insert returns null data without error → 400", () => {
-    const result = simulateCreateEnterpriseSubOrg({
-      existingOrg: null,
-      existingEnterprise: null,
-      orgInsertResult: { data: null, error: null },
-      roleInsertError: null,
-      subInsertError: null,
-    });
-
-    assert.ok(!result.ok);
-    assert.strictEqual(result.status, 400);
-    assert.strictEqual(result.error, "Unable to create organization");
   });
 });

@@ -1,50 +1,97 @@
 import test from "node:test";
-import assert from "node:assert";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
-interface CreateWithUpgradeRouteParams {
-  orgInsertError: { message: string } | null;
-  roleError: { message: string } | null;
-}
-
-interface CreateWithUpgradeRouteResult {
-  status: number;
-  body: Record<string, unknown>;
-}
-
-function simulateCreateWithUpgradeErrors(
-  params: CreateWithUpgradeRouteParams
-): CreateWithUpgradeRouteResult {
-  const { orgInsertError, roleError } = params;
-
-  if (orgInsertError) {
-    return { status: 400, body: { error: "Unable to create organization" } };
+function simulateCreateWithUpgradeErrors(params: {
+  slugAvailable: boolean;
+  adjustment: { ok: boolean; status: number; body: Record<string, unknown> };
+  creation: { ok: boolean; status: number; body: Record<string, unknown> };
+}) {
+  if (!params.slugAvailable) {
+    return {
+      status: 409,
+      body: { error: "Slug is already taken" },
+      adjusted: false,
+      created: false,
+    };
   }
 
-  if (roleError) {
-    return { status: 400, body: { error: "Failed to assign admin role" } };
+  if (!params.adjustment.ok) {
+    return {
+      status: params.adjustment.status,
+      body: params.adjustment.body,
+      adjusted: false,
+      created: false,
+    };
   }
 
-  return { status: 201, body: { organization: { id: "org-1" } } };
+  if (!params.creation.ok) {
+    return {
+      status: params.creation.status,
+      body: params.creation.body,
+      adjusted: true,
+      created: false,
+    };
+  }
+
+  return {
+    status: 201,
+    body: params.creation.body,
+    adjusted: true,
+    created: true,
+  };
 }
 
-test("create-with-upgrade returns generic error when org insert fails", () => {
+test("create-with-upgrade surfaces billing-adjust failures and creates nothing", () => {
   const result = simulateCreateWithUpgradeErrors({
-    orgInsertError: { message: "duplicate key value violates unique constraint organizations_slug_key" },
-    roleError: null,
+    slugAvailable: true,
+    adjustment: {
+      ok: false,
+      status: 500,
+      body: { error: "Billing updated but failed to save. Please contact support." },
+    },
+    creation: {
+      ok: true,
+      status: 201,
+      body: { organization: { id: "org-1" } },
+    },
   });
 
-  assert.strictEqual(result.status, 400);
-  assert.strictEqual(result.body.error, "Unable to create organization");
-  assert.ok(!(result.body.error as string).includes("duplicate key"));
+  assert.equal(result.status, 500);
+  assert.equal(result.adjusted, false);
+  assert.equal(result.created, false);
+  assert.equal(result.body.error, "Billing updated but failed to save. Please contact support.");
 });
 
-test("create-with-upgrade returns generic error when role insert fails", () => {
+test("create-with-upgrade surfaces post-upgrade create failures without hiding them", () => {
   const result = simulateCreateWithUpgradeErrors({
-    orgInsertError: null,
-    roleError: { message: "insert violates foreign key constraint user_organization_roles_user_id_fkey" },
+    slugAvailable: true,
+    adjustment: {
+      ok: true,
+      status: 200,
+      body: { success: true },
+    },
+    creation: {
+      ok: false,
+      status: 409,
+      body: { error: "Slug is already taken" },
+    },
   });
 
-  assert.strictEqual(result.status, 400);
-  assert.strictEqual(result.body.error, "Failed to assign admin role");
-  assert.ok(!(result.body.error as string).includes("foreign key"));
+  assert.equal(result.status, 409);
+  assert.equal(result.adjusted, true);
+  assert.equal(result.created, false);
+  assert.equal(result.body.error, "Slug is already taken");
+});
+
+test("create-with-upgrade rechecks slug availability before adjusting billing", () => {
+  const routePath = path.join(
+    process.cwd(),
+    "src/app/api/enterprise/[enterpriseId]/organizations/create-with-upgrade/route.ts"
+  );
+  const source = readFileSync(routePath, "utf8");
+
+  assert.match(source, /ensureEnterpriseSlugAvailable/);
+  assert.match(source, /Failed to verify slug availability/);
 });

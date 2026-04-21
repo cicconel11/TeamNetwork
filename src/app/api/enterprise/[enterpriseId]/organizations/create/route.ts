@@ -12,7 +12,7 @@ import {
 } from "@/lib/security/validation";
 import { getEnterpriseApiContext, ENTERPRISE_CREATE_ORG_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
-import { canEnterpriseAddSubOrg } from "@/lib/enterprise/quota";
+import { canEnterpriseAddSubOrgs } from "@/lib/enterprise/quota";
 import { createEnterpriseSubOrg } from "@/lib/enterprise/create-sub-org";
 
 export const dynamic = "force-dynamic";
@@ -67,26 +67,6 @@ export async function POST(req: Request, { params }: RouteParams) {
     const body = await validateJson(req, createOrgSchema, { maxBodyBytes: 16_000 });
     const { name, slug, description, purpose, primary_color } = body;
 
-    // Check seat limit for enterprise-managed orgs (hard cap)
-    const seatQuota = await canEnterpriseAddSubOrg(ctx.enterpriseId);
-    if (seatQuota.error) {
-      return respond(
-        { error: "Unable to verify seat limit. Please try again." },
-        503
-      );
-    }
-    if (seatQuota.maxAllowed != null && seatQuota.currentCount >= seatQuota.maxAllowed) {
-      return respond(
-        {
-          error: "Organization limit reached. Upgrade your subscription to add more organizations.",
-          needsUpgrade: true,
-          currentCount: seatQuota.currentCount,
-          maxAllowed: seatQuota.maxAllowed,
-        },
-        402
-      );
-    }
-
     // Fetch enterprise to get primary_color fallback
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: enterprise } = await (ctx.serviceSupabase as any)
@@ -105,13 +85,39 @@ export async function POST(req: Request, { params }: RouteParams) {
       userId: ctx.userId,
       name,
       slug,
-      description,
-      purpose,
+      description: description ?? null,
+      purpose: purpose ?? null,
       primaryColor: primary_color,
       enterprisePrimaryColor: enterprise.primary_color,
     });
 
     if (!result.ok) {
+      if (result.kind === "slug_conflict") {
+        return respond({ error: result.error }, result.status);
+      }
+
+      if (result.kind === "org_limit") {
+        const latestQuota = await canEnterpriseAddSubOrgs(ctx.enterpriseId, 1);
+        const fallbackQuota = result.quota;
+
+        return respond(
+          {
+            error: result.error,
+            needsUpgrade: true,
+            currentCount: latestQuota.error
+              ? fallbackQuota?.currentCount ?? null
+              : latestQuota.currentCount,
+            maxAllowed: latestQuota.error
+              ? fallbackQuota?.maxAllowed ?? null
+              : latestQuota.maxAllowed,
+            remaining: latestQuota.error
+              ? fallbackQuota?.remaining ?? null
+              : latestQuota.remaining,
+          },
+          402
+        );
+      }
+
       return respond({ error: result.error }, result.status);
     }
 
@@ -121,7 +127,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       action: "create_sub_org",
       enterpriseId: ctx.enterpriseId,
       targetType: "organization",
-      targetId: result.org.id as string,
+      targetId: result.orgId,
       metadata: { name, slug },
       ...extractRequestContext(req),
     });

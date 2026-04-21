@@ -20,7 +20,7 @@ import {
  * 1. buildQuotaInfo() — constructing quota info from raw data
  * 2. checkAlumniCapacity() — bucket-based alumni limit checks
  * 3. evaluateAdoptionQuota() — org adoption boundary checks
- * 4. evaluateSubOrgCapacity() — always-allowed in hybrid model
+ * 4. evaluateSubOrgCapacity() — current usage plus optional hard cap
  */
 
 const CAPACITY_PER_BUCKET = ALUMNI_BUCKET_PRICING.capacityPerBucket;
@@ -203,10 +203,17 @@ describe("evaluateAdoptionQuota", () => {
 // ── evaluateSubOrgCapacity ──
 
 describe("evaluateSubOrgCapacity", () => {
-  it("returns current count and null maxAllowed (no hard cap in hybrid model)", () => {
+  it("returns current count and null maxAllowed when no explicit hard cap is configured", () => {
     const result = evaluateSubOrgCapacity(5);
     assert.strictEqual(result.currentCount, 5);
     assert.strictEqual(result.maxAllowed, null);
+    assert.strictEqual(result.error, undefined);
+  });
+
+  it("returns the configured hard cap when sub_org_quantity is present", () => {
+    const result = evaluateSubOrgCapacity(5, 8);
+    assert.strictEqual(result.currentCount, 5);
+    assert.strictEqual(result.maxAllowed, 8);
     assert.strictEqual(result.error, undefined);
   });
 

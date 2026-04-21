@@ -156,13 +156,13 @@ describe("canEnterpriseAddSubOrg — DB error path", () => {
     assert.strictEqual(result.error, undefined);
   });
 
-  it("delegates to evaluateSubOrgCapacity for success path (maxAllowed is null)", () => {
+  it("delegates to evaluateSubOrgCapacity for the success path when no hard cap is configured", () => {
     const result = simulateCanEnterpriseAddSubOrg({
       counts: { enterprise_managed_org_count: 15 },
       countsError: null,
     });
 
-    // evaluateSubOrgCapacity always returns maxAllowed: null in hybrid model
+    // With no subscription quantity available, evaluateSubOrgCapacity returns an uncapped result.
     assert.strictEqual(result.maxAllowed, null);
     assert.strictEqual(result.currentCount, 15);
   });

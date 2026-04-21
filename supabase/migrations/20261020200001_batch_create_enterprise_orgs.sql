@@ -30,6 +30,8 @@ DECLARE
   v_primary_color text;
   v_enterprise_color text;
   v_new_org_id uuid;
+  v_requested_slugs text[];
+  v_conflicting_slug text;
 BEGIN
   -- Prevent indefinite lock holding
   SET LOCAL statement_timeout = '10000';  -- 10 seconds
@@ -47,6 +49,31 @@ BEGIN
   IF v_batch_size > 20 THEN
     RAISE EXCEPTION 'Maximum 20 organizations per batch (got %)', v_batch_size
     USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT array_agg(trim(COALESCE(value->>'slug', '')))
+  INTO v_requested_slugs
+  FROM jsonb_array_elements(COALESCE(p_orgs, '[]'::jsonb));
+
+  SELECT conflict.slug
+  INTO v_conflicting_slug
+  FROM (
+    SELECT o.slug
+    FROM public.organizations o
+    WHERE o.slug = ANY(COALESCE(v_requested_slugs, ARRAY[]::text[]))
+
+    UNION
+
+    SELECT e.slug
+    FROM public.enterprises e
+    WHERE e.slug = ANY(COALESCE(v_requested_slugs, ARRAY[]::text[]))
+  ) AS conflict
+  ORDER BY conflict.slug
+  LIMIT 1;
+
+  IF v_conflicting_slug IS NOT NULL THEN
+    RAISE EXCEPTION 'Slug "%" is already taken', v_conflicting_slug
+    USING ERRCODE = 'unique_violation';
   END IF;
 
   -- Fetch sub_org_quantity for hard cap enforcement

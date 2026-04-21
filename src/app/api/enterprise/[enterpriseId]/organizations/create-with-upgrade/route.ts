@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
+  optionalSafeString,
   safeString,
   validateJson,
   ValidationError,
@@ -11,9 +12,14 @@ import {
 } from "@/lib/security/validation";
 import { getEnterpriseApiContext, ENTERPRISE_CREATE_ORG_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
+import { adjustEnterpriseSubOrgQuantity } from "@/lib/enterprise/adjust-sub-org-quantity";
 import { canEnterpriseAddSubOrg } from "@/lib/enterprise/quota";
-import { getSubOrgPricing } from "@/lib/enterprise/pricing";
-import { createEnterpriseSubOrg } from "@/lib/enterprise/create-sub-org";
+import { getFreeSubOrgCount, getSubOrgPricing } from "@/lib/enterprise/pricing";
+import { resolveCurrentQuantity } from "@/lib/enterprise/quota-logic";
+import {
+  createEnterpriseSubOrg,
+  ensureEnterpriseSlugAvailable,
+} from "@/lib/enterprise/create-sub-org";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,11 +34,23 @@ interface EnterpriseRow {
   primary_color: string | null;
 }
 
+interface EnterpriseSubscriptionContext {
+  alumni_bucket_quantity: number;
+  billing_interval: "month" | "year";
+  sub_org_quantity: number | null;
+}
+
+interface EnterpriseManagedCountsRow {
+  enterprise_managed_org_count: number;
+}
+
 const createOrgWithUpgradeSchema = z
   .object({
     name: safeString(120),
     slug: baseSchemas.slug,
+    purpose: optionalSafeString(500).optional(),
     primary_color: baseSchemas.hexColor.optional(),
+    expectedCurrentQuantity: z.number().int().min(1).max(1000).optional(),
     billingType: z.literal("enterprise_managed").default("enterprise_managed"),
   })
   .strict();
@@ -57,42 +75,91 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_CREATE_ORG_ROLE);
     if (!ctx.ok) return ctx.response;
+    const serviceSupabase = ctx.serviceSupabase;
 
     const respond = (payload: unknown, status = 200) =>
       NextResponse.json(payload, { status, headers: rateLimit.headers });
 
     const body = await validateJson(req, createOrgWithUpgradeSchema, { maxBodyBytes: 16_000 });
-    const { name, slug, primary_color } = body;
+    const {
+      name,
+      slug,
+      purpose,
+      primary_color,
+      expectedCurrentQuantity,
+    } = body;
 
-    // Fetch enterprise to get primary_color fallback
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: enterprise } = await (ctx.serviceSupabase as any)
-      .from("enterprises")
-      .select("id, primary_color")
-      .eq("id", ctx.enterpriseId)
-      .single() as { data: EnterpriseRow | null };
+    const slugAvailability = await ensureEnterpriseSlugAvailable(
+      ctx.serviceSupabase,
+      slug
+    );
+
+    if (!slugAvailability.available) {
+      return respond(
+        { error: slugAvailability.error ?? "Failed to verify slug availability" },
+        slugAvailability.status ?? 500
+      );
+    }
+
+    const [
+      { data: enterprise },
+      { data: subscription, error: subscriptionError },
+      { data: counts, error: countsError },
+    ] = await Promise.all([
+      serviceSupabase
+        .from("enterprises")
+        .select("id, primary_color")
+        .eq("id", ctx.enterpriseId)
+        .single() as unknown as Promise<{ data: EnterpriseRow | null }>,
+      serviceSupabase
+        .from("enterprise_subscriptions")
+        .select("alumni_bucket_quantity, billing_interval, sub_org_quantity")
+        .eq("enterprise_id", ctx.enterpriseId)
+        .single() as unknown as Promise<{
+          data: EnterpriseSubscriptionContext | null;
+          error: { message?: string } | null;
+        }>,
+      serviceSupabase
+        .from("enterprise_alumni_counts")
+        .select("enterprise_managed_org_count")
+        .eq("enterprise_id", ctx.enterpriseId)
+        .maybeSingle() as unknown as Promise<{
+          data: EnterpriseManagedCountsRow | null;
+          error: { message?: string } | null;
+        }>,
+    ]);
 
     if (!enterprise) {
       return respond({ error: "Enterprise not found" }, 404);
     }
 
-    // Fetch subscription for bucket quantity (needed for free sub-org calculation)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: subscription } = await (ctx.serviceSupabase as any)
-      .from("enterprise_subscriptions")
-      .select("alumni_bucket_quantity")
-      .eq("enterprise_id", ctx.enterpriseId)
-      .single() as { data: { alumni_bucket_quantity: number } | null };
+    if (subscriptionError || !subscription) {
+      return respond({ error: "Unable to verify seat limit. Please try again." }, 503);
+    }
 
-    const bucketQuantity = subscription?.alumni_bucket_quantity ?? 1;
+    if (countsError) {
+      return respond({ error: "Unable to verify seat limit. Please try again." }, 503);
+    }
 
-    // Check current seat quota (hybrid model: always allowed, billing kicks in after free tier)
-    const seatQuota = await canEnterpriseAddSubOrg(ctx.enterpriseId);
-    if (seatQuota.error) {
-      return respond(
-        { error: "Unable to verify seat limit. Please try again." },
-        503
-      );
+    const bucketQuantity = subscription.alumni_bucket_quantity ?? 1;
+    const currentQuantity = resolveCurrentQuantity(
+      subscription.sub_org_quantity,
+      counts?.enterprise_managed_org_count ?? 0,
+      getFreeSubOrgCount(bucketQuantity)
+    );
+
+    const adjustment = await adjustEnterpriseSubOrgQuantity({
+      serviceSupabase: ctx.serviceSupabase,
+      enterpriseId: ctx.enterpriseId,
+      userId: ctx.userId,
+      userEmail: ctx.userEmail,
+      req,
+      newQuantity: currentQuantity + 1,
+      expectedCurrentQuantity,
+    });
+
+    if (!adjustment.ok) {
+      return respond(adjustment.body, adjustment.status);
     }
 
     const result = await createEnterpriseSubOrg({
@@ -101,11 +168,25 @@ export async function POST(req: Request, { params }: RouteParams) {
       userId: ctx.userId,
       name,
       slug,
+      purpose: purpose ?? null,
       primaryColor: primary_color,
       enterprisePrimaryColor: enterprise.primary_color,
     });
 
     if (!result.ok) {
+      if (result.kind === "org_limit") {
+        return respond(
+          {
+            error: result.error,
+            needsUpgrade: true,
+            currentCount: result.quota?.currentCount ?? null,
+            maxAllowed: result.quota?.maxAllowed ?? null,
+            remaining: result.quota?.remaining ?? null,
+          },
+          result.status
+        );
+      }
+
       return respond({ error: result.error }, result.status);
     }
 
@@ -115,7 +196,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       action: "create_sub_org_with_upgrade",
       enterpriseId: ctx.enterpriseId,
       targetType: "organization",
-      targetId: result.org.id as string,
+      targetId: result.orgId,
       metadata: { name, slug },
       ...extractRequestContext(req),
     });
@@ -129,7 +210,11 @@ export async function POST(req: Request, { params }: RouteParams) {
         subscription: null,
       }, 201);
     }
-    const pricing = getSubOrgPricing(updatedQuota.currentCount, "year", bucketQuantity);
+    const pricing = getSubOrgPricing(
+      updatedQuota.currentCount,
+      adjustment.billingInterval,
+      adjustment.bucketQuantity
+    );
 
     return respond({
       organization: result.org,

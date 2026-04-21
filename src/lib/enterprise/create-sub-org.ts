@@ -1,20 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/**
- * Shared helper for creating an enterprise sub-organization.
- *
- * Used by both:
- *   - POST /api/enterprise/[enterpriseId]/organizations/create
- *   - POST /api/enterprise/[enterpriseId]/organizations/create-with-upgrade
- *
- * Handles: parallel slug uniqueness checks, org insert, role assignment,
- * subscription creation, and full rollback on any step failure.
- */
-
-// Type for enterprise row (until types are regenerated)
-interface EnterpriseRow {
-  id: string;
-  primary_color: string | null;
-}
+import {
+  extractEnterpriseOrgLimitInfo,
+  isEnterpriseOrgLimitRpcError,
+  type EnterpriseOrgLimitInfo,
+} from "@/lib/enterprise/org-limit-errors";
 
 export interface CreateSubOrgParams {
   serviceSupabase: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -29,8 +17,67 @@ export interface CreateSubOrgParams {
 }
 
 export type CreateSubOrgResult =
-  | { ok: true; org: Record<string, unknown> }
-  | { ok: false; error: string; status: number };
+  | { ok: true; org: Record<string, unknown>; orgId: string; slug: string }
+  | {
+      ok: false;
+      error: string;
+      status: number;
+      kind: "slug_conflict" | "org_limit" | "create_failed";
+      quota?: EnterpriseOrgLimitInfo | null;
+    };
+
+export interface SlugAvailabilityResult {
+  available: boolean;
+  status?: number;
+  error?: string;
+}
+
+interface BatchOrgResult {
+  out_slug: string;
+  out_org_id: string | null;
+  out_status: string;
+}
+
+export async function ensureEnterpriseSlugAvailable(
+  serviceSupabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  slug: string
+): Promise<SlugAvailabilityResult> {
+  const [{ data: existingOrg, error: existingOrgError }, { data: existingEnterprise, error: existingEnterpriseError }] =
+    await Promise.all([
+      serviceSupabase
+        .from("organizations")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle() as Promise<{ data: { id: string } | null; error: { message?: string } | null }>,
+      serviceSupabase
+        .from("enterprises")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle() as Promise<{ data: { id: string } | null; error: { message?: string } | null }>,
+    ]);
+
+  if (existingOrgError || existingEnterpriseError) {
+    console.error("[createEnterpriseSubOrg] slug availability check failed:", {
+      existingOrgError,
+      existingEnterpriseError,
+    });
+    return {
+      available: false,
+      status: 500,
+      error: "Failed to verify slug availability",
+    };
+  }
+
+  if (existingOrg || existingEnterprise) {
+    return {
+      available: false,
+      status: 409,
+      error: "Slug is already taken",
+    };
+  }
+
+  return { available: true };
+}
 
 export async function createEnterpriseSubOrg(
   params: CreateSubOrgParams
@@ -47,88 +94,88 @@ export async function createEnterpriseSubOrg(
     enterprisePrimaryColor,
   } = params;
 
-  // Parallel slug uniqueness check across orgs and enterprises
-  const [{ data: existingOrg }, { data: existingEnterprise }] = await Promise.all([
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (serviceSupabase as any)
-      .from("organizations")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle() as Promise<{ data: { id: string } | null }>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (serviceSupabase as any)
-      .from("enterprises")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle() as Promise<{ data: { id: string } | null }>,
-  ]);
+  const resolvedColor = primaryColor ?? enterprisePrimaryColor ?? "#1e3a5f";
 
-  if (existingOrg || existingEnterprise) {
-    return { ok: false, error: "Slug is already taken", status: 409 };
-  }
-
-  // Create organization under enterprise
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: newOrg, error: orgError } = await (serviceSupabase as any)
-    .from("organizations")
-    .insert({
-      name,
-      slug,
-      description: description ?? null,
-      purpose: purpose ?? null,
-      primary_color: primaryColor ?? enterprisePrimaryColor ?? "#1e3a5f",
-      enterprise_id: enterpriseId,
-      enterprise_relationship_type: "created",
-    })
-    .select()
-    .single() as { data: Record<string, unknown> | null; error: { code?: string; message?: string } | null };
-
-  if (orgError || !newOrg) {
-    // Catch unique constraint violation (e.g., race condition on slug)
-    if (orgError?.code === "23505") {
-      return { ok: false, error: "Slug is already taken", status: 409 };
+  const { data: rpcResult, error: rpcError } = await serviceSupabase.rpc(
+    "batch_create_enterprise_orgs",
+    {
+      p_enterprise_id: enterpriseId,
+      p_user_id: userId,
+      p_orgs: [
+        {
+          name,
+          slug,
+          description: description ?? null,
+          purpose: purpose ?? null,
+          primary_color: resolvedColor,
+        },
+      ],
     }
-    if (orgError) console.error("[createEnterpriseSubOrg] org insert failed:", orgError);
-    return { ok: false, error: "Unable to create organization", status: 400 };
+  ) as {
+    data: BatchOrgResult[] | null;
+    error: { message?: string; code?: string } | null;
+  };
+
+  if (rpcError) {
+    if (rpcError.code === "23505" || rpcError.message?.includes("already taken")) {
+      return {
+        ok: false,
+        error: "Slug is already taken",
+        status: 409,
+        kind: "slug_conflict",
+      };
+    }
+
+    if (isEnterpriseOrgLimitRpcError(rpcError)) {
+      return {
+        ok: false,
+        error: "Organization limit reached. Upgrade your subscription to add more organizations.",
+        status: 402,
+        kind: "org_limit",
+        quota: extractEnterpriseOrgLimitInfo(rpcError.message),
+      };
+    }
+
+    console.error("[createEnterpriseSubOrg] RPC failed:", rpcError);
+    return {
+      ok: false,
+      error: "Failed to create organization",
+      status: 500,
+      kind: "create_failed",
+    };
   }
 
-  // Grant creator admin role on new organization
-  const { error: roleError } = await serviceSupabase
-    .from("user_organization_roles")
-    .insert({
-      user_id: userId,
-      organization_id: newOrg.id as string,
-      role: "admin",
-    });
+  const created = rpcResult?.[0];
+  if (!created?.out_org_id || created.out_status !== "created") {
+    if (created?.out_status === "slug_conflict") {
+      return {
+        ok: false,
+        error: "Slug is already taken",
+        status: 409,
+        kind: "slug_conflict",
+      };
+    }
 
-  if (roleError) {
-    console.error("[createEnterpriseSubOrg] role insert failed:", roleError);
-    // Rollback: delete the org
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
-    return { ok: false, error: "Failed to assign admin role", status: 400 };
+    return {
+      ok: false,
+      error: created?.out_status ?? "Failed to create organization",
+      status: 400,
+      kind: "create_failed",
+    };
   }
 
-  // Create subscription record for enterprise-managed org
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: subError } = await (serviceSupabase as any)
-    .from("organization_subscriptions")
-    .insert({
-      organization_id: newOrg.id,
-      status: "enterprise_managed",
-      base_plan_interval: "month",
-      alumni_bucket: "none",
-    }) as { error: Error | null };
+  const { data: newOrg } = await serviceSupabase
+    .from("organizations")
+    .select("*")
+    .eq("id", created.out_org_id)
+    .single() as {
+    data: Record<string, unknown> | null;
+  };
 
-  if (subError) {
-    console.error("[createEnterpriseSubOrg] subscription insert failed:", subError);
-    // Rollback: delete role + org
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (serviceSupabase as any).from("user_organization_roles").delete().eq("organization_id", newOrg.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
-    return { ok: false, error: "Failed to create organization subscription", status: 500 };
-  }
-
-  return { ok: true, org: newOrg };
+  return {
+    ok: true,
+    org: newOrg ?? { id: created.out_org_id, slug: created.out_slug },
+    orgId: created.out_org_id,
+    slug: created.out_slug,
+  };
 }
