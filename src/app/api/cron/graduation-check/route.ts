@@ -93,7 +93,7 @@ export async function GET(request: Request) {
 
     // Step 1: Send 30-day warnings
     const nearingGraduation = await getMembersNearingGraduation(supabase, 30);
-    console.log(`[cron/graduation-check] Found ${nearingGraduation.length} members nearing graduation`);
+    console.info(`[cron/graduation-check] Found ${nearingGraduation.length} members nearing graduation`);
 
     // Group by organization
     const byOrgWarning = new Map<string, typeof nearingGraduation>();
@@ -154,7 +154,7 @@ export async function GET(request: Request) {
 
     // Step 2: Process graduations
     const pastGraduation = await getMembersPastGraduation(supabase);
-    console.log(`[cron/graduation-check] Found ${pastGraduation.length} members past graduation`);
+    console.info(`[cron/graduation-check] Found ${pastGraduation.length} members past graduation`);
 
     // Group by organization
     const byOrgGrad = new Map<string, typeof pastGraduation>();
@@ -198,7 +198,7 @@ export async function GET(request: Request) {
           for (const member of members) {
             // Skip members without a user account (can't transition roles)
             if (!member.user_id) {
-              console.log(`[cron/graduation-check] Skipping member ${member.id} - no user_id`);
+              console.info(`[cron/graduation-check] Skipping member ${member.id} - no user_id`);
               continue;
             }
 
@@ -291,7 +291,7 @@ export async function GET(request: Request) {
 
     // Step 3: Reverse flow — reinstate members whose graduation date was moved forward
     const membersToReinstate = await getMembersToReinstate(supabase);
-    console.log(`[cron/graduation-check] Found ${membersToReinstate.length} members to reinstate`);
+    console.info(`[cron/graduation-check] Found ${membersToReinstate.length} members to reinstate`);
 
     const byOrgReinstate = new Map<string, typeof membersToReinstate>();
     for (const member of membersToReinstate) {
@@ -318,7 +318,7 @@ export async function GET(request: Request) {
 
         for (const member of members) {
           if (!member.user_id) {
-            console.log(`[cron/graduation-check] Skipping reinstate for member ${member.id} - no user_id`);
+            console.info(`[cron/graduation-check] Skipping reinstate for member ${member.id} - no user_id`);
             continue;
           }
 
@@ -349,7 +349,7 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log("[cron/graduation-check] Completed:", results);
+    console.info("[cron/graduation-check] Completed:", results);
     debugLog("graduation-cron", "batch summary", {
       totalProcessed: pastGraduation.length,
       transitioned: results.transitionsToAlumni,

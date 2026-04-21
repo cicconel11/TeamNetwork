@@ -123,7 +123,7 @@ export async function fetchBrightDataProfile(
   const fetchFn = options.fetchFn ?? fetch;
 
   if (!apiKey) {
-    console.log("[bright-data] Skipping enrichment — BRIGHT_DATA_API_KEY not configured");
+    console.info("[bright-data] Skipping enrichment — BRIGHT_DATA_API_KEY not configured");
     return {
       ok: false,
       kind: "not_configured",

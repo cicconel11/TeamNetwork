@@ -51,7 +51,6 @@ export async function POST(request: Request) {
     });
 
     const redirectUrl = getLinkedInAuthUrl(oauthState.state);
-    console.log("[linkedin-connect] redirect_uri used in OAuth URL:", redirectUrl.split("redirect_uri=")[1]?.split("&")[0]);
     const response = NextResponse.json({ redirectUrl });
     response.cookies.set(
       oauthState.cookie.name,

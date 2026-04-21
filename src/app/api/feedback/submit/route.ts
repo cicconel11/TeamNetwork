@@ -82,7 +82,7 @@ User Agent: ${responses.user_agent}
   }
 
   // Stub for development
-  console.log("[STUB] Would send admin notification:", {
+  console.info("[STUB] Would send admin notification:", {
     to: ADMIN_EMAIL,
     subject,
     body: body.substring(0, 200) + "...",

@@ -271,11 +271,6 @@ export async function prepareGalleryUploadEntries(
         previewFileSize = prepared.previewFile?.size ?? 0;
         if (previewUrl) revokeObjectUrl(previewUrl);
         previewUrl = prepared.previewUrl;
-        console.log("[media/upload] prepared gallery image", {
-          fileName: file.name,
-          originalBytes: prepared.originalBytes,
-          normalizedBytes: prepared.normalizedBytes,
-        });
       } catch (error) {
         if (previewUrl) revokeObjectUrl(previewUrl);
         rejected.push({

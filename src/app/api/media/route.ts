@@ -336,10 +336,9 @@ export async function POST(request: NextRequest) {
     const initialStatus = "uploading";
 
     let mediaId: string;
-    let creationPath: "rpc" | "fallback";
 
     try {
-      ({ mediaId, creationPath } = await createMediaGalleryUploadRecord(
+      ({ mediaId } = await createMediaGalleryUploadRecord(
         serviceClient as unknown as GalleryUploadRecordClient,
         {
           orgId,
@@ -424,15 +423,6 @@ export async function POST(request: NextRequest) {
       await serviceClient.from("media_items").delete().eq("id", mediaId);
       return NextResponse.json({ error: "Failed to generate preview upload URL" }, { status: 500 });
     }
-
-    console.log("[media/gallery] Upload intent created", {
-      orgId,
-      mediaId,
-      mimeType,
-      fileSizeBytes,
-      creationPath,
-      hasPreviewUpload: Boolean(previewStoragePath),
-    });
 
     return NextResponse.json(
       {

@@ -108,7 +108,7 @@ async function runWithConcurrency<T extends { success: boolean; error?: string }
 export async function sendEmail(params: EmailParams): Promise<NotificationResult> {
   if (!resend) {
     // Fallback to stub behavior when Resend is not configured (e.g., local development)
-    console.log("[STUB] Sending email (RESEND_API_KEY not configured):", {
+    console.info("[STUB] Sending email (RESEND_API_KEY not configured):", {
       to: params.to,
       subject: params.subject,
       body: params.body.substring(0, 100) + "...",
@@ -143,7 +143,7 @@ export async function sendEmail(params: EmailParams): Promise<NotificationResult
 // gate on an SMS_PROVIDER env var. The stub safely returns success so callers
 // can be written against the final interface today.
 export async function sendSMS(params: SMSParams): Promise<NotificationResult> {
-  console.log("[STUB] Sending SMS (provider not configured):", {
+  console.info("[STUB] Sending SMS (provider not configured):", {
     to: params.to,
     message: params.message.substring(0, 100) + "...",
   });

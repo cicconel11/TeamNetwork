@@ -114,13 +114,6 @@ export async function POST() {
       `)
       .eq("user_id", user.id);
 
-    console.log("[seed-enterprise] Verification:", {
-      verifyEnterprise,
-      verifyRole,
-      rlsTest,
-      rlsError: rlsError?.message,
-    });
-
     return NextResponse.json({
       success: true,
       message: "Mock enterprise created successfully",

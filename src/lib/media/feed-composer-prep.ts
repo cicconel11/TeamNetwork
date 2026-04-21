@@ -142,11 +142,6 @@ export async function prepareFeedImageEntries(
     let preparedImage: PreparedImageUpload;
     try {
       preparedImage = await prepareImage(file);
-      console.log("[media/upload] prepared feed image", {
-        fileName: file.name,
-        originalBytes: preparedImage.originalBytes,
-        normalizedBytes: preparedImage.normalizedBytes,
-      });
     } catch (err) {
       skipped.push(
         `${file.name}: ${err instanceof Error ? err.message : "failed to prepare image upload"}`,
