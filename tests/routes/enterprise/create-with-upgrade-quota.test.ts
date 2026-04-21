@@ -128,5 +128,6 @@ test("create-with-upgrade route uses resolveCurrentQuantity and the shared billi
 
   assert.match(source, /resolveCurrentQuantity\(/);
   assert.match(source, /adjustEnterpriseSubOrgQuantity\(/);
-  assert.match(source, /newQuantity:\s*currentQuantity\s*\+\s*1/);
+  assert.match(source, /requestedQuantity\s*=\s*currentQuantity\s*\+\s*1/);
+  assert.match(source, /newQuantity:\s*requestedQuantity/);
 });

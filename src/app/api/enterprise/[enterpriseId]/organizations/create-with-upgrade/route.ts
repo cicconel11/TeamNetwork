@@ -52,6 +52,11 @@ const createOrgWithUpgradeSchema = z
     primary_color: baseSchemas.hexColor.optional(),
     expectedCurrentQuantity: z.number().int().min(1).max(1000).optional(),
     billingType: z.literal("enterprise_managed").default("enterprise_managed"),
+    // Hard block: client must explicitly confirm the upgrade before we bump
+    // the seat quantity and charge. Absence returns 402 with a cost preview
+    // so the frontend can surface a confirmation modal. See requirements doc:
+    // docs/brainstorms/2026-04-20-enterprise-bulk-org-wizard-requirements.md
+    confirmUpgrade: z.boolean().optional(),
   })
   .strict();
 
@@ -87,6 +92,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       purpose,
       primary_color,
       expectedCurrentQuantity,
+      confirmUpgrade,
     } = body;
 
     const slugAvailability = await ensureEnterpriseSlugAvailable(
@@ -147,6 +153,60 @@ export async function POST(req: Request, { params }: RouteParams) {
       counts?.enterprise_managed_org_count ?? 0,
       getFreeSubOrgCount(bucketQuantity)
     );
+    const requestedQuantity = currentQuantity + 1;
+
+    // Hard block: this route bumps the paid seat quantity by +1. Per the
+    // bulk-org-wizard requirements, admins must explicitly confirm before we
+    // charge. Mirrors the 402 needsUpgrade convention from batch-create so the
+    // frontend can render a confirm modal with cost preview, then retry with
+    // confirmUpgrade: true.
+    if (confirmUpgrade !== true) {
+      const currentPricing = getSubOrgPricing(
+        currentQuantity,
+        subscription.billing_interval,
+        bucketQuantity
+      );
+      const projectedPricing = getSubOrgPricing(
+        requestedQuantity,
+        subscription.billing_interval,
+        bucketQuantity
+      );
+
+      return respond(
+        {
+          error: "Upgrade confirmation required to add another organization",
+          needsUpgrade: true,
+          currentCount: counts?.enterprise_managed_org_count ?? 0,
+          maxAllowed: subscription.sub_org_quantity,
+          remaining:
+            subscription.sub_org_quantity != null
+              ? Math.max(
+                  subscription.sub_org_quantity -
+                    (counts?.enterprise_managed_org_count ?? 0),
+                  0
+                )
+              : null,
+          currentQuantity,
+          requestedQuantity,
+          billingInterval: subscription.billing_interval,
+          costPreview: {
+            current: {
+              freeOrgs: currentPricing.freeOrgs,
+              billableOrgs: currentPricing.billableOrgs,
+              totalCents: currentPricing.totalCents,
+            },
+            projected: {
+              freeOrgs: projectedPricing.freeOrgs,
+              billableOrgs: projectedPricing.billableOrgs,
+              totalCents: projectedPricing.totalCents,
+            },
+            additionalCents: projectedPricing.totalCents - currentPricing.totalCents,
+            unitCents: projectedPricing.unitCents,
+          },
+        },
+        402
+      );
+    }
 
     const adjustment = await adjustEnterpriseSubOrgQuantity({
       serviceSupabase: ctx.serviceSupabase,
@@ -154,7 +214,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       userId: ctx.userId,
       userEmail: ctx.userEmail,
       req,
-      newQuantity: currentQuantity + 1,
+      newQuantity: requestedQuantity,
       expectedCurrentQuantity,
     });
 

@@ -63,9 +63,10 @@ export function paginateEnterpriseMemberUsers(
   nextCursor: string | null;
 } {
   const hasMore = users.length > limit;
+  const trimmed = users.slice(0, limit);
   return {
-    users: users.slice(0, limit),
-    nextCursor: hasMore ? users[limit].id : null,
+    users: trimmed,
+    nextCursor: hasMore && trimmed.length > 0 ? trimmed[trimmed.length - 1].id : null,
   };
 }
 

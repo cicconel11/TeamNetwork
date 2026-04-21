@@ -87,7 +87,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     .order("id", { ascending: true });
 
   if (after) {
-    userQuery = userQuery.gte("id", after);
+    userQuery = userQuery.gt("id", after);
   }
 
   const { data: usersPage, error: usersPageError } = await userQuery.limit(limit + 1) as {

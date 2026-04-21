@@ -6,6 +6,7 @@ import {
   buildEnterpriseMembers,
   getActiveAdminOrgIds,
   paginateEnterpriseMemberUsers,
+  type EnterpriseMemberUserRow,
 } from "@/lib/enterprise/member-list";
 
 async function fetchAllEnterpriseMembers<T extends { userId: string }>(
@@ -42,7 +43,7 @@ test("member list scoping dedupes repeated active admin rows", () => {
   assert.deepEqual(scopedOrgIds, ["org-1", "org-2"]);
 });
 
-test("member pagination slices by unique users and advances with the extra user cursor", () => {
+test("member pagination slices by unique users and uses the last returned user id as cursor", () => {
   const page = paginateEnterpriseMemberUsers(
     [
       { id: "user-1", email: "one@example.com", name: "One" },
@@ -56,7 +57,72 @@ test("member pagination slices by unique users and advances with the extra user 
     page.users.map((user) => user.id),
     ["user-1", "user-2"]
   );
-  assert.equal(page.nextCursor, "user-3");
+  // Cursor MUST be the last id of the returned page (used with `.gt(cursor)` in the
+  // query), not the id of the extra peeked row. Returning the extra row's id paired
+  // with `.gte(cursor)` would duplicate that row on the next page.
+  assert.equal(page.nextCursor, "user-2");
+});
+
+test("member pagination returns null cursor when there is no next page", () => {
+  const page = paginateEnterpriseMemberUsers(
+    [
+      { id: "user-1", email: "one@example.com", name: "One" },
+      { id: "user-2", email: "two@example.com", name: "Two" },
+    ],
+    2
+  );
+
+  assert.deepEqual(
+    page.users.map((user) => user.id),
+    ["user-1", "user-2"]
+  );
+  assert.equal(page.nextCursor, null);
+});
+
+test("member pagination across consecutive pages yields no duplicates and no skips", () => {
+  // Simulate the DB layer: stable order by id, fetch limit+1, apply `.gt(after)`
+  // when a cursor is supplied. This mirrors the behavior of the route.
+  const allUsers: EnterpriseMemberUserRow[] = Array.from({ length: 5 }, (_, index) => ({
+    id: `user-${index + 1}`,
+    email: `user${index + 1}@example.com`,
+    name: `User ${index + 1}`,
+  }));
+
+  const limit = 2;
+
+  const fetchPeek = (after: string | null) => {
+    const filtered = after === null ? allUsers : allUsers.filter((user) => user.id > after);
+    return filtered.slice(0, limit + 1);
+  };
+
+  const firstPage = paginateEnterpriseMemberUsers(fetchPeek(null), limit);
+  assert.deepEqual(
+    firstPage.users.map((user) => user.id),
+    ["user-1", "user-2"]
+  );
+  assert.equal(firstPage.nextCursor, "user-2");
+
+  const secondPage = paginateEnterpriseMemberUsers(fetchPeek(firstPage.nextCursor), limit);
+  assert.deepEqual(
+    secondPage.users.map((user) => user.id),
+    ["user-3", "user-4"]
+  );
+  assert.equal(secondPage.nextCursor, "user-4");
+
+  const thirdPage = paginateEnterpriseMemberUsers(fetchPeek(secondPage.nextCursor), limit);
+  assert.deepEqual(
+    thirdPage.users.map((user) => user.id),
+    ["user-5"]
+  );
+  assert.equal(thirdPage.nextCursor, null);
+
+  const seenIds = [
+    ...firstPage.users.map((user) => user.id),
+    ...secondPage.users.map((user) => user.id),
+    ...thirdPage.users.map((user) => user.id),
+  ];
+  assert.deepEqual(seenIds, ["user-1", "user-2", "user-3", "user-4", "user-5"]);
+  assert.equal(new Set(seenIds).size, seenIds.length, "no duplicate user ids across pages");
 });
 
 test("member building keeps later users reachable even when one user has many org-role rows", () => {
@@ -90,7 +156,7 @@ test("member building keeps later users reachable even when one user has many or
   );
 });
 
-test("fetchAllEnterpriseMembers reaches later pages when nextCursor is the next unique user id", async () => {
+test("fetchAllEnterpriseMembers reaches later pages when nextCursor is the last returned user id", async () => {
   const seenCursors: Array<string | null> = [];
 
   const members = await fetchAllEnterpriseMembers(async (after) => {
@@ -116,7 +182,7 @@ test("fetchAllEnterpriseMembers reaches later pages when nextCursor is the next 
             ],
           },
         ],
-        nextCursor: "user-3",
+        nextCursor: "user-2",
       };
     }
 
@@ -135,7 +201,7 @@ test("fetchAllEnterpriseMembers reaches later pages when nextCursor is the next 
     };
   });
 
-  assert.deepEqual(seenCursors, [null, "user-3"]);
+  assert.deepEqual(seenCursors, [null, "user-2"]);
   assert.deepEqual(
     members.map((member) => member.userId),
     ["user-1", "user-2", "user-3"]
@@ -151,7 +217,10 @@ test("members route pages distinct users instead of truncating on raw role rows"
 
   assert.match(source, /\.from\("users"\)/);
   assert.match(source, /user_organization_roles!inner/);
-  assert.match(source, /\.gte\("id", after\)/);
+  // Cursor pagination MUST use `.gt` (strict) to avoid duplicating the boundary
+  // row on the next page; `.gte` would cause repeated rows.
+  assert.match(source, /\.gt\("id", after\)/);
+  assert.doesNotMatch(source, /\.gte\("id", after\)/);
   assert.match(source, /\.limit\(limit \+ 1\)/);
   assert.doesNotMatch(source, /\.limit\(limit \* 5\)/);
 });
