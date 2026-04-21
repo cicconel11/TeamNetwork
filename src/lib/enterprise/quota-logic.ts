@@ -88,16 +88,49 @@ export function evaluateAdoptionQuota(
 }
 
 /**
- * Evaluate sub-org capacity. In the hybrid model, creation is always allowed
- * — billing kicks in after the free tier, but there is no hard cap.
+ * Evaluate sub-org capacity against the hard cap (sub_org_quantity).
+ * Returns whether additional orgs can be created.
  * Pure function — no I/O required.
+ *
+ * Note: This was changed from "always allowed" to hard enforcement.
+ * See migration 20261020200000 for the business rule reversal rationale.
  */
 export function evaluateSubOrgCapacity(
-  enterpriseManagedOrgCount: number
+  enterpriseManagedOrgCount: number,
+  subOrgQuantity: number | null = null
 ): SeatQuotaInfo {
+  if (subOrgQuantity == null) {
+    // Legacy unlimited — no hard cap
+    return {
+      currentCount: enterpriseManagedOrgCount,
+      maxAllowed: null,
+    };
+  }
+
   return {
     currentCount: enterpriseManagedOrgCount,
-    maxAllowed: null,
+    maxAllowed: subOrgQuantity,
+  };
+}
+
+/**
+ * Check whether a batch of orgs can be created within the hard cap.
+ * Pure function — operates on pre-fetched counts.
+ */
+export function batchQuotaCheck(
+  currentCount: number,
+  subOrgQuantity: number | null,
+  batchSize: number
+): { allowed: boolean; remaining: number | null; wouldExceedBy: number } {
+  if (subOrgQuantity == null) {
+    return { allowed: true, remaining: null, wouldExceedBy: 0 };
+  }
+  const remaining = Math.max(subOrgQuantity - currentCount, 0);
+  const wouldExceedBy = Math.max((currentCount + batchSize) - subOrgQuantity, 0);
+  return {
+    allowed: currentCount + batchSize <= subOrgQuantity,
+    remaining,
+    wouldExceedBy,
   };
 }
 

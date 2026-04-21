@@ -23,6 +23,7 @@ export interface CreateSubOrgParams {
   name: string;
   slug: string;
   description?: string | null;
+  purpose?: string | null;
   primaryColor?: string | null;
   enterprisePrimaryColor: string | null;
 }
@@ -41,6 +42,7 @@ export async function createEnterpriseSubOrg(
     name,
     slug,
     description,
+    purpose,
     primaryColor,
     enterprisePrimaryColor,
   } = params;
@@ -73,6 +75,7 @@ export async function createEnterpriseSubOrg(
       name,
       slug,
       description: description ?? null,
+      purpose: purpose ?? null,
       primary_color: primaryColor ?? enterprisePrimaryColor ?? "#1e3a5f",
       enterprise_id: enterpriseId,
       enterprise_relationship_type: "created",

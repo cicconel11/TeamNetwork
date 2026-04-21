@@ -33,6 +33,7 @@ const createOrgSchema = z
     name: safeString(120),
     slug: baseSchemas.slug,
     description: optionalSafeString(800),
+    purpose: optionalSafeString(500).optional(),
     primary_color: baseSchemas.hexColor.optional(),
     // Independent billing is not yet implemented - only enterprise_managed is supported
     billingType: z.literal("enterprise_managed").default("enterprise_managed"),
@@ -64,14 +65,25 @@ export async function POST(req: Request, { params }: RouteParams) {
       NextResponse.json(payload, { status, headers: rateLimit.headers });
 
     const body = await validateJson(req, createOrgSchema, { maxBodyBytes: 16_000 });
-    const { name, slug, description, primary_color } = body;
+    const { name, slug, description, purpose, primary_color } = body;
 
-    // Check seat limit for enterprise-managed orgs
+    // Check seat limit for enterprise-managed orgs (hard cap)
     const seatQuota = await canEnterpriseAddSubOrg(ctx.enterpriseId);
     if (seatQuota.error) {
       return respond(
         { error: "Unable to verify seat limit. Please try again." },
         503
+      );
+    }
+    if (seatQuota.maxAllowed != null && seatQuota.currentCount >= seatQuota.maxAllowed) {
+      return respond(
+        {
+          error: "Organization limit reached. Upgrade your subscription to add more organizations.",
+          needsUpgrade: true,
+          currentCount: seatQuota.currentCount,
+          maxAllowed: seatQuota.maxAllowed,
+        },
+        402
       );
     }
 
@@ -94,6 +106,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       name,
       slug,
       description,
+      purpose,
       primaryColor: primary_color,
       enterprisePrimaryColor: enterprise.primary_color,
     });
