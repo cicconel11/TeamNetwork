@@ -1957,6 +1957,112 @@ export type Database = {
           },
         ]
       }
+      dsr_requests: {
+        Row: {
+          ack_due_at: string
+          acknowledged_at: string | null
+          acknowledgement_method: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          linked_access_log_id: string | null
+          linked_deletion_request_id: string | null
+          organization_id: string | null
+          received_at: string
+          request_type: string
+          requester_email: string | null
+          requester_name: string | null
+          requester_relationship: string
+          resolution_method: string | null
+          resolution_notes: string | null
+          resolve_due_at: string
+          resolved_at: string | null
+          school_owner_user_id: string | null
+          source: string
+          status: string
+          subject_identifier: string | null
+          subject_identifier_type: string | null
+          subject_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          ack_due_at?: string
+          acknowledged_at?: string | null
+          acknowledgement_method?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          linked_access_log_id?: string | null
+          linked_deletion_request_id?: string | null
+          organization_id?: string | null
+          received_at?: string
+          request_type: string
+          requester_email?: string | null
+          requester_name?: string | null
+          requester_relationship: string
+          resolution_method?: string | null
+          resolution_notes?: string | null
+          resolve_due_at?: string
+          resolved_at?: string | null
+          school_owner_user_id?: string | null
+          source: string
+          status?: string
+          subject_identifier?: string | null
+          subject_identifier_type?: string | null
+          subject_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ack_due_at?: string
+          acknowledged_at?: string | null
+          acknowledgement_method?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          linked_access_log_id?: string | null
+          linked_deletion_request_id?: string | null
+          organization_id?: string | null
+          received_at?: string
+          request_type?: string
+          requester_email?: string | null
+          requester_name?: string | null
+          requester_relationship?: string
+          resolution_method?: string | null
+          resolution_notes?: string | null
+          resolve_due_at?: string
+          resolved_at?: string | null
+          school_owner_user_id?: string | null
+          source?: string
+          status?: string
+          subject_identifier?: string | null
+          subject_identifier_type?: string | null
+          subject_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dsr_requests_linked_access_log_id_fkey"
+            columns: ["linked_access_log_id"]
+            isOneToOne: false
+            referencedRelation: "data_access_log"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dsr_requests_linked_deletion_request_id_fkey"
+            columns: ["linked_deletion_request_id"]
+            isOneToOne: false
+            referencedRelation: "user_deletion_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dsr_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enterprise_adoption_requests: {
         Row: {
           enterprise_id: string
@@ -3676,6 +3782,122 @@ export type Database = {
           },
         ]
       }
+      mentee_preferences: {
+        Row: {
+          communication_prefs: string[]
+          created_at: string
+          geographic_pref: string | null
+          goals: string | null
+          id: string
+          nice_to_have_attributes: string[]
+          organization_id: string
+          preferred_industries: string[]
+          preferred_positions: string[]
+          preferred_role_families: string[]
+          preferred_sports: string[]
+          preferred_topics: string[]
+          required_attributes: string[]
+          seeking_mentorship: boolean
+          time_availability: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          communication_prefs?: string[]
+          created_at?: string
+          geographic_pref?: string | null
+          goals?: string | null
+          id?: string
+          nice_to_have_attributes?: string[]
+          organization_id: string
+          preferred_industries?: string[]
+          preferred_positions?: string[]
+          preferred_role_families?: string[]
+          preferred_sports?: string[]
+          preferred_topics?: string[]
+          required_attributes?: string[]
+          seeking_mentorship?: boolean
+          time_availability?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          communication_prefs?: string[]
+          created_at?: string
+          geographic_pref?: string | null
+          goals?: string | null
+          id?: string
+          nice_to_have_attributes?: string[]
+          organization_id?: string
+          preferred_industries?: string[]
+          preferred_positions?: string[]
+          preferred_role_families?: string[]
+          preferred_sports?: string[]
+          preferred_topics?: string[]
+          required_attributes?: string[]
+          seeking_mentorship?: boolean
+          time_availability?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentee_preferences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentor_bio_backfill_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error: string | null
+          id: string
+          mentor_profile_id: string
+          organization_id: string
+          processed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          mentor_profile_id: string
+          organization_id: string
+          processed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          mentor_profile_id?: string
+          organization_id?: string
+          processed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentor_bio_backfill_queue_mentor_profile_id_fkey"
+            columns: ["mentor_profile_id"]
+            isOneToOne: false
+            referencedRelation: "mentor_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentor_bio_backfill_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mentor_profiles: {
         Row: {
           accepting_new: boolean
@@ -3691,10 +3913,14 @@ export type Database = {
           custom_attributes: Json
           expertise_areas: string[]
           id: string
+          industries: string[]
           is_active: boolean
           max_mentees: number
           meeting_preferences: string[]
           organization_id: string
+          positions: string[]
+          role_families: string[]
+          sports: string[]
           time_commitment: string | null
           topics: string[]
           updated_at: string
@@ -3715,10 +3941,14 @@ export type Database = {
           custom_attributes?: Json
           expertise_areas?: string[]
           id?: string
+          industries?: string[]
           is_active?: boolean
           max_mentees?: number
           meeting_preferences?: string[]
           organization_id: string
+          positions?: string[]
+          role_families?: string[]
+          sports?: string[]
           time_commitment?: string | null
           topics?: string[]
           updated_at?: string
@@ -3739,10 +3969,14 @@ export type Database = {
           custom_attributes?: Json
           expertise_areas?: string[]
           id?: string
+          industries?: string[]
           is_active?: boolean
           max_mentees?: number
           meeting_preferences?: string[]
           organization_id?: string
+          positions?: string[]
+          role_families?: string[]
+          sports?: string[]
           time_commitment?: string | null
           topics?: string[]
           updated_at?: string
@@ -3807,54 +4041,6 @@ export type Database = {
             columns: ["pair_id"]
             isOneToOne: false
             referencedRelation: "mentorship_pairs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mentor_bio_backfill_queue: {
-        Row: {
-          attempts: number
-          created_at: string
-          error: string | null
-          id: string
-          mentor_profile_id: string
-          organization_id: string
-          processed_at: string | null
-          updated_at: string
-        }
-        Insert: {
-          attempts?: number
-          created_at?: string
-          error?: string | null
-          id?: string
-          mentor_profile_id: string
-          organization_id: string
-          processed_at?: string | null
-          updated_at?: string
-        }
-        Update: {
-          attempts?: number
-          created_at?: string
-          error?: string | null
-          id?: string
-          mentor_profile_id?: string
-          organization_id?: string
-          processed_at?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mentor_bio_backfill_queue_mentor_profile_id_fkey"
-            columns: ["mentor_profile_id"]
-            isOneToOne: false
-            referencedRelation: "mentor_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mentor_bio_backfill_queue_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -4037,6 +4223,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "mentorship_pairs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentorship_reminders: {
+        Row: {
+          created_at: string
+          id: string
+          mentor_user_id: string
+          organization_id: string
+          pending_count: number
+          sent_by: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mentor_user_id: string
+          organization_id: string
+          pending_count: number
+          sent_by: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mentor_user_id?: string
+          organization_id?: string
+          pending_count?: number
+          sent_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentorship_reminders_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -4695,6 +4916,7 @@ export type Database = {
           original_subscription_id: string | null
           original_subscription_status: string | null
           primary_color: string | null
+          purpose: string | null
           require_invite_approval: boolean
           secondary_color: string | null
           settings: Json
@@ -4726,6 +4948,7 @@ export type Database = {
           original_subscription_id?: string | null
           original_subscription_status?: string | null
           primary_color?: string | null
+          purpose?: string | null
           require_invite_approval?: boolean
           secondary_color?: string | null
           settings?: Json
@@ -4757,6 +4980,7 @@ export type Database = {
           original_subscription_id?: string | null
           original_subscription_status?: string | null
           primary_color?: string | null
+          purpose?: string | null
           require_invite_approval?: boolean
           secondary_color?: string | null
           settings?: Json
@@ -6073,6 +6297,10 @@ export type Database = {
       }
     }
     Functions: {
+      _donation_is_settled: {
+        Args: { p_deleted_at: string; p_status: string }
+        Returns: boolean
+      }
       accept_mentorship_proposal: {
         Args: { admin_override?: boolean; pair_id: string }
         Returns: {
@@ -6110,7 +6338,6 @@ export type Database = {
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
       backfill_ai_embedding_queue: { Args: { p_org_id: string }; Returns: Json }
       backfill_graph_sync_queue: { Args: { p_org_id: string }; Returns: Json }
-      backfill_mentor_bio_queue: { Args: { p_org_id: string }; Returns: Json }
       backfill_ip_hashes: {
         Args: { salt: string }
         Returns: {
@@ -6118,17 +6345,13 @@ export type Database = {
           updated_count: number
         }[]
       }
-      dequeue_mentor_bio_backfill_queue: {
-        Args: { p_batch_size?: number }
+      backfill_mentor_bio_queue: { Args: { p_org_id: string }; Returns: Json }
+      batch_create_enterprise_orgs: {
+        Args: { p_enterprise_id: string; p_orgs: Json; p_user_id: string }
         Returns: {
-          attempts: number
-          created_at: string
-          error: string | null
-          id: string
-          mentor_profile_id: string
-          organization_id: string
-          processed_at: string | null
-          updated_at: string
+          out_org_id: string
+          out_slug: string
+          out_status: string
         }[]
       }
       bulk_import_alumni_rich: {
@@ -6358,6 +6581,25 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      dequeue_mentor_bio_backfill_queue: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          error: string | null
+          id: string
+          mentor_profile_id: string
+          organization_id: string
+          processed_at: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "mentor_bio_backfill_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       enrich_alumni_by_id: {
         Args: {
           p_alumni_id: string
@@ -6380,8 +6622,41 @@ export type Database = {
         Returns: string[]
       }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
+      get_donation_analytics: {
+        Args: {
+          p_bucket: string
+          p_org_id: string
+          p_top_purposes_limit: number
+          p_window_days: number
+        }
+        Returns: Json
+      }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
+      get_dsr_requests_due_soon: {
+        Args: { p_org_id: string; p_window_days?: number }
+        Returns: {
+          ack_due_at: string
+          acknowledged_at: string
+          due_at: string
+          due_phase: string
+          id: string
+          organization_id: string
+          received_at: string
+          request_type: string
+          requester_email: string
+          requester_name: string
+          requester_relationship: string
+          resolve_due_at: string
+          school_owner_user_id: string
+          source: string
+          status: string
+        }[]
+      }
       get_enterprise_alumni_stats: {
+        Args: { p_enterprise_id: string }
+        Returns: Json
+      }
+      get_enterprise_counts: {
         Args: { p_enterprise_id: string }
         Returns: Json
       }
@@ -6425,6 +6700,7 @@ export type Database = {
         Args: { allowed_roles: string[]; org: string }
         Returns: boolean
       }
+      has_dsr_compliance_role: { Args: never; Returns: boolean }
       increment_ai_queue_attempts: {
         Args: { p_error: string; p_id: string }
         Returns: undefined

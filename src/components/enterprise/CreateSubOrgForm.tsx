@@ -150,6 +150,9 @@ export function CreateSubOrgForm({
           primary_color: pendingFormData.primaryColor,
           expectedCurrentQuantity: upgradeInfo?.maxAllowed,
           billingType: pendingFormData.billingType,
+          // Hard-block protocol: server requires this flag before bumping the
+          // seat quantity. The user has just confirmed in OrgLimitUpgradeModal.
+          confirmUpgrade: true,
         }),
       });
 
