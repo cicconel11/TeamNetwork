@@ -34,16 +34,6 @@ interface EnterpriseCountsResult {
   sub_org_quantity: number | null;
 }
 
-// Type for enterprise-managed org count from view (legacy fallback)
-interface EnterpriseManagedCountRow {
-  enterprise_managed_org_count: number;
-}
-
-// Type for enterprise alumni counts view (legacy fallback)
-interface AlumniCountsRow {
-  total_alumni_count: number;
-  sub_org_count: number;
-}
 
 /**
  * Fetch enterprise counts using the parameterized function (preferred)

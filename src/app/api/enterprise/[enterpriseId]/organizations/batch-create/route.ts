@@ -9,7 +9,6 @@ import {
 import {
   getEnterpriseApiContext,
   ENTERPRISE_CREATE_ORG_ROLE,
-  ENTERPRISE_OWNER_ROLE,
 } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { canEnterpriseAddSubOrgs } from "@/lib/enterprise/quota";
