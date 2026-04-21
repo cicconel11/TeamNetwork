@@ -64,7 +64,7 @@ BEGIN
     ON os.organization_id = o.id
   WHERE o.enterprise_id = p_enterprise_id
     AND os.status = 'enterprise_managed'
-    AND o.deleted_at IS NULL;
+    -- Note: organizations table has no deleted_at column;
 
   -- Hard cap check for entire batch (NULL = legacy unlimited)
   IF v_sub_org_quantity IS NOT NULL

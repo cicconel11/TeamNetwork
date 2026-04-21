@@ -44,7 +44,7 @@ BEGIN
   LEFT JOIN public.organization_subscriptions os
     ON os.organization_id = o.id
   WHERE o.enterprise_id = p_enterprise_id
-    AND o.deleted_at IS NULL;
+    -- Note: organizations table has no deleted_at column;
 
   -- Fetch sub_org_quantity for quota info
   SELECT es.sub_org_quantity

@@ -53,7 +53,7 @@ BEGIN
     ON os.organization_id = o.id
   WHERE o.enterprise_id = v_enterprise_id
     AND os.status = 'enterprise_managed'
-    AND o.deleted_at IS NULL;
+    -- Note: organizations table has no deleted_at column;
 
   IF v_current_count >= v_sub_org_quantity THEN
     RAISE EXCEPTION 'Enterprise org limit reached (% of % allowed). Upgrade your subscription to add more organizations.',

@@ -116,8 +116,8 @@ export async function POST(req: Request, { params }: RouteParams) {
           402
         );
       }
-      console.error("[batch-create] RPC error:", rpcError);
-      return respond({ error: "Failed to create organizations" }, 500);
+      console.error("[batch-create] RPC error:", JSON.stringify(rpcError, null, 2));
+      return respond({ error: "Failed to create organizations", detail: rpcError.message, code: rpcError.code }, 500);
     }
 
     const createdOrgs = (rpcResult ?? []).filter((r) => r.out_status === "created");
@@ -280,6 +280,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     if (error instanceof ValidationError) {
       return validationErrorResponse(error);
     }
-    throw error;
+    console.error("[batch-create] Unhandled error:", error);
+    return NextResponse.json(
+      { error: "Internal server error", detail: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
   }
 }
