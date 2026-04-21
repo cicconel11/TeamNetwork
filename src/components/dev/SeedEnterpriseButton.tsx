@@ -18,7 +18,6 @@ export function SeedEnterpriseButton() {
         method: "POST",
       });
       const data = await response.json();
-      console.log("[SeedEnterpriseButton] Response:", data);
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to seed enterprise");

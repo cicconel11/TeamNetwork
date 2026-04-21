@@ -143,7 +143,7 @@ export async function GET(request: Request) {
   }
 
   const summary = { processed, orgs: orgs.length, ok, not_found: notFound, errors, skipped };
-  console.log("[linkedin-bulk-sync] Complete:", JSON.stringify(summary));
+  console.info("[linkedin-bulk-sync] Complete:", JSON.stringify(summary));
 
   return NextResponse.json(summary);
 }

@@ -221,8 +221,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Failed to finalize upload" }, { status: 500 });
     }
 
-    console.log("[media/gallery] Finalize success", { mediaId });
-
     return NextResponse.json(
       { mediaId: updated.id, status: updated.status },
       { headers: rateLimit.headers },

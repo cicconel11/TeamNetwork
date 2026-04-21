@@ -273,8 +273,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: deletion.error }, { status: deletion.status });
     }
 
-    console.log("[media/gallery] Deleted", { mediaId, deletedIds: deletion.deletedIds });
-
     return NextResponse.json({ success: true }, { headers: rateLimit.headers });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

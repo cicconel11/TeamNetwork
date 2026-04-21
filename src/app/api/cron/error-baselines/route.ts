@@ -40,7 +40,7 @@ export async function GET(request: Request) {
           throw resetError;
         }
 
-        console.log("[cron/error-baselines] Baseline update completed (fallback mode)");
+        console.info("[cron/error-baselines] Baseline update completed (fallback mode)");
 
         return NextResponse.json({
           success: true,
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
       throw error;
     }
 
-    console.log("[cron/error-baselines] Baseline update completed");
+    console.info("[cron/error-baselines] Baseline update completed");
 
     return NextResponse.json({
       success: true,

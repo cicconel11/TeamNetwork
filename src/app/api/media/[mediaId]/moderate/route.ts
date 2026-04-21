@@ -100,8 +100,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    console.log("[media/gallery] Moderated", { mediaId, action: newStatus });
-
     return NextResponse.json(updated, { headers: rateLimit.headers });
   } catch (error) {
     if (error instanceof ValidationError) {
