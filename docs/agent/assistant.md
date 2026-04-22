@@ -81,6 +81,7 @@ The assistant is locked to TeamNetwork organization tasks. Enforcement runs at f
 | Semantic Cache | [semantic-cache-codemap.md](semantic-cache-codemap.md) | Exact-hash prompt deduplication, 12h general TTL, hourly bounded purge |
 | Thread Management | [threads-codemap.md](threads-codemap.md) | CRUD for threads and messages, cursor pagination, soft-delete |
 | UI Panel | [ui-panel-codemap.md](ui-panel-codemap.md) | Slide-out panel, SSE stream consumer, thread/message display, pending-action review |
+| Confirm Dispatchers | [confirm-dispatcher-pattern.md](confirm-dispatcher-pattern.md) | Per-domain confirm-handler split, CAS + rollback contract, `return await` rule for new `prepare_*` families |
 
 ## Database Tables
 
