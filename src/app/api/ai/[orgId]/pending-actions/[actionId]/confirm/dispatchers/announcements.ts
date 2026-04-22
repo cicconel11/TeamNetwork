@@ -83,6 +83,7 @@ export async function handleCreateAnnouncement(
       userId: ctx.userId,
       threadId: action.thread_id,
       pendingActionId: action.id,
+      draftType: "create_announcement",
     });
   }
 

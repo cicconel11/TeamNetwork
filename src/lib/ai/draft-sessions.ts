@@ -69,6 +69,11 @@ export interface DraftSessionRecord<TDraftType extends DraftSessionType = DraftS
 
 interface DraftSessionSelectChain {
   eq(column: string, value: string): DraftSessionSelectChain;
+  order(
+    column: string,
+    options: { ascending: boolean }
+  ): DraftSessionSelectChain;
+  limit(count: number): DraftSessionSelectChain;
   maybeSingle(): Promise<{ data: unknown; error: unknown }>;
 }
 
@@ -117,14 +122,32 @@ export async function getDraftSession(
     organizationId: string;
     userId: string;
     threadId: string;
+    // When provided, narrows the lookup to a specific draft type — required
+    // for any caller that needs to discriminate between concurrent drafts
+    // (e.g. a `create_announcement` vs `edit_announcement` draft on the
+    // same thread). When omitted, returns the most-recently-updated draft
+    // of any type for backwards compatibility with legacy "do they have an
+    // active draft?" callers.
+    draftType?: DraftSessionType;
   }
 ): Promise<DraftSessionRecord | null> {
-  const { data, error } = await supabase
+  let chain = supabase
     .from("ai_draft_sessions")
     .select("*")
     .eq("organization_id", input.organizationId)
     .eq("user_id", input.userId)
-    .eq("thread_id", input.threadId)
+    .eq("thread_id", input.threadId);
+
+  if (input.draftType) {
+    chain = chain.eq("draft_type", input.draftType);
+  }
+
+  // order + limit keeps `.maybeSingle()` safe once the unique key widens
+  // to (thread_id, draft_type): a thread can legitimately carry multiple
+  // rows after widening, and un-narrowed callers want the most recent.
+  const { data, error } = await chain
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) {
@@ -165,10 +188,14 @@ export async function saveDraftSession(
       input.expiresAt ?? new Date(Date.now() + AI_PENDING_ACTION_EXPIRY_MS).toISOString(),
   };
 
+  // Existence check narrowed to draft_type so two draft types on the same
+  // thread round-trip as two rows under the widened (thread_id, draft_type)
+  // unique key.
   const existing = await getDraftSession(supabase, {
     organizationId: input.organizationId,
     userId: input.userId,
     threadId: input.threadId,
+    draftType: input.draftType,
   });
 
   if (existing) {
@@ -205,6 +232,10 @@ export async function clearDraftSession(
     userId: string;
     threadId: string;
     pendingActionId?: string | null;
+    // When provided, clears only the matching draft type. When omitted,
+    // clears every draft type for the thread (the legacy behaviour —
+    // still valid for callers that want a blanket reset).
+    draftType?: DraftSessionType;
   }
 ): Promise<void> {
   let query = supabase
@@ -213,6 +244,10 @@ export async function clearDraftSession(
     .eq("organization_id", input.organizationId)
     .eq("user_id", input.userId)
     .eq("thread_id", input.threadId);
+
+  if (input.draftType) {
+    query = query.eq("draft_type", input.draftType);
+  }
 
   if (input.pendingActionId) {
     query = query.eq("pending_action_id", input.pendingActionId);

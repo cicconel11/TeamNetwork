@@ -78,6 +78,7 @@ export async function handleCreateDiscussionThread(
       userId: ctx.userId,
       threadId: action.thread_id,
       pendingActionId: action.id,
+      draftType: "create_discussion_thread",
     });
   }
 
@@ -165,6 +166,7 @@ export async function handleCreateDiscussionReply(
       userId: ctx.userId,
       threadId: action.thread_id,
       pendingActionId: action.id,
+      draftType: "create_discussion_reply",
     });
   }
 

@@ -92,6 +92,7 @@ export async function handleSendChatMessage(
       userId: ctx.userId,
       threadId: action.thread_id,
       pendingActionId: action.id,
+      draftType: "send_chat_message",
     });
   }
 
@@ -184,6 +185,7 @@ export async function handleSendGroupChatMessage(
       userId: ctx.userId,
       threadId: action.thread_id,
       pendingActionId: action.id,
+      draftType: "send_group_chat_message",
     });
   }
 

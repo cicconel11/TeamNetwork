@@ -4196,6 +4196,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 userId: ctx.userId,
                 threadId,
                 pendingActionId: activeDraftSession.pending_action_id,
+                draftType: activeDraftSession.draft_type,
               });
             } catch (error) {
               aiLog("warn", "ai-chat", "failed to clear expired draft session", {
@@ -4222,6 +4223,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   userId: ctx.userId,
                   threadId,
                   pendingActionId: activeDraftSession.pending_action_id,
+                  draftType: activeDraftSession.draft_type,
                 });
               } catch (error) {
                 aiLog("warn", "ai-chat", "failed to clear abandoned draft session", {

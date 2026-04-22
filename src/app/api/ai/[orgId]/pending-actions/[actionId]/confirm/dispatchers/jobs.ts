@@ -73,6 +73,7 @@ export async function handleCreateJobPosting(
       userId: ctx.userId,
       threadId: action.thread_id,
       pendingActionId: action.id,
+      draftType: "create_job_posting",
     });
   }
 
