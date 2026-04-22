@@ -104,11 +104,13 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
   const [reorderMode, setReorderMode] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const albumsRef = useRef<MediaAlbum[]>([]);
+  const sourceAlbumsRef = useRef<MediaAlbum[]>([]);
   const visibleAlbums = useMemo(
     () => mergeFolderImportAlbum(albums, importingAlbum, hiddenAlbumIds),
     [albums, hiddenAlbumIds, importingAlbum],
   );
   albumsRef.current = visibleAlbums;
+  sourceAlbumsRef.current = albums;
 
   const canReorder = canCreate;
 
@@ -146,12 +148,12 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const persistReorder = useCallback(async (next: MediaAlbum[], previous: MediaAlbum[]) => {
+  const persistReorder = useCallback(async (orderedIds: string[], previous: MediaAlbum[]) => {
     try {
       const res = await fetch("/api/media/albums/reorder", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgId, albumIds: next.map((a) => a.id) }),
+        body: JSON.stringify({ orgId, albumIds: orderedIds }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -173,8 +175,24 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
       const newIndex = current.findIndex((a) => a.id === over.id);
       if (oldIndex < 0 || newIndex < 0) return;
       const next = arrayMove(current, oldIndex, newIndex);
-      setAlbums(next);
-      void persistReorder(next, current);
+
+      // Build the full album ID list for the API: reordered visible IDs
+      // (excluding temp import-only albums) + hidden albums appended at end.
+      const sourceIds = new Set(sourceAlbumsRef.current.map((a) => a.id));
+      const reorderedIds = next.map((a) => a.id).filter((id) => sourceIds.has(id));
+      const reorderedSet = new Set(reorderedIds);
+      const hiddenIds = sourceAlbumsRef.current
+        .filter((a) => !reorderedSet.has(a.id))
+        .map((a) => a.id);
+      const fullAlbumIds = [...reorderedIds, ...hiddenIds];
+
+      // Update local state with the reordered source albums
+      const orderMap = new Map(fullAlbumIds.map((id, i) => [id, i]));
+      const reorderedAlbums = [...sourceAlbumsRef.current].sort(
+        (a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0),
+      );
+      setAlbums(reorderedAlbums);
+      void persistReorder(fullAlbumIds, sourceAlbumsRef.current);
     },
     [persistReorder],
   );
