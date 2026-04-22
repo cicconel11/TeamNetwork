@@ -161,6 +161,13 @@ const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
 // does NOT match "delete/remove/cancel" — that's Phase 2b-prepare.
 const EDIT_ANNOUNCEMENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:fix|change|update|edit|reword|rephrase|correct|amend|revise)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin|typo|typos|title|wording)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:fix|change|edit|reword|rephrase|correct|amend|revise)(?!\w))/i;
+// Delete-intent verbs for announcements. Destructive verbs only:
+// "delete/remove/take down/retract/unpublish/pull". Does NOT match
+// "cancel" because cancel overloads with event-cancel semantics; the
+// model should use explicit delete/remove phrasing. Does NOT match edit
+// verbs ("fix/change/edit/…") — those remain Phase 2a.
+const DELETE_ANNOUNCEMENT_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:delete|remove|retract|unpublish|pull)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:delete|remove|retract|unpublish|pull|take\s+down)(?!\w)|(?<!\w)take\s+down(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin)(?!\w))/i;
 const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 const SEND_CHAT_MESSAGE_PROMPT_PATTERN =
@@ -1849,6 +1856,14 @@ function getPass1Tools(
 
   if (CREATE_ANNOUNCEMENT_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.prepare_announcement];
+  }
+
+  // Delete-intent attachment — check BEFORE edit because delete verbs
+  // (delete/remove/retract/unpublish) do not overlap with edit verbs and
+  // are destructively specific. A message matching both ("remove and fix"
+  // is not a thing) should never reach here.
+  if (DELETE_ANNOUNCEMENT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_delete_announcement];
   }
 
   // Edit-intent attachment — check AFTER create to avoid stealing turns that

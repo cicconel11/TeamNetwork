@@ -344,6 +344,31 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_delete_announcement: {
+    type: "function" as const,
+    function: {
+      name: "prepare_delete_announcement" as const,
+      description:
+        "Prepare a soft-delete of an existing organization announcement. Use this when the user asks to delete, remove, cancel, take down, retract, or unpublish an announcement. Target resolution is strict — target_id must be supplied explicitly. There is no most-recent fallback because delete is destructive and cannot be undone from chat. When the user has not named a specific announcement, list recent announcements and ask them to pick one rather than guessing.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          target_id: {
+            type: "string" as const,
+            description:
+              "The ID of the announcement to delete. Required — the tool refuses to act without an explicit target_id.",
+          },
+          reasoning: {
+            type: "string" as const,
+            description:
+              "Short (one-sentence) explanation of why this delete is being proposed. Logged for audit. Example: 'user asked to remove a duplicate announcement'.",
+          },
+        },
+        required: ["target_id"] as const,
+        additionalProperties: false as const,
+      },
+    },
+  },
   prepare_job_posting: {
     type: "function" as const,
     function: {
@@ -1114,6 +1139,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.revoke_enterprise_invite,
   TOOL_BY_NAME.prepare_announcement,
   TOOL_BY_NAME.prepare_edit_announcement,
+  TOOL_BY_NAME.prepare_delete_announcement,
   TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.prepare_chat_message,
   TOOL_BY_NAME.prepare_group_message,

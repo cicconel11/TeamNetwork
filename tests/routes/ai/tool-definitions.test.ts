@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 35 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 35);
+test("AI_TOOLS exports 36 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 36);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -33,6 +33,7 @@ test("TOOL_NAMES contains all tool names", () => {
     "list_philanthropy_events",
     "prepare_announcement",
     "prepare_edit_announcement",
+    "prepare_delete_announcement",
     "prepare_job_posting",
     "prepare_chat_message",
     "list_chat_groups",
@@ -158,6 +159,23 @@ test("suggest_connections supports person_query or person_type plus person_id", 
   assert.ok(props.person_query);
   assert.equal(props.limit.maximum, 25);
   assert.equal(params.required, undefined);
+});
+
+test("prepare_delete_announcement requires target_id", () => {
+  const tool = AI_TOOLS.find(
+    (t) => t.function.name === "prepare_delete_announcement"
+  )!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.target_id);
+  assert.equal(props.target_id.type, "string");
+  assert.deepEqual(params.required, ["target_id"]);
+  // Security: description must convey strict target resolution (no fallback).
+  assert.match(
+    tool.function.description,
+    /no most-recent fallback|strict|explicit/i
+  );
 });
 
 test("find_navigation_targets requires a query string", () => {

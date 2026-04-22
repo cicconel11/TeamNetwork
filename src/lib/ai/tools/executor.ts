@@ -53,6 +53,7 @@ import {
   buildPendingActionSummary,
   type CreateAnnouncementPendingPayload,
   type EditAnnouncementPendingPayload,
+  type DeleteAnnouncementPendingPayload,
   type SendChatMessagePendingPayload,
   type SendGroupChatMessagePendingPayload,
   type CreateDiscussionReplyPendingPayload,
@@ -213,6 +214,13 @@ const prepareEditAnnouncementSchema = z
       .enum(["all", "members", "active_members", "alumni", "individuals"])
       .optional(),
     audience_user_ids: z.array(z.string().uuid()).optional(),
+    reasoning: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const prepareDeleteAnnouncementSchema = z
+  .object({
+    target_id: z.string().uuid(),
     reasoning: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -414,6 +422,7 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   revoke_enterprise_invite: revokeEnterpriseInviteSchema,
   prepare_announcement: prepareAnnouncementSchema,
   prepare_edit_announcement: prepareEditAnnouncementSchema,
+  prepare_delete_announcement: prepareDeleteAnnouncementSchema,
   prepare_job_posting: prepareJobPostingSchema,
   prepare_chat_message: prepareChatMessageSchema,
   prepare_group_message: prepareGroupMessageSchema,
@@ -1674,6 +1683,150 @@ async function prepareEditAnnouncement(
         target_id: target.id,
         target_title: target.title,
         patch,
+      },
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
+// ─── prepare_delete_announcement ──────────────────────────────────────
+//
+// Phase 2b-prepare of the Tier 1 plan. Unlike edit, delete is strictly
+// target_id-required — no most-recent fallback. The plan's security-
+// hardening decision (A2.1) disables the fallback for destructive ops
+// so the assistant can never soft-delete an ambiguous target. The
+// confirm-side dispatcher (see confirm/dispatchers/announcements.ts::
+// handleDeleteAnnouncement) calls softDeleteAnnouncement, which is
+// idempotent — re-confirm on an already-deleted row no-ops.
+
+async function prepareDeleteAnnouncement(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareDeleteAnnouncementSchema>
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Announcement delete preparation requires a thread context");
+  }
+
+  // Target resolution is strict: explicit target_id only, no fallback.
+  // We still run the resolver for parity with edit (auth + taint checks
+  // live there), but force fallback: "none".
+  const resolution = await resolveAgentActionTarget({
+    supabase: sb as never,
+    caller: { userId: ctx.userId, organizationId: ctx.orgId },
+    entityType: "announcement",
+    op: "delete",
+    targetId: args.target_id,
+    fallback: "none",
+  });
+
+  if (resolution.kind === "needs_target_id") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason: resolution.reason,
+      },
+    };
+  }
+  if (resolution.kind === "not_found") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason:
+          "The requested announcement was not found in this organization.",
+      },
+    };
+  }
+
+  // Load the target row to capture the optimistic-concurrency token and
+  // current title (for the confirmation ai_message body — once the row
+  // is soft-deleted, subsequent reads may filter it out). Scope by
+  // orgId to defend against cross-org target_id spoofing — the triple-
+  // layer org assertion per the plan's security hardening.
+  const { data: target, error: targetError } = await sb
+    .from("announcements")
+    .select("id, title, updated_at, organization_id, deleted_at")
+    .eq("id", resolution.targetId)
+    .eq("organization_id", ctx.orgId)
+    .maybeSingle();
+
+  if (targetError) {
+    aiLog(
+      "warn",
+      "ai-tools",
+      "prepare_delete_announcement target lookup failed",
+      logContext,
+      { error: getSafeErrorMessage(targetError), targetId: resolution.targetId }
+    );
+    return toolError("Failed to load the target announcement");
+  }
+  if (!target) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason: "The requested announcement was not found in this organization.",
+      },
+    };
+  }
+  if (target.deleted_at !== null) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason:
+          "The requested announcement has already been deleted.",
+      },
+    };
+  }
+
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_delete_announcement org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  const pendingPayload: DeleteAnnouncementPendingPayload = {
+    targetId: target.id as string,
+    expectedUpdatedAt: (target.updated_at as string | null) ?? null,
+    targetTitle: (target.title as string | null) ?? null,
+    orgSlug: typeof org?.slug === "string" ? org.slug : null,
+  };
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "delete_announcement",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: {
+        target_id: target.id,
+        target_title: target.title,
       },
       pending_action: {
         id: pendingAction.id,
@@ -3545,6 +3698,12 @@ export async function executeToolCall(
             sb,
             ctx,
             args as z.infer<typeof prepareEditAnnouncementSchema>
+          );
+        case "prepare_delete_announcement":
+          return prepareDeleteAnnouncement(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareDeleteAnnouncementSchema>
           );
         case "prepare_job_posting":
           return prepareJobPosting(
