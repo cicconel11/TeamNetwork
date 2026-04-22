@@ -11,7 +11,6 @@ import {
   type SendGroupChatMessagePendingPayload,
   updatePendingActionStatus,
   type CreateDiscussionThreadPendingPayload,
-  type CreateJobPostingPendingPayload,
   type CreateEnterpriseInvitePendingPayload,
   type RevokeEnterpriseInvitePendingPayload,
 } from "@/lib/ai/pending-actions";
@@ -41,6 +40,7 @@ import { syncEventToUsers } from "@/lib/google/calendar-sync";
 import { sendNotificationBlast } from "@/lib/notifications";
 import { handleCreateAnnouncement } from "./dispatchers/announcements";
 import { handleCreateEvent } from "./dispatchers/events";
+import { handleCreateJobPosting } from "./dispatchers/jobs";
 
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
@@ -182,7 +182,11 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
     try {
       switch (action.action_type) {
         case "create_announcement":
-          return handleCreateAnnouncement(
+          // `return await` (not `return`) is required: the outer try/catch must
+          // observe rejections from the dispatcher to run the rollback path.
+          // `return promise` would return the pending promise and let the
+          // rejection escape the surrounding try.
+          return await handleCreateAnnouncement(
             {
               serviceSupabase: ctx.serviceSupabase,
               orgId: ctx.orgId,
@@ -199,74 +203,20 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               sendNotificationBlastFn,
             }
           );
-        case "create_job_posting": {
-          const payload = action.payload as CreateJobPostingPendingPayload;
-          const result = await createJobPostingFn({
-            supabase: ctx.serviceSupabase,
-            serviceSupabase: ctx.serviceSupabase,
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            input: payload,
-          });
-
-          if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-              status: "pending",
-              expectedStatus: "confirmed",
-            });
-            return NextResponse.json(
-              result.details ? { error: result.error, details: result.details } : { error: result.error },
-              { status: result.status }
-            );
-          }
-
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-            status: "executed",
-            expectedStatus: "confirmed",
-            executedAt: new Date().toISOString(),
-            resultEntityType: "job_posting",
-            resultEntityId: result.job.id,
-          });
-
-          if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
-              organizationId: ctx.orgId,
+        case "create_job_posting":
+          return await handleCreateJobPosting(
+            {
+              serviceSupabase: ctx.serviceSupabase,
+              orgId: ctx.orgId,
               userId: ctx.userId,
-              threadId: action.thread_id,
-              pendingActionId: action.id,
-            });
-          }
-
-          const orgSlug =
-            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
-              ? payload.orgSlug
-              : null;
-          const jobUrl = orgSlug ? `/${orgSlug}/jobs/${result.job.id}` : null;
-          const content = jobUrl
-            ? `Created job posting: [${result.job.title}](${jobUrl})`
-            : `Created job posting: ${result.job.title}`;
-
-          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
-            thread_id: action.thread_id,
-            org_id: ctx.orgId,
-            role: "assistant",
-            content,
-            status: "complete",
-          });
-
-          if (msgError) {
-            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
-              ...logContext,
-              userId: ctx.userId,
-              threadId: action.thread_id,
-            }, {
-              actionId: action.id,
-              error: msgError,
-            });
-          }
-
-          return NextResponse.json({ ok: true, job: result.job, actionId: action.id });
-        }
+              logContext,
+              canUseDraftSessions,
+              updatePendingActionStatusFn,
+              clearDraftSessionFn,
+            },
+            action as PendingActionRecord<"create_job_posting">,
+            { createJobPostingFn }
+          );
         case "send_chat_message": {
           const payload = action.payload as SendChatMessagePendingPayload;
           const result = await sendAiAssistedDirectChatMessageFn(ctx.serviceSupabase as DirectChatSupabase, {
@@ -564,7 +514,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           return NextResponse.json({ ok: true, reply: result.reply, actionId: action.id });
         }
         case "create_event":
-          return handleCreateEvent(
+          return await handleCreateEvent(
             {
               serviceSupabase: ctx.serviceSupabase,
               orgId: ctx.orgId,
