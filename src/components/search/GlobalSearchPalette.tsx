@@ -246,17 +246,15 @@ export function GlobalSearchPalette() {
       );
       setOpen(false);
 
-      // If targeting an album on the media page, fire a custom event so an
-      // already-mounted MediaGallery can react (router.push won't re-run
-      // useState initialisers on a soft navigation).
-      const albumMatch = url.match(/\/media\?album=([^&]+)/);
-      if (albumMatch) {
-        window.dispatchEvent(
-          new CustomEvent("media:select-album", { detail: { albumId: albumMatch[1] } }),
-        );
+      // Add cache-bust param for album deep-links so repeated clicks for
+      // the same album always produce a fresh searchParams prop on the
+      // server-rendered media page.
+      let navUrl = url;
+      if (/\/media\?album=/.test(url)) {
+        navUrl = `${url}&_t=${Date.now()}`;
       }
 
-      router.push(url);
+      router.push(navUrl);
     },
     [orgId, mode, orgSlug, query, router, setOpen],
   );

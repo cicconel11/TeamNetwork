@@ -52,6 +52,8 @@ interface MediaGalleryProps {
   canUpload: boolean;
   isAdmin: boolean;
   currentUserId?: string;
+  deepLinkAlbumId?: string;
+  deepLinkKey?: string;
 }
 
 type MediaType = "all" | "image" | "video";
@@ -118,42 +120,33 @@ function SortableMediaRow({
   );
 }
 
-export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: MediaGalleryProps) {
+export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId, deepLinkAlbumId, deepLinkKey }: MediaGalleryProps) {
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
   const { dismissImportAlbum, importingAlbum } = useMediaUploadManager();
 
-  // Deep-link: capture ?album=<id> from URL on mount (e.g. from global search)
-  const [autoSelectAlbumId, setAutoSelectAlbumId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    const url = new URL(window.location.href);
-    const id = url.searchParams.get("album");
-    if (id) {
-      url.searchParams.delete("album");
-      window.history.replaceState(null, "", url.pathname + url.search);
-    }
-    return id;
-  });
+  // Deep-link: album ID passed from server via searchParams (e.g. from global search)
+  const [autoSelectAlbumId, setAutoSelectAlbumId] = useState<string | null>(deepLinkAlbumId ?? null);
   // Sequence counter so repeated searches for the same album still trigger auto-select
   const [autoSelectSeq, setAutoSelectSeq] = useState(0);
 
-  // Listen for same-page album deep-links from global search (custom event
-  // dispatched by GlobalSearchPalette when the user is already on /media).
+  // React to server-provided deep-link album ID changes (e.g. navigating
+  // from global search while already on the media page — router.push triggers
+  // a server re-render that flows new searchParams down as props).
   useEffect(() => {
-    const handler = (e: Event) => {
-      const { albumId } = (e as CustomEvent<{ albumId: string }>).detail;
-      setSelectedAlbum(null);
-      setView("albums");
-      setAutoSelectAlbumId(albumId);
-      setAutoSelectSeq((s) => s + 1);
-      // Clean URL
-      const url = new URL(window.location.href);
+    if (!deepLinkAlbumId) return;
+    setSelectedAlbum(null);
+    setView("albums");
+    setAutoSelectAlbumId(deepLinkAlbumId);
+    setAutoSelectSeq((s) => s + 1);
+    // Clean URL so refresh doesn't replay the deep-link
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("album")) {
       url.searchParams.delete("album");
+      url.searchParams.delete("_t");
       window.history.replaceState(null, "", url.pathname + url.search);
-    };
-    window.addEventListener("media:select-album", handler);
-    return () => window.removeEventListener("media:select-album", handler);
-  }, []);
+    }
+  }, [deepLinkAlbumId, deepLinkKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // View tab state
   const [view, setView] = useState<GalleryView>("albums");
