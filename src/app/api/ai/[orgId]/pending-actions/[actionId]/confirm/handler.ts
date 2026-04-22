@@ -218,6 +218,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               userId: ctx.userId,
               threadId: action.thread_id,
               pendingActionId: action.id,
+              draftType: "create_announcement",
             });
           }
 
@@ -316,6 +317,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               userId: ctx.userId,
               threadId: action.thread_id,
               pendingActionId: action.id,
+              draftType: "create_job_posting",
             });
           }
 
@@ -391,6 +393,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               userId: ctx.userId,
               threadId: action.thread_id,
               pendingActionId: action.id,
+              draftType: "send_chat_message",
             });
           }
 
@@ -462,6 +465,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               userId: ctx.userId,
               threadId: action.thread_id,
               pendingActionId: action.id,
+              draftType: "send_group_chat_message",
             });
           }
 
@@ -540,6 +544,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               userId: ctx.userId,
               threadId: action.thread_id,
               pendingActionId: action.id,
+              draftType: "create_discussion_thread",
             });
           }
 
@@ -610,6 +615,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               userId: ctx.userId,
               threadId: action.thread_id,
               pendingActionId: action.id,
+              draftType: "create_discussion_reply",
             });
           }
 
@@ -702,6 +708,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               userId: ctx.userId,
               threadId: action.thread_id,
               pendingActionId: action.id,
+              draftType: "create_event",
             });
           }
 
