@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import {
-  type CreateAnnouncementPendingPayload,
   type CreateDiscussionReplyPendingPayload,
   getPendingAction,
   isAuthorizedAction,
   isPendingActionExpired,
+  type PendingActionRecord,
   type SendChatMessagePendingPayload,
   type SendGroupChatMessagePendingPayload,
   updatePendingActionStatus,
@@ -41,6 +41,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { aiLog } from "@/lib/ai/logger";
 import { syncEventToUsers } from "@/lib/google/calendar-sync";
 import { sendNotificationBlast } from "@/lib/notifications";
+import { handleCreateAnnouncement } from "./dispatchers/announcements";
 
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
@@ -181,106 +182,24 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
     try {
       switch (action.action_type) {
-        case "create_announcement": {
-          const payload = action.payload as CreateAnnouncementPendingPayload;
-          const result = await createAnnouncementFn({
-            supabase: ctx.serviceSupabase,
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            input: {
-              ...payload,
-              audience_user_ids: payload.audience_user_ids ?? null,
-            },
-          });
-
-          if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-              status: "pending",
-              expectedStatus: "confirmed",
-            });
-            return NextResponse.json(
-              result.details ? { error: result.error, details: result.details } : { error: result.error },
-              { status: result.status }
-            );
-          }
-
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-            status: "executed",
-            expectedStatus: "confirmed",
-            executedAt: new Date().toISOString(),
-            resultEntityType: "announcement",
-            resultEntityId: result.announcement.id,
-          });
-
-          if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
-              organizationId: ctx.orgId,
-              userId: ctx.userId,
-              threadId: action.thread_id,
-              pendingActionId: action.id,
-            });
-          }
-
-          try {
-            await sendAnnouncementNotificationFn({
-              supabase: ctx.serviceSupabase,
-              announcementId: result.announcement.id,
+        case "create_announcement":
+          return handleCreateAnnouncement(
+            {
+              serviceSupabase: ctx.serviceSupabase,
               orgId: ctx.orgId,
-              input: {
-                ...payload,
-                audience_user_ids: payload.audience_user_ids ?? null,
-              },
-              sendDirectNotification: async ({ organizationId, title, body, audience, targetUserIds }) => {
-                await sendNotificationBlastFn({
-                  supabase: ctx.serviceSupabase,
-                  organizationId,
-                  audience,
-                  channel: "email",
-                  title,
-                  body,
-                  targetUserIds,
-                  category: "announcement",
-                });
-              },
-            });
-          } catch (notificationError) {
-            aiLog("error", "ai-confirm", "announcement notification failed", {
-              ...logContext,
               userId: ctx.userId,
-              threadId: action.thread_id,
-            }, { actionId: action.id, announcementId: result.announcement.id, error: notificationError });
-          }
-
-          const orgSlug =
-            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
-              ? payload.orgSlug
-              : null;
-          const announcementUrl = orgSlug ? `/${orgSlug}/announcements` : null;
-          const content = announcementUrl
-            ? `Created announcement: [${result.announcement.title}](${announcementUrl})`
-            : `Created announcement: ${result.announcement.title}`;
-
-          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
-            thread_id: action.thread_id,
-            org_id: ctx.orgId,
-            role: "assistant",
-            content,
-            status: "complete",
-          });
-
-          if (msgError) {
-            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
-              ...logContext,
-              userId: ctx.userId,
-              threadId: action.thread_id,
-            }, {
-              actionId: action.id,
-              error: msgError,
-            });
-          }
-
-          return NextResponse.json({ ok: true, announcement: result.announcement, actionId: action.id });
-        }
+              logContext,
+              canUseDraftSessions,
+              updatePendingActionStatusFn,
+              clearDraftSessionFn,
+            },
+            action as PendingActionRecord<"create_announcement">,
+            {
+              createAnnouncementFn,
+              sendAnnouncementNotificationFn,
+              sendNotificationBlastFn,
+            }
+          );
         case "create_job_posting": {
           const payload = action.payload as CreateJobPostingPendingPayload;
           const result = await createJobPostingFn({
