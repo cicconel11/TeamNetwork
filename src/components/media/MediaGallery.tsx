@@ -18,6 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 import {
@@ -49,11 +50,10 @@ import { useMediaUploadManager } from "./MediaUploadManagerContext";
 
 interface MediaGalleryProps {
   orgId: string;
+  orgSlug: string;
   canUpload: boolean;
   isAdmin: boolean;
   currentUserId?: string;
-  deepLinkAlbumId?: string;
-  deepLinkKey?: string;
 }
 
 type MediaType = "all" | "image" | "video";
@@ -120,38 +120,71 @@ function SortableMediaRow({
   );
 }
 
-export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId, deepLinkAlbumId, deepLinkKey }: MediaGalleryProps) {
+export function MediaGallery({ orgId, orgSlug, canUpload, isAdmin, currentUserId }: MediaGalleryProps) {
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
   const { dismissImportAlbum, importingAlbum } = useMediaUploadManager();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedAlbumId = searchParams.get("album");
 
-  // Deep-link: album ID passed from server via searchParams (e.g. from global search)
-  const [autoSelectAlbumId, setAutoSelectAlbumId] = useState<string | null>(deepLinkAlbumId ?? null);
-  // Sequence counter so repeated searches for the same album still trigger auto-select
-  const [autoSelectSeq, setAutoSelectSeq] = useState(0);
+  const navigateToAlbum = useCallback(
+    (albumId: string | null) => {
+      const target = albumId
+        ? `/${orgSlug}/media?album=${encodeURIComponent(albumId)}`
+        : `/${orgSlug}/media`;
+      router.push(target);
+    },
+    [orgSlug, router],
+  );
 
-  // React to server-provided deep-link album ID changes (e.g. navigating
-  // from global search while already on the media page — router.push triggers
-  // a server re-render that flows new searchParams down as props).
-  useEffect(() => {
-    if (!deepLinkAlbumId) return;
-    setSelectedAlbum(null);
-    setView("albums");
-    setAutoSelectAlbumId(deepLinkAlbumId);
-    setAutoSelectSeq((s) => s + 1);
-    // Clean URL so refresh doesn't replay the deep-link
-    const url = new URL(window.location.href);
-    if (url.searchParams.has("album")) {
-      url.searchParams.delete("album");
-      url.searchParams.delete("_t");
-      window.history.replaceState(null, "", url.pathname + url.search);
+  // Album list: lifted from AlbumGrid so the same list can both render the
+  // grid and resolve a URL-driven selection (`?album=<id>`) to a full album.
+  const [albums, setAlbums] = useState<MediaAlbum[]>([]);
+  const [albumsLoading, setAlbumsLoading] = useState(true);
+  const [albumsError, setAlbumsError] = useState<string | null>(null);
+  const [albumRefreshToken, setAlbumRefreshToken] = useState(0);
+
+  const fetchAlbums = useCallback(async () => {
+    setAlbumsLoading(true);
+    setAlbumsError(null);
+    try {
+      const res = await fetch(`/api/media/albums?orgId=${encodeURIComponent(orgId)}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || tMedia("failedToLoadAlbums"));
+      }
+      const result = await res.json();
+      setAlbums(result.data || []);
+    } catch (err) {
+      setAlbumsError(err instanceof Error ? err.message : tMedia("failedToLoadAlbums"));
+    } finally {
+      setAlbumsLoading(false);
     }
-  }, [deepLinkAlbumId, deepLinkKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [orgId, tMedia]);
+
+  useEffect(() => {
+    void fetchAlbums();
+  }, [fetchAlbums, albumRefreshToken]);
 
   // View tab state
   const [view, setView] = useState<GalleryView>("albums");
-  const [selectedAlbum, setSelectedAlbum] = useState<MediaAlbum | null>(null);
+  const selectedAlbum = useMemo(
+    () => (selectedAlbumId ? albums.find((a) => a.id === selectedAlbumId) ?? null : null),
+    [selectedAlbumId, albums],
+  );
   const [hiddenAlbumIds, setHiddenAlbumIds] = useState<Set<string>>(new Set());
+
+  // If the URL carries `?album=<id>`, force the albums tab so the selection
+  // actually renders (protects against user-initiated view changes that
+  // leave a stale album param behind — shouldn't normally happen, but cheap).
+  useEffect(() => {
+    if (selectedAlbumId && view !== "albums") {
+      setView("albums");
+    }
+  }, [selectedAlbumId, view]);
 
   // Photos state
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -453,11 +486,11 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId, deepLin
       next.delete(album.id);
       return next;
     });
+    // Ensure the new album is in the list so the URL-driven selection resolves.
+    setAlbums((prev) => (prev.some((a) => a.id === album.id) ? prev : [album, ...prev]));
     setView("albums");
-    setSelectedAlbum(album);
-  }, []);
-
-  const [albumRefreshToken, setAlbumRefreshToken] = useState(0);
+    navigateToAlbum(album.id);
+  }, [navigateToAlbum]);
 
   const handleAlbumDeleted = useCallback((albumId: string) => {
     setHiddenAlbumIds((prev) => {
@@ -467,11 +500,11 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId, deepLin
       return next;
     });
     dismissImportAlbum(albumId);
-    setSelectedAlbum((prev) => (prev?.id === albumId ? null : prev));
-    // Force AlbumGrid to refetch with cache-busting so the deleted album
-    // doesn't reappear from a stale browser cache on remount.
+    if (selectedAlbumId === albumId) {
+      navigateToAlbum(null);
+    }
     setAlbumRefreshToken((t) => t + 1);
-  }, [dismissImportAlbum]);
+  }, [dismissImportAlbum, navigateToAlbum, selectedAlbumId]);
 
   const toggleItem = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -582,15 +615,13 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId, deepLin
       });
   }, [fetchMedia]);
 
-  const handleAlbumPickerSuccess = useCallback((albumId: string, albumName: string) => {
+  const handleAlbumPickerSuccess = useCallback((_albumId: string, albumName: string) => {
     setShowAlbumPicker(false);
     exitSelectMode();
     showFeedback(`Added to "${albumName}"`, "success", { duration: 3000 });
-    // Navigate to the album
     setView("albums");
-    // We don't have the full album object, so we'll just go to album list
-    setSelectedAlbum(null);
-  }, [exitSelectMode]);
+    navigateToAlbum(null);
+  }, [exitSelectMode, navigateToAlbum]);
 
   const pendingCount = isAdmin ? items.filter((i) => i.status === "pending").length : 0;
 
@@ -605,7 +636,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId, deepLin
               key={v}
               onClick={() => {
                 setView(v);
-                setSelectedAlbum(null);
+                if (selectedAlbumId) navigateToAlbum(null);
               }}
               className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors capitalize ${
                 view === v
@@ -716,10 +747,16 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId, deepLin
           orgId={orgId}
           canCreate={canUpload}
           hiddenAlbumIds={hiddenAlbumIds}
-          onSelectAlbum={setSelectedAlbum}
-          refreshToken={albumRefreshToken}
-          autoSelectAlbumId={autoSelectAlbumId ?? undefined}
-          autoSelectSeq={autoSelectSeq}
+          albums={albums}
+          loading={albumsLoading}
+          error={albumsError}
+          onRetry={fetchAlbums}
+          onAlbumsChange={setAlbums}
+          onSelectAlbum={(album) => navigateToAlbum(album.id)}
+          onAlbumCreated={(album) => {
+            setAlbums((prev) => (prev.some((a) => a.id === album.id) ? prev : [album, ...prev]));
+            navigateToAlbum(album.id);
+          }}
         />
       )}
 
@@ -730,10 +767,12 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId, deepLin
           isAdmin={isAdmin}
           canUpload={canUpload}
           currentUserId={currentUserId}
-          onBack={() => setSelectedAlbum(null)}
+          onBack={() => navigateToAlbum(null)}
           onAlbumDeleted={handleAlbumDeleted}
           onAlbumUpdated={(updates) =>
-            setSelectedAlbum((prev) => (prev ? { ...prev, ...updates } : null))
+            setAlbums((prev) =>
+              prev.map((a) => (a.id === displayedSelectedAlbum.id ? { ...a, ...updates } : a)),
+            )
           }
         />
       )}
