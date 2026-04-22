@@ -18,7 +18,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 import {
@@ -123,8 +122,6 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
   const { dismissImportAlbum, importingAlbum } = useMediaUploadManager();
-  const router = useRouter();
-
   // View tab state
   const [view, setView] = useState<GalleryView>("albums");
   const [selectedAlbum, setSelectedAlbum] = useState<MediaAlbum | null>(null);
@@ -136,9 +133,9 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
     const albumId = url.searchParams.get("album");
     if (!albumId) return;
 
-    // Clear the query param to avoid re-triggering
+    // Clear the query param without triggering a React re-render
     url.searchParams.delete("album");
-    router.replace(url.pathname + url.search, { scroll: false });
+    window.history.replaceState(null, "", url.pathname + url.search);
 
     // Fetch albums and select the matching one
     fetch(`/api/media/albums?orgId=${encodeURIComponent(orgId)}`, { cache: "no-store" })
