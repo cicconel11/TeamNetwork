@@ -12,10 +12,13 @@ const MediaGallery = dynamic(
 
 export default async function MediaArchivePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<{ album?: string; _t?: string }>;
 }) {
   const { orgSlug } = await params;
+  const { album: deepLinkAlbumId, _t: deepLinkKey } = await searchParams;
   const orgCtx = await getOrgContext(orgSlug);
 
   if (!orgCtx.organization) {
@@ -38,6 +41,8 @@ export default async function MediaArchivePage({
         canUpload={canUpload}
         isAdmin={isAdmin}
         currentUserId={orgCtx.userId || undefined}
+        deepLinkAlbumId={deepLinkAlbumId}
+        deepLinkKey={deepLinkKey}
       />
     </div>
   );
