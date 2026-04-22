@@ -83,6 +83,18 @@ export const editAnnouncementSchema = z.object({
 });
 export type EditAnnouncementForm = z.infer<typeof editAnnouncementSchema>;
 
+// Agent-path patch schema. Every field is optional (patch semantics); callers
+// must supply at least one. send_notification is excluded — notifications are
+// fired once at create time; edits do not re-blast.
+export const assistantAnnouncementPatchSchema = z.object({
+  title: safeString(200).optional(),
+  body: optionalSafeString(5000),
+  is_pinned: z.boolean().optional(),
+  audience: announcementAudienceSchema.optional(),
+  audience_user_ids: z.array(z.string().uuid()).optional(),
+});
+export type AssistantAnnouncementPatch = z.infer<typeof assistantAnnouncementPatchSchema>;
+
 // ─── Recurrence schemas ───────────────────────────────────────────────
 
 export const recurrenceOccurrenceSchema = z.enum(["daily", "weekly", "monthly"]);
