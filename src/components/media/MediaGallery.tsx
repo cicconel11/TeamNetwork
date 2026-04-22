@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 import {
@@ -123,7 +123,6 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
   const { dismissImportAlbum, importingAlbum } = useMediaUploadManager();
-  const searchParams = useSearchParams();
   const router = useRouter();
 
   // View tab state
@@ -133,11 +132,11 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
 
   // Deep-link: open album from ?album=<id> (e.g. from global search)
   useEffect(() => {
-    const albumId = searchParams.get("album");
+    const url = new URL(window.location.href);
+    const albumId = url.searchParams.get("album");
     if (!albumId) return;
 
     // Clear the query param to avoid re-triggering
-    const url = new URL(window.location.href);
     url.searchParams.delete("album");
     router.replace(url.pathname + url.search, { scroll: false });
 
