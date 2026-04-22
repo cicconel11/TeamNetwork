@@ -30,17 +30,13 @@ interface AlbumGridProps {
   orgId: string;
   canCreate: boolean;
   hiddenAlbumIds?: Iterable<string>;
+  albums: MediaAlbum[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  onAlbumsChange: (next: MediaAlbum[]) => void;
   onSelectAlbum: (album: MediaAlbum) => void;
-  /**
-   * Bumping this value triggers a fresh, cache-busting refetch of albums.
-   * Used by parents after a delete so the gallery doesn't show ghost albums
-   * from a stale browser cache.
-   */
-  refreshToken?: number;
-  /** When set, auto-select this album after the initial fetch (deep-link from global search). */
-  autoSelectAlbumId?: string;
-  /** Bumped to allow re-selecting the same album (e.g. repeated searches). */
-  autoSelectSeq?: number;
+  onAlbumCreated: (album: MediaAlbum) => void;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -96,14 +92,22 @@ function SortableAlbumRow({
   );
 }
 
-export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, refreshToken, autoSelectAlbumId, autoSelectSeq }: AlbumGridProps) {
+export function AlbumGrid({
+  orgId,
+  canCreate,
+  hiddenAlbumIds,
+  albums,
+  loading,
+  error,
+  onRetry,
+  onAlbumsChange,
+  onSelectAlbum,
+  onAlbumCreated,
+}: AlbumGridProps) {
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
   const { importingAlbum } = useMediaUploadManager();
 
-  const [albums, setAlbums] = useState<MediaAlbum[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
@@ -117,52 +121,6 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
   sourceAlbumsRef.current = albums;
 
   const canReorder = canCreate;
-
-  const fetchAlbums = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // cache: "no-store" — belt-and-braces guard against any intermediate
-      // browser cache so deletes are reflected immediately. The server now
-      // also returns max-age=0 for this endpoint.
-      const res = await fetch(`/api/media/albums?orgId=${encodeURIComponent(orgId)}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || tMedia("failedToLoadAlbums"));
-      }
-      const result = await res.json();
-      setAlbums(result.data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : tMedia("failedToLoadAlbums"));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, tMedia]);
-
-  const didAutoSelect = useRef(false);
-
-  // Reset auto-select guard when the target album changes (or seq bumps for same album)
-  useEffect(() => {
-    if (autoSelectAlbumId) {
-      didAutoSelect.current = false;
-    }
-  }, [autoSelectAlbumId, autoSelectSeq]);
-
-  useEffect(() => {
-    fetchAlbums();
-  }, [fetchAlbums, refreshToken]);
-
-  // Auto-select album from deep-link (e.g. global search)
-  useEffect(() => {
-    if (!autoSelectAlbumId || didAutoSelect.current || albums.length === 0) return;
-    const match = albums.find((a) => a.id === autoSelectAlbumId);
-    if (match) {
-      didAutoSelect.current = true;
-      onSelectAlbum(match);
-    }
-  }, [albums, autoSelectAlbumId, onSelectAlbum]);
 
   const albumIds = useMemo(() => visibleAlbums.map((a) => a.id), [visibleAlbums]);
 
@@ -184,10 +142,10 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
       }
       showFeedback("Album order saved", "success", { duration: 2500 });
     } catch (err) {
-      setAlbums(previous);
+      onAlbumsChange(previous);
       showFeedback(err instanceof Error ? err.message : "Could not save order", "error", { duration: 4000 });
     }
-  }, [orgId]);
+  }, [orgId, onAlbumsChange]);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -209,15 +167,16 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
         .map((a) => a.id);
       const fullAlbumIds = [...reorderedIds, ...hiddenIds];
 
-      // Update local state with the reordered source albums
+      // Update source list with the reordered source albums
       const orderMap = new Map(fullAlbumIds.map((id, i) => [id, i]));
       const reorderedAlbums = [...sourceAlbumsRef.current].sort(
         (a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0),
       );
-      setAlbums(reorderedAlbums);
-      void persistReorder(fullAlbumIds, sourceAlbumsRef.current);
+      const previous = sourceAlbumsRef.current;
+      onAlbumsChange(reorderedAlbums);
+      void persistReorder(fullAlbumIds, previous);
     },
-    [persistReorder],
+    [onAlbumsChange, persistReorder],
   );
 
   if (loading) {
@@ -236,7 +195,7 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
     return (
       <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-lg p-3">
         {error}
-        <button type="button" onClick={fetchAlbums} className="ml-2 underline">{tCommon("retry")}</button>
+        <button type="button" onClick={onRetry} className="ml-2 underline">{tCommon("retry")}</button>
       </div>
     );
   }
@@ -319,7 +278,7 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
           onClose={() => setShowCreate(false)}
           onCreated={(album) => {
             setShowCreate(false);
-            void fetchAlbums().then(() => onSelectAlbum(album));
+            onAlbumCreated(album);
           }}
         />
       )}

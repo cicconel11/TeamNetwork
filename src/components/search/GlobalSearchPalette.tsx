@@ -245,16 +245,7 @@ export function GlobalSearchPalette() {
         orgId,
       );
       setOpen(false);
-
-      // Add cache-bust param for album deep-links so repeated clicks for
-      // the same album always produce a fresh searchParams prop on the
-      // server-rendered media page.
-      let navUrl = url;
-      if (/\/media\?album=/.test(url)) {
-        navUrl = `${url}&_t=${Date.now()}`;
-      }
-
-      router.push(navUrl);
+      router.push(url);
     },
     [orgId, mode, orgSlug, query, router, setOpen],
   );
