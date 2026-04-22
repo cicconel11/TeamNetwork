@@ -11,7 +11,6 @@ import {
   type SendGroupChatMessagePendingPayload,
   updatePendingActionStatus,
   type CreateDiscussionThreadPendingPayload,
-  type CreateEventPendingPayload,
   type CreateJobPostingPendingPayload,
   type CreateEnterpriseInvitePendingPayload,
   type RevokeEnterpriseInvitePendingPayload,
@@ -36,12 +35,12 @@ import {
   sendAiAssistedGroupChatMessage,
   type GroupChatSupabase,
 } from "@/lib/chat/group-chat";
-import { calendarEventDetailPath } from "@/lib/calendar/routes";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
 import { syncEventToUsers } from "@/lib/google/calendar-sync";
 import { sendNotificationBlast } from "@/lib/notifications";
 import { handleCreateAnnouncement } from "./dispatchers/announcements";
+import { handleCreateEvent } from "./dispatchers/events";
 
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
@@ -564,136 +563,25 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           return NextResponse.json({ ok: true, reply: result.reply, actionId: action.id });
         }
-        case "create_event": {
-          const payload = action.payload as CreateEventPendingPayload;
-          const result = await createEventFn({
-            supabase: ctx.serviceSupabase,
-            serviceSupabase: ctx.serviceSupabase,
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            input: payload,
-            orgSlug:
-              typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
-                ? payload.orgSlug
-                : null,
-          });
-
-          if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-              status: "pending",
-              expectedStatus: "confirmed",
-            });
-
-            aiLog("error", "ai-confirm", "create_event confirmation failed", {
-              ...logContext,
+        case "create_event":
+          return handleCreateEvent(
+            {
+              serviceSupabase: ctx.serviceSupabase,
+              orgId: ctx.orgId,
               userId: ctx.userId,
-              threadId: action.thread_id,
-            }, {
-              actionId: action.id,
-              attemptedEventType: payload.event_type,
-              eventErrorCode: result.code ?? null,
-              eventError: result.error,
-              eventStatus: result.status,
-              internalError: result.internalError ?? null,
-            });
-
-            return NextResponse.json(
-              {
-                error: result.error,
-                ...(result.code ? { code: result.code } : {}),
-                ...(result.details ? { details: result.details } : {}),
-              },
-              { status: result.status }
-            );
-          }
-
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-            status: "executed",
-            expectedStatus: "confirmed",
-            executedAt: new Date().toISOString(),
-            resultEntityType: "event",
-            resultEntityId: result.event.id,
-          });
-
-          if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
-              organizationId: ctx.orgId,
-              userId: ctx.userId,
-              threadId: action.thread_id,
-              pendingActionId: action.id,
-            });
-          }
-
-          const orgSlug =
-            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
-              ? payload.orgSlug
-              : null;
-          const eventUrl = orgSlug
-            ? calendarEventDetailPath(orgSlug, result.event.id)
-            : result.eventUrl;
-          const content = eventUrl
-            ? `Created event: [${result.event.title}](${eventUrl})`
-            : `Created event: ${result.event.title}`;
-
-          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
-            thread_id: action.thread_id,
-            org_id: ctx.orgId,
-            role: "assistant",
-            content,
-            status: "complete",
-          });
-
-          if (msgError) {
-            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
-              ...logContext,
-              userId: ctx.userId,
-              threadId: action.thread_id,
-            }, {
-              actionId: action.id,
-              error: msgError,
-            });
-          }
-
-          try {
-            await syncEventToUsersFn(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
-          } catch (syncErr) {
-            aiLog("error", "ai-confirm", "google calendar sync failed", {
-              ...logContext,
-              userId: ctx.userId,
-              threadId: action.thread_id,
-            }, { actionId: action.id, eventId: result.event.id, error: syncErr });
-          }
-
-          try {
-            await syncOutlookEventToUsersFn(ctx.serviceSupabase, ctx.orgId, result.event.id, "create");
-          } catch (outlookErr) {
-            aiLog("error", "ai-confirm", "outlook calendar sync failed", {
-              ...logContext,
-              userId: ctx.userId,
-              threadId: action.thread_id,
-            }, { actionId: action.id, eventId: result.event.id, error: outlookErr });
-          }
-
-          try {
-            await sendNotificationBlastFn({
-              supabase: ctx.serviceSupabase,
-              organizationId: ctx.orgId,
-              audience: "both",
-              channel: "email",
-              title: `New Event: ${result.event.title}`,
-              body: `Event scheduled for ${payload.start_date} at ${payload.start_time}${payload.location ? `\nWhere: ${payload.location}` : ""}`,
-              category: "event",
-            });
-          } catch (notifyErr) {
-            aiLog("error", "ai-confirm", "event notification blast failed", {
-              ...logContext,
-              userId: ctx.userId,
-              threadId: action.thread_id,
-            }, { actionId: action.id, eventId: result.event.id, error: notifyErr });
-          }
-
-          return NextResponse.json({ ok: true, event: result.event, actionId: action.id });
-        }
+              logContext,
+              canUseDraftSessions,
+              updatePendingActionStatusFn,
+              clearDraftSessionFn,
+            },
+            action as PendingActionRecord<"create_event">,
+            {
+              createEventFn,
+              syncEventToUsersFn,
+              syncOutlookEventToUsersFn,
+              sendNotificationBlastFn,
+            }
+          );
         case "create_enterprise_invite": {
           const payload = action.payload as CreateEnterpriseInvitePendingPayload;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
