@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AssistantAnnouncementDraft } from "@/lib/schemas/content";
 import type {
   AssistantDiscussionDraft,
@@ -10,6 +11,21 @@ import { AI_PENDING_ACTION_EXPIRY_MS } from "@/lib/ai/pending-actions";
 
 export type DraftSessionStatus = "collecting_fields" | "ready_for_confirmation";
 
+// Single source of truth for the draft_type enum. The prior CHECK constraint
+// (see migration 20261101000000) was dropped; this tuple plus the Zod guard in
+// saveDraftSession enforces the contract at the application boundary.
+export const DRAFT_SESSION_TYPES = [
+  "create_announcement",
+  "create_job_posting",
+  "send_chat_message",
+  "send_group_chat_message",
+  "create_discussion_reply",
+  "create_discussion_thread",
+  "create_event",
+] as const;
+
+export type DraftSessionType = (typeof DRAFT_SESSION_TYPES)[number];
+
 export interface DraftSessionPayloadByType {
   create_announcement: AssistantAnnouncementDraft;
   create_job_posting: AssistantJobDraft;
@@ -20,7 +36,19 @@ export interface DraftSessionPayloadByType {
   create_event: AssistantEventDraft;
 }
 
-export type DraftSessionType = keyof DraftSessionPayloadByType;
+// Compile fails if DRAFT_SESSION_TYPES and DraftSessionPayloadByType diverge.
+type _MissingFromPayload = Exclude<DraftSessionType, keyof DraftSessionPayloadByType>;
+type _MissingFromTypes = Exclude<keyof DraftSessionPayloadByType, DraftSessionType>;
+type _DraftSessionCoverageOK = [
+  _MissingFromPayload,
+  _MissingFromTypes,
+] extends [never, never]
+  ? true
+  : never;
+const _draftSessionCoverageOK: _DraftSessionCoverageOK = true;
+void _draftSessionCoverageOK;
+
+const draftSessionTypeSchema = z.enum(DRAFT_SESSION_TYPES);
 
 export type DraftSessionPayload = DraftSessionPayloadByType[DraftSessionType];
 
@@ -120,6 +148,10 @@ export async function saveDraftSession(
     expiresAt?: string;
   }
 ): Promise<DraftSessionRecord> {
+  if (!draftSessionTypeSchema.safeParse(input.draftType).success) {
+    throw new Error(`Invalid draft_type: ${String(input.draftType)}`);
+  }
+
   const payload = {
     organization_id: input.organizationId,
     user_id: input.userId,
