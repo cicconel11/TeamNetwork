@@ -19,7 +19,9 @@ import { searchNavigationTargets } from "@/lib/ai/navigation-targets";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import {
   assistantAnnouncementDraftSchema,
+  assistantAnnouncementPatchSchema,
   assistantPreparedAnnouncementSchema,
+  type AssistantAnnouncementPatch,
   type AssistantPreparedAnnouncement,
 } from "@/lib/schemas/content";
 import {
@@ -50,6 +52,8 @@ import { isOwnedScheduleUploadPath } from "@/lib/ai/schedule-upload-path";
 import {
   buildPendingActionSummary,
   type CreateAnnouncementPendingPayload,
+  type EditAnnouncementPendingPayload,
+  type DeleteAnnouncementPendingPayload,
   type SendChatMessagePendingPayload,
   type SendGroupChatMessagePendingPayload,
   type CreateDiscussionReplyPendingPayload,
@@ -60,6 +64,7 @@ import {
   type CreateEnterpriseInvitePendingPayload,
   type RevokeEnterpriseInvitePendingPayload,
 } from "@/lib/ai/pending-actions";
+import { resolveAgentActionTarget } from "@/lib/ai/tools/target-resolver";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 import {
@@ -196,6 +201,27 @@ const prepareAnnouncementSchema = z
     audience: z.enum(["all", "members", "active_members", "alumni", "individuals"]).optional(),
     send_notification: z.boolean().optional(),
     audience_user_ids: z.array(z.string().uuid()).optional(),
+  })
+  .strict();
+
+const prepareEditAnnouncementSchema = z
+  .object({
+    target_id: z.string().uuid().optional(),
+    title: z.string().trim().min(1).optional(),
+    body: z.string().trim().optional(),
+    is_pinned: z.boolean().optional(),
+    audience: z
+      .enum(["all", "members", "active_members", "alumni", "individuals"])
+      .optional(),
+    audience_user_ids: z.array(z.string().uuid()).optional(),
+    reasoning: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const prepareDeleteAnnouncementSchema = z
+  .object({
+    target_id: z.string().uuid(),
+    reasoning: z.string().trim().min(1).optional(),
   })
   .strict();
 
@@ -395,6 +421,8 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   prepare_enterprise_invite: prepareEnterpriseInviteSchema,
   revoke_enterprise_invite: revokeEnterpriseInviteSchema,
   prepare_announcement: prepareAnnouncementSchema,
+  prepare_edit_announcement: prepareEditAnnouncementSchema,
+  prepare_delete_announcement: prepareDeleteAnnouncementSchema,
   prepare_job_posting: prepareJobPostingSchema,
   prepare_chat_message: prepareChatMessageSchema,
   prepare_group_message: prepareGroupMessageSchema,
@@ -1473,6 +1501,333 @@ async function prepareAnnouncement(
     data: {
       state: "needs_confirmation",
       draft: prepared.data,
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
+// ─── prepare_edit_announcement ──────────────────────────────────────────
+//
+// Phase 2a-prepare of the Tier 1 plan. Resolves the target announcement
+// (either via explicit target_id or most-recent fallback within 15
+// minutes per the plan's performance-review narrowing), captures the
+// optimistic-concurrency `expectedUpdatedAt` token from the target's
+// current row, validates the patch against assistantAnnouncementPatchSchema,
+// and creates an `edit_announcement` pending action. The confirm-side
+// dispatcher (see confirm/dispatchers/announcements.ts::handleEditAnnouncement)
+// applies the patch via the updateAnnouncement primitive.
+
+async function prepareEditAnnouncement(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareEditAnnouncementSchema>
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Announcement edit preparation requires a thread context");
+  }
+
+  // Reject empty patches fast. The model must supply at least one change.
+  const patchInput = {
+    ...(args.title !== undefined ? { title: args.title } : {}),
+    ...(args.body !== undefined ? { body: args.body } : {}),
+    ...(args.is_pinned !== undefined ? { is_pinned: args.is_pinned } : {}),
+    ...(args.audience !== undefined ? { audience: args.audience } : {}),
+    ...(args.audience_user_ids !== undefined
+      ? { audience_user_ids: args.audience_user_ids }
+      : {}),
+  };
+  if (Object.keys(patchInput).length === 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["patch"],
+        reason:
+          "Specify at least one field to change (title, body, is_pinned, audience, or audience_user_ids).",
+      },
+    };
+  }
+
+  const parsedPatch = assistantAnnouncementPatchSchema.safeParse(patchInput);
+  if (!parsedPatch.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: parsedPatch.error.issues.map(
+          (issue) => issue.path.join(".") || "patch"
+        ),
+        draft: patchInput,
+      },
+    };
+  }
+  const patch: AssistantAnnouncementPatch = parsedPatch.data;
+
+  // Resolve the target. Explicit target_id short-circuits the resolver;
+  // otherwise fall back to the most-recently-executed announcement action
+  // by the same user within the 15-minute edit window.
+  const resolution = await resolveAgentActionTarget({
+    supabase: sb as never,
+    caller: { userId: ctx.userId, organizationId: ctx.orgId },
+    entityType: "announcement",
+    op: "edit",
+    targetId: args.target_id,
+    fallback: args.target_id ? "none" : "most_recent",
+  });
+
+  if (resolution.kind === "needs_target_id") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason: resolution.reason,
+      },
+    };
+  }
+  if (resolution.kind === "not_found") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason:
+          "No recently-created announcement was found to edit. Ask the user which announcement to edit and pass its target_id.",
+      },
+    };
+  }
+
+  // Load the target row to capture the optimistic-concurrency token and
+  // the current title (for the confirmation ai_message body). Scope by
+  // orgId to defend against cross-org target_id spoofing — the triple-
+  // layer org assertion per the plan's security hardening.
+  const { data: target, error: targetError } = await sb
+    .from("announcements")
+    .select("id, title, updated_at, organization_id, deleted_at")
+    .eq("id", resolution.targetId)
+    .eq("organization_id", ctx.orgId)
+    .maybeSingle();
+
+  if (targetError) {
+    aiLog(
+      "warn",
+      "ai-tools",
+      "prepare_edit_announcement target lookup failed",
+      logContext,
+      { error: getSafeErrorMessage(targetError), targetId: resolution.targetId }
+    );
+    return toolError("Failed to load the target announcement");
+  }
+  if (!target) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason: "The requested announcement was not found in this organization.",
+      },
+    };
+  }
+  if (target.deleted_at !== null) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason:
+          "The requested announcement has been deleted and cannot be edited.",
+      },
+    };
+  }
+
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_edit_announcement org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  const pendingPayload: EditAnnouncementPendingPayload = {
+    targetId: target.id as string,
+    patch,
+    expectedUpdatedAt: (target.updated_at as string | null) ?? null,
+    targetTitle: (target.title as string | null) ?? null,
+    orgSlug: typeof org?.slug === "string" ? org.slug : null,
+  };
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "edit_announcement",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: {
+        target_id: target.id,
+        target_title: target.title,
+        patch,
+      },
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
+// ─── prepare_delete_announcement ──────────────────────────────────────
+//
+// Phase 2b-prepare of the Tier 1 plan. Unlike edit, delete is strictly
+// target_id-required — no most-recent fallback. The plan's security-
+// hardening decision (A2.1) disables the fallback for destructive ops
+// so the assistant can never soft-delete an ambiguous target. The
+// confirm-side dispatcher (see confirm/dispatchers/announcements.ts::
+// handleDeleteAnnouncement) calls softDeleteAnnouncement, which is
+// idempotent — re-confirm on an already-deleted row no-ops.
+
+async function prepareDeleteAnnouncement(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareDeleteAnnouncementSchema>
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Announcement delete preparation requires a thread context");
+  }
+
+  // Target resolution is strict: explicit target_id only, no fallback.
+  // We still run the resolver for parity with edit (auth + taint checks
+  // live there), but force fallback: "none".
+  const resolution = await resolveAgentActionTarget({
+    supabase: sb as never,
+    caller: { userId: ctx.userId, organizationId: ctx.orgId },
+    entityType: "announcement",
+    op: "delete",
+    targetId: args.target_id,
+    fallback: "none",
+  });
+
+  if (resolution.kind === "needs_target_id") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason: resolution.reason,
+      },
+    };
+  }
+  if (resolution.kind === "not_found") {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason:
+          "The requested announcement was not found in this organization.",
+      },
+    };
+  }
+
+  // Load the target row to capture the optimistic-concurrency token and
+  // current title (for the confirmation ai_message body — once the row
+  // is soft-deleted, subsequent reads may filter it out). Scope by
+  // orgId to defend against cross-org target_id spoofing — the triple-
+  // layer org assertion per the plan's security hardening.
+  const { data: target, error: targetError } = await sb
+    .from("announcements")
+    .select("id, title, updated_at, organization_id, deleted_at")
+    .eq("id", resolution.targetId)
+    .eq("organization_id", ctx.orgId)
+    .maybeSingle();
+
+  if (targetError) {
+    aiLog(
+      "warn",
+      "ai-tools",
+      "prepare_delete_announcement target lookup failed",
+      logContext,
+      { error: getSafeErrorMessage(targetError), targetId: resolution.targetId }
+    );
+    return toolError("Failed to load the target announcement");
+  }
+  if (!target) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason: "The requested announcement was not found in this organization.",
+      },
+    };
+  }
+  if (target.deleted_at !== null) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: ["target_id"],
+        reason:
+          "The requested announcement has already been deleted.",
+      },
+    };
+  }
+
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_delete_announcement org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  const pendingPayload: DeleteAnnouncementPendingPayload = {
+    targetId: target.id as string,
+    expectedUpdatedAt: (target.updated_at as string | null) ?? null,
+    targetTitle: (target.title as string | null) ?? null,
+    orgSlug: typeof org?.slug === "string" ? org.slug : null,
+  };
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "delete_announcement",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: {
+        target_id: target.id,
+        target_title: target.title,
+      },
       pending_action: {
         id: pendingAction.id,
         action_type: pendingAction.action_type,
@@ -3337,6 +3692,18 @@ export async function executeToolCall(
             sb,
             ctx,
             args as z.infer<typeof prepareAnnouncementSchema>
+          );
+        case "prepare_edit_announcement":
+          return prepareEditAnnouncement(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareEditAnnouncementSchema>
+          );
+        case "prepare_delete_announcement":
+          return prepareDeleteAnnouncement(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareDeleteAnnouncementSchema>
           );
         case "prepare_job_posting":
           return prepareJobPosting(

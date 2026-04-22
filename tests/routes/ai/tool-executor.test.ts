@@ -970,6 +970,300 @@ test("prepare_announcement creates a pending confirmation action when complete",
   });
 });
 
+// ─── prepare_edit_announcement ──────────────────────────────────────────
+// Phase 2a-prepare. Mirrors the create tests but also exercises the
+// target resolver (most-recent fallback + explicit target_id).
+
+const EDIT_TARGET_ID = "00000000-0000-4000-8000-000000000aaa";
+
+test("prepare_edit_announcement returns missing_fields when no patch fields are supplied", async () => {
+  const editCtx = { ...ctx, threadId: "thread-edit" };
+
+  const result = expectOk(
+    await executeToolCall(editCtx, {
+      name: "prepare_edit_announcement",
+      args: { target_id: EDIT_TARGET_ID },
+    })
+  );
+
+  assert.equal((result.data as { state: string }).state, "missing_fields");
+  assert.deepEqual((result.data as { missing_fields: string[] }).missing_fields, ["patch"]);
+});
+
+test("prepare_edit_announcement returns missing_fields when target_id is omitted and no recent action exists", async () => {
+  // Resolver finds no matching recent action → returns not_found.
+  const resolverStub = createToolSupabaseStub({
+    ai_pending_actions: { select: { data: [], error: null } },
+  });
+  const editCtx = { ...makeCtx(resolverStub as any), threadId: "thread-edit" };
+
+  const result = expectOk(
+    await executeToolCall(editCtx, {
+      name: "prepare_edit_announcement",
+      args: { title: "Fixed typo" },
+    })
+  );
+
+  assert.equal((result.data as { state: string }).state, "missing_fields");
+  assert.deepEqual(
+    (result.data as { missing_fields: string[] }).missing_fields,
+    ["target_id"]
+  );
+});
+
+test("prepare_edit_announcement surfaces a missing_fields response when the target is not found in the org", async () => {
+  const editStub = createToolSupabaseStub({
+    announcements: { maybeSingle: { data: null, error: null } },
+  });
+  const editCtx = { ...makeCtx(editStub as any), threadId: "thread-edit" };
+
+  const result = expectOk(
+    await executeToolCall(editCtx, {
+      name: "prepare_edit_announcement",
+      args: { target_id: EDIT_TARGET_ID, title: "Fixed typo" },
+    })
+  );
+
+  assert.equal((result.data as { state: string }).state, "missing_fields");
+  assert.deepEqual(
+    (result.data as { missing_fields: string[] }).missing_fields,
+    ["target_id"]
+  );
+});
+
+test("prepare_edit_announcement refuses to edit a soft-deleted announcement", async () => {
+  const editStub = createToolSupabaseStub({
+    announcements: {
+      maybeSingle: {
+        data: {
+          id: EDIT_TARGET_ID,
+          title: "Old",
+          organization_id: ORG_ID,
+          updated_at: "2026-04-22T09:00:00.000Z",
+          deleted_at: "2026-04-22T09:30:00.000Z",
+        },
+        error: null,
+      },
+    },
+  });
+  const editCtx = { ...makeCtx(editStub as any), threadId: "thread-edit" };
+
+  const result = expectOk(
+    await executeToolCall(editCtx, {
+      name: "prepare_edit_announcement",
+      args: { target_id: EDIT_TARGET_ID, title: "Fixed typo" },
+    })
+  );
+
+  assert.equal((result.data as { state: string }).state, "missing_fields");
+  const reason = (result.data as { reason?: string }).reason;
+  assert.match(reason ?? "", /deleted/i);
+});
+
+test("prepare_edit_announcement creates a pending edit_announcement action when complete", async () => {
+  const editStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: { data: { slug: "upenn-sprint-football" }, error: null },
+    },
+    announcements: {
+      maybeSingle: {
+        data: {
+          id: EDIT_TARGET_ID,
+          title: "Original Title",
+          organization_id: ORG_ID,
+          updated_at: "2026-04-22T09:00:00.000Z",
+          deleted_at: null,
+        },
+        error: null,
+      },
+    },
+    ai_pending_actions: {
+      single: {
+        data: {
+          id: "pending-edit-announcement-1",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "thread-edit",
+          action_type: "edit_announcement",
+          payload: {
+            targetId: EDIT_TARGET_ID,
+            patch: { title: "Fixed Title" },
+            expectedUpdatedAt: "2026-04-22T09:00:00.000Z",
+            targetTitle: "Original Title",
+            orgSlug: "upenn-sprint-football",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-04-22T09:30:00.000Z",
+          updated_at: "2026-04-22T09:30:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+  const editCtx = { ...makeCtx(editStub as any), threadId: "thread-edit" };
+
+  const result = expectOk(
+    await executeToolCall(editCtx, {
+      name: "prepare_edit_announcement",
+      args: {
+        target_id: EDIT_TARGET_ID,
+        title: "Fixed Title",
+        reasoning: "user asked to fix the title typo",
+      },
+    })
+  );
+
+  assert.equal((result.data as { state: string }).state, "needs_confirmation");
+  const pending = (result.data as { pending_action: { action_type: string; payload: any } }).pending_action;
+  assert.equal(pending.action_type, "edit_announcement");
+  assert.equal(pending.payload.targetId, EDIT_TARGET_ID);
+  assert.deepEqual(pending.payload.patch, { title: "Fixed Title" });
+  assert.equal(pending.payload.expectedUpdatedAt, "2026-04-22T09:00:00.000Z");
+  assert.equal(pending.payload.targetTitle, "Original Title");
+  assert.equal(pending.payload.orgSlug, "upenn-sprint-football");
+});
+
+// ─── prepare_delete_announcement ────────────────────────────────────────
+// Phase 2b-prepare. Destructive op, so fallback is disabled — target_id
+// is strictly required. Still exercises the triple-layer org assertion
+// and the deleted_at guard to keep the executor from re-queueing a
+// delete for an already-soft-deleted row.
+
+const DELETE_TARGET_ID = "00000000-0000-4000-8000-000000000bbb";
+
+test("prepare_delete_announcement rejects at the arg-schema layer when target_id is missing", async () => {
+  const deleteCtx = { ...ctx, threadId: "thread-delete" };
+
+  const result = await executeToolCall(deleteCtx, {
+    name: "prepare_delete_announcement",
+    args: {},
+  });
+
+  // Zod schema makes target_id required — absent arg surfaces as a
+  // tool_error before the executor body even runs. This is the single
+  // deterministic gate that prevents ambiguous destructive ops.
+  assert.equal(result.kind, "tool_error");
+});
+
+test("prepare_delete_announcement surfaces a missing_fields response when the target is not found in the org", async () => {
+  const deleteStub = createToolSupabaseStub({
+    announcements: { maybeSingle: { data: null, error: null } },
+  });
+  const deleteCtx = { ...makeCtx(deleteStub as any), threadId: "thread-delete" };
+
+  const result = expectOk(
+    await executeToolCall(deleteCtx, {
+      name: "prepare_delete_announcement",
+      args: { target_id: DELETE_TARGET_ID },
+    })
+  );
+
+  assert.equal((result.data as { state: string }).state, "missing_fields");
+  assert.deepEqual(
+    (result.data as { missing_fields: string[] }).missing_fields,
+    ["target_id"]
+  );
+});
+
+test("prepare_delete_announcement refuses to re-delete a soft-deleted announcement", async () => {
+  const deleteStub = createToolSupabaseStub({
+    announcements: {
+      maybeSingle: {
+        data: {
+          id: DELETE_TARGET_ID,
+          title: "Already Gone",
+          organization_id: ORG_ID,
+          updated_at: "2026-04-22T09:00:00.000Z",
+          deleted_at: "2026-04-22T09:30:00.000Z",
+        },
+        error: null,
+      },
+    },
+  });
+  const deleteCtx = { ...makeCtx(deleteStub as any), threadId: "thread-delete" };
+
+  const result = expectOk(
+    await executeToolCall(deleteCtx, {
+      name: "prepare_delete_announcement",
+      args: { target_id: DELETE_TARGET_ID },
+    })
+  );
+
+  assert.equal((result.data as { state: string }).state, "missing_fields");
+  const reason = (result.data as { reason?: string }).reason;
+  assert.match(reason ?? "", /already been deleted/i);
+});
+
+test("prepare_delete_announcement creates a pending delete_announcement action when target resolves", async () => {
+  const deleteStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: { data: { slug: "upenn-sprint-football" }, error: null },
+    },
+    announcements: {
+      maybeSingle: {
+        data: {
+          id: DELETE_TARGET_ID,
+          title: "Stale Announcement",
+          organization_id: ORG_ID,
+          updated_at: "2026-04-22T09:00:00.000Z",
+          deleted_at: null,
+        },
+        error: null,
+      },
+    },
+    ai_pending_actions: {
+      single: {
+        data: {
+          id: "pending-delete-announcement-1",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "thread-delete",
+          action_type: "delete_announcement",
+          payload: {
+            targetId: DELETE_TARGET_ID,
+            expectedUpdatedAt: "2026-04-22T09:00:00.000Z",
+            targetTitle: "Stale Announcement",
+            orgSlug: "upenn-sprint-football",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-04-22T09:30:00.000Z",
+          updated_at: "2026-04-22T09:30:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+  const deleteCtx = { ...makeCtx(deleteStub as any), threadId: "thread-delete" };
+
+  const result = expectOk(
+    await executeToolCall(deleteCtx, {
+      name: "prepare_delete_announcement",
+      args: {
+        target_id: DELETE_TARGET_ID,
+        reasoning: "user asked to remove the stale announcement",
+      },
+    })
+  );
+
+  assert.equal((result.data as { state: string }).state, "needs_confirmation");
+  const pending = (result.data as {
+    pending_action: { action_type: string; payload: any };
+  }).pending_action;
+  assert.equal(pending.action_type, "delete_announcement");
+  assert.equal(pending.payload.targetId, DELETE_TARGET_ID);
+  assert.equal(pending.payload.expectedUpdatedAt, "2026-04-22T09:00:00.000Z");
+  assert.equal(pending.payload.targetTitle, "Stale Announcement");
+  assert.equal(pending.payload.orgSlug, "upenn-sprint-football");
+});
+
 test("prepare_discussion_thread creates a pending confirmation action when complete", async () => {
   const discussionStub = createToolSupabaseStub({
     organizations: {

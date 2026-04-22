@@ -20,13 +20,19 @@ import {
   createAnnouncement,
   sendAnnouncementNotification,
 } from "@/lib/announcements/create-announcement";
+import { softDeleteAnnouncement } from "@/lib/announcements/soft-delete-announcement";
+import { updateAnnouncement } from "@/lib/announcements/update-announcement";
 import { sendAiAssistedDirectChatMessage } from "@/lib/chat/direct-chat";
 import { sendAiAssistedGroupChatMessage } from "@/lib/chat/group-chat";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
 import { syncEventToUsers } from "@/lib/google/calendar-sync";
 import { sendNotificationBlast } from "@/lib/notifications";
-import { handleCreateAnnouncement } from "./dispatchers/announcements";
+import {
+  handleCreateAnnouncement,
+  handleDeleteAnnouncement,
+  handleEditAnnouncement,
+} from "./dispatchers/announcements";
 import { handleCreateEvent } from "./dispatchers/events";
 import { handleCreateJobPosting } from "./dispatchers/jobs";
 import {
@@ -48,6 +54,8 @@ export interface AiPendingActionConfirmRouteDeps {
   getPendingAction?: typeof getPendingAction;
   updatePendingActionStatus?: typeof updatePendingActionStatus;
   createAnnouncement?: typeof createAnnouncement;
+  updateAnnouncement?: typeof updateAnnouncement;
+  softDeleteAnnouncement?: typeof softDeleteAnnouncement;
   createJobPosting?: typeof createJobPosting;
   createDiscussionReply?: typeof createDiscussionReply;
   createDiscussionThread?: typeof createDiscussionThread;
@@ -72,6 +80,8 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const getPendingActionFn = deps.getPendingAction ?? getPendingAction;
   const updatePendingActionStatusFn = deps.updatePendingActionStatus ?? updatePendingActionStatus;
   const createAnnouncementFn = deps.createAnnouncement ?? createAnnouncement;
+  const updateAnnouncementFn = deps.updateAnnouncement ?? updateAnnouncement;
+  const softDeleteAnnouncementFn = deps.softDeleteAnnouncement ?? softDeleteAnnouncement;
   const createJobPostingFn = deps.createJobPosting ?? createJobPosting;
   const createDiscussionReplyFn = deps.createDiscussionReply ?? createDiscussionReply;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
@@ -202,6 +212,34 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               sendAnnouncementNotificationFn,
               sendNotificationBlastFn,
             }
+          );
+        case "edit_announcement":
+          return await handleEditAnnouncement(
+            {
+              serviceSupabase: ctx.serviceSupabase,
+              orgId: ctx.orgId,
+              userId: ctx.userId,
+              logContext,
+              canUseDraftSessions,
+              updatePendingActionStatusFn,
+              clearDraftSessionFn,
+            },
+            action as PendingActionRecord<"edit_announcement">,
+            { updateAnnouncementFn }
+          );
+        case "delete_announcement":
+          return await handleDeleteAnnouncement(
+            {
+              serviceSupabase: ctx.serviceSupabase,
+              orgId: ctx.orgId,
+              userId: ctx.userId,
+              logContext,
+              canUseDraftSessions,
+              updatePendingActionStatusFn,
+              clearDraftSessionFn,
+            },
+            action as PendingActionRecord<"delete_announcement">,
+            { softDeleteAnnouncementFn }
           );
         case "create_job_posting":
           return await handleCreateJobPosting(
