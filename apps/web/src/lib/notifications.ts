@@ -1,17 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
-import type { Database, NotificationAudience, NotificationChannel, UserRole } from "@/types/database";
+import type {
+  Database,
+  NotificationAudience,
+  NotificationChannel,
+  UserRole,
+} from "@/types/database";
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 
 export type DeliveryChannel = "email" | "sms";
 
 export type NotificationCategory =
-  | "announcement" | "discussion" | "event" | "workout" | "competition";
+  | "announcement"
+  | "discussion"
+  | "event"
+  | "workout"
+  | "competition"
+  | "mentorship";
 
 export interface NotificationTarget {
   email?: string | null;
@@ -114,7 +122,10 @@ export async function sendEmail(params: EmailParams): Promise<NotificationResult
       body: params.body.substring(0, 100) + "...",
     });
     await delay(50);
-    return { success: true, messageId: `stub_${Date.now()}_${Math.random().toString(36).slice(2)}` };
+    return {
+      success: true,
+      messageId: `stub_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    };
   }
 
   try {
@@ -146,7 +157,10 @@ export async function sendSMS(params: SMSParams): Promise<NotificationResult> {
     message: params.message.substring(0, 100) + "...",
   });
   await delay(50);
-  return { success: true, messageId: `sms_stub_${Date.now()}_${Math.random().toString(36).slice(2)}` };
+  return {
+    success: true,
+    messageId: `sms_stub_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+  };
 }
 
 type PreferenceRow = Database["public"]["Tables"]["notification_preferences"]["Row"];
@@ -157,6 +171,7 @@ const CATEGORY_PREF_COLUMN: Record<NotificationCategory, keyof PreferenceRow> = 
   event: "event_emails_enabled",
   workout: "workout_emails_enabled",
   competition: "competition_emails_enabled",
+  mentorship: "mentorship_emails_enabled" as keyof PreferenceRow,
 };
 
 const getChannelsForContact = ({
@@ -189,7 +204,10 @@ export async function buildNotificationTargets(params: {
   channel: NotificationChannel;
   targetUserIds?: string[] | null;
   category?: NotificationCategory;
-}): Promise<{ targets: NotificationTarget[]; stats: { total: number; emailCount: number; smsCount: number; skippedMissingContact: number } }> {
+}): Promise<{
+  targets: NotificationTarget[];
+  stats: { total: number; emailCount: number; smsCount: number; skippedMissingContact: number };
+}> {
   const { supabase, organizationId, audience, channel, targetUserIds, category } = params;
   const desired = DESIRED_CHANNELS[channel];
 
@@ -198,8 +216,8 @@ export async function buildNotificationTargets(params: {
     audience === "members"
       ? ["admin", "active_member", "member"]
       : audience === "alumni"
-      ? ["alumni", "viewer"]
-      : ["admin", "active_member", "member", "alumni", "viewer"];
+        ? ["alumni", "viewer"]
+        : ["admin", "active_member", "member", "alumni", "viewer"];
 
   const normalizeRole = (role: UserRole) => {
     if (role === "member") return "active_member";
@@ -215,9 +233,10 @@ export async function buildNotificationTargets(params: {
     .eq("status", "active")
     .in("role", audienceRoles);
 
-  const membershipsRes = targetUserIds && targetUserIds.length > 0
-    ? await membershipFilter.in("user_id", targetUserIds)
-    : await membershipFilter;
+  const membershipsRes =
+    targetUserIds && targetUserIds.length > 0
+      ? await membershipFilter.in("user_id", targetUserIds)
+      : await membershipFilter;
 
   const membershipRows =
     (membershipsRes.data as { user_id: string; role: string; status: string }[] | null) || [];
@@ -242,13 +261,12 @@ export async function buildNotificationTargets(params: {
   const [prefsRes, usersRes] = await Promise.all([
     supabase
       .from("notification_preferences")
-      .select("email_enabled,email_address,sms_enabled,phone_number,user_id,organization_id,announcement_emails_enabled,discussion_emails_enabled,event_emails_enabled,workout_emails_enabled,competition_emails_enabled")
+      .select(
+        "email_enabled,email_address,sms_enabled,phone_number,user_id,organization_id,announcement_emails_enabled,discussion_emails_enabled,event_emails_enabled,workout_emails_enabled,competition_emails_enabled"
+      )
       .eq("organization_id", organizationId)
       .in("user_id", memberUserIds),
-    supabase
-      .from("users")
-      .select("id,email,name")
-      .in("id", memberUserIds),
+    supabase.from("users").select("id,email,name").in("id", memberUserIds),
   ]);
 
   const prefs = (prefsRes.data as PreferenceRow[] | null) || [];
@@ -315,8 +333,20 @@ export async function buildNotificationTargets(params: {
   };
 }
 
-export async function sendNotificationBlast(input: NotificationBlastInput): Promise<NotificationBlastResult> {
-  const { supabase, organizationId, audience, channel, title, body, targetUserIds, category, sendEmailFn } = input;
+export async function sendNotificationBlast(
+  input: NotificationBlastInput
+): Promise<NotificationBlastResult> {
+  const {
+    supabase,
+    organizationId,
+    audience,
+    channel,
+    title,
+    body,
+    targetUserIds,
+    category,
+    sendEmailFn,
+  } = input;
   const { targets, stats } = await buildNotificationTargets({
     supabase,
     organizationId,
@@ -341,14 +371,22 @@ export async function sendNotificationBlast(input: NotificationBlastInput): Prom
       const email = target.email;
       tasks.push(async () => {
         const result = await emailFn({ to: email, subject: title, body });
-        return { type: "email" as const, success: result.success, error: result.error ? `Email to ${email}: ${result.error}` : undefined };
+        return {
+          type: "email" as const,
+          success: result.success,
+          error: result.error ? `Email to ${email}: ${result.error}` : undefined,
+        };
       });
     }
     if (target.channels.includes("sms") && target.phone) {
       const phone = target.phone;
       tasks.push(async () => {
         const result = await sendSMS({ to: phone, message: `${title}\n\n${body}` });
-        return { type: "sms" as const, success: result.success, error: result.error ? `SMS to ${phone}: ${result.error}` : undefined };
+        return {
+          type: "sms" as const,
+          success: result.success,
+          error: result.error ? `SMS to ${phone}: ${result.error}` : undefined,
+        };
       });
     }
   }
