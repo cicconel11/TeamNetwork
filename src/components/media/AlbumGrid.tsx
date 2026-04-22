@@ -39,6 +39,8 @@ interface AlbumGridProps {
   refreshToken?: number;
   /** When set, auto-select this album after the initial fetch (deep-link from global search). */
   autoSelectAlbumId?: string;
+  /** Bumped to allow re-selecting the same album (e.g. repeated searches). */
+  autoSelectSeq?: number;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -94,7 +96,7 @@ function SortableAlbumRow({
   );
 }
 
-export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, refreshToken, autoSelectAlbumId }: AlbumGridProps) {
+export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, refreshToken, autoSelectAlbumId, autoSelectSeq }: AlbumGridProps) {
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
   const { importingAlbum } = useMediaUploadManager();
@@ -140,6 +142,13 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
   }, [orgId, tMedia]);
 
   const didAutoSelect = useRef(false);
+
+  // Reset auto-select guard when the target album changes (or seq bumps for same album)
+  useEffect(() => {
+    if (autoSelectAlbumId) {
+      didAutoSelect.current = false;
+    }
+  }, [autoSelectAlbumId, autoSelectSeq]);
 
   useEffect(() => {
     fetchAlbums();

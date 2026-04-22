@@ -124,7 +124,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
   const { dismissImportAlbum, importingAlbum } = useMediaUploadManager();
 
   // Deep-link: capture ?album=<id> from URL on mount (e.g. from global search)
-  const [autoSelectAlbumId] = useState(() => {
+  const [autoSelectAlbumId, setAutoSelectAlbumId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     const url = new URL(window.location.href);
     const id = url.searchParams.get("album");
@@ -134,6 +134,26 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
     }
     return id;
   });
+  // Sequence counter so repeated searches for the same album still trigger auto-select
+  const [autoSelectSeq, setAutoSelectSeq] = useState(0);
+
+  // Listen for same-page album deep-links from global search (custom event
+  // dispatched by GlobalSearchPalette when the user is already on /media).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { albumId } = (e as CustomEvent<{ albumId: string }>).detail;
+      setSelectedAlbum(null);
+      setView("albums");
+      setAutoSelectAlbumId(albumId);
+      setAutoSelectSeq((s) => s + 1);
+      // Clean URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("album");
+      window.history.replaceState(null, "", url.pathname + url.search);
+    };
+    window.addEventListener("media:select-album", handler);
+    return () => window.removeEventListener("media:select-album", handler);
+  }, []);
 
   // View tab state
   const [view, setView] = useState<GalleryView>("albums");
@@ -706,6 +726,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
           onSelectAlbum={setSelectedAlbum}
           refreshToken={albumRefreshToken}
           autoSelectAlbumId={autoSelectAlbumId ?? undefined}
+          autoSelectSeq={autoSelectSeq}
         />
       )}
 
