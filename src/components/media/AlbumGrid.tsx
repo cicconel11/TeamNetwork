@@ -37,6 +37,8 @@ interface AlbumGridProps {
    * from a stale browser cache.
    */
   refreshToken?: number;
+  /** When set, auto-select this album after the initial fetch (deep-link from global search). */
+  autoSelectAlbumId?: string;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -92,7 +94,7 @@ function SortableAlbumRow({
   );
 }
 
-export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, refreshToken }: AlbumGridProps) {
+export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, refreshToken, autoSelectAlbumId }: AlbumGridProps) {
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
   const { importingAlbum } = useMediaUploadManager();
@@ -137,9 +139,21 @@ export function AlbumGrid({ orgId, canCreate, hiddenAlbumIds, onSelectAlbum, ref
     }
   }, [orgId, tMedia]);
 
+  const didAutoSelect = useRef(false);
+
   useEffect(() => {
     fetchAlbums();
   }, [fetchAlbums, refreshToken]);
+
+  // Auto-select album from deep-link (e.g. global search)
+  useEffect(() => {
+    if (!autoSelectAlbumId || didAutoSelect.current || albums.length === 0) return;
+    const match = albums.find((a) => a.id === autoSelectAlbumId);
+    if (match) {
+      didAutoSelect.current = true;
+      onSelectAlbum(match);
+    }
+  }, [albums, autoSelectAlbumId, onSelectAlbum]);
 
   const albumIds = useMemo(() => visibleAlbums.map((a) => a.id), [visibleAlbums]);
 
