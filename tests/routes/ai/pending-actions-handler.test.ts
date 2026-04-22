@@ -1093,6 +1093,78 @@ test("exception during write rolls back to pending", async () => {
   assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
 });
 
+test("exception during write rolls back for create_announcement (dispatcher rejection propagates to try/catch)", async () => {
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () =>
+      buildPendingAction({
+        action_type: "create_announcement",
+        payload: {
+          title: "Announcement",
+          body: "body",
+          audience: "all",
+          is_pinned: false,
+          orgSlug: "org",
+        },
+      }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createAnnouncement: async () => {
+      throw new Error("Supabase timeout");
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
+test("exception during write rolls back for create_event (dispatcher rejection propagates to try/catch)", async () => {
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () =>
+      buildPendingAction({
+        action_type: "create_event",
+        payload: {
+          title: "Event",
+          start_date: "2026-05-01",
+          start_time: "10:00",
+          event_type: "practice",
+          orgSlug: "org",
+        },
+      }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createEvent: async () => {
+      throw new Error("Supabase timeout");
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
 test("rollback failure logs structured error and re-throws", async () => {
   const logged: any[] = [];
   const originalError = console.error;
