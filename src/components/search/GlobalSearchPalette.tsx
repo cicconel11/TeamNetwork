@@ -8,6 +8,7 @@ import {
   Briefcase,
   CalendarDays,
   GraduationCap,
+  Image,
   Megaphone,
   MessageSquare,
   Search,
@@ -82,6 +83,8 @@ function entityIcon(entityType: string) {
     case "job_posting":
     case "job_postings":
       return Briefcase;
+    case "album":
+      return Image;
     default:
       return Search;
   }
@@ -101,6 +104,8 @@ function entityLabel(entityType: string) {
       return "Event";
     case "job_posting":
       return "Job";
+    case "album":
+      return "Album";
     default:
       return entityType;
   }
@@ -305,7 +310,7 @@ export function GlobalSearchPalette() {
         <Command.Input
           value={query}
           onValueChange={setQuery}
-          placeholder="Search members, events, jobs…"
+          placeholder="Search members, events, albums, jobs…"
           className="flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
           autoFocus
         />
