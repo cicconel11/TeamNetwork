@@ -2,13 +2,18 @@ import type { AssistantPreparedJob } from "@/lib/schemas/jobs";
 import type { AssistantPreparedDiscussion } from "@/lib/schemas/discussion";
 import type { AssistantPreparedDiscussionReply } from "@/lib/schemas/discussion";
 import type { AssistantPreparedEvent } from "@/lib/schemas/events-ai";
-import type { AssistantPreparedAnnouncement } from "@/lib/schemas/content";
+import type {
+  AssistantAnnouncementPatch,
+  AssistantPreparedAnnouncement,
+} from "@/lib/schemas/content";
 import type { AssistantPreparedChatMessage, AssistantPreparedGroupMessage } from "@/lib/schemas/chat-ai";
 
 export const AI_PENDING_ACTION_EXPIRY_MS = 15 * 60 * 1000;
 
 export type PendingActionType =
   | "create_announcement"
+  | "edit_announcement"
+  | "delete_announcement"
   | "create_job_posting"
   | "send_chat_message"
   | "send_group_chat_message"
@@ -30,6 +35,43 @@ export interface CreateJobPostingPendingPayload extends AssistantPreparedJob {
 }
 
 export interface CreateAnnouncementPendingPayload extends AssistantPreparedAnnouncement {
+  orgSlug?: string | null;
+}
+
+export interface EditAnnouncementPendingPayload {
+  targetId: string;
+  patch: AssistantAnnouncementPatch;
+  /**
+   * `target.updated_at` captured at prepare time. When present it is used
+   * at confirm time as an optimistic-concurrency token: both a fast in-code
+   * re-read check and an `.eq("updated_at", ...)` filter on the UPDATE
+   * statement. Prevents racing with a concurrent UI edit.
+   */
+  expectedUpdatedAt?: string | null;
+  /**
+   * Caller-captured prior title — only used for the confirmation ai_message
+   * body. Not part of the mutation's semantics.
+   */
+  targetTitle?: string | null;
+  orgSlug?: string | null;
+}
+
+export interface DeleteAnnouncementPendingPayload {
+  targetId: string;
+  /**
+   * Optional optimistic-concurrency token captured at prepare time. Unlike
+   * edit, delete tolerates last-writer-wins semantics — the soft-delete is
+   * idempotent (second invocation on an already-deleted row no-ops). But
+   * supplying the token surfaces concurrent edits as a 409 stale_version,
+   * which the user can use to review before a destructive-op re-confirm.
+   */
+  expectedUpdatedAt?: string | null;
+  /**
+   * Caller-captured title — only used for the confirmation ai_message body.
+   * Not part of the mutation's semantics. Populated because once the row is
+   * soft-deleted, subsequent reads may filter it out.
+   */
+  targetTitle?: string | null;
   orgSlug?: string | null;
 }
 
@@ -74,6 +116,8 @@ export interface RevokeEnterpriseInvitePendingPayload {
 
 export interface PendingActionPayloadByType {
   create_announcement: CreateAnnouncementPendingPayload;
+  edit_announcement: EditAnnouncementPendingPayload;
+  delete_announcement: DeleteAnnouncementPendingPayload;
   create_job_posting: CreateJobPostingPendingPayload;
   send_chat_message: SendChatMessagePendingPayload;
   send_group_chat_message: SendGroupChatMessagePendingPayload;
@@ -305,6 +349,16 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       return {
         title: "Review announcement",
         description: "Confirm the drafted announcement before it is published.",
+      };
+    case "edit_announcement":
+      return {
+        title: "Review announcement edit",
+        description: "Confirm the proposed changes before the announcement is updated.",
+      };
+    case "delete_announcement":
+      return {
+        title: "Delete announcement?",
+        description: "Confirm that this announcement should be removed.",
       };
     case "create_job_posting":
       return {
