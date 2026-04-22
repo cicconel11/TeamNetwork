@@ -18,6 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 import {
@@ -122,11 +123,38 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
   const { dismissImportAlbum, importingAlbum } = useMediaUploadManager();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   // View tab state
   const [view, setView] = useState<GalleryView>("albums");
   const [selectedAlbum, setSelectedAlbum] = useState<MediaAlbum | null>(null);
   const [hiddenAlbumIds, setHiddenAlbumIds] = useState<Set<string>>(new Set());
+
+  // Deep-link: open album from ?album=<id> (e.g. from global search)
+  useEffect(() => {
+    const albumId = searchParams.get("album");
+    if (!albumId) return;
+
+    // Clear the query param to avoid re-triggering
+    const url = new URL(window.location.href);
+    url.searchParams.delete("album");
+    router.replace(url.pathname + url.search, { scroll: false });
+
+    // Fetch albums and select the matching one
+    fetch(`/api/media/albums?orgId=${encodeURIComponent(orgId)}`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Failed to load album"))))
+      .then((result) => {
+        const album = (result.data as MediaAlbum[])?.find((a) => a.id === albumId);
+        if (album) {
+          setView("albums");
+          setSelectedAlbum(album);
+        }
+      })
+      .catch(() => {
+        // Silently fail — user lands on the gallery
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Photos state
   const [items, setItems] = useState<MediaItem[]>([]);
