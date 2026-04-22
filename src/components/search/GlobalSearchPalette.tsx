@@ -245,6 +245,17 @@ export function GlobalSearchPalette() {
         orgId,
       );
       setOpen(false);
+
+      // If targeting an album on the media page, fire a custom event so an
+      // already-mounted MediaGallery can react (router.push won't re-run
+      // useState initialisers on a soft navigation).
+      const albumMatch = url.match(/\/media\?album=([^&]+)/);
+      if (albumMatch) {
+        window.dispatchEvent(
+          new CustomEvent("media:select-album", { detail: { albumId: albumMatch[1] } }),
+        );
+      }
+
       router.push(url);
     },
     [orgId, mode, orgSlug, query, router, setOpen],
