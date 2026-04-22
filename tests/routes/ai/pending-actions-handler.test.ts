@@ -1165,6 +1165,264 @@ test("exception during write rolls back for create_event (dispatcher rejection p
   assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
 });
 
+// --- Remaining dispatchers: regression coverage for the return-await bug ---
+//
+// The existing "exception during write" tests above cover create_job_posting,
+// create_announcement, and create_event. The other six dispatchers extracted
+// in #128 (send_chat_message, send_group_chat_message, create_discussion_thread,
+// create_discussion_reply, create_enterprise_invite, revoke_enterprise_invite)
+// have the same structural vulnerability: if `return handleDispatcher(...)`
+// ever regresses back from `return await handleDispatcher(...)`, the outer
+// try/catch in handler.ts will miss rejections and skip the rollback.
+//
+// These tests lock in that behaviour for each dispatcher.
+
+test("exception during write rolls back for send_chat_message", async () => {
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () =>
+      buildPendingAction({
+        action_type: "send_chat_message",
+        payload: {
+          recipient_member_id: "member-1",
+          recipient_user_id: "user-1",
+          recipient_display_name: "Alice",
+          body: "hello",
+          orgSlug: "org",
+        },
+      }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    sendAiAssistedDirectChatMessage: async () => {
+      throw new Error("Supabase timeout");
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
+test("exception during write rolls back for send_group_chat_message", async () => {
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () =>
+      buildPendingAction({
+        action_type: "send_group_chat_message",
+        payload: {
+          chat_group_id: "group-1",
+          group_name: "Group",
+          message_status: "complete",
+          body: "hello",
+          orgSlug: "org",
+        },
+      }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    sendAiAssistedGroupChatMessage: async () => {
+      throw new Error("Supabase timeout");
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
+test("exception during write rolls back for create_discussion_thread", async () => {
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () =>
+      buildPendingAction({
+        action_type: "create_discussion_thread",
+        payload: {
+          title: "Thread",
+          body: "body",
+          orgSlug: "org",
+        },
+      }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createDiscussionThread: async () => {
+      throw new Error("Supabase timeout");
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
+test("exception during write rolls back for create_discussion_reply", async () => {
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () =>
+      buildPendingAction({
+        action_type: "create_discussion_reply",
+        payload: {
+          discussion_thread_id: "thread-1",
+          body: "reply body",
+          orgSlug: "org",
+        },
+      }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createDiscussionReply: async () => {
+      throw new Error("Supabase timeout");
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
+test("exception during write rolls back for create_enterprise_invite", async () => {
+  // Enterprise-invite dispatcher uses the auth-bound supabase client (not
+  // serviceSupabase) for the RPC. Simulate the throw by overriding
+  // createClient so supabase.rpc rejects.
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+        rpc: async () => {
+          throw new Error("Supabase timeout");
+        },
+      }) as any,
+    getPendingAction: async () =>
+      buildPendingAction({
+        action_type: "create_enterprise_invite",
+        payload: {
+          enterpriseId: "enterprise-1",
+          enterpriseSlug: "ent",
+          organizationId: null,
+          role: "admin",
+          usesRemaining: null,
+          expiresAt: null,
+        },
+      }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
+test("exception during write rolls back for revoke_enterprise_invite", async () => {
+  // Revoke uses ctx.serviceSupabase.from("enterprise_invites").update(...)...
+  // Override getAiOrgContext to return a serviceSupabase whose `.from()` on
+  // enterprise_invites returns an update chain that rejects on the final
+  // `.select()`. ai_messages still needs to succeed on insert (but won't be
+  // reached, since rollback happens first).
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps({
+      getAiOrgContext: async () =>
+        ({
+          ok: true,
+          orgId: ORG_ID,
+          userId: ADMIN_USER.id,
+          role: "admin",
+          supabase: null,
+          serviceSupabase: {
+            from(table: string) {
+              if (table === "enterprise_invites") {
+                const chain: any = {
+                  update: () => chain,
+                  eq: () => chain,
+                  is: () => chain,
+                  select: () => Promise.reject(new Error("Supabase timeout")),
+                };
+                return chain;
+              }
+              if (table === "ai_messages") {
+                return { insert: () => Promise.resolve({ error: null }) };
+              }
+              throw new Error(`unexpected table ${table}`);
+            },
+          },
+        }) as any,
+    }),
+    getPendingAction: async () =>
+      buildPendingAction({
+        action_type: "revoke_enterprise_invite",
+        payload: {
+          inviteId: "invite-1",
+          inviteCode: "CODE1",
+          enterpriseId: "enterprise-1",
+        },
+      }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
 test("rollback failure logs structured error and re-throws", async () => {
   const logged: any[] = [];
   const originalError = console.error;
