@@ -15,6 +15,7 @@ import type {
 } from "@/lib/ai/draft-sessions";
 import type {
   CreateAnnouncementPendingPayload,
+  DeleteAnnouncementPendingPayload,
   EditAnnouncementPendingPayload,
   PendingActionRecord,
   updatePendingActionStatus,
@@ -23,6 +24,7 @@ import type {
   createAnnouncement,
   sendAnnouncementNotification,
 } from "@/lib/announcements/create-announcement";
+import type { softDeleteAnnouncement } from "@/lib/announcements/soft-delete-announcement";
 import type { updateAnnouncement } from "@/lib/announcements/update-announcement";
 import type { sendNotificationBlast } from "@/lib/notifications";
 
@@ -248,6 +250,104 @@ export async function handleEditAnnouncement(
   const content = announcementUrl
     ? `Updated announcement: [${displayTitle}](${announcementUrl})`
     : `Updated announcement: ${displayTitle}`;
+
+  const { error: msgError } = await ctx.serviceSupabase
+    .from("ai_messages")
+    .insert({
+      thread_id: action.thread_id,
+      org_id: ctx.orgId,
+      role: "assistant",
+      content,
+      status: "complete",
+    });
+
+  if (msgError) {
+    aiLog(
+      "error",
+      "ai-confirm",
+      "failed to insert confirmation message",
+      {
+        ...ctx.logContext,
+        userId: ctx.userId,
+        threadId: action.thread_id,
+      },
+      {
+        actionId: action.id,
+        error: msgError,
+      }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    announcement: result.value,
+    actionId: action.id,
+  });
+}
+
+// ─── Delete dispatcher ──────────────────────────────────────────────────
+//
+// Phase 2b of the Tier 1 edit/delete plan. Mirrors handleEditAnnouncement
+// but calls the softDeleteAnnouncement primitive and has no draft-session
+// clear — delete actions skip the multi-turn collection phase entirely
+// (the plan's security decision: "most-recent fallback disabled for
+// delete" means target_id is always explicit, so there's nothing to
+// collect). Matches the revoke_enterprise_invite precedent where
+// destructive single-target ops don't register a DraftSessionType.
+
+export interface DeleteAnnouncementDispatcherDeps {
+  softDeleteAnnouncementFn: typeof softDeleteAnnouncement;
+}
+
+export async function handleDeleteAnnouncement(
+  ctx: AnnouncementDispatcherContext,
+  action: PendingActionRecord<"delete_announcement">,
+  deps: DeleteAnnouncementDispatcherDeps
+): Promise<NextResponse> {
+  const payload = action.payload as DeleteAnnouncementPendingPayload;
+  const result = await deps.softDeleteAnnouncementFn({
+    supabase: ctx.serviceSupabase,
+    orgId: ctx.orgId,
+    userId: ctx.userId,
+    targetId: payload.targetId,
+    expectedUpdatedAt: payload.expectedUpdatedAt ?? null,
+  });
+
+  if (!result.ok) {
+    await ctx.updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+      status: "pending",
+      expectedStatus: "confirmed",
+    });
+    return NextResponse.json(
+      result.details
+        ? { error: result.error, details: result.details }
+        : { error: result.error },
+      { status: result.status }
+    );
+  }
+
+  await ctx.updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+    status: "executed",
+    expectedStatus: "confirmed",
+    executedAt: new Date().toISOString(),
+    resultEntityType: "announcement",
+    resultEntityId: result.value.id,
+  });
+
+  // No draft-session clear: delete_announcement is not a DraftSessionType.
+  // If a future phase adds multi-turn disambiguation for deletes (e.g. name
+  // lookup), the DraftSessionType entry will be added alongside and this
+  // dispatcher will gain the standard clear call.
+
+  const orgSlug =
+    typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+      ? payload.orgSlug
+      : null;
+  const announcementUrl = orgSlug ? `/${orgSlug}/announcements` : null;
+  const displayTitle = payload.targetTitle ?? result.value.title ?? "announcement";
+  const content = announcementUrl
+    ? `Deleted announcement: [${displayTitle}](${announcementUrl})`
+    : `Deleted announcement: ${displayTitle}`;
 
   const { error: msgError } = await ctx.serviceSupabase
     .from("ai_messages")
