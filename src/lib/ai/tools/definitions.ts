@@ -307,6 +307,43 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_edit_announcement: {
+    type: "function" as const,
+    function: {
+      name: "prepare_edit_announcement" as const,
+      description:
+        "Prepare an edit to an existing organization announcement. Use this when the user wants to fix, change, update, or reschedule an announcement they previously posted. It resolves the target announcement (via target_id, or as a fallback the most-recently-posted announcement in the last 15 minutes by the same user), validates the patch against the announcement schema, and creates a pending confirmation action. Supply only the fields that should change; unspecified fields keep their current value. At least one patch field must be provided.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          target_id: {
+            type: "string" as const,
+            description:
+              "The ID of the announcement to edit. When omitted, the tool falls back to the most recent announcement the same user created in this org within the last 15 minutes. Prefer explicit target_id whenever the user references a specific announcement by title or context.",
+          },
+          title: { type: "string" as const },
+          body: { type: "string" as const },
+          is_pinned: { type: "boolean" as const },
+          audience: {
+            type: "string" as const,
+            enum: ["all", "members", "active_members", "alumni", "individuals"],
+          },
+          audience_user_ids: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Replace the individual-recipient list. Only meaningful when audience is 'individuals' or when the existing announcement already targets individuals.",
+          },
+          reasoning: {
+            type: "string" as const,
+            description:
+              "Short (one-sentence) explanation of why this edit is being proposed. Logged for audit. Example: 'user asked to fix typo in the title'.",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   prepare_job_posting: {
     type: "function" as const,
     function: {
@@ -1076,6 +1113,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.prepare_enterprise_invite,
   TOOL_BY_NAME.revoke_enterprise_invite,
   TOOL_BY_NAME.prepare_announcement,
+  TOOL_BY_NAME.prepare_edit_announcement,
   TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.prepare_chat_message,
   TOOL_BY_NAME.prepare_group_message,

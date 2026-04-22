@@ -154,6 +154,13 @@ const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
 const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|send|draft|write|compose)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|send|draft|write|compose)(?!\w))/i;
+// Edit-intent verbs for announcements. Distinct from create verbs above:
+// "fix/change/update/edit/reword/rephrase/correct/amend/revise" paired with
+// "announcement" (or just "typo" / "typos" when the feature context is
+// announcements — see the surface-routing fallback below). Deliberately
+// does NOT match "delete/remove/cancel" — that's Phase 2b-prepare.
+const EDIT_ANNOUNCEMENT_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:fix|change|update|edit|reword|rephrase|correct|amend|revise)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin|typo|typos|title|wording)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:fix|change|edit|reword|rephrase|correct|amend|revise)(?!\w))/i;
 const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 const SEND_CHAT_MESSAGE_PROMPT_PATTERN =
@@ -1844,6 +1851,13 @@ function getPass1Tools(
     return [AI_TOOL_MAP.prepare_announcement];
   }
 
+  // Edit-intent attachment — check AFTER create to avoid stealing turns that
+  // match both (e.g. "create an update" would match create; "update the
+  // announcement title" matches edit only).
+  if (EDIT_ANNOUNCEMENT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_edit_announcement];
+  }
+
   if (CREATE_JOB_PROMPT_PATTERN.test(message) || looksLikeStructuredJobDraft(message)) {
     return [AI_TOOL_MAP.prepare_job_posting];
   }
@@ -2887,15 +2901,7 @@ function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
     case "create_announcement":
       return "prepare_announcement";
     case "edit_announcement":
-      // Placeholder for Phase 2a-prepare: the prepare_edit_announcement
-      // tool is not yet registered. This branch should be unreachable
-      // until that tool ships, because no code path creates a draft
-      // session with draftType "edit_announcement" yet. Throwing makes
-      // the incomplete state explicit instead of silently attaching a
-      // non-existent tool name.
-      throw new Error(
-        "prepare_edit_announcement tool is not registered yet (Phase 2a-prepare not shipped)"
-      );
+      return "prepare_edit_announcement";
     case "create_job_posting":
       return "prepare_job_posting";
     case "send_chat_message":
