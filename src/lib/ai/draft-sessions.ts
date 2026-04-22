@@ -7,7 +7,10 @@ import type {
 import type { AssistantEventDraft } from "@/lib/schemas/events-ai";
 import type { AssistantJobDraft } from "@/lib/schemas/jobs";
 import type { AssistantChatMessageDraft, AssistantGroupMessageDraft } from "@/lib/schemas/chat-ai";
-import { AI_PENDING_ACTION_EXPIRY_MS } from "@/lib/ai/pending-actions";
+import {
+  AI_PENDING_ACTION_EXPIRY_MS,
+  type EditAnnouncementPendingPayload,
+} from "@/lib/ai/pending-actions";
 
 export type DraftSessionStatus = "collecting_fields" | "ready_for_confirmation";
 
@@ -16,6 +19,7 @@ export type DraftSessionStatus = "collecting_fields" | "ready_for_confirmation";
 // saveDraftSession enforces the contract at the application boundary.
 export const DRAFT_SESSION_TYPES = [
   "create_announcement",
+  "edit_announcement",
   "create_job_posting",
   "send_chat_message",
   "send_group_chat_message",
@@ -28,6 +32,7 @@ export type DraftSessionType = (typeof DRAFT_SESSION_TYPES)[number];
 
 export interface DraftSessionPayloadByType {
   create_announcement: AssistantAnnouncementDraft;
+  edit_announcement: EditAnnouncementPendingPayload;
   create_job_posting: AssistantJobDraft;
   send_chat_message: AssistantChatMessageDraft;
   send_group_chat_message: AssistantGroupMessageDraft;

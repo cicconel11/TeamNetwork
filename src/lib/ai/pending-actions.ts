@@ -2,13 +2,17 @@ import type { AssistantPreparedJob } from "@/lib/schemas/jobs";
 import type { AssistantPreparedDiscussion } from "@/lib/schemas/discussion";
 import type { AssistantPreparedDiscussionReply } from "@/lib/schemas/discussion";
 import type { AssistantPreparedEvent } from "@/lib/schemas/events-ai";
-import type { AssistantPreparedAnnouncement } from "@/lib/schemas/content";
+import type {
+  AssistantAnnouncementPatch,
+  AssistantPreparedAnnouncement,
+} from "@/lib/schemas/content";
 import type { AssistantPreparedChatMessage, AssistantPreparedGroupMessage } from "@/lib/schemas/chat-ai";
 
 export const AI_PENDING_ACTION_EXPIRY_MS = 15 * 60 * 1000;
 
 export type PendingActionType =
   | "create_announcement"
+  | "edit_announcement"
   | "create_job_posting"
   | "send_chat_message"
   | "send_group_chat_message"
@@ -30,6 +34,24 @@ export interface CreateJobPostingPendingPayload extends AssistantPreparedJob {
 }
 
 export interface CreateAnnouncementPendingPayload extends AssistantPreparedAnnouncement {
+  orgSlug?: string | null;
+}
+
+export interface EditAnnouncementPendingPayload {
+  targetId: string;
+  patch: AssistantAnnouncementPatch;
+  /**
+   * `target.updated_at` captured at prepare time. When present it is used
+   * at confirm time as an optimistic-concurrency token: both a fast in-code
+   * re-read check and an `.eq("updated_at", ...)` filter on the UPDATE
+   * statement. Prevents racing with a concurrent UI edit.
+   */
+  expectedUpdatedAt?: string | null;
+  /**
+   * Caller-captured prior title — only used for the confirmation ai_message
+   * body. Not part of the mutation's semantics.
+   */
+  targetTitle?: string | null;
   orgSlug?: string | null;
 }
 
@@ -74,6 +96,7 @@ export interface RevokeEnterpriseInvitePendingPayload {
 
 export interface PendingActionPayloadByType {
   create_announcement: CreateAnnouncementPendingPayload;
+  edit_announcement: EditAnnouncementPendingPayload;
   create_job_posting: CreateJobPostingPendingPayload;
   send_chat_message: SendChatMessagePendingPayload;
   send_group_chat_message: SendGroupChatMessagePendingPayload;
@@ -305,6 +328,11 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       return {
         title: "Review announcement",
         description: "Confirm the drafted announcement before it is published.",
+      };
+    case "edit_announcement":
+      return {
+        title: "Review announcement edit",
+        description: "Confirm the proposed changes before the announcement is updated.",
       };
     case "create_job_posting":
       return {

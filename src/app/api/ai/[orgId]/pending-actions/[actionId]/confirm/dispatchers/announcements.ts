@@ -15,6 +15,7 @@ import type {
 } from "@/lib/ai/draft-sessions";
 import type {
   CreateAnnouncementPendingPayload,
+  EditAnnouncementPendingPayload,
   PendingActionRecord,
   updatePendingActionStatus,
 } from "@/lib/ai/pending-actions";
@@ -22,6 +23,7 @@ import type {
   createAnnouncement,
   sendAnnouncementNotification,
 } from "@/lib/announcements/create-announcement";
+import type { updateAnnouncement } from "@/lib/announcements/update-announcement";
 import type { sendNotificationBlast } from "@/lib/notifications";
 
 export interface AnnouncementDispatcherContext {
@@ -172,6 +174,111 @@ export async function handleCreateAnnouncement(
   return NextResponse.json({
     ok: true,
     announcement: result.announcement,
+    actionId: action.id,
+  });
+}
+
+// ─── Edit dispatcher ────────────────────────────────────────────────────
+//
+// Phase 2a of the Tier 1 edit/delete plan. Mirrors handleCreateAnnouncement's
+// ctx + deps shape, but calls the updateAnnouncement domain primitive and
+// surfaces the structured DomainResult failure codes (403 forbidden, 404
+// not_found, 409 stale_version, 422 invariant_violation, 500 update_failed)
+// directly into the HTTP response. The primitive enforces both the admin
+// permission check and the optimistic-concurrency `expectedUpdatedAt` token
+// captured at prepare time, so this dispatcher has no additional auth or
+// race logic — it's a thin CAS + primitive + ai_messages shell.
+
+export interface EditAnnouncementDispatcherDeps {
+  updateAnnouncementFn: typeof updateAnnouncement;
+}
+
+export async function handleEditAnnouncement(
+  ctx: AnnouncementDispatcherContext,
+  action: PendingActionRecord<"edit_announcement">,
+  deps: EditAnnouncementDispatcherDeps
+): Promise<NextResponse> {
+  const payload = action.payload as EditAnnouncementPendingPayload;
+  const result = await deps.updateAnnouncementFn({
+    supabase: ctx.serviceSupabase,
+    orgId: ctx.orgId,
+    userId: ctx.userId,
+    targetId: payload.targetId,
+    patch: payload.patch,
+    expectedUpdatedAt: payload.expectedUpdatedAt ?? null,
+  });
+
+  if (!result.ok) {
+    await ctx.updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+      status: "pending",
+      expectedStatus: "confirmed",
+    });
+    return NextResponse.json(
+      result.details
+        ? { error: result.error, details: result.details }
+        : { error: result.error },
+      { status: result.status }
+    );
+  }
+
+  await ctx.updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+    status: "executed",
+    expectedStatus: "confirmed",
+    executedAt: new Date().toISOString(),
+    resultEntityType: "announcement",
+    resultEntityId: result.value.id,
+  });
+
+  if (ctx.canUseDraftSessions) {
+    await ctx.clearDraftSessionFn(ctx.serviceSupabase, {
+      organizationId: ctx.orgId,
+      userId: ctx.userId,
+      threadId: action.thread_id,
+      pendingActionId: action.id,
+      draftType: "edit_announcement",
+    });
+  }
+
+  const orgSlug =
+    typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+      ? payload.orgSlug
+      : null;
+  const announcementUrl = orgSlug ? `/${orgSlug}/announcements` : null;
+  const displayTitle = result.value.title ?? payload.targetTitle ?? "announcement";
+  const content = announcementUrl
+    ? `Updated announcement: [${displayTitle}](${announcementUrl})`
+    : `Updated announcement: ${displayTitle}`;
+
+  const { error: msgError } = await ctx.serviceSupabase
+    .from("ai_messages")
+    .insert({
+      thread_id: action.thread_id,
+      org_id: ctx.orgId,
+      role: "assistant",
+      content,
+      status: "complete",
+    });
+
+  if (msgError) {
+    aiLog(
+      "error",
+      "ai-confirm",
+      "failed to insert confirmation message",
+      {
+        ...ctx.logContext,
+        userId: ctx.userId,
+        threadId: action.thread_id,
+      },
+      {
+        actionId: action.id,
+        error: msgError,
+      }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    announcement: result.value,
     actionId: action.id,
   });
 }

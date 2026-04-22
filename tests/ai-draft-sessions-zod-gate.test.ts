@@ -7,7 +7,7 @@ import {
 } from "@/lib/ai/draft-sessions";
 
 describe("DRAFT_SESSION_TYPES const tuple", () => {
-  it("exports the 7 known draft types in a readonly tuple", () => {
+  it("exports the known draft types in a readonly tuple", () => {
     assert.deepEqual(
       [...DRAFT_SESSION_TYPES].sort(),
       [
@@ -16,6 +16,7 @@ describe("DRAFT_SESSION_TYPES const tuple", () => {
         "create_discussion_thread",
         "create_event",
         "create_job_posting",
+        "edit_announcement",
         "send_chat_message",
         "send_group_chat_message",
       ]

@@ -2886,6 +2886,16 @@ function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
   switch (draftType) {
     case "create_announcement":
       return "prepare_announcement";
+    case "edit_announcement":
+      // Placeholder for Phase 2a-prepare: the prepare_edit_announcement
+      // tool is not yet registered. This branch should be unreachable
+      // until that tool ships, because no code path creates a draft
+      // session with draftType "edit_announcement" yet. Throwing makes
+      // the incomplete state explicit instead of silently attaching a
+      // non-existent tool name.
+      throw new Error(
+        "prepare_edit_announcement tool is not registered yet (Phase 2a-prepare not shipped)"
+      );
     case "create_job_posting":
       return "prepare_job_posting";
     case "send_chat_message":
@@ -3548,6 +3558,13 @@ function inferDraftSessionFromHistory(input: {
           (field) => getNonEmptyString(draftPayload[field]) == null
         );
         break;
+      case "edit_announcement":
+        // Edit drafts cannot be reconstructed from chat-history inference —
+        // they require a target_id resolved via the target_resolver. Skip
+        // this iteration; callers fall through to explicit draft-session
+        // load paths (save + get by draft_type) once the prepare-side
+        // tool is wired in a follow-up PR.
+        continue;
       case "send_chat_message":
         draftPayload = extractChatMessageDraftFromHistory(relevantMessages);
         missingFields = [
