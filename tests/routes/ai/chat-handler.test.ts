@@ -3122,3 +3122,142 @@ test("POST /api/ai/[orgId]/chat in RAG shadow mode audits but passes ungrounded 
     delete process.env.RAG_GROUNDING_MODE;
   }
 });
+
+test("POST /api/ai/[orgId]/chat with RAG_GROUNDING_MODE=bypass does not invoke grounding", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+  process.env.EMBEDDING_API_KEY = "embed-key";
+  process.env.RAG_GROUNDING_MODE = "bypass";
+  delete process.env.DISABLE_RAG_GROUNDING;
+
+  try {
+    let groundingCalls = 0;
+    POST = createChatPostHandler({
+      createClient: async () => supabaseStub as any,
+      getAiOrgContext: async () => aiContext,
+      buildPromptContext: async (input: any) => ({
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      }),
+      createZaiClient: () => ({ client: "fake" } as any),
+      getZaiModel: () => "glm-5",
+      composeResponse: (async function* () {
+        yield { type: "chunk", content: "Ungrounded-looking content that should pass through." };
+      }) as any,
+      logAiRequest: async (_s: unknown, entry: unknown) => {
+        auditEntries.push(entry);
+      },
+      retrieveRelevantChunks: async () => [
+        {
+          contentText: "Announcement chunk",
+          sourceTable: "announcements",
+          similarity: 0.7,
+          metadata: {},
+        } as any,
+      ],
+      resolveOwnThread: async () => ({
+        ok: true,
+        thread: { id: "thread-1", user_id: ADMIN_USER.id, org_id: ORG_ID, surface: "general", title: "t" },
+      }),
+      verifyRagGrounding: async () => {
+        groundingCalls++;
+        return {
+          grounded: false,
+          uncoveredClaims: ["Ungrounded-looking content that should pass through."],
+          topChunkExcerpt: "Announcement chunk",
+          latencyMs: 5,
+          usedJudge: false,
+        };
+      },
+      classifySafety: async () => ({
+        verdict: "safe",
+        categories: [],
+        latencyMs: 1,
+        usedJudge: false,
+      }),
+      trackOpsEventServer: async (...args: any[]) => {
+        trackedOpsEvents.push(args);
+      },
+    });
+
+    const response = await POST(makeFreeformRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    });
+    const body = await response.text();
+    assert.match(body, /Ungrounded-looking content/);
+    assert.equal(groundingCalls, 0);
+    // Grounding stays unevaluated in bypass mode…
+    assert.equal((auditEntries[0] as any)?.ragGrounded, undefined);
+    // …but audit row records the mode so bypass is distinguishable from
+    // normal ungrounded traffic.
+    assert.equal((auditEntries[0] as any)?.ragGroundingMode, "bypass");
+    // And a one-shot ops event fires so the break-glass posture is visible
+    // in production dashboards.
+    const bypassEvents = trackedOpsEvents.filter(
+      (args) => args[1]?.error_code === "rag_grounding_bypassed"
+    );
+    assert.equal(bypassEvents.length, 1, "expected a single rag_grounding_bypassed ops event");
+    assert.equal(bypassEvents[0][1].endpoint_group, "ai-rag-grounding");
+  } finally {
+    delete process.env.RAG_GROUNDING_MODE;
+  }
+});
+
+test("POST /api/ai/[orgId]/chat safety gate does NOT allowlist phone numbers from RAG chunk free text", async () => {
+  // Policy: phones embedded in free-text RAG chunk bodies can be personal
+  // cell numbers. They are not broadly-publishable identifiers the way
+  // emails are, so the gate must flag them as pii_phone rather than treat
+  // them as "org-owned" just because they appear in a chunk.
+  process.env.DISABLE_AI_CACHE = "true";
+  process.env.EMBEDDING_API_KEY = "embed-key";
+  delete process.env.DISABLE_SAFETY_GATE;
+
+  try {
+    POST = createChatPostHandler({
+      createClient: async () => supabaseStub as any,
+      getAiOrgContext: async () => aiContext,
+      buildPromptContext: async (input: any) => ({
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      }),
+      createZaiClient: () => ({ client: "fake" } as any),
+      getZaiModel: () => "glm-5",
+      composeResponse: (async function* () {
+        yield { type: "chunk", content: "Call the office at 415-555-2671 for details." };
+      }) as any,
+      logAiRequest: async (_s: unknown, entry: unknown) => {
+        auditEntries.push(entry);
+      },
+      retrieveRelevantChunks: async () => [
+        {
+          contentText: "Main office phone: 415-555-2671",
+          sourceTable: "announcements",
+          similarity: 0.8,
+          metadata: {},
+        } as any,
+      ],
+      resolveOwnThread: async () => ({
+        ok: true,
+        thread: { id: "thread-1", user_id: ADMIN_USER.id, org_id: ORG_ID, surface: "general", title: "t" },
+      }),
+      trackOpsEventServer: async (...args: any[]) => {
+        trackedOpsEvents.push(args);
+      },
+    });
+
+    const response = await POST(makeFreeformRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    });
+    await response.text();
+    assert.equal((auditEntries[0] as any)?.safetyVerdict, "unsafe");
+    const categories = (auditEntries[0] as any)?.safetyCategories ?? [];
+    assert.ok(
+      categories.includes("pii_phone"),
+      `expected pii_phone in ${JSON.stringify(categories)}`
+    );
+  } finally {
+    delete process.env.DISABLE_SAFETY_GATE;
+    delete process.env.EMBEDDING_API_KEY;
+  }
+});
