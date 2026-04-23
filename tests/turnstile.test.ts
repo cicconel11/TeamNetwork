@@ -1,6 +1,6 @@
 /**
  * Cloudflare Turnstile verification tests.
- * Mirrors tests/captcha.test.ts hCaptcha coverage.
+ * Covers the default captcha provider plus explicit legacy-provider dispatch.
  */
 
 import { describe, it } from "node:test";
