@@ -115,6 +115,21 @@ export function detectProfanity(content: string): string[] {
   return [...hits];
 }
 
+function normalizeIdentifier(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.includes("@")) {
+    return normalized;
+  }
+  const digits = normalized.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return digits.slice(1);
+  }
+  if (digits.length === 10) {
+    return digits;
+  }
+  return normalized;
+}
+
 // An identifier is "org-owned" if it already appears in retrieved RAG chunks
 // or a tool-row-derived allowlist. Echoing such an identifier is not a leak.
 export function isOrgOwnedIdentifier(
@@ -122,9 +137,9 @@ export function isOrgOwnedIdentifier(
   allowlist: Iterable<string> | undefined
 ): boolean {
   if (!allowlist) return false;
-  const normalized = identifier.trim().toLowerCase();
+  const normalized = normalizeIdentifier(identifier);
   for (const owned of allowlist) {
-    if (owned.trim().toLowerCase() === normalized) return true;
+    if (normalizeIdentifier(owned) === normalized) return true;
   }
   return false;
 }
