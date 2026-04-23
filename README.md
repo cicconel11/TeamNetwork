@@ -25,7 +25,9 @@ Core environment variables:
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key |
 | `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile secret key |
 
-Captcha uses Cloudflare Turnstile for all auth and donation flows. Site key and secret must be configured for production. Set `NEXT_PUBLIC_CAPTCHA_PROVIDER=turnstile` and `CAPTCHA_PROVIDER=turnstile` (these are also the defaults). Register the site's hostname under the widget in the Cloudflare dashboard.
+Captcha defaults to Cloudflare Turnstile for auth and donation flows. Site key and secret must be configured for production. Set `NEXT_PUBLIC_CAPTCHA_PROVIDER=turnstile` and `CAPTCHA_PROVIDER=turnstile` (these are also the defaults). Register the site's hostname under the widget in the Cloudflare dashboard. The legacy hCaptcha fallback is still selectable with matching `hcaptcha` provider flags and hCaptcha keys until it is intentionally removed.
+
+Note: Supabase Auth accepts captcha tokens for email/password, email OTP, signup, and password recovery flows. OAuth provider buttons still require captcha completion in the app UI, but Supabase does not accept a captcha token for `signInWithOAuth`, so that protection is client-side friction rather than server-enforced verification.
 
 Build-time Stripe price validation also expects:
 

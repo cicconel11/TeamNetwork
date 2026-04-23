@@ -179,8 +179,9 @@ function validateBuildEnv() {
     console.warn("⚠️  CRON_SECRET not set — cron job authentication will not work");
   }
 
-  // Captcha: require Turnstile keys on Vercel production so we fail fast if a
-  // rotation or Shared-env misconfig drops the secret before deploy.
+  // Captcha: fail fast on Vercel production when the selected provider is
+  // missing keys or when client/server provider flags drift.
+  // Keep this in sync with src/lib/env.ts validateCaptchaEnv().
   const serverCaptchaProvider = process.env.CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
   const clientCaptchaProvider = process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
   if (isVercelProduction) {
@@ -316,20 +317,22 @@ const nextConfig = {
             : []),
           {
             key: "Permissions-Policy",
-            value: "camera=(self), microphone=(self), geolocation=()",
+            // hCaptcha camera/microphone origins stay allowlisted while the
+            // legacy fallback remains selectable through CAPTCHA_PROVIDER.
+            value: "camera=(self \"https://newassets.hcaptcha.com\" \"https://hcaptcha.com\"), microphone=(self \"https://newassets.hcaptcha.com\" \"https://hcaptcha.com\"), geolocation=()",
           },
           {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://va.vercel-scripts.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com https://va.vercel-scripts.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               // External member avatars are browser-fetched via <img>, so CSP
               // must allow arbitrary HTTPS image origins without widening the
               // Next.js server-side optimizer allowlist.
               "img-src 'self' blob: data: https:",
               "font-src 'self' https://fonts.gstatic.com",
-              "frame-src https://challenges.cloudflare.com https://js.stripe.com https://connect.stripe.com https://*.stripe.com",
+              "frame-src https://hcaptcha.com https://newassets.hcaptcha.com https://challenges.cloudflare.com https://js.stripe.com https://connect.stripe.com https://*.stripe.com",
               "media-src 'self' blob: https://rytsziwekhtjdqzzpdso.supabase.co",
               "connect-src 'self' https://challenges.cloudflare.com https://rytsziwekhtjdqzzpdso.supabase.co https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://connect.stripe.com",
             ].join("; "),
