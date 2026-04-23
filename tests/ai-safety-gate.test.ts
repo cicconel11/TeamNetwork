@@ -9,6 +9,7 @@ import {
   buildSafetyJudgePrompt,
   SAFETY_FALLBACK_TEXT,
 } from "../src/lib/ai/safety-gate.ts";
+import { collectPhoneNumberFields } from "../src/app/api/ai/[orgId]/chat/handler.ts";
 
 test("detectPII finds emails, phones, SSNs, credit cards (Luhn)", () => {
   const result = detectPII(
@@ -45,6 +46,17 @@ test("isOrgOwnedIdentifier matches case-insensitive", () => {
   assert.equal(isOrgOwnedIdentifier("x", undefined), false);
 });
 
+test("isOrgOwnedIdentifier normalizes phone formatting", () => {
+  assert.equal(
+    isOrgOwnedIdentifier("415-555-2671", ["(415) 555-2671"]),
+    true
+  );
+  assert.equal(
+    isOrgOwnedIdentifier("+1 415 555 2671", ["4155552671"]),
+    true
+  );
+});
+
 test("classifySafety short-circuits on PII with no allowlist", async () => {
   const result = await classifySafety({
     content: "Reach me at stranger@example.com",
@@ -59,6 +71,15 @@ test("classifySafety passes when email is org-owned", async () => {
   const result = await classifySafety({
     content: "Reach me at alice@example.com",
     orgContext: { ownedEmails: ["alice@example.com"] },
+    judge: async () => ({ verdict: "safe", categories: [] }),
+  });
+  assert.equal(result.verdict, "safe");
+});
+
+test("classifySafety passes when phone is org-owned across formatting variants", async () => {
+  const result = await classifySafety({
+    content: "Call me at 415-555-2671",
+    orgContext: { ownedPhones: ["(415) 555-2671"] },
     judge: async () => ({ verdict: "safe", categories: [] }),
   });
   assert.equal(result.verdict, "safe");
@@ -133,4 +154,51 @@ test("buildSafetyJudgePrompt defines tri-class schema", () => {
   assert.match(prompt, /safe/);
   assert.match(prompt, /controversial/);
   assert.match(prompt, /unsafe/);
+});
+
+test("collectPhoneNumberFields harvests phone_number from structured rows", () => {
+  const owned = new Set<string>();
+  collectPhoneNumberFields(
+    [
+      {
+        name: "list_parents",
+        data: {
+          rows: [
+            { full_name: "Alice", phone_number: "415-555-2671" },
+            { full_name: "Bob", phone_number: "415-555-0099" },
+          ],
+        },
+      },
+    ],
+    owned
+  );
+  assert.ok(owned.has("415-555-2671"));
+  assert.ok(owned.has("415-555-0099"));
+});
+
+test("collectPhoneNumberFields ignores phones embedded in free-text description fields", () => {
+  const owned = new Set<string>();
+  collectPhoneNumberFields(
+    [
+      {
+        name: "list_announcements",
+        data: {
+          rows: [
+            {
+              title: "Reminder",
+              description: "Call coach at 415-555-1111 anytime",
+            },
+          ],
+        },
+      },
+    ],
+    owned
+  );
+  assert.equal(owned.size, 0, "free-text description must NOT widen the phone allowlist");
+});
+
+test("collectPhoneNumberFields ignores non-string phone_number values", () => {
+  const owned = new Set<string>();
+  collectPhoneNumberFields({ phone_number: 4155550000 }, owned);
+  assert.equal(owned.size, 0);
 });
