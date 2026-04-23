@@ -279,7 +279,7 @@ function looksLikeStructuredJobDraft(message: string): boolean {
   return hasJobContext && structuredFieldMatches >= 2 && message.trim().length >= 80;
 }
 
-const CONNECTION_PASS2_TEMPLATE = [
+export const CONNECTION_PASS2_TEMPLATE = [
   "CONNECTION ANSWER CONTRACT:",
   "- If suggest_connections returned state=resolved, respond using this exact shape:",
   "  Top connections for [source person name]",
@@ -290,8 +290,16 @@ const CONNECTION_PASS2_TEMPLATE = [
   "- Do not mention scores, UUIDs, Falkor, SQL fallback, freshness, or internal tool details.",
   "- Do not add a concluding summary sentence.",
   "- If state=ambiguous, ask the user which returned option they mean.",
+  "- If the user's next message picks one of the ambiguous options you previously listed (by name, subtitle, or position), call suggest_connections again using the person_type and person_id from the [ref: person_type:person_id] tag on the matching line, not person_query.",
   "- If state=not_found, say you couldn't find that person in the organization's member or alumni data and ask for a narrower identifier.",
   "- If state=no_suggestions, say you found the person but there is not enough strong professional overlap yet to recommend a connection.",
+].join("\n");
+
+const CONNECTION_PASS1_DISAMBIGUATION_INSTRUCTION = [
+  "CONNECTION TOOL ROUTING:",
+  "- If the latest assistant message listed ambiguous suggest_connections options with [ref: person_type:person_id] tags and the user replies with a choice by number, position, name, or subtitle, call suggest_connections again.",
+  "- In that follow-up call, use the matching person_type and person_id from the prior assistant message's [ref: person_type:person_id] tag.",
+  "- Do not send person_query for that follow-up disambiguation call.",
 ].join("\n");
 
 const MENTOR_PASS2_TEMPLATE = [
@@ -466,7 +474,58 @@ function formatDisplayRow(row: { name?: unknown; subtitle?: unknown }): string |
   return subtitle ? `${name} - ${subtitle}` : name;
 }
 
-function formatSuggestConnectionsResponse(data: unknown): string | null {
+function hasPendingConnectionDisambiguation(history: Array<{ role: "user" | "assistant"; content: string }>): boolean {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (message.role !== "assistant") {
+      continue;
+    }
+    return (
+      /which one did you mean\?/i.test(message.content) &&
+      /\[ref:\s*(member|alumni):[^\]\s]+\]/i.test(message.content)
+    );
+  }
+  return false;
+}
+
+function looksLikeConnectionDisambiguationReply(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized || normalized.length > 120) {
+    return false;
+  }
+  if (/\n/.test(normalized)) {
+    return false;
+  }
+  if (
+    /^(?:the\s+)?(?:first|second|third|fourth|fifth|last)\b/.test(normalized) ||
+    /^(?:option\s+)?\d+\b/.test(normalized)
+  ) {
+    return true;
+  }
+  return normalized.split(/\s+/).length <= 8;
+}
+
+// Walk `successfulToolResults` and add any value found at a literal
+// `phone_number` key into `owned`. Unknown-shaped free-text fields are
+// deliberately ignored so a poisoned tool blob cannot widen the allowlist.
+export function collectPhoneNumberFields(value: unknown, owned: Set<string>, depth = 0): void {
+  if (depth > 8 || value == null) return;
+  if (typeof value === "string") return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectPhoneNumberFields(item, owned, depth + 1);
+    return;
+  }
+  if (typeof value !== "object") return;
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if (key === "phone_number" && typeof val === "string" && val.trim().length > 0) {
+      owned.add(val.trim().toLowerCase());
+      continue;
+    }
+    collectPhoneNumberFields(val, owned, depth + 1);
+  }
+}
+
+export function formatSuggestConnectionsResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
   }
@@ -485,11 +544,26 @@ function formatSuggestConnectionsResponse(data: unknown): string | null {
   if (state === "ambiguous") {
     const options = Array.isArray(payload.disambiguation_options)
       ? payload.disambiguation_options
-          .map((option) =>
-            option && typeof option === "object"
-              ? formatDisplayRow(option as { name?: unknown; subtitle?: unknown })
-              : null
-          )
+          .map((option) => {
+            if (!option || typeof option !== "object") return null;
+            const row = option as {
+              name?: unknown;
+              subtitle?: unknown;
+              person_type?: unknown;
+              person_id?: unknown;
+            };
+            const display = formatDisplayRow(row);
+            if (!display) return null;
+            const personType = getNonEmptyString(row.person_type);
+            const personId = getNonEmptyString(row.person_id);
+            if (personType && personId && (personType === "member" || personType === "alumni")) {
+              // Machine-parseable tail: lets pass-2 prompt re-call the tool
+              // with stable id on the user's next turn. User-facing prefix
+              // stays identical.
+              return `${display} [ref: ${personType}:${personId}]`;
+            }
+            return display;
+          })
           .filter((option): option is string => Boolean(option))
       : [];
 
@@ -4992,24 +5066,34 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         if (safetyGateDisabled || !buffered) return buffered;
         try {
           const ownedEmails = new Set<string>();
+          const ownedPhones = new Set<string>();
           const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+          // RAG chunks: emails are widely distributed directory identifiers
+          // (low marginal harm); phones may be personal cell numbers embedded
+          // in free-text bodies. Allowlist emails only. Phones from RAG free
+          // text are NOT allowlisted — the gate should flag them if echoed.
           for (const chunk of ragChunks) {
             const text = chunk.contentText ?? "";
-            const matches = text.match(emailRegex) ?? [];
-            for (const m of matches) ownedEmails.add(m.toLowerCase());
+            const emailMatches = text.match(emailRegex) ?? [];
+            for (const m of emailMatches) ownedEmails.add(m.toLowerCase());
           }
-          // Tool-row emails are org-owned data visible to this user by policy.
-          // Emitting them back is not a leak.
+          // Tool-row identifiers are org-owned data visible to this user by
+          // policy. Emails: flat regex over serialized JSON is fine.
+          // Phones: only collect from explicitly-modeled `phone_number`
+          // fields to avoid a poisoned free-text tool blob widening the
+          // allowlist. `list_parents` + `list_alumni` are the two surfaces
+          // that emit a structured phone_number.
           try {
             const serialized = JSON.stringify(successfulToolResults);
-            const matches = serialized.match(emailRegex) ?? [];
-            for (const m of matches) ownedEmails.add(m.toLowerCase());
+            const emailMatches = serialized.match(emailRegex) ?? [];
+            for (const m of emailMatches) ownedEmails.add(m.toLowerCase());
           } catch {
             // Circular-ref tool data; skip.
           }
+          collectPhoneNumberFields(successfulToolResults, ownedPhones);
           const result = await classifySafetyFn({
             content: buffered,
-            orgContext: { ownedEmails },
+            orgContext: { ownedEmails, ownedPhones },
           });
           safetyVerdict = result.verdict;
           safetyCategories = result.categories;
@@ -5047,9 +5131,28 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       const applyRagGrounding = async (buffered: string): Promise<string> => {
         if (
           ragGroundingDisabled ||
+          ragGroundingMode === "bypass" ||
           !buffered ||
           ragChunks.length < ragGroundingMinChunks
         ) {
+          // Record which gate we short-circuited on so the audit row
+          // distinguishes bypass from normal ungrounded traffic.
+          // ragGrounded stays undefined → persisted as null ("not evaluated").
+          if (buffered) {
+            ragGroundingAudited = ragGroundingMode;
+          }
+          if (ragGroundingMode === "bypass" && !ragGroundingDisabled) {
+            void trackOpsEventServerFn(
+              "api_error",
+              {
+                endpoint_group: "ai-rag-grounding",
+                error_code: "rag_grounding_bypassed",
+                http_status: 200,
+                retryable: false,
+              },
+              ctx.orgId
+            );
+          }
           return buffered;
         }
         try {
@@ -5548,10 +5651,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       const draftSessionContextMessage = activeDraftSession
         ? buildDraftSessionContextMessage(activeDraftSession)
         : null;
-      const pass1SystemPrompt = activeDraftSession
-        ? `${systemPrompt}\n\n${ACTIVE_DRAFT_CONTINUATION_INSTRUCTION}`
-        : systemPrompt;
-
       const historyMessages = (historyRows ?? [])
         .filter((m: any) => m.content)
         .map((m: any) => ({
@@ -5562,7 +5661,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               : (m.content as string),
         }))
         .filter((m: { content: string }) => Boolean(m.content));
-
       const finalHistory =
         attachment &&
         historyMessages.length > 0 &&
@@ -5577,6 +5675,22 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               },
             ]
           : historyMessages;
+      const pendingConnectionDisambiguation =
+        hasPendingConnectionDisambiguation(finalHistory) &&
+        looksLikeConnectionDisambiguationReply(messageSafety.promptSafeMessage);
+      if (pendingConnectionDisambiguation) {
+        pass1Tools = [AI_TOOL_MAP.suggest_connections];
+      }
+      const pass1Instructions: string[] = [];
+      if (activeDraftSession) {
+        pass1Instructions.push(ACTIVE_DRAFT_CONTINUATION_INSTRUCTION);
+      }
+      if (pass1Tools?.some((tool) => tool.function.name === "suggest_connections")) {
+        pass1Instructions.push(CONNECTION_PASS1_DISAMBIGUATION_INSTRUCTION);
+      }
+      const effectivePass1SystemPrompt = pass1Instructions.length > 0
+        ? `${systemPrompt}\n\n${pass1Instructions.join("\n\n")}`
+        : systemPrompt;
 
       const contextMessages = orgContextMessage
         ? [
@@ -5598,7 +5712,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           PASS1_MODEL_TIMEOUT_MS,
           {
             client,
-            systemPrompt: pass1SystemPrompt,
+            systemPrompt: effectivePass1SystemPrompt,
             messages: contextMessages,
             tools: pass1Tools,
             toolChoice: pass1ToolChoice,
@@ -5951,6 +6065,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         }
 
         if (toolCallMade && toolResults.length > 0) {
+          if (pass1BufferedContent) {
+            pass1BufferedContent = await applySafetyGate(pass1BufferedContent);
+            fullContent += pass1BufferedContent;
+            enqueue({ type: "chunk", content: pass1BufferedContent });
+          }
           const canUseDeterministicMemberRoster =
             successfulToolResults.length === 1 &&
             successfulToolResults[0]?.name === "list_members" &&
