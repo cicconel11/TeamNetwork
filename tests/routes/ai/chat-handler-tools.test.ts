@@ -2718,6 +2718,100 @@ test("direct-name connection prompts log suggest_connections in audit metadata",
   assert.notEqual(auditEntries[0].error, "tool_grounding_failed");
 });
 
+test("connection disambiguation follow-up re-attaches suggest_connections with ref ids", async () => {
+  const threadId = buildThreadId(1);
+  let sawRoutingPrompt = false;
+  let sawRefHistory = false;
+  supabaseStub.state.threads.push({
+    id: threadId,
+    organization_id: ORG_ID,
+    user_id: ADMIN_USER.id,
+    title: "Connections",
+    surface: "general",
+  });
+  supabaseStub.state.messages.push(
+    {
+      id: "msg-user-1",
+      thread_id: threadId,
+      organization_id: ORG_ID,
+      role: "user",
+      status: "complete",
+      content: "Find me connections for Louis Ciccone",
+      created_at: "2026-04-23T10:00:00.000Z",
+    },
+    {
+      id: "msg-assistant-1",
+      thread_id: threadId,
+      organization_id: ORG_ID,
+      role: "assistant",
+      status: "complete",
+      content: [
+        "I found multiple matches. Which one did you mean?",
+        "- Louis Ciccone - Captain [ref: member:member-1]",
+        "- Louis Ciccone - Alumni Coach [ref: alumni:alumni-2]",
+      ].join("\n"),
+      created_at: "2026-04-23T10:00:01.000Z",
+    }
+  );
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          assert.deepEqual(
+            options.tools.map((tool: any) => tool.function.name),
+            ["suggest_connections"]
+          );
+          assert.match(options.systemPrompt, /CONNECTION TOOL ROUTING:/);
+          assert.match(options.systemPrompt, /Do not send person_query/);
+          sawRoutingPrompt = true;
+          assert.match(
+            options.messages.map((message: any) => message.content).join("\n\n"),
+            /\[ref: alumni:alumni-2\]/
+          );
+          sawRefHistory = true;
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "suggest_connections",
+            argsJson: '{"person_type":"alumni","person_id":"alumni-2"}',
+          };
+          return;
+        }
+
+        throw new Error("suggest_connections follow-up should stay deterministic");
+      },
+      resolveOwnThread: async () => ({
+        ok: true,
+        thread: { id: threadId, user_id: ADMIN_USER.id, org_id: ORG_ID, surface: "general", title: "t" },
+      }),
+    })
+  );
+
+  await (
+    await POST(
+      new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "the second one",
+          threadId,
+          surface: "general",
+          idempotencyKey: VALID_IDEMPOTENCY_KEY,
+        }),
+      }) as any,
+      {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      }
+    )
+  ).text();
+
+  assert.equal(sawRoutingPrompt, true);
+  assert.equal(sawRefHistory, true);
+  assert.equal(executeToolCallCalls[0].call.name, "suggest_connections");
+});
+
 test("single-tool announcement results render deterministic copy without pass 2", async () => {
   POST = createChatPostHandler(
     buildDefaultDeps({
@@ -2908,7 +3002,7 @@ test("tool call: pass 1 text before tool execution is buffered while pass 2 comp
   });
   const body = await response.text();
 
-  assert.doesNotMatch(body, /Let me check/);
+  assert.match(body, /Let me check/);
   assert.match(body, /combined member and stats summary/);
   assert.match(body, /"type":"tool_status".*"status":"calling"/);
   assert.match(body, /"type":"tool_status".*"status":"done"/);
@@ -3674,4 +3768,36 @@ test("donor count queries route to get_org_stats, not list_donations", async () 
   ).text();
 
   assert.equal(executeToolCallCalls[0].call.name, "get_org_stats");
+});
+
+test("tool-first pass preserves pass1 lead-in text emitted before the tool call", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield { type: "chunk", content: "Let me check that for you. " };
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_announcements",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+
+        options.onUsage?.({ inputTokens: 10, outputTokens: 5 });
+        yield { type: "chunk", content: "Here are 5 members..." };
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Show me recent announcements") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.match(body, /Let me check that for you\./);
+  assert.match(body, /Recent announcements/);
 });
