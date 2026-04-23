@@ -37,10 +37,13 @@ export function useCaptcha(): UseCaptchaReturn {
     // Development mode bypass — only when no real site key is configured
     // (mirrors server-side bypass condition: development && !secretKey)
     useEffect(() => {
-        if (
-            process.env.NODE_ENV === "development" &&
-            !process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY
-        ) {
+        const provider =
+            process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "turnstile" ? "turnstile" : "hcaptcha";
+        const siteKey =
+            provider === "turnstile"
+                ? process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+                : process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+        if (process.env.NODE_ENV === "development" && !siteKey) {
             setToken("dev-bypass-token");
         }
     }, []);

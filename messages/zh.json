@@ -642,6 +642,7 @@
     "preparingCheckout": "正在准备结账...请重试。",
     "amountRequired": "请输入大于零的捐款金额。",
     "stripeNotEnabled": "Stripe 捐款尚未启用。请联系管理员连接 Stripe。",
+    "donationsNotEnabledForOrg": "该组织尚未启用捐款。",
     "eventDonation": "慈善活动捐款",
     "directedDonation": "定向捐款",
     "intentCreated": "捐款意向已创建。请通过 Stripe 完成付款。",

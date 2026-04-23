@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card, HCaptcha, HCaptchaRef, InlineBanner } from "@/components/ui";
+import { Button, Input, Card, Captcha, CaptchaRef, InlineBanner } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { signupSchema, type SignupForm, type AgeBracket } from "@/lib/schemas/auth";
 import { PASSWORD_REQUIREMENTS } from "@/lib/auth/password";
@@ -39,7 +39,7 @@ function clearAgeGateData() {
 }
 
 interface SignupClientProps {
-  hcaptchaSiteKey: string;
+  captchaSiteKey: string;
   linkedinOauthAvailable: boolean;
   microsoftOauthAvailable: boolean;
   redirectTo?: string;
@@ -47,7 +47,7 @@ interface SignupClientProps {
 }
 
 export function SignupClient({
-  hcaptchaSiteKey,
+  captchaSiteKey,
   linkedinOauthAvailable,
   microsoftOauthAvailable,
   redirectTo = "/app",
@@ -104,7 +104,7 @@ export function SignupClient({
     },
   });
 
-  const captchaRef = useRef<HCaptchaRef>(null);
+  const captchaRef = useRef<CaptchaRef>(null);
   const { token: captchaToken, isVerified, onVerify, onExpire, onError: onCaptchaError } = useCaptcha();
 
   const handleAgeGateComplete = async (bracket: AgeBracket) => {
@@ -397,8 +397,8 @@ export function SignupClient({
           )}
 
           <div className="flex justify-center">
-            <HCaptcha
-              siteKey={hcaptchaSiteKey}
+            <Captcha
+              siteKey={captchaSiteKey}
               ref={captchaRef}
               onVerify={onVerify}
               onExpire={onExpire}

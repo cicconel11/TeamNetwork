@@ -642,6 +642,7 @@
     "preparingCheckout": "Preparando pago... por favor intenta de nuevo.",
     "amountRequired": "Ingresa un monto de donacion mayor a cero.",
     "stripeNotEnabled": "Las donaciones con Stripe aun no estan habilitadas. Pide a un administrador que conecte Stripe.",
+    "donationsNotEnabledForOrg": "Las donaciones aun no estan habilitadas para esta organizacion.",
     "eventDonation": "Donacion para evento filantropico",
     "directedDonation": "Donacion dirigida",
     "intentCreated": "Intencion de donacion creada. Completa el pago via Stripe.",

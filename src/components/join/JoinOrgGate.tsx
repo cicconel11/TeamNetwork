@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
+import { Button, Input, Card, Captcha, CaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import {
   redeemInviteWithFallback,
@@ -29,7 +29,7 @@ function JoinOrgGateInner({ orgName }: JoinOrgGateProps) {
   const [success, setSuccess] = useState(false);
   const [autoProcessing, setAutoProcessing] = useState(false);
 
-  const captchaRef = useRef<HCaptchaRef>(null);
+  const captchaRef = useRef<CaptchaRef>(null);
   const { isVerified, onVerify, onExpire, onError: onCaptchaError } = useCaptcha();
   const processedRef = useRef(false);
 
@@ -237,7 +237,7 @@ function JoinOrgGateInner({ orgName }: JoinOrgGateProps) {
               ) : (
                 <>
                   <div className="flex justify-center">
-                    <HCaptcha
+                    <Captcha
                       ref={captchaRef}
                       onVerify={onVerify}
                       onExpire={onExpire}
@@ -265,7 +265,7 @@ function JoinOrgGateInner({ orgName }: JoinOrgGateProps) {
                 />
 
                 <div className="flex justify-center">
-                  <HCaptcha
+                  <Captcha
                     ref={captchaRef}
                     onVerify={onVerify}
                     onExpire={onExpire}

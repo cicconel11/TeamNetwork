@@ -36,6 +36,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@hcaptcha/react-hcaptcha": "^1.17.4",
     "@hookform/resolvers": "^5.2.2",
+    "@marsidev/react-turnstile": "^1.5.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.86.2",

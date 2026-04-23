@@ -104,7 +104,14 @@ export type Database = {
           output_tokens: number | null
           rag_chunk_count: number | null
           rag_error: string | null
+          rag_grounded: boolean | null
+          rag_grounding_failures: Json | null
+          rag_grounding_latency_ms: number | null
+          rag_grounding_mode: string | null
           rag_top_similarity: number | null
+          safety_categories: Json | null
+          safety_latency_ms: number | null
+          safety_verdict: string | null
           stage_timings: Json | null
           thread_id: string | null
           tool_calls: Json | null
@@ -132,7 +139,14 @@ export type Database = {
           output_tokens?: number | null
           rag_chunk_count?: number | null
           rag_error?: string | null
+          rag_grounded?: boolean | null
+          rag_grounding_failures?: Json | null
+          rag_grounding_latency_ms?: number | null
+          rag_grounding_mode?: string | null
           rag_top_similarity?: number | null
+          safety_categories?: Json | null
+          safety_latency_ms?: number | null
+          safety_verdict?: string | null
           stage_timings?: Json | null
           thread_id?: string | null
           tool_calls?: Json | null
@@ -160,7 +174,14 @@ export type Database = {
           output_tokens?: number | null
           rag_chunk_count?: number | null
           rag_error?: string | null
+          rag_grounded?: boolean | null
+          rag_grounding_failures?: Json | null
+          rag_grounding_latency_ms?: number | null
+          rag_grounding_mode?: string | null
           rag_top_similarity?: number | null
+          safety_categories?: Json | null
+          safety_latency_ms?: number | null
+          safety_verdict?: string | null
           stage_timings?: Json | null
           thread_id?: string | null
           tool_calls?: Json | null
@@ -4894,6 +4915,7 @@ export type Database = {
       organizations: {
         Row: {
           base_color: string | null
+          captcha_provider: string | null
           created_at: string | null
           default_language: string
           description: string | null
@@ -4926,6 +4948,7 @@ export type Database = {
         }
         Insert: {
           base_color?: string | null
+          captcha_provider?: string | null
           created_at?: string | null
           default_language?: string
           description?: string | null
@@ -4958,6 +4981,7 @@ export type Database = {
         }
         Update: {
           base_color?: string | null
+          captcha_provider?: string | null
           created_at?: string | null
           default_language?: string
           description?: string | null

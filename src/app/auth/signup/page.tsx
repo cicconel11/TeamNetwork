@@ -3,6 +3,7 @@ import { SignupClient } from "./SignupClient";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 import { isLinkedInLoginEnabled } from "@/lib/linkedin/config.server";
 import { isMicrosoftLoginEnabled } from "@/lib/microsoft/sso-config.server";
+import { getCaptchaSiteKey } from "@/lib/security/captcha";
 import { getTranslations } from "next-intl/server";
 
 // Force dynamic rendering so env vars are read at request time
@@ -13,7 +14,7 @@ export default async function SignupPage({
 }: {
   searchParams: Promise<{ redirect?: string; error?: string }>;
 }) {
-  const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
+  const captchaSiteKey = getCaptchaSiteKey();
   const linkedinOauthAvailable = isLinkedInLoginEnabled();
   const microsoftOauthAvailable = isMicrosoftLoginEnabled();
   const t = await getTranslations("auth");
@@ -27,7 +28,7 @@ export default async function SignupPage({
         <AuthHeader subtitle={t("createAccount")} />
 
         <SignupClient
-          hcaptchaSiteKey={hcaptchaSiteKey}
+          captchaSiteKey={captchaSiteKey}
           linkedinOauthAvailable={linkedinOauthAvailable}
           microsoftOauthAvailable={microsoftOauthAvailable}
           redirectTo={redirectTo}

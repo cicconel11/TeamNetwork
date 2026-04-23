@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { DonationForm } from "@/components/donations";
+import type { CaptchaProvider } from "@/components/ui";
 
 interface DonationDrawerProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface DonationDrawerProps {
   organizationSlug: string;
   philanthropyEventsForForm?: { id: string; title: string }[];
   isStripeConnected?: boolean;
+  captchaProvider?: CaptchaProvider;
 }
 
 export function DonationDrawer({
@@ -19,6 +21,7 @@ export function DonationDrawer({
   organizationSlug,
   philanthropyEventsForForm,
   isStripeConnected,
+  captchaProvider,
 }: DonationDrawerProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +74,7 @@ export function DonationDrawer({
             organizationSlug={organizationSlug}
             philanthropyEventsForForm={philanthropyEventsForForm}
             isStripeConnected={isStripeConnected}
+            captchaProvider={captchaProvider}
           />
         </div>
       </div>

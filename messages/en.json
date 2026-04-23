@@ -642,6 +642,7 @@
     "preparingCheckout": "Preparing checkout... please try again.",
     "amountRequired": "Enter a donation amount greater than zero.",
     "stripeNotEnabled": "Stripe donations are not enabled yet. Ask an admin to connect Stripe.",
+    "donationsNotEnabledForOrg": "Donations are not yet enabled for this organization.",
     "eventDonation": "Philanthropy event donation",
     "directedDonation": "Directed donation",
     "intentCreated": "Donation intent created. Complete payment via Stripe.",

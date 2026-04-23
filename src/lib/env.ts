@@ -28,54 +28,95 @@ export function requireEnvOrDummy(name: string, dummy: string): string {
   return requireEnv(name);
 }
 
-/**
- * Checks if hCaptcha is properly configured
- * Returns true if the secret key is set, false otherwise
- */
-export function isCaptchaConfigured(): boolean {
-  const secretKey = process.env.HCAPTCHA_SECRET_KEY;
-  const siteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
-  return !!(secretKey && secretKey.trim() !== "" && siteKey && siteKey.trim() !== "");
+type CaptchaProvider = "hcaptcha" | "turnstile";
+
+function resolveDefaultProvider(): CaptchaProvider {
+  return process.env.CAPTCHA_PROVIDER === "turnstile" ? "turnstile" : "hcaptcha";
+}
+
+function hasValue(v: string | undefined): boolean {
+  return !!(v && v.trim() !== "");
 }
 
 /**
- * Validates hCaptcha environment configuration
- * - In production: throws error if HCAPTCHA_SECRET_KEY is missing
- * - In development: logs warning if keys are missing
- * 
- * Call this during app initialization to catch configuration issues early
+ * Checks if the captcha provider is configured (server secret + public site key).
+ * Defaults to the provider selected by CAPTCHA_PROVIDER.
+ */
+export function isCaptchaConfigured(provider?: CaptchaProvider): boolean {
+  const target = provider ?? resolveDefaultProvider();
+  if (target === "turnstile") {
+    return hasValue(process.env.TURNSTILE_SECRET_KEY) && hasValue(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+  }
+  return hasValue(process.env.HCAPTCHA_SECRET_KEY) && hasValue(process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY);
+}
+
+/**
+ * Validates captcha environment configuration.
+ * - hCaptcha pair always required in prod (auth flows still use it).
+ * - If CAPTCHA_PROVIDER=turnstile, Turnstile pair also required.
+ * - Warns on client/server provider mismatch.
+ * - Dev: warns only.
  */
 export function validateCaptchaEnv(): void {
-  const secretKey = process.env.HCAPTCHA_SECRET_KEY;
-  const siteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
   const isProduction = process.env.NODE_ENV === "production";
+  const provider = resolveDefaultProvider();
+  const clientProvider = process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "turnstile" ? "turnstile" : "hcaptcha";
 
-  const missingSecretKey = !secretKey || secretKey.trim() === "";
-  const missingSiteKey = !siteKey || siteKey.trim() === "";
+  const missingHcaptchaSecret = !hasValue(process.env.HCAPTCHA_SECRET_KEY);
+  const missingHcaptchaSite = !hasValue(process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY);
+  const missingTurnstileSecret = !hasValue(process.env.TURNSTILE_SECRET_KEY);
+  const missingTurnstileSite = !hasValue(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
   if (isProduction) {
-    if (missingSecretKey) {
+    if (missingHcaptchaSecret) {
       throw new Error(
         "Missing required environment variable: HCAPTCHA_SECRET_KEY. " +
-        "hCaptcha protection is required in production."
+        "hCaptcha protection is required in production (auth flows).",
       );
     }
-    if (missingSiteKey) {
+    if (missingHcaptchaSite) {
       throw new Error(
         "Missing required environment variable: NEXT_PUBLIC_HCAPTCHA_SITE_KEY. " +
-        "hCaptcha protection is required in production."
+        "hCaptcha protection is required in production (auth flows).",
+      );
+    }
+    if (provider === "turnstile") {
+      if (missingTurnstileSecret) {
+        throw new Error(
+          "Missing required environment variable: TURNSTILE_SECRET_KEY. " +
+          "Turnstile is selected via CAPTCHA_PROVIDER.",
+        );
+      }
+      if (missingTurnstileSite) {
+        throw new Error(
+          "Missing required environment variable: NEXT_PUBLIC_TURNSTILE_SITE_KEY. " +
+          "Turnstile is selected via CAPTCHA_PROVIDER.",
+        );
+      }
+    }
+    if (clientProvider !== provider) {
+      console.warn(
+        `[env] Captcha provider mismatch: server=${provider} client=${clientProvider}. ` +
+        "Set NEXT_PUBLIC_CAPTCHA_PROVIDER to match CAPTCHA_PROVIDER.",
       );
     }
   } else {
-    // Development mode - log warnings
-    if (missingSecretKey || missingSiteKey) {
-      const missing: string[] = [];
-      if (missingSecretKey) missing.push("HCAPTCHA_SECRET_KEY");
-      if (missingSiteKey) missing.push("NEXT_PUBLIC_HCAPTCHA_SITE_KEY");
-
+    const missing: string[] = [];
+    if (missingHcaptchaSecret) missing.push("HCAPTCHA_SECRET_KEY");
+    if (missingHcaptchaSite) missing.push("NEXT_PUBLIC_HCAPTCHA_SITE_KEY");
+    if (provider === "turnstile") {
+      if (missingTurnstileSecret) missing.push("TURNSTILE_SECRET_KEY");
+      if (missingTurnstileSite) missing.push("NEXT_PUBLIC_TURNSTILE_SITE_KEY");
+    }
+    if (missing.length > 0) {
       console.warn(
-        `[env] hCaptcha keys not configured: ${missing.join(", ")}. ` +
-        "Captcha verification will be bypassed in development mode."
+        `[env] Captcha keys not configured: ${missing.join(", ")}. ` +
+        "Captcha verification will be bypassed in development mode.",
+      );
+    }
+    if (clientProvider !== provider) {
+      console.warn(
+        `[env] Captcha provider mismatch: server=${provider} client=${clientProvider}.`,
       );
     }
   }

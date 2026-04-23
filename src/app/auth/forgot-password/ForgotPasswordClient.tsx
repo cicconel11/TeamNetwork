@@ -6,17 +6,17 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card, HCaptcha, HCaptchaRef, InlineBanner } from "@/components/ui";
+import { Button, Input, Card, Captcha, CaptchaRef, InlineBanner } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { sanitizeRedirectPath, buildRecoveryRedirectTo } from "@/lib/auth/redirect";
 import { forgotPasswordSchema, type ForgotPasswordForm } from "@/lib/schemas/auth";
 import { useTranslations } from "next-intl";
 
 interface ForgotPasswordFormProps {
-  hcaptchaSiteKey: string;
+  captchaSiteKey: string;
 }
 
-function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
+function ForgotPasswordFormComponent({ captchaSiteKey }: ForgotPasswordFormProps) {
   const t = useTranslations("auth");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +31,7 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
     defaultValues: { email: "" },
   });
 
-  const captchaRef = useRef<HCaptchaRef>(null);
+  const captchaRef = useRef<CaptchaRef>(null);
   const { token: captchaToken, isVerified, onVerify, onExpire, onError } = useCaptcha();
 
   const searchParams = useSearchParams();
@@ -91,8 +91,8 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
           />
 
           <div className="flex justify-center">
-            <HCaptcha
-              siteKey={hcaptchaSiteKey}
+            <Captcha
+              siteKey={captchaSiteKey}
               ref={captchaRef}
               onVerify={onVerify}
               onExpire={onExpire}
@@ -123,7 +123,7 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
   );
 }
 
-export function ForgotPasswordClient({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
+export function ForgotPasswordClient({ captchaSiteKey }: ForgotPasswordFormProps) {
   return (
     <Suspense fallback={
       <Card className="p-6">
@@ -133,7 +133,7 @@ export function ForgotPasswordClient({ hcaptchaSiteKey }: ForgotPasswordFormProp
         </div>
       </Card>
     }>
-      <ForgotPasswordFormComponent hcaptchaSiteKey={hcaptchaSiteKey} />
+      <ForgotPasswordFormComponent captchaSiteKey={captchaSiteKey} />
     </Suspense>
   );
 }
