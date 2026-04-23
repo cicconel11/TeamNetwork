@@ -35,6 +35,56 @@ function prefixMatches(queryToken: string | null, candidateToken: string | null)
   return candidateToken.startsWith(queryToken);
 }
 
+// Damerau-Levenshtein distance (edit distance with adjacent transposition).
+// 2-row DP, pure. Used for 1-2 char typo tolerance on name tokens.
+export function damerauLevenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  const m = a.length;
+  const n = b.length;
+  const d: number[][] = [];
+  for (let i = 0; i <= m; i++) {
+    d[i] = new Array(n + 1).fill(0);
+    d[i][0] = i;
+  }
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(
+        d[i - 1][j] + 1,       // deletion
+        d[i][j - 1] + 1,       // insertion
+        d[i - 1][j - 1] + cost // substitution
+      );
+      if (
+        i > 1 &&
+        j > 1 &&
+        a[i - 1] === b[j - 2] &&
+        a[i - 2] === b[j - 1]
+      ) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); // transposition
+      }
+    }
+  }
+
+  return d[m][n];
+}
+
+// Fuzzy token match — short tokens require exact. Long tokens tolerate 1-2
+// character edits. Returns true when tokens are "close enough" to consider
+// the candidate as a near-miss (surfaces via disambiguation, not resolution).
+function fuzzyTokenMatch(query: string, candidate: string): boolean {
+  if (!query || !candidate) return false;
+  const shorter = Math.min(query.length, candidate.length);
+  if (shorter < 4) return false; // too short — false positives dominate
+  const distance = damerauLevenshtein(query, candidate);
+  if (shorter >= 7) return distance <= 2;
+  return distance <= 1;
+}
+
 function parseHumanName(value: string | null | undefined): ParsedHumanName {
   const normalized = normalizeHumanNameText(value);
   const tokens = normalized ? normalized.split(" ").filter(Boolean) : [];
@@ -84,6 +134,19 @@ export function scoreProjectedPersonNameMatch(
   if (firstExact && lastPrefix) return 75;
   if (firstAlias && lastPrefix) return 65;
   if (firstPrefix && lastPrefix) return 50;
+
+  // Fuzzy fallback — both tokens must be close. Scores land in the 30-60
+  // disambiguation band, below the auto-resolve threshold so common typos
+  // surface as ambiguous options instead of silent resolutions.
+  const firstFuzzy = fuzzyTokenMatch(query.firstToken, candidate.firstToken);
+  const lastFuzzy = fuzzyTokenMatch(query.lastToken, candidate.lastToken);
+  if ((firstExact || firstAlias || firstPrefix || firstFuzzy) && lastFuzzy) {
+    const longestToken = Math.max(query.lastToken.length, candidate.lastToken.length);
+    return longestToken >= 7 ? 35 : 40;
+  }
+  if (firstFuzzy && lastExact) {
+    return 40;
+  }
 
   return 0;
 }
