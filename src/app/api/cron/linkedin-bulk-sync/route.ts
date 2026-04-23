@@ -37,8 +37,7 @@ export async function GET(request: Request) {
   const { data: orgs, error: orgError } = await (supabase as any)
     .from("organizations")
     .select("id, name")
-    .eq("linkedin_resync_enabled", true)
-    .is("deleted_at", null);
+    .eq("linkedin_resync_enabled", true);
 
   if (orgError) {
     console.error("[linkedin-bulk-sync] Error fetching orgs:", orgError);
