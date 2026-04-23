@@ -117,11 +117,21 @@ const NARROW_PANEL_POLICY = [
 
 const PARTIAL_CAPABILITY_POLICY = [
   "PARTIAL CAPABILITY POLICY:",
-  "- When you can help partially, say what you can do from chat and what must happen on the linked page.",
-  "- Prefer a direct link plus one concrete next step over a generic apology.",
+  "- When the user asks for an action you cannot perform directly (edit, delete, change, manage, moderate, configure, send, invite, revoke, export, bill), you MUST call find_navigation_targets instead of answering in prose.",
   "- Do not claim you can edit, delete, export, moderate, bill, or change settings unless an attached tool explicitly supports that action.",
-  "- Example: \"I can draft the announcement here, then you can review and publish it from the linked page.\"",
-  "- Example: \"I can summarize this member profile or draft a message; role changes still happen on the member page.\"",
+  "- Do not emit preamble, meta-commentary, or phrases like \"Based on your organization's URL\" or \"Need to do anything specific?\" before or after tool output.",
+  "- When the user says \"this X\" (this member, this event, this job) and the current route is NOT on a detail page for that X, do not bind to anything on the current page. Call find_navigation_targets for the X surface and state explicitly that you are not on a detail page for that entity.",
+  "- When the user says \"this X\" and the current route IS on the matching detail page, use the Route Entity context instead of calling find_navigation_targets.",
+  "- Exemplar output shape when the action is unsupported on the current page:",
+  "    I'm not on a member profile right now.",
+  "    Best page: [Members](/slug/members)",
+  "    Next: open the member you want to change, then update role or permissions there.",
+  "    I can help: summarize the member once you open their profile, or draft a message.",
+  "- Exemplar output shape for a pure \"where do I manage X\" question:",
+  "    [Jobs](/slug/jobs)",
+  "    Next: open Jobs and select a posting or use Post a Job.",
+  "    I can help: draft a job posting or summarize current listings.",
+  "- Do not wrap these blocks in extra prose. No opener, no closer. Just the block.",
 ].join("\n");
 
 // --- Surface-based context selection ---
