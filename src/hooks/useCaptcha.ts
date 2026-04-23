@@ -48,8 +48,11 @@ export function useCaptcha(): UseCaptchaReturn {
         }
     }, []);
 
-    // E2E test bypass: automatically set token when bypass is enabled
+    // E2E test bypass: automatically set token when bypass is enabled.
+    // Hard-disabled in production regardless of the flag, so a misconfigured
+    // env var can never short-circuit captcha in a live deploy.
     useEffect(() => {
+        if (process.env.NODE_ENV === "production") return;
         if (process.env.NEXT_PUBLIC_E2E_CAPTCHA_BYPASS === "true") {
             setToken("e2e-bypass-token");
         }

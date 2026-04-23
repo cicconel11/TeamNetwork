@@ -178,6 +178,38 @@ function validateBuildEnv() {
   if (!isDev && !cronSecret) {
     console.warn("⚠️  CRON_SECRET not set — cron job authentication will not work");
   }
+
+  // Captcha: require Turnstile keys on Vercel production so we fail fast if a
+  // rotation or Shared-env misconfig drops the secret before deploy.
+  const serverCaptchaProvider = process.env.CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
+  const clientCaptchaProvider = process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
+  if (isVercelProduction) {
+    if (serverCaptchaProvider === "turnstile") {
+      if (!process.env.TURNSTILE_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY.trim() === "") {
+        throw new Error("Missing required environment variable: TURNSTILE_SECRET_KEY (required on Vercel production)");
+      }
+      if (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY.trim() === "") {
+        throw new Error("Missing required environment variable: NEXT_PUBLIC_TURNSTILE_SITE_KEY (required on Vercel production)");
+      }
+    } else {
+      if (!process.env.HCAPTCHA_SECRET_KEY || process.env.HCAPTCHA_SECRET_KEY.trim() === "") {
+        throw new Error("Missing required environment variable: HCAPTCHA_SECRET_KEY (required on Vercel production when CAPTCHA_PROVIDER=hcaptcha)");
+      }
+      if (!process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY.trim() === "") {
+        throw new Error("Missing required environment variable: NEXT_PUBLIC_HCAPTCHA_SITE_KEY (required on Vercel production when CAPTCHA_PROVIDER=hcaptcha)");
+      }
+    }
+    if (serverCaptchaProvider !== clientCaptchaProvider) {
+      throw new Error(
+        `Captcha provider mismatch on Vercel production: CAPTCHA_PROVIDER=${serverCaptchaProvider} but NEXT_PUBLIC_CAPTCHA_PROVIDER=${clientCaptchaProvider}. Both must match.`,
+      );
+    }
+    if (process.env.NEXT_PUBLIC_E2E_CAPTCHA_BYPASS === "true") {
+      throw new Error(
+        "SECURITY ERROR: NEXT_PUBLIC_E2E_CAPTCHA_BYPASS=true is set on Vercel production. This bypasses captcha verification and must never be enabled in prod.",
+      );
+    }
+  }
 }
 
 validateBuildEnv();
@@ -284,22 +316,22 @@ const nextConfig = {
             : []),
           {
             key: "Permissions-Policy",
-            value: "camera=(self \"https://newassets.hcaptcha.com\" \"https://hcaptcha.com\"), microphone=(self \"https://newassets.hcaptcha.com\" \"https://hcaptcha.com\"), geolocation=()",
+            value: "camera=(self), microphone=(self), geolocation=()",
           },
           {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com https://va.vercel-scripts.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://va.vercel-scripts.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               // External member avatars are browser-fetched via <img>, so CSP
               // must allow arbitrary HTTPS image origins without widening the
               // Next.js server-side optimizer allowlist.
               "img-src 'self' blob: data: https:",
               "font-src 'self' https://fonts.gstatic.com",
-              "frame-src https://hcaptcha.com https://newassets.hcaptcha.com https://challenges.cloudflare.com https://js.stripe.com https://connect.stripe.com https://*.stripe.com",
+              "frame-src https://challenges.cloudflare.com https://js.stripe.com https://connect.stripe.com https://*.stripe.com",
               "media-src 'self' blob: https://rytsziwekhtjdqzzpdso.supabase.co",
-              "connect-src 'self' https://rytsziwekhtjdqzzpdso.supabase.co https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://connect.stripe.com",
+              "connect-src 'self' https://challenges.cloudflare.com https://rytsziwekhtjdqzzpdso.supabase.co https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://connect.stripe.com",
             ].join("; "),
           },
         ],

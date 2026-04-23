@@ -25,7 +25,7 @@ Core environment variables:
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key |
 | `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile secret key |
 
-Captcha defaults to Cloudflare Turnstile. To use the legacy hCaptcha fallback, set both `CAPTCHA_PROVIDER=hcaptcha` and `NEXT_PUBLIC_CAPTCHA_PROVIDER=hcaptcha`, plus `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY`.
+Captcha uses Cloudflare Turnstile for all auth and donation flows. Site key and secret must be configured for production. Set `NEXT_PUBLIC_CAPTCHA_PROVIDER=turnstile` and `CAPTCHA_PROVIDER=turnstile` (these are also the defaults). Register the site's hostname under the widget in the Cloudflare dashboard.
 
 Build-time Stripe price validation also expects:
 
