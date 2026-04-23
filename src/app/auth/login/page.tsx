@@ -1,6 +1,7 @@
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { isLinkedInLoginEnabled } from "@/lib/linkedin/config.server";
 import { isMicrosoftLoginEnabled } from "@/lib/microsoft/sso-config.server";
+import { getCaptchaSiteKey } from "@/lib/security/captcha";
 import { LoginClient } from "./LoginClient";
 import { getTranslations } from "next-intl/server";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   const t = await getTranslations("auth");
-  const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
+  const captchaSiteKey = getCaptchaSiteKey();
   const linkedinOauthAvailable = isLinkedInLoginEnabled();
   const microsoftOauthAvailable = isMicrosoftLoginEnabled();
 
@@ -19,7 +20,7 @@ export default async function LoginPage() {
         <AuthHeader subtitle={t("signInToAccount")} />
 
         <LoginClient
-          hcaptchaSiteKey={hcaptchaSiteKey}
+          captchaSiteKey={captchaSiteKey}
           linkedinOauthAvailable={linkedinOauthAvailable}
           microsoftOauthAvailable={microsoftOauthAvailable}
         />

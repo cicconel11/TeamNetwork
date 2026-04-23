@@ -8,6 +8,7 @@ import { listManagedOrgs } from "./enterprise/managed-orgs";
 import { getEnterpriseOrgCapacity, getEnterpriseQuota } from "./enterprise/quota";
 import { listEnterpriseAuditEvents } from "./enterprise/audit-visibility";
 import { getEnterprisePermissions, type EnterpriseRole } from "@/types/enterprise";
+import { isToolAllowed, type AiActorRole } from "@/lib/ai/access-policy";
 import {
   EXTRACTION_TOOL_TIMEOUT_MS,
   isStageTimeoutError,
@@ -77,7 +78,15 @@ import type {
 } from "@/lib/ai/schedule-extraction";
 
 export type ToolExecutionAuthorization =
-  | { kind: "preverified_admin"; source: "ai_org_context" }
+  | {
+      kind: "preverified_admin";
+      source: "ai_org_context";
+    }
+  | {
+      kind: "preverified_role";
+      source: "ai_org_context";
+      role: AiActorRole;
+    }
   | { kind: "verify_membership" };
 
 export interface ToolExecutionContext {
@@ -85,6 +94,7 @@ export interface ToolExecutionContext {
   userId: string;
   enterpriseId?: string;
   enterpriseRole?: EnterpriseRole;
+  supabase?: SupabaseClient | null;
   serviceSupabase: SupabaseClient;
   authorization: ToolExecutionAuthorization;
   threadId?: string;
@@ -123,6 +133,16 @@ export type ToolExecutionResult =
 type CountResult =
   | { ok: true; count: number }
   | { ok: false; error: string };
+
+const NON_ADMIN_RLS_READ_TOOL_NAMES: ReadonlySet<ToolName> = new Set<ToolName>([
+  "list_announcements",
+  "list_events",
+  "list_discussions",
+  "list_job_postings",
+  "list_chat_groups",
+  "list_philanthropy_events",
+  "find_navigation_targets",
+]);
 
 const listMembersSchema = z
   .object({
@@ -3178,9 +3198,32 @@ async function verifyExecutorAccess(
 export function getToolAuthorizationMode(
   authorization: ToolExecutionAuthorization
 ): AiToolAuthMode {
-  return authorization.kind === "preverified_admin"
-    ? "reused_verified_admin"
-    : "db_lookup";
+  if (authorization.kind === "preverified_admin") return "reused_verified_admin";
+  if (authorization.kind === "preverified_role") return "reused_verified_admin";
+  return "db_lookup";
+}
+
+function resolvePolicyRoleForAuthorization(
+  authorization: ToolExecutionAuthorization,
+): { role: AiActorRole } {
+  if (authorization.kind === "preverified_role") {
+    return { role: authorization.role };
+  }
+  // verify_membership and preverified_admin both land here as "admin" because
+  // verify_membership only allows admin rows through verifyExecutorAccess.
+  return { role: "admin" };
+}
+
+function resolveToolClient(
+  ctx: ToolExecutionContext,
+  toolName: ToolName,
+  actorRole: AiActorRole,
+): SupabaseClient | null {
+  if (actorRole !== "admin" && NON_ADMIN_RLS_READ_TOOL_NAMES.has(toolName)) {
+    return ctx.supabase ?? null;
+  }
+
+  return ctx.serviceSupabase;
 }
 
 export async function executeToolCall(
@@ -3202,6 +3245,24 @@ export async function executeToolCall(
     if (access.kind !== "allowed") {
       return access;
     }
+  }
+
+  // Centralized tool access policy — the single source of truth for what
+  // each role can invoke, applied even if the model (or a caller) requests
+  // a tool that wasn't attached to the turn.
+  const policyActor = resolvePolicyRoleForAuthorization(ctx.authorization);
+  const policyDecision = isToolAllowed({
+    role: policyActor.role,
+    enterpriseRole: ctx.enterpriseRole,
+    toolName,
+  });
+  if (!policyDecision.allowed) {
+    aiLog("info", "ai-tools", "tool blocked by access policy", logContext, {
+      toolName,
+      role: policyActor.role,
+      reason: policyDecision.reason,
+    });
+    return { kind: "forbidden", error: "Forbidden" };
   }
 
   if (ENTERPRISE_TOOL_NAMES.has(toolName)) {
@@ -3227,7 +3288,14 @@ export async function executeToolCall(
     }
   }
 
-  const sb = ctx.serviceSupabase;
+  const sb = resolveToolClient(ctx, toolName, policyActor.role);
+  if (!sb) {
+    aiLog("warn", "ai-tools", "auth-bound client unavailable for non-admin tool", logContext, {
+      toolName,
+      role: policyActor.role,
+    });
+    return { kind: "auth_error", error: "Auth check failed" };
+  }
 
   try {
     const timeoutMs =

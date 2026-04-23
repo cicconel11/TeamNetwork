@@ -642,6 +642,7 @@
     "preparingCheckout": "جارٍ تحضير الدفع... يرجى المحاولة مرة أخرى.",
     "amountRequired": "أدخل مبلغ تبرع أكبر من صفر.",
     "stripeNotEnabled": "لم يتم تفعيل تبرعات Stripe بعد. اطلب من مسؤول ربط Stripe.",
+    "donationsNotEnabledForOrg": "لم يتم تفعيل التبرعات لهذه المنظمة بعد.",
     "eventDonation": "تبرع لفعالية خيرية",
     "directedDonation": "تبرع موجّه",
     "intentCreated": "تم إنشاء طلب التبرع. أكمل الدفع عبر Stripe.",

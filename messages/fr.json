@@ -642,6 +642,7 @@
     "preparingCheckout": "Preparation du paiement... veuillez reessayer.",
     "amountRequired": "Saisissez un montant de don superieur a zero.",
     "stripeNotEnabled": "Les dons Stripe ne sont pas encore actives. Demandez a un administrateur de connecter Stripe.",
+    "donationsNotEnabledForOrg": "Les dons ne sont pas encore actives pour cette organisation.",
     "eventDonation": "Don pour evenement philanthropique",
     "directedDonation": "Don dirige",
     "intentCreated": "Intention de don creee. Finalisez le paiement via Stripe.",

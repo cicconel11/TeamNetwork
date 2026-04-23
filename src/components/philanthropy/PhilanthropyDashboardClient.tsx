@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Card, Button, Badge, ToggleSwitch } from "@/components/ui";
+import { Card, Button, Badge, ToggleSwitch, type CaptchaProvider } from "@/components/ui";
 import { RecentDuesTable } from "./RecentDuesTable";
 import { PurposeDotLeaders } from "./PurposeDotLeaders";
 import { DonationDrawer } from "./DonationDrawer";
@@ -20,6 +20,7 @@ interface PhilanthropyDashboardClientProps {
   philanthropyEventsForForm: { id: string; title: string }[];
   purposeEmptyMessage: string;
   hideDonorNames?: boolean;
+  captchaProvider?: CaptchaProvider;
 }
 
 export function PhilanthropyDashboardClient({
@@ -32,6 +33,7 @@ export function PhilanthropyDashboardClient({
   philanthropyEventsForForm,
   purposeEmptyMessage,
   hideDonorNames: initialHideDonorNames = false,
+  captchaProvider,
 }: PhilanthropyDashboardClientProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSimulatingPublic, setIsSimulatingPublic] = useState(false);
@@ -173,23 +175,32 @@ export function PhilanthropyDashboardClient({
         </div>
       )}
 
-      {/* Make a Donation button (floating in header via portal would be ideal, but keeping it simple) */}
-      <Button onClick={() => setIsDrawerOpen(true)} disabled={!isStripeConnected}>
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        {tDonations("makeADonation")}
-      </Button>
-
-      {/* Donation Drawer */}
-      <DonationDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        organizationId={organizationId}
-        organizationSlug={organizationSlug}
-        philanthropyEventsForForm={philanthropyEventsForForm}
-        isStripeConnected={isStripeConnected}
-      />
+      {/* CTA vs empty state — hide donation button entirely when Stripe Connect is not onboarded */}
+      {isStripeConnected ? (
+        <>
+          <Button onClick={() => setIsDrawerOpen(true)}>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {tDonations("makeADonation")}
+          </Button>
+          <DonationDrawer
+            isOpen={isDrawerOpen}
+            onClose={() => setIsDrawerOpen(false)}
+            organizationId={organizationId}
+            organizationSlug={organizationSlug}
+            philanthropyEventsForForm={philanthropyEventsForForm}
+            isStripeConnected={isStripeConnected}
+            captchaProvider={captchaProvider}
+          />
+        </>
+      ) : isAdmin ? null : (
+        <Card className="p-5 bg-muted/30">
+          <p className="text-sm text-muted-foreground">
+            {tDonations("donationsNotEnabledForOrg")}
+          </p>
+        </Card>
+      )}
     </>
   );
 }

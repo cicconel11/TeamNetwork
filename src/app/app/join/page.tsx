@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
+import { Button, Input, Card, Captcha, CaptchaRef } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { EnterpriseOrgPicker } from "@/components/enterprise/EnterpriseOrgPicker";
 import { useCaptcha } from "@/hooks/useCaptcha";
@@ -50,7 +50,7 @@ function JoinOrgFormComponent() {
   const code = watch("code");
 
   // Captcha state management
-  const captchaRef = useRef<HCaptchaRef>(null);
+  const captchaRef = useRef<CaptchaRef>(null);
   const { token: captchaToken, isVerified, onVerify, onExpire, onError: onCaptchaError } = useCaptcha();
 
   // Auto-fill code from URL and optionally auto-submit
@@ -398,7 +398,7 @@ function JoinOrgFormComponent() {
                     />
 
                     <div className="flex justify-center">
-                      <HCaptcha
+                      <Captcha
                         ref={captchaRef}
                         onVerify={onVerify}
                         onExpire={onExpire}
@@ -407,8 +407,8 @@ function JoinOrgFormComponent() {
                       />
                     </div>
 
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       className="w-full" 
                       isLoading={isLoading}
                       disabled={!isVerified}
@@ -431,7 +431,7 @@ function JoinOrgFormComponent() {
                         Complete the captcha to join the organization.
                       </p>
                       <div className="flex justify-center">
-                        <HCaptcha
+                        <Captcha
                           ref={captchaRef}
                           onVerify={onVerify}
                           onExpire={onExpire}

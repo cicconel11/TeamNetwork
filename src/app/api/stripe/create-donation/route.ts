@@ -28,6 +28,13 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type DonationMode = "checkout" | "payment_intent";
+type DonationOrganization = {
+  id: string;
+  slug: string;
+  name: string;
+  stripe_connect_account_id: string | null;
+  captcha_provider?: string | null;
+};
 
 const donationSchema = z
   .object({
@@ -85,16 +92,7 @@ export async function POST(req: Request) {
     throw error;
   }
 
-  // Verify captcha token before processing donation
   const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
-  const captchaResult = await verifyCaptcha(body.captchaToken, clientIp);
-  if (!captchaResult.success) {
-    const errorCode = captchaResult.error_codes?.[0];
-    if (errorCode === "missing-input-response") {
-      return respond({ error: "Captcha verification required" }, 400);
-    }
-    return respond({ error: "Captcha verification failed" }, 403);
-  }
 
   const amountCents = Math.round(Number(body.amount || 0) * 100);
   if (!Number.isFinite(amountCents) || amountCents < 100) {
@@ -121,19 +119,37 @@ export async function POST(req: Request) {
 
   const { data: org, error: orgError } = await supabase
     .from("organizations")
-    .select("id, slug, name, stripe_connect_account_id")
+    .select("id, slug, name, stripe_connect_account_id, captcha_provider")
     .eq(orgFilter.column as "id" | "slug", orgFilter.value)
     .maybeSingle();
 
   if (orgError || !org) {
     return respond({ error: "Organization not found" }, 404);
   }
+  const resolvedOrg = org as unknown as DonationOrganization;
 
-  if (!org.stripe_connect_account_id) {
+  // Verify captcha after org lookup so per-org provider flag can apply.
+  const orgCaptchaProvider = resolvedOrg.captcha_provider;
+  const captchaProvider =
+    orgCaptchaProvider === "turnstile" || orgCaptchaProvider === "hcaptcha"
+      ? orgCaptchaProvider
+      : undefined;
+  const captchaResult = await verifyCaptcha(body.captchaToken, clientIp, {
+    provider: captchaProvider,
+  });
+  if (!captchaResult.success) {
+    const errorCode = captchaResult.error_codes?.[0];
+    if (errorCode === "missing-input-response") {
+      return respond({ error: "Captcha verification required" }, 400);
+    }
+    return respond({ error: "Captcha verification failed" }, 403);
+  }
+
+  if (!resolvedOrg.stripe_connect_account_id) {
     return respond({ error: "Stripe is not connected for this organization" }, 400);
   }
 
-  const connectStatus = await getConnectAccountStatus(org.stripe_connect_account_id);
+  const connectStatus = await getConnectAccountStatus(resolvedOrg.stripe_connect_account_id);
   if (connectStatus.lookupFailed) {
     return respond({ error: "Unable to verify Stripe connection. Please try again." }, 503);
   }
@@ -146,7 +162,7 @@ export async function POST(req: Request) {
       .from("events")
       .select("id")
       .eq("id", body.eventId)
-      .eq("organization_id", org.id)
+      .eq("organization_id", resolvedOrg.id)
       .maybeSingle();
 
     if (!event) {
@@ -158,10 +174,10 @@ export async function POST(req: Request) {
   const donorName = body.donorName?.trim();
   const donorEmail = body.donorEmail?.trim();
   const purpose = body.purpose?.trim();
-  const stripeAccount = org.stripe_connect_account_id || undefined;
+  const stripeAccount = resolvedOrg.stripe_connect_account_id || undefined;
   const stripeOptions = stripeAccount ? { stripeAccount } : {};
   const fingerprint = hashFingerprint({
-    orgId: org.id,
+    orgId: resolvedOrg.id,
     amountCents,
     currency,
     mode,
@@ -173,8 +189,8 @@ export async function POST(req: Request) {
   });
   // Stripe metadata (no PII - stored in payment_attempts instead)
   const metadata: Record<string, string> = {
-    organization_id: org.id,
-    organization_slug: org.slug,
+    organization_id: resolvedOrg.id,
+    organization_slug: resolvedOrg.slug,
     flow: mode,
   };
 
@@ -199,8 +215,8 @@ export async function POST(req: Request) {
       flowType: mode === "payment_intent" ? "donation_payment_intent" : "donation_checkout",
       amountCents,
       currency,
-      organizationId: org.id,
-      stripeConnectedAccountId: org.stripe_connect_account_id,
+      organizationId: resolvedOrg.id,
+      stripeConnectedAccountId: resolvedOrg.stripe_connect_account_id,
       requestFingerprint: fingerprint,
       metadata: paymentAttemptMetadata, // Includes donor PII for webhook retrieval
     });
@@ -213,7 +229,7 @@ export async function POST(req: Request) {
       attempt,
       amountCents,
       currency,
-      stripeConnectedAccountId: org.stripe_connect_account_id,
+      stripeConnectedAccountId: resolvedOrg.stripe_connect_account_id,
       requestFingerprint: fingerprint,
     });
 
@@ -279,7 +295,7 @@ export async function POST(req: Request) {
           currency,
           automatic_payment_methods: { enabled: true },
           receipt_email: donorEmail || undefined,
-          description: purpose ? `Donation: ${purpose}` : `Donation to ${org.name}`,
+          description: purpose ? `Donation: ${purpose}` : `Donation to ${resolvedOrg.name}`,
           metadata,
           application_fee_amount: platformFeeCents || undefined,
         },
@@ -291,7 +307,7 @@ export async function POST(req: Request) {
       await updatePaymentAttempt(supabase, claimedAttempt.id, {
         stripe_payment_intent_id: paymentIntent.id,
         status: "processing",
-        stripe_connected_account_id: org.stripe_connect_account_id,
+        stripe_connected_account_id: resolvedOrg.stripe_connect_account_id,
       });
 
       return respond({
@@ -314,7 +330,7 @@ export async function POST(req: Request) {
               currency,
               unit_amount: amountCents,
               product_data: {
-                name: `Donation to ${org.name}`,
+                name: `Donation to ${resolvedOrg.name}`,
                 metadata,
               },
             },
@@ -327,8 +343,8 @@ export async function POST(req: Request) {
           receipt_email: donorEmail || undefined,
           application_fee_amount: platformFeeCents || undefined,
         },
-        success_url: `${origin}/${org.slug}/donations?donation=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/${org.slug}/donations?donation=cancelled`,
+        success_url: `${origin}/${resolvedOrg.slug}/donations?donation=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/${resolvedOrg.slug}/donations?donation=cancelled`,
       },
       { idempotencyKey: claimedAttempt.idempotency_key, ...stripeOptions },
     );
@@ -349,7 +365,7 @@ export async function POST(req: Request) {
       stripe_checkout_session_id: session.id,
       checkout_url: session.url,
       status: "processing",
-      stripe_connected_account_id: org.stripe_connect_account_id,
+      stripe_connected_account_id: resolvedOrg.stripe_connect_account_id,
     });
 
     return respond({

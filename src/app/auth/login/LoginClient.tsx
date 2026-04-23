@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card, HCaptcha, HCaptchaRef, InlineBanner } from "@/components/ui";
+import { Button, Input, Card, Captcha, CaptchaRef, InlineBanner } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { sanitizeRedirectPath, buildAuthCallbackUrl, buildAuthLink } from "@/lib/auth/redirect";
@@ -18,13 +18,13 @@ import { MICROSOFT_SSO_PROVIDER } from "@/lib/microsoft/sso-config";
 import { useTranslations } from "next-intl";
 
 interface LoginFormProps {
-  hcaptchaSiteKey: string;
+  captchaSiteKey: string;
   linkedinOauthAvailable: boolean;
   microsoftOauthAvailable: boolean;
 }
 
 function LoginFormComponent({
-  hcaptchaSiteKey,
+  captchaSiteKey,
   linkedinOauthAvailable,
   microsoftOauthAvailable,
 }: LoginFormProps) {
@@ -49,7 +49,7 @@ function LoginFormComponent({
 
   const email = watch("email");
 
-  const captchaRef = useRef<HCaptchaRef>(null);
+  const captchaRef = useRef<CaptchaRef>(null);
   const { token: captchaToken, isVerified, onVerify, onExpire, onError } = useCaptcha();
 
   const router = useRouter();
@@ -296,8 +296,8 @@ function LoginFormComponent({
           )}
 
           <div className="flex justify-center">
-            <HCaptcha
-              siteKey={hcaptchaSiteKey}
+            <Captcha
+              siteKey={captchaSiteKey}
               ref={captchaRef}
               onVerify={onVerify}
               onExpire={onExpire}
@@ -329,7 +329,7 @@ function LoginFormComponent({
 }
 
 export function LoginClient({
-  hcaptchaSiteKey,
+  captchaSiteKey,
   linkedinOauthAvailable,
   microsoftOauthAvailable,
 }: LoginFormProps) {
@@ -344,7 +344,7 @@ export function LoginClient({
       </Card>
     }>
       <LoginFormComponent
-        hcaptchaSiteKey={hcaptchaSiteKey}
+        captchaSiteKey={captchaSiteKey}
         linkedinOauthAvailable={linkedinOauthAvailable}
         microsoftOauthAvailable={microsoftOauthAvailable}
       />

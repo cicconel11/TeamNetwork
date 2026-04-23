@@ -5,15 +5,19 @@ import type { RateLimitResult } from "@/lib/security/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import type { EnterpriseRole } from "@/types/enterprise";
+import type { OrgRole } from "@/lib/auth/role-utils";
+import { isMemberAccessKilled } from "@/lib/ai/access-policy";
 
 // ── Discriminated union return type ──
+
+export type AiOrgContextRole = OrgRole;
 
 export type AiOrgContext =
   | {
       ok: true;
       orgId: string;
       userId: string;
-      role: "admin";
+      role: AiOrgContextRole;
       enterpriseId?: string;
       enterpriseRole?: EnterpriseRole;
       supabase: any; // auth-bound client (for threads/messages via RLS)
@@ -29,16 +33,36 @@ export interface AiOrgContextDeps {
   logContext?: AiLogContext;
 }
 
+export interface AiOrgContextOptions {
+  /**
+   * Minimum roles allowed through this entry point. Defaults to admin-only,
+   * which preserves prior behavior for every existing AI API route.
+   */
+  allowedRoles?: readonly AiOrgContextRole[];
+}
+
+const DEFAULT_ALLOWED_ROLES: readonly AiOrgContextRole[] = ["admin"];
+
+function isAiOrgContextRole(value: unknown): value is AiOrgContextRole {
+  return (
+    value === "admin" ||
+    value === "active_member" ||
+    value === "alumni" ||
+    value === "parent"
+  );
+}
+
 // ── Helper ──
 
 /**
  * Consolidated auth helper for AI assistant API routes.
  *
- * Validates that the requesting user is an org admin, following the same
- * discriminated union pattern as `getEnterpriseApiContext()`.
+ * Validates that the requesting user has an allowed org role. Defaults to
+ * admin-only to match legacy behavior; routes that want to admit members must
+ * opt in with `options.allowedRoles`.
  *
- * Accepts a pre-fetched `user` (routes already call getUser() for rate limiting)
- * to avoid a double getUser() per request.
+ * Non-admin callers additionally gated by `AI_MEMBER_ACCESS_KILL` env var
+ * (defaults to killed until member rollout is ready).
  *
  * Fail-closed: if the DB role query errors, returns 503 (never silently grants access).
  */
@@ -46,7 +70,8 @@ export async function getAiOrgContext(
   orgId: string,
   user: User | null,
   rateLimit: Pick<RateLimitResult, "headers">,
-  deps: AiOrgContextDeps = {}
+  deps: AiOrgContextDeps = {},
+  options: AiOrgContextOptions = {},
 ): Promise<AiOrgContext> {
   const respond = (payload: unknown, status: number) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
@@ -58,8 +83,9 @@ export async function getAiOrgContext(
 
   // 2. Get service client (injectable for tests)
   const serviceSupabase = deps.serviceSupabase ?? createServiceClient();
+  const allowedRoles = options.allowedRoles ?? DEFAULT_ALLOWED_ROLES;
 
-  // 3. Check admin role — fail closed on DB error
+  // 3. Check role — fail closed on DB error
   const { data: membership, error } = await (serviceSupabase as any)
     .from("user_organization_roles")
     .select("role, status")
@@ -76,11 +102,42 @@ export async function getAiOrgContext(
     return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
   }
 
-  if (!membership || membership.role !== "admin" || membership.status !== "active") {
+  if (!membership || membership.status !== "active") {
     return {
       ok: false,
-      response: respond({ error: "AI assistant requires admin role" }, 403),
+      response: respond({ error: "AI assistant requires an active org membership" }, 403),
     };
+  }
+
+  const rawRole = membership.role;
+  if (!isAiOrgContextRole(rawRole)) {
+    return {
+      ok: false,
+      response: respond({ error: "AI assistant requires an active org membership" }, 403),
+    };
+  }
+
+  if (!allowedRoles.includes(rawRole)) {
+    return {
+      ok: false,
+      response: respond({ error: "AI assistant is not available for your role" }, 403),
+    };
+  }
+
+  // Enforce global kill switch for non-admin callers
+  if (rawRole !== "admin") {
+    if (isMemberAccessKilled()) {
+      return {
+        ok: false,
+        response: respond({ error: "AI assistant is not available for your role" }, 403),
+      };
+    }
+    if (rawRole === "parent") {
+      return {
+        ok: false,
+        response: respond({ error: "AI assistant is not available for your role" }, 403),
+      };
+    }
   }
 
   let enterpriseId: string | undefined;
@@ -129,7 +186,7 @@ export async function getAiOrgContext(
     ok: true,
     orgId,
     userId: user.id,
-    role: "admin",
+    role: rawRole,
     enterpriseId,
     enterpriseRole,
     supabase: deps.supabase ?? null, // routes pass their auth-bound client

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Card, Button, Input, Textarea, Select, HCaptcha } from "@/components/ui";
+import { Card, Button, Input, Textarea, Select, Captcha, type CaptchaProvider } from "@/components/ui";
 import { useIdempotencyKey, useCaptcha } from "@/hooks";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
 
@@ -16,6 +16,7 @@ interface DonationFormProps {
   organizationSlug: string;
   philanthropyEventsForForm?: PhilanthropyEventOption[];
   isStripeConnected?: boolean;
+  captchaProvider?: CaptchaProvider;
 }
 
 export function DonationForm({
@@ -23,6 +24,7 @@ export function DonationForm({
   organizationSlug,
   philanthropyEventsForForm,
   isStripeConnected = false,
+  captchaProvider,
 }: DonationFormProps) {
   const tDonations = useTranslations("donations");
 
@@ -264,7 +266,8 @@ export function DonationForm({
           </div>
         )}
 
-        <HCaptcha
+        <Captcha
+          provider={captchaProvider}
           onVerify={onCaptchaVerify}
           onExpire={onCaptchaExpire}
           onError={onCaptchaError}

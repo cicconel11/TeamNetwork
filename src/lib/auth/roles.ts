@@ -108,7 +108,7 @@ export const getOrgContext = cache(async (orgSlug: string): Promise<OrgContextRe
     supabase
       .from("organizations")
       .select(
-        "id, name, slug, logo_url, base_color, primary_color, secondary_color, nav_config, stripe_connect_account_id, org_type, donation_embed_url, created_at, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, timezone, hide_donor_names"
+        "id, name, slug, logo_url, base_color, primary_color, secondary_color, nav_config, stripe_connect_account_id, org_type, donation_embed_url, created_at, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, timezone, hide_donor_names, captcha_provider"
       )
       .eq("slug", orgSlug)
       .maybeSingle(),
@@ -167,7 +167,7 @@ export const getOrgContext = cache(async (orgSlug: string): Promise<OrgContextRe
   const flags = memberStatus === "active" ? roleFlags(role) : roleFlags(null);
 
   return {
-    organization: org as Organization,
+    organization: org as unknown as Organization,
     status: memberStatus,
     userId,
     subscription,

@@ -126,4 +126,134 @@ describe("getAiOrgContext", () => {
       { column: "id", value: "org-id" },
     ]);
   });
+
+  // ── Member access foundation: kill switch + allowedRoles ──
+
+  function createMockServiceSupabaseWithOrg(opts: {
+    role?: string;
+    status?: string;
+  }) {
+    return {
+      from: (table: string) => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => {
+              if (table === "organizations") {
+                return {
+                  data: { enterprise_id: null },
+                  error: null,
+                };
+              }
+              return { data: null, error: null };
+            },
+            eq: () => ({
+              maybeSingle: async () => {
+                if (!opts.role) return { data: null, error: null };
+                return {
+                  data: { role: opts.role, status: opts.status ?? "active" },
+                  error: null,
+                };
+              },
+            }),
+          }),
+        }),
+      }),
+    };
+  }
+
+  const ORIGINAL_KILL = process.env.AI_MEMBER_ACCESS_KILL;
+  const liftKill = () => { process.env.AI_MEMBER_ACCESS_KILL = "0"; };
+  const restoreKill = () => {
+    if (ORIGINAL_KILL === undefined) delete process.env.AI_MEMBER_ACCESS_KILL;
+    else process.env.AI_MEMBER_ACCESS_KILL = ORIGINAL_KILL;
+  };
+
+  it("returns 403 for active_member when kill switch is active", async () => {
+    process.env.AI_MEMBER_ACCESS_KILL = "1";
+    try {
+      const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
+      const mockUser = { id: "user-id", email: "m@t.com" };
+      const mockServiceSupabase = createMockServiceSupabaseWithOrg({
+        role: "active_member",
+      });
+      const result = await getAiOrgContext(
+        "org-id",
+        mockUser as unknown as User,
+        mockRateLimit,
+        { serviceSupabase: mockServiceSupabase },
+        { allowedRoles: ["admin", "active_member", "alumni"] },
+      );
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.equal(result.response.status, 403);
+    } finally {
+      restoreKill();
+    }
+  });
+
+  it("admits active_member when kill is lifted and allowedRoles permits", async () => {
+    liftKill();
+    try {
+      const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
+      const mockUser = { id: "user-id", email: "m@t.com" };
+      const mockServiceSupabase = createMockServiceSupabaseWithOrg({
+        role: "active_member",
+      });
+      const result = await getAiOrgContext(
+        "org-id",
+        mockUser as unknown as User,
+        mockRateLimit,
+        { serviceSupabase: mockServiceSupabase },
+        { allowedRoles: ["admin", "active_member", "alumni"] },
+      );
+      assert.equal(result.ok, true);
+      if (result.ok) {
+        assert.equal(result.role, "active_member");
+      }
+    } finally {
+      restoreKill();
+    }
+  });
+
+  it("refuses parent role even when kill is lifted", async () => {
+    liftKill();
+    try {
+      const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
+      const mockUser = { id: "user-id", email: "p@t.com" };
+      const mockServiceSupabase = createMockServiceSupabaseWithOrg({
+        role: "parent",
+      });
+      const result = await getAiOrgContext(
+        "org-id",
+        mockUser as unknown as User,
+        mockRateLimit,
+        { serviceSupabase: mockServiceSupabase },
+        { allowedRoles: ["admin", "active_member", "alumni", "parent"] },
+      );
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.equal(result.response.status, 403);
+    } finally {
+      restoreKill();
+    }
+  });
+
+  it("default allowedRoles is admin-only (preserves legacy behavior)", async () => {
+    liftKill();
+    try {
+      const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
+      const mockUser = { id: "user-id", email: "m@t.com" };
+      const mockServiceSupabase = createMockServiceSupabaseWithOrg({
+        role: "active_member",
+      });
+      const result = await getAiOrgContext(
+        "org-id",
+        mockUser as unknown as User,
+        mockRateLimit,
+        { serviceSupabase: mockServiceSupabase },
+      );
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.equal(result.response.status, 403);
+    } finally {
+      restoreKill();
+    }
+  });
 });
