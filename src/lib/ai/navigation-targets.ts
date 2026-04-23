@@ -2,12 +2,16 @@ import { resolveActionLabel, resolveLabel } from "@/lib/navigation/label-resolve
 import { type NavConfig } from "@/lib/navigation/nav-items";
 import { getVisibleOrgNavItems } from "@/lib/navigation/visible-items";
 import type { OrgRole } from "@/lib/auth/role-utils";
+import { getActionGuidance } from "./action-guidance";
 
 export interface NavigationTarget {
   label: string;
   href: string;
   description: string;
   kind: "page" | "create";
+  userCanAccess: boolean;
+  manualSteps: string[];
+  assistantCanHelpWith: string[];
 }
 
 export interface NavigationSearchResult {
@@ -255,12 +259,22 @@ export function searchNavigationTargets(input: {
       return left.target.label.localeCompare(right.target.label);
     })
     .slice(0, Math.min(input.limit ?? 5, 10))
-    .map(({ target }) => ({
-      label: target.label,
-      href: target.href,
-      description: target.description,
-      kind: target.kind,
-    }));
+    .map(({ target }) => {
+      const guidance = getActionGuidance({
+        href: target.href,
+        kind: target.kind,
+        role: input.role,
+      });
+      return {
+        label: target.label,
+        href: target.href,
+        description: target.description,
+        kind: target.kind,
+        userCanAccess: guidance.userCanAccess,
+        manualSteps: guidance.manualSteps,
+        assistantCanHelpWith: guidance.assistantCanHelpWith,
+      };
+    });
 
   if (matches.length === 0) {
     return { state: "not_found", query, matches: [] };

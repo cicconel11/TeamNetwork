@@ -12,6 +12,9 @@ test("searchNavigationTargets finds create targets for create-intent queries", (
   assert.equal(result.state, "resolved");
   assert.equal(result.matches[0]?.label, "New Announcement");
   assert.equal(result.matches[0]?.href, "/acme/announcements/new");
+  assert.equal(result.matches[0]?.userCanAccess, true);
+  assert.match(result.matches[0]?.manualSteps[0] ?? "", /create form/i);
+  assert.match(result.matches[0]?.assistantCanHelpWith[0] ?? "", /draft/i);
 });
 
 test("searchNavigationTargets finds page targets for open-page queries", () => {
@@ -24,6 +27,9 @@ test("searchNavigationTargets finds page targets for open-page queries", () => {
   assert.equal(result.state, "resolved");
   assert.equal(result.matches[0]?.label, "Members");
   assert.equal(result.matches[0]?.href, "/acme/members");
+  assert.equal(result.matches[0]?.userCanAccess, true);
+  assert.match(result.matches[0]?.manualSteps[0] ?? "", /members page/i);
+  assert.match(result.matches[0]?.assistantCanHelpWith[0] ?? "", /List members/i);
 });
 
 test("searchNavigationTargets returns not_found for unrelated queries", () => {

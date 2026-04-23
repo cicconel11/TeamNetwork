@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CacheSurface } from "./semantic-cache-utils";
 import type { ToolName } from "./tools/definitions";
 import { describeAttachedTools } from "./capabilities";
+import type { RouteEntityContext } from "./route-entity";
 import { aiLog, type AiLogContext } from "./logger";
 import { buildQuotaInfo } from "@/lib/enterprise/quota-logic";
 import { getFreeSubOrgCount } from "@/lib/enterprise/pricing";
@@ -28,6 +29,7 @@ interface BuildPromptInput {
   now?: string;
   timeZone?: string;
   currentPath?: string;
+  routeEntity?: RouteEntityContext | null;
   availableTools?: readonly ToolName[];
   threadTurnCount?: number;
 }
@@ -113,6 +115,15 @@ const NARROW_PANEL_POLICY = [
   "Keep lines and sections brief.",
 ].join(" ");
 
+const PARTIAL_CAPABILITY_POLICY = [
+  "PARTIAL CAPABILITY POLICY:",
+  "- When you can help partially, say what you can do from chat and what must happen on the linked page.",
+  "- Prefer a direct link plus one concrete next step over a generic apology.",
+  "- Do not claim you can edit, delete, export, moderate, bill, or change settings unless an attached tool explicitly supports that action.",
+  "- Example: \"I can draft the announcement here, then you can review and publish it from the linked page.\"",
+  "- Example: \"I can summarize this member profile or draft a message; role changes still happen on the member page.\"",
+].join("\n");
+
 // --- Surface-based context selection ---
 
 type DataSourceKey = keyof PromptContextData;
@@ -131,6 +142,7 @@ type SectionName =
   | "Enterprise Overview"
   | "Current User"
   | "Client Page Context"
+  | "Route Entity"
   | "Counts"
   | "Retrieved Knowledge"
   | "Upcoming Events"
@@ -145,6 +157,7 @@ const SECTION_PRIORITY: Record<SectionName, number> = {
   "Enterprise Overview": 2,
   "Current User": 3,
   "Client Page Context": 4,
+  "Route Entity": 4.5,
   "Counts": 5,
   "Retrieved Knowledge": 6,
   "Upcoming Events": 7,
@@ -633,6 +646,7 @@ export async function buildPromptContext(
     "For networking, connection, or introduction questions about a named person, call suggest_connections directly. It can resolve the person from a natural-language person_query and return a chat-ready payload.",
     "For mentor matching, mentee pairing, or 'who should mentor X' questions, call suggest_mentors directly. Do not invent matches — render only signals from tool output.",
     "For navigation or 'where do I go' requests, call find_navigation_targets and prefer returning direct in-app links.",
+    PARTIAL_CAPABILITY_POLICY,
     "When listing members or admins, prefer real human names over raw emails whenever a trustworthy name is available.",
     "Do NOT present placeholder identities like Member(email@example.com).",
     "If a member or admin has no trustworthy human name, describe them as an email-only member account or email-only admin account and include the email only when it is the only identifier or the user explicitly asks for emails.",
@@ -653,6 +667,31 @@ export async function buildPromptContext(
     contextSections.push({
       name: "Client Page Context",
       priority: SECTION_PRIORITY["Client Page Context"],
+      lines,
+      estimatedTokens: estimateTokens(text),
+    });
+  }
+
+  if (input.routeEntity) {
+    const lines = [
+      "## Route Entity",
+      `- Page: ${input.routeEntity.label}`,
+      `- Entity type: ${input.routeEntity.kind.replace(/_/g, " ")}`,
+      `- Entity name: ${input.routeEntity.displayName}`,
+    ];
+    for (const item of input.routeEntity.metadata.slice(0, 6)) {
+      lines.push(`- ${item.label}: ${item.value}`);
+    }
+    if (input.routeEntity.nextActions.length > 0) {
+      lines.push("- Available next steps:");
+      for (const action of input.routeEntity.nextActions.slice(0, 4)) {
+        lines.push(`  - ${action}`);
+      }
+    }
+    const text = lines.join("\n");
+    contextSections.push({
+      name: "Route Entity",
+      priority: SECTION_PRIORITY["Route Entity"],
       lines,
       estimatedTokens: estimateTokens(text),
     });

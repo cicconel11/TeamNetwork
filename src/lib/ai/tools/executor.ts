@@ -2869,6 +2869,7 @@ async function findNavigationTargets(
   sb: SB,
   orgId: string,
   args: z.infer<typeof findNavigationTargetsSchema>,
+  ctx: ToolExecutionContext,
   logContext: AiLogContext
 ): Promise<ToolExecutionResult> {
   return safeToolQuery(logContext, async () => {
@@ -2908,7 +2909,7 @@ async function findNavigationTargets(
           org.nav_config && typeof org.nav_config === "object" && !Array.isArray(org.nav_config)
             ? (org.nav_config as NavConfig)
             : null,
-        role: "admin",
+        role: ctx.authorization.kind === "preverified_role" ? ctx.authorization.role : "admin",
         hasAlumniAccess,
         hasParentsAccess,
         limit: args.limit,
@@ -3502,6 +3503,7 @@ export async function executeToolCall(
             sb,
             ctx.orgId,
             args as z.infer<typeof findNavigationTargetsSchema>,
+            ctx,
             logContext
           );
       }
