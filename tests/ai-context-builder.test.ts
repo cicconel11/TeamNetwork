@@ -192,9 +192,44 @@ describe("AI prompt context builder", () => {
 
     assert.doesNotMatch(result.systemPrompt, /Current page path: \/acme\/announcements/);
     assert.match(result.systemPrompt, /List recent organization announcements/i);
-    assert.match(result.systemPrompt, /Find the best in-app pages/i);
+    assert.match(result.systemPrompt, /Find the best accessible in-app pages/i);
     assert.match(result.orgContextMessage ?? "", /## Client-Reported Page Context/);
     assert.match(result.orgContextMessage ?? "", /Current page path: \/acme\/announcements/);
+  });
+
+  it("includes route entity context only in the untrusted context message", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      currentPath: "/acme/members/member-1",
+      routeEntity: {
+        kind: "member",
+        id: "member-1",
+        label: "Member profile",
+        displayName: "Jane Captain",
+        currentPath: "/acme/members/member-1",
+        metadata: [
+          { label: "Role", value: "Captain" },
+          { label: "Status", value: "active" },
+        ],
+        nextActions: [
+          "Ask for connection suggestions.",
+          "Ask me to draft a direct message.",
+        ],
+      },
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Acme Org", slug: "acme" },
+      }) as any,
+    });
+
+    assert.doesNotMatch(result.systemPrompt, /Entity name: Jane Captain/);
+    assert.match(result.systemPrompt, /PARTIAL CAPABILITY POLICY:/);
+    assert.match(result.orgContextMessage ?? "", /## Route Entity/);
+    assert.match(result.orgContextMessage ?? "", /Entity name: Jane Captain/);
+    assert.match(result.orgContextMessage ?? "", /Role: Captain/);
+    assert.match(result.orgContextMessage ?? "", /Ask me to draft a direct message/);
   });
 
   it("builds a separate untrusted organization context message", async () => {

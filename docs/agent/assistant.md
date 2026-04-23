@@ -8,7 +8,7 @@ Enterprise behavior is an extension of this same assistant, not a second pipelin
 
 Most organizations in the app are not on the enterprise plan. For non-enterprise organizations, the assistant must stay org-scoped and should not expose enterprise prompts, enterprise tools, or enterprise-wide answers. Even for enterprise-linked organizations, enterprise-wide answers are valid only for that caller's own enterprise context.
 
-The chat runtime is split into thin `route.ts` entrypoints and testable `handler.ts` factories for chat, thread, message, and pending-action endpoints. The main chat handler orchestrates auth, rate limiting, message safety, idempotency, surface and intent routing, execution policy decisions, optional RAG retrieval, prompt construction, SSE streaming, deterministic tool execution, grounding verification, persistence, and audit logging. Straightforward live-read turns can short-circuit to `tool_first` deterministic formatting paths (for example, `list_members`, `list_events`, `get_org_stats`, `get_donation_analytics`, `suggest_connections`, and `find_navigation_targets`) to avoid an unnecessary second model pass.
+The chat runtime is split into thin `route.ts` entrypoints and testable `handler.ts` factories for chat, thread, message, and pending-action endpoints. The main chat handler orchestrates auth, rate limiting, message safety, idempotency, surface and intent routing, execution policy decisions, optional RAG retrieval, prompt construction, SSE streaming, deterministic tool execution, grounding verification, persistence, and audit logging. Straightforward live-read turns can short-circuit to `tool_first` deterministic formatting paths (for example, `list_members`, `list_events`, `get_org_stats`, `get_donation_analytics`, `suggest_connections`, and `find_navigation_targets`) to avoid an unnecessary second model pass. Route-aware turns now also resolve a trusted current-page entity snapshot from the caller's RLS-scoped Supabase client, so prompts like `message this person` and `reply to this thread` can ground against the page the user is already viewing without widening data visibility.
 
 The shipped tool surface includes org read tools, enterprise read tools, and confirmation-gated write-preparation flows (announcements, jobs, direct/group chat messages, discussion threads/replies, and calendar events). Org analytics now include both the shallow `get_org_stats` snapshot path and a richer `get_donation_analytics` reporting path for trend, breakdown, average, and top-purpose donation questions. Pending-action flows emit structured SSE events and require explicit confirm/cancel API calls before execution. The panel is route-aware, persists active thread per org/surface, and streams live tool status.
 
@@ -159,19 +159,22 @@ The panel now derives `surface` from the current route instead of hardcoding `"g
 ### 4. Write-action parity is partial
 The assistant now supports confirmation-gated write paths for announcements, jobs, top-level discussion threads, discussion replies, and calendar events. Broader write parity for role changes, forms, destructive edits, and other mutations is still not implemented.
 
-### 5. Discussion and job reads are live, and both now have shipped create flows
+### 5. Route-entity context and navigation guidance are richer
+The assistant now resolves a compact trusted route entity for core detail pages (`members`, `discussion threads`, `events`, `jobs`, and announcement edit pages) and injects that normalized snapshot into the untrusted prompt message. This remains org-filtered and RLS-scoped, so cross-org pasted URLs, soft-deleted rows, and inaccessible entities are omitted instead of leaking into prompt context. Deterministic navigation answers also return a concrete `Next:` step and `I can help:` line alongside the best accessible page so unsupported actions still feel guided instead of dead-ending on a link.
+
+### 6. Discussion and job reads are live, and both now have shipped create flows
 `list_discussions` and `list_job_postings` are both live tools now, so those prompts can emit `tool_status` events and return deterministic tool-backed answers. The shipped assistant mutations are the confirmation-gated `prepare_announcement`, `prepare_job_posting`, `prepare_chat_message`, `prepare_group_message`, `prepare_discussion_reply`, `prepare_discussion_thread`, and `prepare_event` flows. Discussion replies can now bind either to the trusted current thread route (`reply to this thread`) or to an org-scoped named thread title supplied in chat, with deterministic clarification when the title is missing, ambiguous, or not found. Direct chat messages follow the same pattern for members: the assistant can resolve a named recipient or reuse the trusted current member route (`message this person`), and confirmation-time execution revalidates the recipient before reusing or creating an exact two-person chat. Group chat messages similarly resolve only among the caller's active group memberships, can deterministically clarify ambiguous group names, and re-check membership plus moderation status at confirmation time before inserting the final message.
 
-### 6. Enterprise role-matrix coverage is still incomplete
+### 7. Enterprise role-matrix coverage is still incomplete
 Enterprise behavior now depends on enterprise eligibility plus role (`owner`, `billing_admin`, `org_admin`) and question class (org-only, enterprise non-billing, enterprise billing). The current test suite has strong unit coverage for individual tools and some pass-1 routing, but still needs broader end-to-end matrix tests for deterministic deny paths, mixed allowed+denied prompts, and enterprise-only starter prompt/capability behavior.
 
-### 7. `get_org_stats` is still the slowest deterministic read path
+### 8. `get_org_stats` is still the slowest deterministic read path
 Simple roster and event questions now take the fast single-tool path, and thread listing / message history queries are now covered by dedicated composite indexes (`idx_ai_threads_org_listing`, `idx_ai_messages_thread_status`). Full org snapshots still depend on the aggregate `get_org_stats` query. The remaining latency on donation / alumni / top-level metrics prompts is now more likely to come from the stats query itself than from chat orchestration.
 
-### 8. Vector similarity cache (deferred to v2)
+### 9. Vector similarity cache (deferred to v2)
 The `20260321100001` migration creates the `vector` extension, but all cache lookups use exact SHA-256 hash matching. Embedding-based semantic similarity is deferred to a future version.
 
-### 9. Docs are codemap-heavy and need periodic refresh
+### 10. Docs are codemap-heavy and need periodic refresh
 The agent docs are now reasonably aligned again, but the implementation moves quickly across `handler.ts`, tool definitions, and panel state. Future agent work should keep these codemaps in sync when route structure, pending-action flows, or tool inventory changes.
 
 ## v2 Roadmap — Research-Backed Enhancements

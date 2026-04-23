@@ -42,6 +42,14 @@ import {
   type TurnExecutionPolicy,
 } from "@/lib/ai/turn-execution-policy";
 import {
+  extractCurrentDiscussionThreadRouteId,
+  extractCurrentMemberRouteId,
+  extractRouteEntity,
+  getCurrentPathFeatureSegment,
+  type RouteEntityContext,
+} from "@/lib/ai/route-entity";
+import { loadRouteEntityContext } from "@/lib/ai/route-entity-loaders";
+import {
   verifyToolBackedResponse,
   type SuccessfulToolSummary,
 } from "@/lib/ai/tool-grounding";
@@ -115,6 +123,7 @@ export interface ChatRouteDeps {
   getDraftSession?: typeof getDraftSession;
   saveDraftSession?: typeof saveDraftSession;
   clearDraftSession?: typeof clearDraftSession;
+  loadRouteEntityContext?: typeof loadRouteEntityContext;
 }
 
 type ChatAttachment = {
@@ -229,40 +238,6 @@ const GROUP_CHAT_MESSAGE_FALLBACK_PATTERN =
 const DISCUSSION_REPLY_FALLBACK_PATTERN =
   /\b(?:reply|respond|response|comment|answer)\b/i;
 
-function getCurrentPathFeatureSegment(pathname: string | undefined): string | null {
-  if (!pathname) {
-    return null;
-  }
-
-  const enterpriseMatch = pathname.match(/^\/enterprise\/[^/]+\/([^/?#]+)/);
-  if (enterpriseMatch) {
-    return enterpriseMatch[1] ?? null;
-  }
-
-  return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? null;
-}
-
-function extractCurrentDiscussionThreadRouteId(pathname: string | undefined): string | null {
-  if (!pathname) {
-    return null;
-  }
-
-  const match =
-    pathname.match(/^\/[^/]+\/messages\/threads\/([^/?#]+)(?:\/|$)/) ??
-    pathname.match(/^\/[^/]+\/discussions\/([^/?#]+)(?:\/|$)/);
-
-  return match?.[1] ?? null;
-}
-
-function extractCurrentMemberRouteId(pathname: string | undefined): string | null {
-  if (!pathname) {
-    return null;
-  }
-
-  const match = pathname.match(/^\/[^/]+\/members\/([^/?#]+)(?:\/|$)/);
-  return match?.[1] ?? null;
-}
-
 function looksLikeStructuredJobDraft(message: string): boolean {
   const hasJobContext =
     /\b(job|job posting|opening|role|position|hiring|apply|application)\b/i.test(message);
@@ -372,6 +347,9 @@ interface NavigationDisplayTarget {
   href?: unknown;
   description?: unknown;
   kind?: unknown;
+  userCanAccess?: unknown;
+  manualSteps?: unknown;
+  assistantCanHelpWith?: unknown;
 }
 
 interface NavigationDisplayPayload {
@@ -1886,7 +1864,15 @@ function formatNavigationTargetsResponse(data: unknown): string | null {
 
       const description = getNonEmptyString(target.description);
       const kind = getNonEmptyString(target.kind);
-      return { label, href, description, kind };
+      const manualSteps = Array.isArray(target.manualSteps)
+        ? target.manualSteps.map(getNonEmptyString).filter((value): value is string => Boolean(value))
+        : [];
+      const assistantCanHelpWith = Array.isArray(target.assistantCanHelpWith)
+        ? target.assistantCanHelpWith.map(getNonEmptyString).filter((value): value is string => Boolean(value))
+        : [];
+      const userCanAccess =
+        typeof target.userCanAccess === "boolean" ? target.userCanAccess : true;
+      return { label, href, description, kind, manualSteps, assistantCanHelpWith, userCanAccess };
     })
     .filter(
       (
@@ -1896,8 +1882,12 @@ function formatNavigationTargetsResponse(data: unknown): string | null {
         href: string;
         description: string | null;
         kind: string | null;
+        manualSteps: string[];
+        assistantCanHelpWith: string[];
+        userCanAccess: boolean;
       } => Boolean(row)
     )
+    .filter((row) => row.userCanAccess)
     .slice(0, 3);
 
   if (matches.length === 0) {
@@ -1909,6 +1899,14 @@ function formatNavigationTargetsResponse(data: unknown): string | null {
     lines.push(`- [${match.label}](${match.href})${match.kind ? ` - ${match.kind}` : ""}`);
     if (match.description) {
       lines.push(`  ${match.description}`);
+    }
+    const manualStep = match.manualSteps[0];
+    if (manualStep) {
+      lines.push(`  Next: ${manualStep}`);
+    }
+    const assistantHelp = match.assistantCanHelpWith[0];
+    if (assistantHelp) {
+      lines.push(`  I can help: ${assistantHelp}`);
     }
   }
 
@@ -3747,11 +3745,6 @@ function buildDraftSessionContextMessage(
   return lines.length > 1 ? lines.join("\n") : null;
 }
 
-interface CurrentDiscussionThreadContext {
-  discussionThreadId: string;
-  threadTitle: string | null;
-}
-
 type DiscussionReplyTargetResolution =
   | {
       kind: "resolved";
@@ -3762,57 +3755,6 @@ type DiscussionReplyTargetResolution =
   | { kind: "ambiguous"; requestedThreadTitle: string; candidateThreadTitles: string[] }
   | { kind: "not_found"; requestedThreadTitle: string }
   | { kind: "lookup_error" };
-
-type DiscussionThreadLookupQuery = {
-  eq(column: string, value: unknown): DiscussionThreadLookupQuery;
-  is?(column: string, value: unknown): DiscussionThreadLookupQuery;
-  maybeSingle(): Promise<{ data: unknown; error: unknown }>;
-};
-
-async function resolveCurrentDiscussionThreadContext(
-  supabase: {
-    from(table: "discussion_threads"): {
-      select(columns: string): {
-        eq(column: string, value: unknown): DiscussionThreadLookupQuery;
-      };
-    };
-  },
-  input: {
-    organizationId: string;
-    currentPath?: string;
-  }
-): Promise<CurrentDiscussionThreadContext | null> {
-  const routeThreadId = extractCurrentDiscussionThreadRouteId(input.currentPath);
-  if (!routeThreadId) {
-    return null;
-  }
-
-  const baseQuery = supabase
-    .from("discussion_threads")
-    .select("id, title")
-    .eq("id", routeThreadId)
-    .eq("organization_id", input.organizationId) as DiscussionThreadLookupQuery;
-
-  const query =
-    typeof baseQuery.is === "function"
-      ? baseQuery.is("deleted_at", null)
-      : baseQuery;
-
-  const { data, error } = await query.maybeSingle();
-  if (error) {
-    throw new Error("Failed to load current discussion thread context");
-  }
-
-  if (!data || typeof data !== "object") {
-    return null;
-  }
-
-  return {
-    discussionThreadId:
-      getNonEmptyString((data as { id?: unknown }).id) ?? routeThreadId,
-    threadTitle: getNonEmptyString((data as { title?: unknown }).title),
-  };
-}
 
 function isDiscussionThreadDemonstrative(value: string | null | undefined): boolean {
   if (!value) {
@@ -4091,6 +4033,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const getDraftSessionFn = deps.getDraftSession ?? getDraftSession;
   const saveDraftSessionFn = deps.saveDraftSession ?? saveDraftSession;
   const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
+  const loadRouteEntityContextFn = deps.loadRouteEntityContext ?? loadRouteEntityContext;
 
   return async function POST(
     request: NextRequest,
@@ -4155,7 +4098,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     let usesSharedStaticContext = false;
     let pass1Tools: ReturnType<typeof getPass1Tools>;
     let activeDraftSession: DraftSessionRecord | null = null;
-    let currentDiscussionThreadContext: CurrentDiscussionThreadContext | null = null;
+    let routeEntityContext: RouteEntityContext | null = null;
     let activePendingEventActions: PendingEventActionRecord[] = [];
     let pendingEventRevisionAnalysis: PendingEventRevisionAnalysis = { kind: "none" };
     let cacheStatus: CacheStatus;
@@ -4445,24 +4388,33 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       executionPolicy.retrieval.reason === "tool_only_structured_query" &&
       isToolFirstEligible(pass1Tools);
 
-    if (extractCurrentDiscussionThreadRouteId(currentPath)) {
+    const routeEntityRef = extractRouteEntity(currentPath);
+    if (routeEntityRef) {
       try {
-        currentDiscussionThreadContext = await resolveCurrentDiscussionThreadContext(
-          ctx.supabase as any,
-          {
-            organizationId: ctx.orgId,
+        routeEntityContext = await loadRouteEntityContextFn({
+          supabase: ctx.supabase as any,
+          organizationId: ctx.orgId,
+          currentPath,
+          routeEntity: routeEntityRef,
+        });
+        if (!routeEntityContext) {
+          aiLog("warn", "ai-chat", "route entity context omitted", requestLogContext, {
             currentPath,
-          }
-        );
+            routeEntityKind: routeEntityRef.kind,
+          });
+        }
       } catch (error) {
-        aiLog("error", "ai-chat", "current discussion thread resolution failed", requestLogContext, {
+        aiLog("error", "ai-chat", "route entity resolution failed", requestLogContext, {
           error,
           currentPath,
+          routeEntityKind: routeEntityRef.kind,
         });
-        return NextResponse.json(
-          { error: "Failed to resolve the current discussion thread" },
-          { status: 500, headers: rateLimit.headers }
-        );
+        if (routeEntityRef.kind === "discussion_thread") {
+          return NextResponse.json(
+            { error: "Failed to resolve the current discussion thread" },
+            { status: 500, headers: rateLimit.headers }
+          );
+        }
       }
     }
 
@@ -5609,6 +5561,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               now: requestNow,
               timeZone: requestTimeZone,
               currentPath,
+              routeEntity: routeEntityContext,
               availableTools: pass1Tools?.map((tool) => tool.function.name as ToolName),
               threadTurnCount: existingThreadId ? 2 : 1,
             }).then((result: Awaited<ReturnType<typeof buildPromptContext>>) => {
@@ -5769,7 +5722,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             }
 
             if (toolEvent.name === "prepare_chat_message") {
-              const currentMemberRouteId = extractCurrentMemberRouteId(currentPath);
+              const currentMemberRouteId =
+                routeEntityContext?.kind === "member"
+                  ? routeEntityContext.id
+                  : extractCurrentMemberRouteId(currentPath);
               if (currentMemberRouteId && isChatRecipientDemonstrative(message)) {
                 parsedArgs.recipient_member_id = currentMemberRouteId;
                 delete parsedArgs.person_query;
@@ -5823,14 +5779,17 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                     data: buildDiscussionReplyClarificationPayload(parsedArgs, resolution),
                   };
                 }
-              } else if (currentDiscussionThreadContext && !discussionThreadId) {
+              } else if (
+                routeEntityContext?.kind === "discussion_thread" &&
+                !discussionThreadId
+              ) {
                 parsedArgs.discussion_thread_id =
-                  currentDiscussionThreadContext.discussionThreadId;
+                  routeEntityContext.id;
                 if (
                   getNonEmptyString(parsedArgs.thread_title) == null &&
-                  currentDiscussionThreadContext.threadTitle
+                  routeEntityContext.displayName
                 ) {
-                  parsedArgs.thread_title = currentDiscussionThreadContext.threadTitle;
+                  parsedArgs.thread_title = routeEntityContext.displayName;
                 }
               } else if (!discussionThreadId && !syntheticToolResult) {
                 syntheticToolResult = {

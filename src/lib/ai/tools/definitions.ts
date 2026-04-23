@@ -981,7 +981,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "find_navigation_targets" as const,
       description:
-        "Find the best in-app pages for opening, managing, or creating organization resources. Use for requests like open announcements, take me to members, where do I edit navigation, or where can I create an event.",
+        "Find the best accessible in-app pages for opening, managing, or creating organization resources. Returns links plus manual next steps and how the assistant can help from chat. Use for requests like open announcements, take me to members, where do I edit navigation, or where can I create an event.",
       parameters: {
         type: "object" as const,
         properties: {
