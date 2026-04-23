@@ -235,6 +235,9 @@ async function fetchSourceWithComplement(
 }
 
 const MIN_FUZZY_AUTORESOLVE_MARGIN = 15;
+// Below this threshold a single fuzzy hit stays "ambiguous" — a lone typo
+// suggestion is a near-miss the user should confirm, not an auto-resolution.
+const MIN_FUZZY_AUTORESOLVE_SCORE = 50;
 
 function resolveSourceFromQuery(
   projectedPeople: Map<string, ProjectedPerson>,
@@ -288,13 +291,16 @@ function resolveSourceFromQuery(
 
   const topMatch = fuzzyMatches[0];
   const runnerUp = fuzzyMatches[1] ?? null;
-  if (!runnerUp || topMatch.score - runnerUp.score >= MIN_FUZZY_AUTORESOLVE_MARGIN) {
+  const clearWinner =
+    !runnerUp || topMatch.score - runnerUp.score >= MIN_FUZZY_AUTORESOLVE_MARGIN;
+
+  if (clearWinner && topMatch.score >= MIN_FUZZY_AUTORESOLVE_SCORE) {
     return { state: "resolved", source: topMatch.person };
   }
 
   return {
     state: "ambiguous",
-    options: fuzzyMatches.map((match) => match.person),
+    options: fuzzyMatches.slice(0, 3).map((match) => match.person),
   };
 }
 
