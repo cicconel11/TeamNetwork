@@ -38,7 +38,7 @@ export function useCaptcha(): UseCaptchaReturn {
     // (mirrors server-side bypass condition: development && !secretKey)
     useEffect(() => {
         const provider =
-            process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "turnstile" ? "turnstile" : "hcaptcha";
+            process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
         const siteKey =
             provider === "turnstile"
                 ? process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY

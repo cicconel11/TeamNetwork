@@ -31,7 +31,7 @@ export function requireEnvOrDummy(name: string, dummy: string): string {
 type CaptchaProvider = "hcaptcha" | "turnstile";
 
 function resolveDefaultProvider(): CaptchaProvider {
-  return process.env.CAPTCHA_PROVIDER === "turnstile" ? "turnstile" : "hcaptcha";
+  return process.env.CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
 }
 
 function hasValue(v: string | undefined): boolean {
@@ -52,15 +52,15 @@ export function isCaptchaConfigured(provider?: CaptchaProvider): boolean {
 
 /**
  * Validates captcha environment configuration.
- * - hCaptcha pair always required in prod (auth flows still use it).
- * - If CAPTCHA_PROVIDER=turnstile, Turnstile pair also required.
+ * - Production requires the selected provider's server secret and public site key.
+ * - Turnstile is the default provider; hCaptcha is retained only as an explicit legacy fallback.
  * - Warns on client/server provider mismatch.
  * - Dev: warns only.
  */
 export function validateCaptchaEnv(): void {
   const isProduction = process.env.NODE_ENV === "production";
   const provider = resolveDefaultProvider();
-  const clientProvider = process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "turnstile" ? "turnstile" : "hcaptcha";
+  const clientProvider = process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
 
   const missingHcaptchaSecret = !hasValue(process.env.HCAPTCHA_SECRET_KEY);
   const missingHcaptchaSite = !hasValue(process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY);
@@ -68,29 +68,30 @@ export function validateCaptchaEnv(): void {
   const missingTurnstileSite = !hasValue(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
   if (isProduction) {
-    if (missingHcaptchaSecret) {
-      throw new Error(
-        "Missing required environment variable: HCAPTCHA_SECRET_KEY. " +
-        "hCaptcha protection is required in production (auth flows).",
-      );
-    }
-    if (missingHcaptchaSite) {
-      throw new Error(
-        "Missing required environment variable: NEXT_PUBLIC_HCAPTCHA_SITE_KEY. " +
-        "hCaptcha protection is required in production (auth flows).",
-      );
-    }
-    if (provider === "turnstile") {
+    if (provider === "hcaptcha") {
+      if (missingHcaptchaSecret) {
+        throw new Error(
+          "Missing required environment variable: HCAPTCHA_SECRET_KEY. " +
+          "hCaptcha is selected via CAPTCHA_PROVIDER.",
+        );
+      }
+      if (missingHcaptchaSite) {
+        throw new Error(
+          "Missing required environment variable: NEXT_PUBLIC_HCAPTCHA_SITE_KEY. " +
+          "hCaptcha is selected via CAPTCHA_PROVIDER.",
+        );
+      }
+    } else {
       if (missingTurnstileSecret) {
         throw new Error(
           "Missing required environment variable: TURNSTILE_SECRET_KEY. " +
-          "Turnstile is selected via CAPTCHA_PROVIDER.",
+          "Turnstile is the default captcha provider.",
         );
       }
       if (missingTurnstileSite) {
         throw new Error(
           "Missing required environment variable: NEXT_PUBLIC_TURNSTILE_SITE_KEY. " +
-          "Turnstile is selected via CAPTCHA_PROVIDER.",
+          "Turnstile is the default captcha provider.",
         );
       }
     }
@@ -102,9 +103,10 @@ export function validateCaptchaEnv(): void {
     }
   } else {
     const missing: string[] = [];
-    if (missingHcaptchaSecret) missing.push("HCAPTCHA_SECRET_KEY");
-    if (missingHcaptchaSite) missing.push("NEXT_PUBLIC_HCAPTCHA_SITE_KEY");
-    if (provider === "turnstile") {
+    if (provider === "hcaptcha") {
+      if (missingHcaptchaSecret) missing.push("HCAPTCHA_SECRET_KEY");
+      if (missingHcaptchaSite) missing.push("NEXT_PUBLIC_HCAPTCHA_SITE_KEY");
+    } else {
       if (missingTurnstileSecret) missing.push("TURNSTILE_SECRET_KEY");
       if (missingTurnstileSite) missing.push("NEXT_PUBLIC_TURNSTILE_SITE_KEY");
     }
@@ -183,7 +185,6 @@ export function shouldLogAuth(): boolean {
 export function shouldLogAuthFailures(): boolean {
   return process.env.LOG_AUTH_FAILURES !== "false";
 }
-
 
 
 

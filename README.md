@@ -22,8 +22,10 @@ Core environment variables:
 | `STRIPE_SECRET_KEY` | Stripe secret API key |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
-| `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | hCaptcha site key |
-| `HCAPTCHA_SECRET_KEY` | hCaptcha secret key |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key |
+| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile secret key |
+
+Captcha defaults to Cloudflare Turnstile. To use the legacy hCaptcha fallback, set both `CAPTCHA_PROVIDER=hcaptcha` and `NEXT_PUBLIC_CAPTCHA_PROVIDER=hcaptcha`, plus `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY`.
 
 Build-time Stripe price validation also expects:
 

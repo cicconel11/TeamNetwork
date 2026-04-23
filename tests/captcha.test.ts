@@ -41,6 +41,7 @@ describe("hCaptcha Integration", () => {
           ),
           async (emptyToken) => {
             const result = await verifyCaptcha(emptyToken, undefined, {
+              provider: "hcaptcha",
               secretKey: "test-secret-key",
               skipInDevelopment: false,
             });
@@ -82,6 +83,7 @@ describe("hCaptcha Integration", () => {
             fc.string({ minLength: 1, maxLength: 100 }).filter((s) => s.trim().length > 0),
             async (invalidToken) => {
               const result = await verifyCaptcha(invalidToken, undefined, {
+                provider: "hcaptcha",
                 secretKey: "test-secret-key",
                 skipInDevelopment: false,
                 timeout: 100,
@@ -145,6 +147,7 @@ describe("hCaptcha Integration", () => {
               const startTime = Date.now();
 
               const result = await verifyCaptcha(token, undefined, {
+                provider: "hcaptcha",
                 secretKey: "test-secret-key",
                 skipInDevelopment: false,
                 timeout: timeoutMs,

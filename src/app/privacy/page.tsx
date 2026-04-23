@@ -85,7 +85,7 @@ const privacySections: PrivacySection[] = [
       "Supabase: Database and authentication services.",
       "Stripe: Payment processing for subscriptions and donations.",
       "Google Calendar: Optional calendar synchronization (requires your explicit authorization).",
-      "hCaptcha: Bot protection and security verification.",
+      "Cloudflare Turnstile: Bot protection and security verification.",
       "These services have their own privacy policies, and we encourage you to review them.",
     ],
   },

@@ -87,8 +87,8 @@ See `docs/Data_Inventory.md` for documented security controls including:
 
 * [x] **Access Control:** RBAC implemented via `src/lib/auth/roles.ts` with three tiers: admin, active_member, alumni. Row-Level Security (RLS) policies on all Supabase tables. Middleware enforcement in `src/middleware.ts`.
 * [x] **Encryption:** Supabase PostgreSQL uses AES-256 encryption at rest. TLS/SSL enforced for all connections (Supabase, Vercel deployment).
-* [x] **Authentication:** Password policy upgraded to NIST standards (12+ chars with complexity requirements: uppercase, lowercase, number, special character). Security headers implemented in `next.config.mjs` including CSP, HSTS, X-Frame-Options. hCaptcha on signup/login forms.
-* **MFA:** Targeted for Q3 2026 (on track as of Apr 16 2026). Interim compensating controls: NIST SP 800-63B password policy, hCaptcha bot protection, Supabase 1-hour JWT expiry, rate limiting on auth endpoints. Owner and delivery date must be confirmed before signing any NY district contract.
+* [x] **Authentication:** Password policy upgraded to NIST standards (12+ chars with complexity requirements: uppercase, lowercase, number, special character). Security headers implemented in `next.config.mjs` including CSP, HSTS, X-Frame-Options. Cloudflare Turnstile on signup/login forms.
+* **MFA:** Targeted for Q3 2026 (on track as of Apr 16 2026). Interim compensating controls: NIST SP 800-63B password policy, Cloudflare Turnstile bot protection, Supabase 1-hour JWT expiry, rate limiting on auth endpoints. Owner and delivery date must be confirmed before signing any NY district contract.
 * [x] **Testing:** `npm audit --audit-level=high` runs in CI on every PR (`.github/workflows/ci.yml` `security-audit` job). Dependabot configured for weekly dependency scanning.
 
 > **COMPLETED:** Security controls documented in `docs/Data_Inventory.md`. Additional measures found:
@@ -96,7 +96,7 @@ See `docs/Data_Inventory.md` for documented security controls including:
 > * Input validation with Zod (`src/lib/schemas/`)
 > * SSRF protection (`src/lib/schedule-security/safe-fetch.ts`)
 > * Open redirect protection (`src/lib/auth/redirect.ts`)
-> * hCaptcha integration (`src/lib/security/captcha.ts`)
+> * Cloudflare Turnstile integration (`src/lib/security/captcha.ts`)
 > * Data export capability (`src/app/api/user/export-data/route.ts`)
 > * Account deletion capability (`src/app/api/user/delete-account/route.ts`)
 
@@ -112,7 +112,7 @@ See `docs/Data_Inventory.md` for documented security controls including:
 > **COMPLETED:** See `docs/legal_templates/Use_Disclosure_Policy.md` for the formal policy document including:
 > * Purpose statement and permitted data uses
 > * Prohibited uses (no sale, no advertising, no repurposing)
-> * Approved third-party services (Stripe, Resend, Supabase, hCaptcha, Google Calendar)
+> * Approved third-party services (Stripe, Resend, Supabase, Cloudflare Turnstile, Google Calendar)
 > * Data access rules and role boundaries
 > * Enforcement procedures
 > * Annual review schedule
