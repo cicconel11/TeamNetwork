@@ -26,6 +26,15 @@ export interface AuditEntry {
   ragTopSimilarity?: number; // highest cosine similarity score
   ragError?: string; // error message if RAG retrieval failed
   stageTimings?: AiAuditStageTimings;
+  // Output safety gate (Phase 1)
+  safetyVerdict?: "safe" | "controversial" | "unsafe";
+  safetyCategories?: string[];
+  safetyLatencyMs?: number;
+  // RAG grounding validator (Phase 2)
+  ragGrounded?: boolean;
+  ragGroundingFailures?: string[];
+  ragGroundingLatencyMs?: number;
+  ragGroundingMode?: "shadow" | "overwrite" | "block" | "bypass";
 }
 
 interface AuditInsertClient {
@@ -83,6 +92,15 @@ export async function logAiRequest(
       rag_top_similarity: entry.ragTopSimilarity ?? null,
       rag_error: entry.ragError ? entry.ragError.slice(0, 500) : null,
       stage_timings: stageTimingsJson,
+      safety_verdict: entry.safetyVerdict ?? null,
+      safety_categories: entry.safetyCategories ? redactJsonValue(entry.safetyCategories) : null,
+      safety_latency_ms: entry.safetyLatencyMs ?? null,
+      rag_grounded: entry.ragGrounded ?? null,
+      rag_grounding_failures: entry.ragGroundingFailures
+        ? redactJsonValue(entry.ragGroundingFailures.slice(0, 20))
+        : null,
+      rag_grounding_latency_ms: entry.ragGroundingLatencyMs ?? null,
+      rag_grounding_mode: entry.ragGroundingMode ?? null,
     };
 
     const { error } = await (serviceSupabase as unknown as AuditInsertClient)

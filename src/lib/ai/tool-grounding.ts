@@ -1,4 +1,28 @@
 import type { ToolName } from "@/lib/ai/tools/definitions";
+import {
+  contentIsGroundingFallback,
+  extractAllCurrencyDollars,
+  extractEmails,
+  extractListEntryHeads,
+  extractMentionedDates,
+  extractQuotedTitles,
+  normalizeIdentifier,
+  parseCurrencyClaim,
+  stripMarkdown,
+} from "@/lib/ai/grounding-primitives";
+
+// Re-export for backwards compatibility with existing callers/tests.
+export {
+  contentIsGroundingFallback,
+  extractAllCurrencyDollars,
+  extractEmails,
+  extractListEntryHeads,
+  extractMentionedDates,
+  extractQuotedTitles,
+  normalizeIdentifier,
+  parseCurrencyClaim,
+  stripMarkdown,
+};
 
 export interface SuccessfulToolSummary {
   name: ToolName;
@@ -8,14 +32,6 @@ export interface SuccessfulToolSummary {
 export interface ToolGroundingResult {
   grounded: boolean;
   failures: string[];
-}
-
-function normalizeIdentifier(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stripMarkdown(value: string): string {
-  return value.replace(/[*_`~>#"]/g, "").replace(/\[(.*?)\]\((.*?)\)/g, "$1").trim();
 }
 
 function normalizeMemberCandidate(value: string): string {
@@ -55,50 +71,6 @@ function parseStatClaim(content: string, label: string): number | null {
   }
 
   return null;
-}
-
-// Returns whole dollars from a currency claim adjacent to `label`. Supports
-// comma thousands separators, 1–2 decimal places, and a trailing k/K suffix
-// (e.g. "$1.2k" → 1200). Three-or-more decimal places fail to match and the
-// function returns null so verifiers can flag them as unsupported.
-export function parseCurrencyClaim(content: string, label: string): number | null {
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = /\$([0-9][0-9,]*(?:\.[0-9]{1,2})?)(k|K)?(?![0-9.])/;
-  for (const rawLine of content.split("\n")) {
-    const line = rawLine.trim();
-    if (!new RegExp(`\\b${escaped}\\b`, "i").test(line)) {
-      continue;
-    }
-
-    const match = line.match(pattern);
-    if (!match) {
-      continue;
-    }
-
-    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-    if (!Number.isFinite(parsed)) {
-      continue;
-    }
-    const scaled = match[2] ? parsed * 1000 : parsed;
-    return Math.round(scaled);
-  }
-
-  return null;
-}
-
-// Extract every "$<amount>" token in content, returning whole-dollar values.
-// Handles commas and optional k/K suffix. Skips malformed tokens.
-function extractAllCurrencyDollars(content: string): number[] {
-  const result: number[] = [];
-  const globalPattern = /\$([0-9][0-9,]*(?:\.[0-9]{1,2})?)(k|K)?(?![0-9.])/g;
-  let match: RegExpExecArray | null;
-  while ((match = globalPattern.exec(content)) !== null) {
-    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-    if (!Number.isFinite(parsed)) continue;
-    const scaled = match[2] ? parsed * 1000 : parsed;
-    result.push(Math.round(scaled));
-  }
-  return result;
 }
 
 function verifyOrgStats(content: string, data: unknown): string[] {
@@ -206,13 +178,6 @@ const DONATION_ANALYTICS_CANONICAL_LABELS = [
   "status mix",
   "latest successful donation",
 ];
-
-function contentIsGroundingFallback(content: string): boolean {
-  // Matches copy emitted by getGroundingFallbackForTools — a static paraphrase
-  // warning. Detect via shared sentinel phrase; ungrounded fallback bypasses
-  // strict verification because it is deterministic server-controlled text.
-  return /couldn[’']t verify|could not verify|unable to verify/i.test(content);
-}
 
 function verifyDonationAnalytics(content: string, data: unknown): string[] {
   if (!data || typeof data !== "object") {
@@ -433,22 +398,6 @@ function verifyListDonations(
   return failures;
 }
 
-function extractListEntryHeads(content: string): string[] {
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => /^([-*]|\d+\.)\s+/.test(line))
-    .map((line) => {
-      const stripped = stripMarkdown(line.replace(/^([-*]|\d+\.)\s+/, ""));
-      return stripped.split(/\s*(?:[-—:|]|\bon\b)\s*/i)[0]?.trim() ?? "";
-    })
-    .filter(Boolean);
-}
-
-function extractEmails(content: string): string[] {
-  return [...new Set(content.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? [])];
-}
-
 function answerStatesListIsPartial(content: string): boolean {
   return /\b(partial|showing|first|latest|recent|top)\b/i.test(content);
 }
@@ -526,18 +475,6 @@ function formatKnownEventDates(startDate: string): string[] {
       day: "numeric",
     }).toLowerCase(),
   ];
-}
-
-function extractQuotedTitles(content: string): string[] {
-  return [...content.matchAll(/"([^"\n]+)"/g)].map((match) => stripMarkdown(match[1] ?? ""));
-}
-
-function extractMentionedDates(content: string): string[] {
-  const isoMatches = content.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? [];
-  const longMatches = content.match(
-    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},\s+\d{4}\b/gi
-  ) ?? [];
-  return [...new Set([...isoMatches, ...longMatches].map((value) => value.toLowerCase()))];
 }
 
 function verifyListEvents(content: string, data: unknown): string[] {

@@ -2821,7 +2821,9 @@ test("tool-backed turns fall back when pass 2 emits no content", async () => {
   assert.match(body, /"type":"done"/);
 });
 
-test("no tool call: first pass chunks stream before completion", async () => {
+test("no tool call: first pass buffers until completion then releases atomically", async () => {
+  // Pass-1 freeform is buffered (for RAG grounding + safety gate validation)
+  // before release. Chunks are not emitted until the generator completes.
   let releaseSecondChunk!: () => void;
   const secondChunkGate = new Promise<void>((resolve) => {
     releaseSecondChunk = resolve;
@@ -2846,28 +2848,31 @@ test("no tool call: first pass chunks stream before completion", async () => {
   const reader = response.body?.getReader();
   assert.ok(reader, "response should expose a readable stream");
 
+  const firstReadPromise = reader!.read();
   const firstRead = await Promise.race([
-    reader!.read(),
+    firstReadPromise,
     delay(50).then(() => "timeout" as const),
   ]);
 
-  assert.notEqual(firstRead, "timeout", "first chunk should stream before completion");
-  if (firstRead !== "timeout") {
-    const text = new TextDecoder().decode(firstRead.value);
-    assert.match(text, /"type":"chunk"/);
-    assert.match(text, /Hello/);
-  }
+  assert.equal(firstRead, "timeout", "no chunk should emit before generator completes");
 
   releaseSecondChunk();
-  const remaining: string[] = [];
+
+  const collected: string[] = [];
+  const firstActual = await firstReadPromise;
+  if (!firstActual.done) {
+    collected.push(new TextDecoder().decode(firstActual.value));
+  }
   while (true) {
     const chunk = await reader!.read();
     if (chunk.done) break;
-    remaining.push(new TextDecoder().decode(chunk.value));
+    collected.push(new TextDecoder().decode(chunk.value));
   }
 
-  assert.match(remaining.join(""), /world/);
-  assert.match(remaining.join(""), /"type":"done"/);
+  const combined = collected.join("");
+  assert.match(combined, /Hello world/);
+  assert.match(combined, /"type":"chunk"/);
+  assert.match(combined, /"type":"done"/);
 });
 
 test("tool call: pass 1 text before tool execution is buffered while pass 2 completes", async () => {
@@ -3051,7 +3056,10 @@ test("auth_error is turn-fatal and logs no retryable prompt", async () => {
   assert.equal(composeResponseCalls.length, 1);
 });
 
-test("pass 1 timeout preserves partial text and ends without done", async () => {
+test("pass 1 timeout suppresses buffered text and ends without done", async () => {
+  // Pass-1 freeform is now buffered (for RAG grounding + safety gate
+  // validation) before release. On timeout, buffered partial text is
+  // discarded — same contract as pass-2 timeout.
   POST = createChatPostHandler(
     buildDefaultDeps({
       composeResponse: async function* (options: any) {
@@ -3070,7 +3078,7 @@ test("pass 1 timeout preserves partial text and ends without done", async () => 
   });
   const body = await response.text();
 
-  assert.match(body, /Partial answer/);
+  assert.doesNotMatch(body, /Partial answer/);
   assert.match(body, /The response timed out\. Please try again/);
   assert.doesNotMatch(body, /"type":"done"/);
 });

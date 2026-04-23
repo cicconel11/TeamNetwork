@@ -2817,3 +2817,308 @@ test("POST /api/ai/[orgId]/chat falls back when the model emits no content", asy
   const assistantMessage = supabaseStub.state.messages.find((message) => message.role === "assistant");
   assert.match(String(assistantMessage?.content), /I didn.t get a usable response for that question/i);
 });
+
+// ---------------------------------------------------------------------------
+// Safety gate (Phase 1) + RAG grounding (Phase 2)
+// ---------------------------------------------------------------------------
+
+function makeFreeformRequest(message = "Tell me about our latest announcement.") {
+  return new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+}
+
+test("POST /api/ai/[orgId]/chat overwrites freeform response when safety gate returns unsafe", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+  delete process.env.DISABLE_SAFETY_GATE;
+  delete process.env.SAFETY_GATE_SHADOW;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => ({
+      systemPrompt: "System prompt",
+      orgContextMessage: null,
+      metadata: { surface: input.surface, estimatedTokens: 100 },
+    }),
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      yield { type: "chunk", content: "Some ordinary answer about the roster." };
+    }) as any,
+    logAiRequest: async (_s: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: { id: "thread-1", user_id: ADMIN_USER.id, org_id: ORG_ID, surface: "general", title: "t" },
+    }),
+    classifySafety: async () => ({
+      verdict: "unsafe",
+      categories: ["toxicity"],
+      latencyMs: 12,
+      usedJudge: true,
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const response = await POST(makeFreeformRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /I can't share that response/);
+  assert.doesNotMatch(body, /ordinary answer/);
+  assert.ok(trackedOpsEvents.some((args) => args[1]?.error_code === "safety_gate_blocked"));
+  assert.equal((auditEntries[0] as any)?.safetyVerdict, "unsafe");
+});
+
+test("POST /api/ai/[orgId]/chat in safety shadow mode records verdict but passes content", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+  process.env.SAFETY_GATE_SHADOW = "1";
+  delete process.env.DISABLE_SAFETY_GATE;
+
+  try {
+    POST = createChatPostHandler({
+      createClient: async () => supabaseStub as any,
+      getAiOrgContext: async () => aiContext,
+      buildPromptContext: async (input: any) => ({
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      }),
+      createZaiClient: () => ({ client: "fake" } as any),
+      getZaiModel: () => "glm-5",
+      composeResponse: (async function* () {
+        yield { type: "chunk", content: "Some ordinary answer about the roster." };
+      }) as any,
+      logAiRequest: async (_s: unknown, entry: unknown) => {
+        auditEntries.push(entry);
+      },
+      retrieveRelevantChunks: async () => [],
+      resolveOwnThread: async () => ({
+        ok: true,
+        thread: { id: "thread-1", user_id: ADMIN_USER.id, org_id: ORG_ID, surface: "general", title: "t" },
+      }),
+      classifySafety: async () => ({
+        verdict: "unsafe",
+        categories: ["toxicity"],
+        latencyMs: 12,
+        usedJudge: true,
+      }),
+      trackOpsEventServer: async (...args: any[]) => {
+        trackedOpsEvents.push(args);
+      },
+    });
+
+    const response = await POST(makeFreeformRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    });
+
+    const body = await response.text();
+    assert.match(body, /ordinary answer/);
+    assert.doesNotMatch(body, /I can't share that response/);
+    assert.equal((auditEntries[0] as any)?.safetyVerdict, "unsafe");
+    assert.ok(trackedOpsEvents.some((args) => args[1]?.error_code === "safety_gate_shadow_unsafe"));
+  } finally {
+    delete process.env.SAFETY_GATE_SHADOW;
+  }
+});
+
+test("POST /api/ai/[orgId]/chat with DISABLE_SAFETY_GATE=1 does not invoke the classifier", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+  process.env.DISABLE_SAFETY_GATE = "1";
+  delete process.env.SAFETY_GATE_SHADOW;
+
+  try {
+    let classifierCalls = 0;
+    POST = createChatPostHandler({
+      createClient: async () => supabaseStub as any,
+      getAiOrgContext: async () => aiContext,
+      buildPromptContext: async (input: any) => ({
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      }),
+      createZaiClient: () => ({ client: "fake" } as any),
+      getZaiModel: () => "glm-5",
+      composeResponse: (async function* () {
+        yield { type: "chunk", content: "Some ordinary answer." };
+      }) as any,
+      logAiRequest: async (_s: unknown, entry: unknown) => {
+        auditEntries.push(entry);
+      },
+      retrieveRelevantChunks: async () => [],
+      resolveOwnThread: async () => ({
+        ok: true,
+        thread: { id: "thread-1", user_id: ADMIN_USER.id, org_id: ORG_ID, surface: "general", title: "t" },
+      }),
+      classifySafety: async () => {
+        classifierCalls++;
+        return { verdict: "unsafe", categories: [], latencyMs: 1, usedJudge: false };
+      },
+      trackOpsEventServer: async (...args: any[]) => {
+        trackedOpsEvents.push(args);
+      },
+    });
+
+    const response = await POST(makeFreeformRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    });
+    const body = await response.text();
+    assert.match(body, /ordinary answer/);
+    assert.equal(classifierCalls, 0);
+    assert.equal((auditEntries[0] as any)?.safetyVerdict, undefined);
+  } finally {
+    delete process.env.DISABLE_SAFETY_GATE;
+  }
+});
+
+test("POST /api/ai/[orgId]/chat overwrites freeform response when RAG grounding fails in overwrite mode", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+  process.env.EMBEDDING_API_KEY = "embed-key";
+  process.env.RAG_GROUNDING_MODE = "overwrite";
+  delete process.env.DISABLE_RAG_GROUNDING;
+  delete process.env.DISABLE_SAFETY_GATE;
+
+  try {
+    POST = createChatPostHandler({
+      createClient: async () => supabaseStub as any,
+      getAiOrgContext: async () => aiContext,
+      buildPromptContext: async (input: any) => ({
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      }),
+      createZaiClient: () => ({ client: "fake" } as any),
+      getZaiModel: () => "glm-5",
+      composeResponse: (async function* () {
+        yield { type: "chunk", content: "Contact fabricated@nowhere.com for details." };
+      }) as any,
+      logAiRequest: async (_s: unknown, entry: unknown) => {
+        auditEntries.push(entry);
+      },
+      retrieveRelevantChunks: async () => [
+        {
+          contentText: "Announcement: Spring Gala 2026-05-15 — alice@example.com for tickets.",
+          sourceTable: "announcements",
+          similarity: 0.91,
+          metadata: {},
+        } as any,
+      ],
+      resolveOwnThread: async () => ({
+        ok: true,
+        thread: { id: "thread-1", user_id: ADMIN_USER.id, org_id: ORG_ID, surface: "general", title: "t" },
+      }),
+      verifyRagGrounding: async () => ({
+        grounded: false,
+        uncoveredClaims: ["fabricated@nowhere.com"],
+        topChunkExcerpt: "Announcement: Spring Gala 2026-05-15",
+        latencyMs: 8,
+        usedJudge: false,
+      }),
+      classifySafety: async () => ({
+        verdict: "safe",
+        categories: [],
+        latencyMs: 1,
+        usedJudge: false,
+      }),
+      trackOpsEventServer: async (...args: any[]) => {
+        trackedOpsEvents.push(args);
+      },
+    });
+
+    const response = await POST(makeFreeformRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    });
+    const body = await response.text();
+    assert.match(body, /couldn't verify/i);
+    assert.doesNotMatch(body, /fabricated@nowhere\.com/);
+    assert.equal((auditEntries[0] as any)?.ragGrounded, false);
+    assert.equal((auditEntries[0] as any)?.ragGroundingMode, "overwrite");
+    assert.ok(
+      trackedOpsEvents.some((args) => args[1]?.error_code === "rag_grounding_failed")
+    );
+  } finally {
+    delete process.env.RAG_GROUNDING_MODE;
+  }
+});
+
+test("POST /api/ai/[orgId]/chat in RAG shadow mode audits but passes ungrounded content", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+  process.env.EMBEDDING_API_KEY = "embed-key";
+  process.env.RAG_GROUNDING_MODE = "shadow";
+  delete process.env.DISABLE_RAG_GROUNDING;
+  delete process.env.DISABLE_SAFETY_GATE;
+
+  try {
+    POST = createChatPostHandler({
+      createClient: async () => supabaseStub as any,
+      getAiOrgContext: async () => aiContext,
+      buildPromptContext: async (input: any) => ({
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      }),
+      createZaiClient: () => ({ client: "fake" } as any),
+      getZaiModel: () => "glm-5",
+      composeResponse: (async function* () {
+        yield { type: "chunk", content: "Paraphrased content that is not grounded." };
+      }) as any,
+      logAiRequest: async (_s: unknown, entry: unknown) => {
+        auditEntries.push(entry);
+      },
+      retrieveRelevantChunks: async () => [
+        {
+          contentText: "Announcement chunk",
+          sourceTable: "announcements",
+          similarity: 0.7,
+          metadata: {},
+        } as any,
+      ],
+      resolveOwnThread: async () => ({
+        ok: true,
+        thread: { id: "thread-1", user_id: ADMIN_USER.id, org_id: ORG_ID, surface: "general", title: "t" },
+      }),
+      verifyRagGrounding: async () => ({
+        grounded: false,
+        uncoveredClaims: ["Paraphrased content that is not grounded."],
+        topChunkExcerpt: "Announcement chunk",
+        latencyMs: 5,
+        usedJudge: false,
+      }),
+      classifySafety: async () => ({
+        verdict: "safe",
+        categories: [],
+        latencyMs: 1,
+        usedJudge: false,
+      }),
+      trackOpsEventServer: async (...args: any[]) => {
+        trackedOpsEvents.push(args);
+      },
+    });
+
+    const response = await POST(makeFreeformRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    });
+    const body = await response.text();
+    assert.match(body, /Paraphrased content/);
+    assert.equal((auditEntries[0] as any)?.ragGrounded, false);
+    assert.equal((auditEntries[0] as any)?.ragGroundingMode, "shadow");
+    assert.ok(
+      trackedOpsEvents.some((args) => args[1]?.error_code === "rag_grounding_shadow_ungrounded")
+    );
+  } finally {
+    delete process.env.RAG_GROUNDING_MODE;
+  }
+});
