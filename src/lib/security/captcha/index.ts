@@ -10,7 +10,7 @@ export type { CaptchaConfig, CaptchaProvider, CaptchaVerifyResult };
 
 function resolveProvider(override?: CaptchaProvider): CaptchaProvider {
     if (override) return override;
-    return process.env.CAPTCHA_PROVIDER === "turnstile" ? "turnstile" : "hcaptcha";
+    return process.env.CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
 }
 
 export function getCaptchaSiteKey(): string {

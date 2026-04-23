@@ -202,9 +202,35 @@ describe("Dispatcher (captcha provider routing)", () => {
     }
   });
 
-  it("routes to hCaptcha URL by default (no provider override)", async () => {
+  it("routes to Turnstile URL by default (no provider override)", async () => {
     process.env.NODE_ENV = "production";
     delete process.env.CAPTCHA_PROVIDER;
+    const originalFetch = globalThis.fetch;
+    let calledUrl: string | null = null;
+
+    try {
+      globalThis.fetch = async (url: string | URL | Request) => {
+        calledUrl = typeof url === "string" ? url : url.toString();
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      };
+
+      await verifyCaptcha("t", undefined, {
+        secretKey: "s",
+        skipInDevelopment: false,
+      });
+      assert.strictEqual(calledUrl, TURNSTILE_URL);
+    } finally {
+      globalThis.fetch = originalFetch;
+      resetEnv();
+    }
+  });
+
+  it("routes to hCaptcha when CAPTCHA_PROVIDER env is hcaptcha", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.CAPTCHA_PROVIDER = "hcaptcha";
     const originalFetch = globalThis.fetch;
     let calledUrl: string | null = null;
 

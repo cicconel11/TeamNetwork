@@ -5,7 +5,7 @@ import { HCaptcha, type HCaptchaRef } from "./HCaptcha";
 import { TurnstileWidget, type TurnstileWidgetRef } from "./TurnstileWidget";
 
 const ENV_PROVIDER =
-  process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "turnstile" ? "turnstile" : "hcaptcha";
+  process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
 
 export type CaptchaProvider = "hcaptcha" | "turnstile";
 

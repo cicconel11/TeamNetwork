@@ -55,7 +55,7 @@ These services process data automatically as part of normal platform operations:
 | **Stripe** | Payment processing | Names, emails, payment amounts | Service provision |
 | **Resend** | Email delivery | Email addresses, names, notification content | Service provision |
 | **Vercel** | Application hosting | All user data (in transit) | Service provision |
-| **hCaptcha** | Bot protection | IP address, browser fingerprint | Security/fraud prevention |
+| **Cloudflare Turnstile** | Bot protection | IP address, browser and device signals | Security/fraud prevention |
 
 ### 3.2 User-Initiated Services (Explicit Consent)
 
@@ -138,7 +138,7 @@ Data is protected by the following technical safeguards:
 - Input validation using Zod schemas
 - SSRF protection for external data imports
 - Open redirect protection
-- hCaptcha bot protection
+- Cloudflare Turnstile bot protection
 
 ---
 
