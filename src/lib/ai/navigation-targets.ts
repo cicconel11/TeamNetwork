@@ -249,7 +249,10 @@ export function searchNavigationTargets(input: {
     hasAlumniAccess: input.hasAlumniAccess,
     hasParentsAccess: input.hasParentsAccess,
   });
-  const matches = catalog
+  const createIntent = hasCreateIntent(query);
+  const DOMINANT_SCORE_GAP = 40;
+  const scored = catalog
+    .filter((target) => createIntent || target.kind !== "create")
     .map((target) => ({ target, score: scoreTarget(query, target) }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) => {
@@ -257,8 +260,13 @@ export function searchNavigationTargets(input: {
         return right.score - left.score;
       }
       return left.target.label.localeCompare(right.target.label);
-    })
-    .slice(0, Math.min(input.limit ?? 5, 10))
+    });
+  const topScore = scored[0]?.score ?? 0;
+  const hasDominantMatch =
+    scored.length > 1 && topScore - (scored[1]?.score ?? 0) >= DOMINANT_SCORE_GAP;
+  const effectiveLimit = hasDominantMatch ? 1 : Math.min(input.limit ?? 5, 10);
+  const matches = scored
+    .slice(0, effectiveLimit)
     .map(({ target }) => {
       const guidance = getActionGuidance({
         href: target.href,
