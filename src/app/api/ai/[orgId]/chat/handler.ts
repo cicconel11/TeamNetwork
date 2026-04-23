@@ -6024,10 +6024,17 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         }
 
         if (toolCallMade && toolResults.length > 0) {
-          if (pass1BufferedContent) {
+          const willRenderNavigationDeterministically =
+            toolResults.length === 1 &&
+            successfulToolResults.length === 1 &&
+            successfulToolResults[0]?.name === "find_navigation_targets";
+          if (pass1BufferedContent && !willRenderNavigationDeterministically) {
             pass1BufferedContent = await applySafetyGate(pass1BufferedContent);
             fullContent += pass1BufferedContent;
             enqueue({ type: "chunk", content: pass1BufferedContent });
+          }
+          if (willRenderNavigationDeterministically) {
+            pass1BufferedContent = "";
           }
           const canUseDeterministicMemberRoster =
             successfulToolResults.length === 1 &&
