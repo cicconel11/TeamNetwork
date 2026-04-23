@@ -24,7 +24,9 @@ import {
   buildPendingEventBatchFromDrafts,
   executeToolCall,
   getToolAuthorizationMode,
+  type ToolExecutionAuthorization,
 } from "@/lib/ai/tools/executor";
+import { filterAllowedTools } from "@/lib/ai/access-policy";
 import { resolveOwnThread, type AiThreadMetadata } from "@/lib/ai/thread-resolver";
 import {
   buildSemanticCacheKeyParts,
@@ -43,6 +45,17 @@ import {
   verifyToolBackedResponse,
   type SuccessfulToolSummary,
 } from "@/lib/ai/tool-grounding";
+import {
+  classifySafety,
+  SAFETY_FALLBACK_TEXT,
+  type SafetyVerdict,
+} from "@/lib/ai/safety-gate";
+import {
+  verifyRagGrounding,
+  buildRagGroundingFallback,
+  RAG_GROUNDING_ABSTAIN_TEXT,
+  type RagGroundingMode,
+} from "@/lib/ai/rag-grounding";
 import { trackOpsEventServer } from "@/lib/analytics/events-server";
 import {
   assessAiMessageSafety,
@@ -96,6 +109,8 @@ export interface ChatRouteDeps {
   executeToolCall?: typeof executeToolCall;
   buildTurnExecutionPolicy?: typeof buildTurnExecutionPolicy;
   verifyToolBackedResponse?: typeof verifyToolBackedResponse;
+  classifySafety?: typeof classifySafety;
+  verifyRagGrounding?: typeof verifyRagGrounding;
   trackOpsEventServer?: typeof trackOpsEventServer;
   getDraftSession?: typeof getDraftSession;
   saveDraftSession?: typeof saveDraftSession;
@@ -3996,6 +4011,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     deps.buildTurnExecutionPolicy ?? buildTurnExecutionPolicy;
   const verifyToolBackedResponseFn =
     deps.verifyToolBackedResponse ?? verifyToolBackedResponse;
+  const classifySafetyFn = deps.classifySafety ?? classifySafety;
+  const verifyRagGroundingFn = deps.verifyRagGrounding ?? verifyRagGrounding;
   const trackOpsEventServerFn = deps.trackOpsEventServer ?? trackOpsEventServer;
   const getDraftSessionFn = deps.getDraftSession ?? getDraftSession;
   const saveDraftSessionFn = deps.saveDraftSession ?? saveDraftSession;
@@ -4027,9 +4044,16 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     });
     if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
-    // 2. Auth — validate admin role
+    // 2. Auth — validate role (admins always allowed; members/alumni gated by
+    // AI_MEMBER_ACCESS_KILL env var inside getAiOrgContext)
     const ctx = await runTimedStage(stageTimings, "auth_org_context", async () =>
-      getAiOrgContextFn(orgId, user, rateLimit, { supabase, logContext: baseLogContext })
+      getAiOrgContextFn(
+        orgId,
+        user,
+        rateLimit,
+        { supabase, logContext: baseLogContext },
+        { allowedRoles: ["admin", "active_member", "alumni"] },
+      )
     );
     if (!ctx.ok) return ctx.response;
     const canUseDraftSessions =
@@ -4138,6 +4162,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           Boolean(ctx.enterpriseId),
           ctx.enterpriseRole,
         );
+        pass1Tools = filterAllowedTools(pass1Tools, {
+          role: ctx.role,
+          enterpriseRole: ctx.enterpriseRole,
+        });
       });
     } catch (err) {
       if (err instanceof ValidationError) {
@@ -4214,7 +4242,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 routing
               )
             ) {
-              pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(activeDraftSession.draft_type)]];
+              pass1Tools = filterAllowedTools(
+                [AI_TOOL_MAP[getToolNameForDraftType(activeDraftSession.draft_type)]],
+                {
+                  role: ctx.role,
+                  enterpriseRole: ctx.enterpriseRole,
+                },
+              );
             } else {
               try {
                 await clearDraftSessionFn(ctx.serviceSupabase, {
@@ -4285,7 +4319,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 )
               ) {
                 activeDraftSession = inferredDraftSession;
-                pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(inferredDraftSession.draft_type)]];
+                pass1Tools = filterAllowedTools(
+                  [AI_TOOL_MAP[getToolNameForDraftType(inferredDraftSession.draft_type)]],
+                  {
+                    role: ctx.role,
+                    enterpriseRole: ctx.enterpriseRole,
+                  },
+                );
               }
             }
           } catch (error) {
@@ -4931,6 +4971,136 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       let fullContent = "";
       let pass1BufferedContent = "";
       let pass2BufferedContent = "";
+      let safetyVerdict: SafetyVerdict | undefined;
+      let safetyCategories: string[] | undefined;
+      let safetyLatencyMs: number | undefined;
+      let ragGrounded: boolean | undefined;
+      let ragGroundingFailures: string[] | undefined;
+      let ragGroundingLatencyMs: number | undefined;
+      let ragGroundingAudited: RagGroundingMode | undefined;
+      const safetyGateDisabled = process.env.DISABLE_SAFETY_GATE === "1";
+      const safetyGateShadow = process.env.SAFETY_GATE_SHADOW === "1";
+      const ragGroundingDisabled = process.env.DISABLE_RAG_GROUNDING === "1";
+      const ragGroundingMode: RagGroundingMode =
+        (process.env.RAG_GROUNDING_MODE as RagGroundingMode) || "shadow";
+      const ragGroundingMinChunks = Number.parseInt(
+        process.env.RAG_GROUNDING_MIN_CHUNKS ?? "1",
+        10
+      );
+
+      const applySafetyGate = async (buffered: string): Promise<string> => {
+        if (safetyGateDisabled || !buffered) return buffered;
+        try {
+          const ownedEmails = new Set<string>();
+          const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+          for (const chunk of ragChunks) {
+            const text = chunk.contentText ?? "";
+            const matches = text.match(emailRegex) ?? [];
+            for (const m of matches) ownedEmails.add(m.toLowerCase());
+          }
+          // Tool-row emails are org-owned data visible to this user by policy.
+          // Emitting them back is not a leak.
+          try {
+            const serialized = JSON.stringify(successfulToolResults);
+            const matches = serialized.match(emailRegex) ?? [];
+            for (const m of matches) ownedEmails.add(m.toLowerCase());
+          } catch {
+            // Circular-ref tool data; skip.
+          }
+          const result = await classifySafetyFn({
+            content: buffered,
+            orgContext: { ownedEmails },
+          });
+          safetyVerdict = result.verdict;
+          safetyCategories = result.categories;
+          safetyLatencyMs = result.latencyMs;
+
+          if (result.verdict === "unsafe") {
+            void trackOpsEventServerFn(
+              "api_error",
+              {
+                endpoint_group: safetyGateShadow
+                  ? "ai-safety-gate-shadow"
+                  : "ai-safety-gate",
+                http_status: 200,
+                error_code: safetyGateShadow
+                  ? "safety_gate_shadow_unsafe"
+                  : "safety_gate_blocked",
+                retryable: false,
+              },
+              ctx.orgId
+            );
+            if (!safetyGateShadow) {
+              return SAFETY_FALLBACK_TEXT;
+            }
+          }
+          return buffered;
+        } catch (err) {
+          aiLog("warn", "ai-safety-gate", "classify failed", {
+            ...requestLogContext,
+            threadId: threadId!,
+          }, { error: err });
+          return buffered;
+        }
+      };
+
+      const applyRagGrounding = async (buffered: string): Promise<string> => {
+        if (
+          ragGroundingDisabled ||
+          !buffered ||
+          ragChunks.length < ragGroundingMinChunks
+        ) {
+          return buffered;
+        }
+        try {
+          const result = await verifyRagGroundingFn({
+            content: buffered,
+            ragChunks,
+          });
+          ragGrounded = result.grounded;
+          ragGroundingFailures = result.uncoveredClaims;
+          ragGroundingLatencyMs = result.latencyMs;
+          ragGroundingAudited = ragGroundingMode;
+
+          if (result.grounded) return buffered;
+
+          void trackOpsEventServerFn(
+            "api_error",
+            {
+              endpoint_group:
+                ragGroundingMode === "shadow"
+                  ? "ai-rag-grounding-shadow"
+                  : "ai-rag-grounding",
+              http_status: 200,
+              error_code:
+                ragGroundingMode === "shadow"
+                  ? "rag_grounding_shadow_ungrounded"
+                  : "rag_grounding_failed",
+              retryable: false,
+            },
+            ctx.orgId
+          );
+
+          if (ragGroundingMode === "overwrite") {
+            return buildRagGroundingFallback(
+              result.uncoveredClaims,
+              ragChunks[0] ?? null
+            );
+          }
+          if (ragGroundingMode === "block") {
+            return RAG_GROUNDING_ABSTAIN_TEXT;
+          }
+          // shadow | bypass: passthrough
+          return buffered;
+        } catch (err) {
+          aiLog("warn", "ai-rag-grounding", "verify failed", {
+            ...requestLogContext,
+            threadId: threadId!,
+          }, { error: err });
+          return buffered;
+        }
+      };
+
       const usageRef: { current: UsageAccumulator | null } = { current: null };
       let streamCompletedSuccessfully = false;
       let auditErrorMessage: string | undefined;
@@ -4941,10 +5111,17 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       let toolPassBreakerOpen = false;
       const auditToolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
       const successfulToolResults: SuccessfulToolSummary[] = [];
-      const toolAuthorization = {
-        kind: "preverified_admin" as const,
-        source: "ai_org_context" as const,
-      };
+      const toolAuthorization: ToolExecutionAuthorization =
+        ctx.role === "admin"
+          ? {
+              kind: "preverified_admin",
+              source: "ai_org_context",
+            }
+          : {
+              kind: "preverified_role",
+              source: "ai_org_context",
+              role: ctx.role,
+            };
       const toolAuthMode = getToolAuthorizationMode(toolAuthorization);
       const recordUsage = (usage: UsageAccumulator) => {
         usageRef.current = {
@@ -5170,6 +5347,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   userId: ctx.userId,
                   enterpriseId: ctx.enterpriseId,
                   enterpriseRole: ctx.enterpriseRole,
+                  supabase: ctx.supabase,
                   serviceSupabase: ctx.serviceSupabase,
                   authorization: toolAuthorization,
                   threadId,
@@ -5428,12 +5606,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           },
           async (event) => {
             if (event.type === "chunk") {
-              if (pass1Tools) {
-                pass1BufferedContent += event.content;
-              } else {
-                fullContent += event.content;
-                enqueue(event);
-              }
+              // Buffer pass-1 text until validators run. Freeform (no-tool)
+              // path used to stream token-by-token; now buffered so RAG
+              // grounding + safety gate can inspect before release.
+              pass1BufferedContent += event.content;
               return "continue";
             }
 
@@ -5570,6 +5746,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   userId: ctx.userId,
                   enterpriseId: ctx.enterpriseId,
                   enterpriseRole: ctx.enterpriseRole,
+                  supabase: ctx.supabase,
                   serviceSupabase: ctx.serviceSupabase,
                   authorization: toolAuthorization,
                   threadId,
@@ -5766,7 +5943,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           skipStage(stageTimings, "tools");
         }
 
-        if (!toolCallMade && pass1Tools && pass1BufferedContent) {
+        if (!toolCallMade && pass1BufferedContent) {
+          pass1BufferedContent = await applyRagGrounding(pass1BufferedContent);
+          pass1BufferedContent = await applySafetyGate(pass1BufferedContent);
           fullContent += pass1BufferedContent;
           enqueue({ type: "chunk", content: pass1BufferedContent });
         }
@@ -5940,6 +6119,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           }
 
           if (pass2BufferedContent) {
+            // Tool-backed pass-2: tool-grounding already ran. Still gate output
+            // for safety (PII / toxicity) before release.
+            pass2BufferedContent = await applySafetyGate(pass2BufferedContent);
             fullContent += pass2BufferedContent;
             enqueue({ type: "chunk", content: pass2BufferedContent });
           }
@@ -6109,6 +6291,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           ragChunkCount: ragChunkCount > 0 ? ragChunkCount : undefined,
           ragTopSimilarity,
           ragError,
+          safetyVerdict,
+          safetyCategories,
+          safetyLatencyMs,
+          ragGrounded,
+          ragGroundingFailures,
+          ragGroundingLatencyMs,
+          ragGroundingMode: ragGroundingAudited,
           stageTimings: finalizeStageTimings(
             stageTimings,
             requestOutcome,
