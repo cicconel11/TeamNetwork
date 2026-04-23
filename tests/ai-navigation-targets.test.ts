@@ -54,6 +54,32 @@ test("searchNavigationTargets excludes nav items hidden for the current org stat
   assert.equal(result.state, "not_found");
 });
 
+test("searchNavigationTargets drops create targets when query lacks create intent", () => {
+  const result = searchNavigationTargets({
+    query: "where is the jobs page",
+    orgSlug: "acme",
+    role: "admin",
+  });
+
+  assert.equal(result.state, "resolved");
+  assert.ok(
+    result.matches.every((match) => match.kind !== "create"),
+    "no create-kind target should be returned without create intent"
+  );
+});
+
+test("searchNavigationTargets returns only the dominant match when score gap is large", () => {
+  const result = searchNavigationTargets({
+    query: "open members",
+    orgSlug: "acme",
+    role: "admin",
+  });
+
+  assert.equal(result.state, "resolved");
+  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches[0]?.href, "/acme/members");
+});
+
 test("searchNavigationTargets excludes nav items hidden by nav config", () => {
   const result = searchNavigationTargets({
     query: "open announcements",
