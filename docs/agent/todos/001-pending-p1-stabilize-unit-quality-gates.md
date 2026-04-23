@@ -15,7 +15,7 @@ dependencies: []
 ## Findings
 
 - The unit run failed during this session after the new AI safety and handler tests passed.
-- One failure path is network-dependent captcha verification against `api.hcaptcha.com`, which is not reliable in the current sandboxed environment.
+- One failure path was historically network-dependent captcha verification against provider APIs, which is not reliable in the current sandboxed environment.
 - Additional unrelated failures came from pre-existing suites such as dashboard source assertions, form admin rework assertions, Google OAuth property tests, parent invite migration regressions, parent CRUD validation, and schedule sync tests.
 
 ## Proposed Solutions
