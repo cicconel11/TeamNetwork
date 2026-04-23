@@ -1894,23 +1894,30 @@ function formatNavigationTargetsResponse(data: unknown): string | null {
     return null;
   }
 
-  const lines = [`Best matches for "${query}"`];
+  const escapeLabel = (label: string) => label.replace(/_/g, "\\_");
+
+  const blocks: string[] = [];
+  if (matches.length > 1) {
+    blocks.push(`Best matches for "${query}":`);
+  }
   for (const match of matches) {
-    lines.push(`- [${match.label}](${match.href})${match.kind ? ` - ${match.kind}` : ""}`);
-    if (match.description) {
-      lines.push(`  ${match.description}`);
-    }
+    const header =
+      matches.length === 1
+        ? `[${escapeLabel(match.label)}](${match.href})`
+        : `- [${escapeLabel(match.label)}](${match.href})`;
+    const lines: string[] = [header];
     const manualStep = match.manualSteps[0];
     if (manualStep) {
-      lines.push(`  Next: ${manualStep}`);
+      lines.push(`Next: ${manualStep}`);
     }
     const assistantHelp = match.assistantCanHelpWith[0];
     if (assistantHelp) {
-      lines.push(`  I can help: ${assistantHelp}`);
+      lines.push(`I can help: ${assistantHelp}`);
     }
+    blocks.push(lines.join("  \n"));
   }
 
-  return lines.join("\n");
+  return blocks.join("\n\n");
 }
 
 function getPass1Tools(
