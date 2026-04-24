@@ -148,6 +148,7 @@ test("no active id -> straight create, never reads existing rows", async () => {
 
   assert.equal(result.revised, false);
   assert.equal(inserted.insertCount, 1);
+  assert.ok(result.record, "expected created record");
   assert.equal(result.record.payload, v1);
 });
 
@@ -173,7 +174,7 @@ test("active id + matching action_type -> revise in place, no insert", async () 
   }
 });
 
-test("active id but mismatched action_type -> falls through to create", async () => {
+test("active id but mismatched action_type -> returns failure, no insert", async () => {
   const rows = [makeRow({ payload: v1, action_type: "create_event" })];
   const inserted: Inserted = { payload: {}, insertCount: 0 };
   const supabase = createSupabase(rows, inserted);
@@ -186,13 +187,18 @@ test("active id but mismatched action_type -> falls through to create", async ()
   });
 
   assert.equal(result.revised, false);
-  assert.equal(inserted.insertCount, 1);
+  assert.equal("failed" in result && result.failed, true);
+  if ("failed" in result) {
+    assert.equal(result.reason, "action_type_mismatch");
+    assert.equal(result.record, null);
+  }
+  assert.equal(inserted.insertCount, 0);
   // Original row untouched
   assert.equal(rows[0].revise_count, 0);
   assert.deepEqual(rows[0].payload, v1);
 });
 
-test("active id at revise_limit -> falls through to create", async () => {
+test("active id at revise_limit -> returns failure, no insert", async () => {
   const rows = [makeRow({ payload: v1, revise_count: AI_PENDING_ACTION_MAX_REVISES })];
   const inserted: Inserted = { payload: {}, insertCount: 0 };
   const supabase = createSupabase(rows, inserted);
@@ -204,11 +210,15 @@ test("active id at revise_limit -> falls through to create", async () => {
   });
 
   assert.equal(result.revised, false);
-  assert.equal(inserted.insertCount, 1);
+  assert.equal("failed" in result && result.failed, true);
+  if ("failed" in result) {
+    assert.equal(result.reason, "revise_limit");
+  }
+  assert.equal(inserted.insertCount, 0);
   assert.equal(rows[0].revise_count, AI_PENDING_ACTION_MAX_REVISES);
 });
 
-test("active id but row missing -> falls through to create", async () => {
+test("active id but row missing -> returns failure, no insert", async () => {
   const inserted: Inserted = { payload: {}, insertCount: 0 };
   const supabase = createSupabase([], inserted);
 
@@ -219,10 +229,14 @@ test("active id but row missing -> falls through to create", async () => {
   });
 
   assert.equal(result.revised, false);
-  assert.equal(inserted.insertCount, 1);
+  assert.equal("failed" in result && result.failed, true);
+  if ("failed" in result) {
+    assert.equal(result.reason, "not_found");
+  }
+  assert.equal(inserted.insertCount, 0);
 });
 
-test("active id but row no longer pending -> falls through to create", async () => {
+test("active id but row no longer pending -> returns failure, no insert", async () => {
   const rows = [makeRow({ payload: v1, status: "executed" })];
   const inserted: Inserted = { payload: {}, insertCount: 0 };
   const supabase = createSupabase(rows, inserted);
@@ -234,7 +248,11 @@ test("active id but row no longer pending -> falls through to create", async () 
   });
 
   assert.equal(result.revised, false);
-  assert.equal(inserted.insertCount, 1);
+  assert.equal("failed" in result && result.failed, true);
+  if ("failed" in result) {
+    assert.equal(result.reason, "not_pending");
+  }
+  assert.equal(inserted.insertCount, 0);
 });
 
 test("create path forwards previousPayload (edit-source snapshot)", async () => {
@@ -250,5 +268,27 @@ test("create path forwards previousPayload (edit-source snapshot)", async () => 
 
   assert.equal(result.revised, false);
   assert.deepEqual(inserted.payload.previous_payload, editSource);
+  assert.ok(result.record, "expected created record");
   assert.deepEqual(result.record.previous_payload, editSource);
+});
+
+test("active id at revise_limit -> failure on next call (no cap reset)", async () => {
+  // Regression for Bug A: previously, hitting the cap silently fell through
+  // to createPendingAction, minting a fresh row with revise_count = 0 and
+  // defeating the 3-loop limit. Now must return a failure.
+  const rows = [makeRow({ payload: v1, revise_count: AI_PENDING_ACTION_MAX_REVISES })];
+  const inserted: Inserted = { payload: {}, insertCount: 0 };
+  const supabase = createSupabase(rows, inserted);
+
+  const result = await createOrRevisePendingAction(supabase as any, {
+    ...baseInput,
+    payload: v2,
+    activeActionId: "action-1",
+  });
+
+  assert.equal(inserted.insertCount, 0, "must not insert a fresh row");
+  assert.equal("failed" in result && result.failed, true);
+  if ("failed" in result) {
+    assert.equal(result.reason, "revise_limit");
+  }
 });

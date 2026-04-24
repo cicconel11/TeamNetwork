@@ -1131,7 +1131,11 @@ test("prepare_announcement revises in place when ctx carries an active pending a
   assert.equal(queryLog.filter((q) => q === "insert").length, 0);
 });
 
-test("prepare_announcement falls through to create when active pending action's type does not match", async () => {
+test("prepare_announcement returns tool_error when active pending action's type does not match", async () => {
+  // Bug A regression: previously a type mismatch silently fell through to
+  // createPendingAction, minting a fresh row and effectively resetting the
+  // revise cap. Must now surface a tool_error so the user is told the
+  // existing draft must be confirmed/cancelled first.
   const existingRow = {
     id: "pending-event-existing",
     organization_id: ORG_ID,
@@ -1151,42 +1155,12 @@ test("prepare_announcement falls through to create when active pending action's 
     result_entity_id: null,
   };
 
-  // ai_pending_actions: first call (pre-CAS lookup) returns the mismatched
-  // row. The createPendingAction insert path uses .single() and is served
-  // by overrides.ai_pending_actions.single below.
   const mismatchStub = createToolSupabaseStub({
     organizations: {
       maybeSingle: { data: { slug: "upenn-sprint-football" }, error: null },
     },
     ai_pending_actions: {
       maybeSingle: { data: existingRow, error: null },
-      single: {
-        data: {
-          id: "pending-announcement-fresh",
-          organization_id: ORG_ID,
-          user_id: USER_ID,
-          thread_id: "thread-mismatch",
-          action_type: "create_announcement",
-          payload: {
-            title: "Practice moved",
-            body: "6pm Weight Room B",
-            audience: "all",
-            is_pinned: false,
-            send_notification: false,
-            orgSlug: "upenn-sprint-football",
-          },
-          previous_payload: null,
-          revise_count: 0,
-          status: "pending",
-          expires_at: "2099-01-01T00:00:00.000Z",
-          created_at: "2026-01-01T00:00:00.000Z",
-          updated_at: "2026-01-01T00:00:00.000Z",
-          executed_at: null,
-          result_entity_type: null,
-          result_entity_id: null,
-        },
-        error: null,
-      },
     },
   });
 
@@ -1196,22 +1170,19 @@ test("prepare_announcement falls through to create when active pending action's 
     activePendingActionId: existingRow.id,
   };
 
-  const result = expectOk(
-    await executeToolCall(mismatchCtx, {
-      name: "prepare_announcement",
-      args: {
-        title: "Practice moved",
-        body: "6pm Weight Room B",
-        audience: "all",
-      },
-    })
-  );
+  const result = await executeToolCall(mismatchCtx, {
+    name: "prepare_announcement",
+    args: {
+      title: "Practice moved",
+      body: "6pm Weight Room B",
+      audience: "all",
+    },
+  });
 
-  const data = result.data as {
-    pending_action: { id: string; revise_count?: number };
-  };
-  assert.equal(data.pending_action.id, "pending-announcement-fresh");
-  assert.equal(data.pending_action.revise_count, undefined);
+  assert.equal(result.kind, "tool_error");
+  if (result.kind === "tool_error") {
+    assert.equal(result.code, "pending_action_not_pending");
+  }
 
   const insertQueries = mismatchStub.queries.filter(
     (q) => q.table === "ai_pending_actions" && q.method === "insert"
@@ -1219,7 +1190,7 @@ test("prepare_announcement falls through to create when active pending action's 
   const updateQueries = mismatchStub.queries.filter(
     (q) => q.table === "ai_pending_actions" && q.method === "update"
   );
-  assert.equal(insertQueries.length, 1, "fresh insert on type mismatch");
+  assert.equal(insertQueries.length, 0, "must not insert fresh row on type mismatch");
   assert.equal(updateQueries.length, 0, "no CAS attempted on type mismatch");
 });
 
