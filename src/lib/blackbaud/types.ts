@@ -95,4 +95,7 @@ export interface SyncResult {
   unchanged: number;
   skipped: number;
   error?: string;
+  warning?: string;
+  partial?: boolean;
+  skippedReasons?: Record<string, number>;
 }

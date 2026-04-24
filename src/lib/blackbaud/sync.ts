@@ -38,6 +38,25 @@ class BlackbaudSyncFailure extends Error {
   }
 }
 
+function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
+  if (!value?.trim()) return fallback;
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getDevSyncControls() {
+  if (process.env.NODE_ENV === "production") {
+    return { limit: 500, maxPages: Infinity, skipEmails: false };
+  }
+
+  return {
+    limit: Math.min(500, parsePositiveIntegerEnv(process.env.BLACKBAUD_DEV_PAGE_SIZE, 500)),
+    maxPages: parsePositiveIntegerEnv(process.env.BLACKBAUD_DEV_MAX_PAGES, Infinity),
+    skipEmails: process.env.BLACKBAUD_DEV_SKIP_EMAILS === "true",
+  };
+}
+
 /**
  * Runs a full sync cycle: paginated fetch → normalize → upsert.
  * Creates a sync log entry and updates integration state.
@@ -117,8 +136,9 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     syncLogId = syncLog?.id ?? null;
   }
 
-  const totals: SyncResult = { ok: true, created: 0, updated: 0, unchanged: 0, skipped: 0 };
+  const totals: SyncResult = { ok: true, created: 0, updated: 0, unchanged: 0, skipped: 0, skippedReasons: {} };
   const syncStartedAt = new Date().toISOString();
+  let partialDueToDevCap = false;
 
   try {
     const health = await checkBlackbaudHealth(client);
@@ -133,8 +153,9 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     }
 
     let offset = 0;
-    const limit = 500;
+    const { limit, maxPages, skipEmails } = getDevSyncControls();
     let hasMore = true;
+    let pagesFetched = 0;
 
     while (hasMore) {
       const params: Record<string, string> = {
@@ -166,20 +187,22 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       for (const constituent of constituents) {
         try {
           let emails: BlackbaudEmail[] = [];
-          try {
-            const emailsRes = await client.getList<BlackbaudEmail>(
-              `/constituent/v1/constituents/${constituent.id}/emailaddresses`
-            );
-            emails = emailsRes.value;
-            await new Promise((resolve) => setTimeout(resolve, 50));
-          } catch (err) {
-            if (err instanceof BlackbaudApiError && err.isQuotaExhausted) {
-              throw err;
+          if (!skipEmails) {
+            try {
+              const emailsRes = await client.getList<BlackbaudEmail>(
+                `/constituent/v1/constituents/${constituent.id}/emailaddresses`
+              );
+              emails = emailsRes.value;
+              await new Promise((resolve) => setTimeout(resolve, 50));
+            } catch (err) {
+              if (err instanceof BlackbaudApiError && err.isQuotaExhausted) {
+                throw err;
+              }
+              debugLog("blackbaud-sync", "email fetch error", {
+                constituentId: constituent.id,
+                error: err instanceof Error ? err.message : String(err),
+              });
             }
-            debugLog("blackbaud-sync", "email fetch error", {
-              constituentId: constituent.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
           }
 
           normalized.push(normalizeConstituent(constituent, emails, [], []));
@@ -215,9 +238,19 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       totals.updated += batchResult.updated;
       totals.unchanged += batchResult.unchanged;
       totals.skipped += batchResult.skipped;
+      for (const [reason, count] of Object.entries(batchResult.skippedReasons ?? {})) {
+        totals.skippedReasons![reason] = (totals.skippedReasons![reason] ?? 0) + count;
+      }
 
       offset += limit;
-      hasMore = constituents.length === limit;
+      pagesFetched += 1;
+      partialDueToDevCap = constituents.length === limit && pagesFetched >= maxPages;
+      hasMore = constituents.length === limit && !partialDueToDevCap;
+    }
+
+    if (partialDueToDevCap) {
+      totals.partial = true;
+      totals.warning = "Blackbaud sync stopped early because BLACKBAUD_DEV_MAX_PAGES is set. last_synced_at was not advanced.";
     }
 
     if (syncLogId) {
@@ -237,7 +270,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     await supabase
       .from("org_integrations")
       .update({
-        last_synced_at: syncStartedAt,
+        ...(partialDueToDevCap ? {} : { last_synced_at: syncStartedAt }),
         last_sync_count: totals.created + totals.updated,
         last_sync_error: null,
         updated_at: new Date().toISOString(),
