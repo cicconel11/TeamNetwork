@@ -649,6 +649,10 @@ export function shouldContinueDraftSession(
   const isDiscussionPrompt = CREATE_DISCUSSION_PROMPT_PATTERN.test(message);
   const isEventPrompt = EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN.test(message);
 
+  if (draftSession.draft_type === "send_chat_message" && isGroupMessagePrompt) {
+    return false;
+  }
+
   if (draftSession.draft_type === "create_announcement" && isAnnouncementPrompt) {
     return true;
   }

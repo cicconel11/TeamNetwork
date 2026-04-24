@@ -28,7 +28,9 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/message-safety.ts` | Transport-noise cleanup, prompt-injection assessment, history sanitization | `assessAiMessageSafety`, `sanitizeHistoryMessageForPrompt` |
 | `src/lib/ai/turn-execution-policy.ts` | Internal execution-policy builder | `buildTurnExecutionPolicy` |
 | `src/lib/ai/tool-grounding.ts` | Deterministic verifier for current read-tool summaries, including connection-template validation against `suggest_connections` payload states, names, order, and reasons | `verifyToolBackedResponse` |
-| `src/lib/ai/tools/executor.ts` | Read-tool executor with executor-side active-admin recheck and discriminated result union | `executeToolCall`, `ToolExecutionResult`, `ToolExecutionContext` |
+| `src/lib/ai/tools/executor.ts` | Tool executor with access policy, legacy switch dispatch, and registered-module dispatch for migrated read tools | `executeToolCall`, `ToolExecutionResult`, `ToolExecutionContext` |
+| `src/lib/ai/tools/registry/` | Tool-module registry for migrated read tools; modules own their Zod argument schemas and execution | `dispatchToolModule`, `getToolModule` |
+| `src/lib/ai/tools/shared.ts` | Shared tool-query and formatting primitives used by executor and registry modules without importing across the registry boundary | `safeToolQuery`, `truncateBody`, `buildMemberName` |
 | `src/lib/ai/schedule-upload-path.ts` | Shared path-ownership validator with traversal prevention for schedule uploads | `isOwnedScheduleUploadPath` |
 | `src/lib/ai/schedule-extraction.ts` | LLM-based schedule extraction from text/PDF/image with Zod validation and retry | `extractScheduleFromText`, `extractScheduleFromImage` |
 | `src/lib/falkordb/suggestions.ts` | `suggest_connections` implementation: unified person projection, server-side person-query resolution, chat-ready payload normalization, SQL fallback parity, graph freshness metadata | `suggestConnections` |
