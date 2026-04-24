@@ -83,7 +83,6 @@ import {
   type DraftSessionType,
 } from "@/lib/ai/draft-sessions";
 import {
-  getPendingAction,
   updatePendingActionStatus,
   type PendingActionRecord,
 } from "@/lib/ai/pending-actions";
@@ -369,7 +368,6 @@ interface PendingActionToolPayload {
       title?: unknown;
       description?: unknown;
     } | null;
-    was_revised?: unknown;
     revise_count?: unknown;
     previous_payload?: unknown;
   } | null;
@@ -2242,7 +2240,6 @@ function getPendingActionFromToolData(data: unknown) {
     return null;
   }
 
-  const wasRevised = pending.was_revised === true;
   const reviseCount =
     typeof pending.revise_count === "number" ? pending.revise_count : null;
   const previousPayload =
@@ -2259,7 +2256,6 @@ function getPendingActionFromToolData(data: unknown) {
       description: pending.summary.description,
     },
     payload: pending.payload as Record<string, unknown>,
-    wasRevised,
     reviseCount,
     previousPayload,
   };
@@ -5836,32 +5832,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             } else {
               enqueue({ type: "tool_status", toolName: toolEvent.name, status: "calling" });
 
-              // Inline revise: when an active draft session has a pending
-              // action id, hand the executor the id + current revise_count so
-              // the prepare_* helper can swap payload in place instead of
-              // creating a new pending row each loop.
-              let activePendingActionId: string | null = null;
-              let activePendingActionReviseCount: number | null = null;
-              if (activeDraftSession?.pending_action_id) {
-                try {
-                  const activeRow = await getPendingAction(
-                    ctx.serviceSupabase as never,
-                    activeDraftSession.pending_action_id
-                  );
-                  if (activeRow && activeRow.status === "pending") {
-                    activePendingActionId = activeRow.id;
-                    activePendingActionReviseCount = activeRow.revise_count;
-                  }
-                } catch (error) {
-                  aiLog(
-                    "warn",
-                    "ai-chat",
-                    "failed to load active pending action for revise; falling back to create",
-                    { ...requestLogContext, threadId: threadId! },
-                    { error, pendingActionId: activeDraftSession.pending_action_id }
-                  );
-                }
-              }
+              const activePendingActionId =
+                toolEvent.name.startsWith("prepare_") &&
+                activeDraftSession?.pending_action_id
+                  ? activeDraftSession.pending_action_id
+                  : null;
 
               result = await executeToolCallFn(
                 {
@@ -5876,7 +5851,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   requestId,
                   attachment,
                   activePendingActionId,
-                  activePendingActionReviseCount,
                 },
                 { name: toolEvent.name, args: parsedArgs }
               );
@@ -5974,7 +5948,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 });
                 const pendingAction = getPendingActionFromToolData(result.data);
                 if (pendingAction) {
-                  if (pendingAction.wasRevised && pendingAction.reviseCount !== null) {
+                  if (pendingAction.reviseCount !== null) {
                     enqueue({
                       type: "pending_action_updated",
                       actionId: pendingAction.actionId,

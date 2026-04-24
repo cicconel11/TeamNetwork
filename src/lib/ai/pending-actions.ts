@@ -316,15 +316,10 @@ export type CreateOrReviseResult =
     };
 
 /**
- * Branches between create-new-row and update-in-place revise.
- *
- * When the caller has an active pending action on the thread (passed as
- * activeActionId + activeReviseCount), attempt a CAS revise. The current row
- * payload becomes previous_payload (revise lineage). On revise_limit /
- * not_pending / not_found / conflict, fall back to create-new-row so the user
- * still gets a draft.
- *
- * The 3-loop cap (AI_PENDING_ACTION_MAX_REVISES) lives in the CAS itself.
+ * Revises in place when an active pending row matches the caller's action_type
+ * and is still under the 3-loop cap; otherwise creates a new row. Falls back
+ * to create on any CAS guard miss (revise_limit / not_pending / not_found /
+ * conflict) so the user always gets a draft.
  */
 export async function createOrRevisePendingAction(
   supabase: PendingActionSupabase,
@@ -336,27 +331,22 @@ export async function createOrRevisePendingAction(
     payload: PendingActionPayload;
     previousPayload?: PendingActionPayload | null;
     activeActionId?: string | null;
-    activeReviseCount?: number | null;
   }
 ): Promise<CreateOrReviseResult> {
-  if (
-    input.activeActionId &&
-    typeof input.activeReviseCount === "number"
-  ) {
+  if (input.activeActionId) {
     const existing = await getPendingAction(supabase, input.activeActionId);
 
     if (
       existing &&
       existing.status === "pending" &&
       existing.action_type === input.actionType &&
-      existing.revise_count === input.activeReviseCount &&
       existing.revise_count < AI_PENDING_ACTION_MAX_REVISES
     ) {
       const previousPayload = existing.payload;
       const result = await updatePendingActionPayload(supabase, input.activeActionId, {
         newPayload: input.payload,
         previousPayload,
-        expectedReviseCount: input.activeReviseCount,
+        expectedReviseCount: existing.revise_count,
       });
 
       if (result.updated) {
@@ -367,7 +357,6 @@ export async function createOrRevisePendingAction(
           previousPayload,
         };
       }
-      // Fall through to create on revise_limit / not_pending / not_found / conflict.
     }
   }
 
