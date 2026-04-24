@@ -111,9 +111,28 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
         entry.method = "insert";
         return builder;
       },
+      update(patch: Record<string, unknown>) {
+        entry.method = "update";
+        (entry as any).patch = patch;
+        return builder;
+      },
       select(columns: string, opts?: any) {
-        entry.method = opts?.head ? "count" : "select";
+        // Preserve insert/update method markers so the chained .select() call
+        // does not silently re-classify the entry as a plain read.
+        if (entry.method !== "update" && entry.method !== "insert") {
+          entry.method = opts?.head ? "count" : "select";
+        }
         entry.columns = columns;
+        if (entry.method === "update") {
+          const tableOverrides = overrides[table]?.update;
+          const matchedIds = Array.isArray(tableOverrides?.matchedIds)
+            ? tableOverrides.matchedIds
+            : [];
+          return Promise.resolve({
+            data: matchedIds.map((id: string) => ({ id })),
+            error: null,
+          });
+        }
         return builder;
       },
       eq(col: string, val: unknown) {
@@ -968,6 +987,244 @@ test("prepare_announcement creates a pending confirmation action when complete",
       },
     },
   });
+});
+
+test("prepare_announcement revises in place when ctx carries an active pending action", async () => {
+  // Mutable shared state keyed by call sequence on ai_pending_actions:
+  //   call 1 (maybeSingle) = pre-CAS lookup, returns row at revise_count=0
+  //   call 2 (update + select) = CAS, mutates state to revise_count=1
+  //   call 3 (maybeSingle) = post-CAS row re-read, returns row at revise_count=1
+  const existingRow = {
+    id: "pending-announcement-existing",
+    organization_id: ORG_ID,
+    user_id: USER_ID,
+    thread_id: "thread-revise",
+    action_type: "create_announcement",
+    payload: {
+      title: "Old title",
+      body: "Old body",
+      audience: "all",
+      is_pinned: false,
+      send_notification: false,
+      orgSlug: "upenn-sprint-football",
+    },
+    previous_payload: null,
+    revise_count: 0,
+    status: "pending",
+    expires_at: "2099-01-01T00:00:00.000Z",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    executed_at: null,
+    error_message: null,
+    result_entity_type: null,
+    result_entity_id: null,
+  };
+
+  let row = { ...existingRow };
+  const queryLog: string[] = [];
+
+  const reviseSb = {
+    from(table: string) {
+      if (table === "organizations") {
+        return {
+          select() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          maybeSingle() {
+            return Promise.resolve({ data: { slug: "upenn-sprint-football" }, error: null });
+          },
+        } as any;
+      }
+
+      if (table === "ai_pending_actions") {
+        return {
+          select() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          maybeSingle() {
+            queryLog.push("read");
+            return Promise.resolve({ data: { ...row }, error: null });
+          },
+          update(patch: Record<string, unknown>) {
+            queryLog.push("update");
+            const chain: any = {
+              eq() {
+                return chain;
+              },
+              async select() {
+                row = { ...row, ...patch } as typeof row;
+                return { data: [{ id: row.id }], error: null };
+              },
+            };
+            return chain;
+          },
+          insert() {
+            queryLog.push("insert");
+            return {
+              select() {
+                return {
+                  single() {
+                    return Promise.resolve({ data: null, error: { message: "should not insert" } });
+                  },
+                };
+              },
+            };
+          },
+        } as any;
+      }
+
+      // Unknown tables reach here in real execution but prepare_announcement
+      // touches only the two above + (none on the happy path).
+      return {
+        select() {
+          return this;
+        },
+        eq() {
+          return this;
+        },
+        maybeSingle() {
+          return Promise.resolve({ data: null, error: null });
+        },
+      } as any;
+    },
+  };
+
+  const reviseCtx: ToolExecutionContext = {
+    ...makeCtx(reviseSb as any, { kind: "preverified_admin", source: "ai_org_context" }),
+    threadId: "thread-revise",
+    activePendingActionId: existingRow.id,
+    activePendingActionReviseCount: 0,
+  };
+
+  const result = expectOk(
+    await executeToolCall(reviseCtx, {
+      name: "prepare_announcement",
+      args: {
+        title: "New title",
+        body: "New body",
+        audience: "all",
+        is_pinned: true,
+        send_notification: true,
+      },
+    })
+  );
+
+  const data = result.data as {
+    state: string;
+    pending_action: {
+      id: string;
+      was_revised?: boolean;
+      revise_count?: number;
+    };
+  };
+  assert.equal(data.state, "needs_confirmation");
+  assert.equal(data.pending_action.id, existingRow.id);
+  assert.equal(data.pending_action.was_revised, true);
+  assert.equal(data.pending_action.revise_count, 1);
+
+  assert.equal(row.revise_count, 1);
+  assert.deepEqual(row.previous_payload, existingRow.payload);
+  assert.equal(queryLog.filter((q) => q === "update").length, 1);
+  assert.equal(queryLog.filter((q) => q === "insert").length, 0);
+});
+
+test("prepare_announcement falls through to create when active pending action's type does not match", async () => {
+  const existingRow = {
+    id: "pending-event-existing",
+    organization_id: ORG_ID,
+    user_id: USER_ID,
+    thread_id: "thread-mismatch",
+    action_type: "create_event",
+    payload: { title: "An event", body: "x" },
+    previous_payload: null,
+    revise_count: 0,
+    status: "pending",
+    expires_at: "2099-01-01T00:00:00.000Z",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    executed_at: null,
+    error_message: null,
+    result_entity_type: null,
+    result_entity_id: null,
+  };
+
+  // ai_pending_actions: first call (pre-CAS lookup) returns the mismatched
+  // row. The createPendingAction insert path uses .single() and is served
+  // by overrides.ai_pending_actions.single below.
+  const mismatchStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: { data: { slug: "upenn-sprint-football" }, error: null },
+    },
+    ai_pending_actions: {
+      maybeSingle: { data: existingRow, error: null },
+      single: {
+        data: {
+          id: "pending-announcement-fresh",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "thread-mismatch",
+          action_type: "create_announcement",
+          payload: {
+            title: "Practice moved",
+            body: "6pm Weight Room B",
+            audience: "all",
+            is_pinned: false,
+            send_notification: false,
+            orgSlug: "upenn-sprint-football",
+          },
+          previous_payload: null,
+          revise_count: 0,
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+
+  const mismatchCtx: ToolExecutionContext = {
+    ...makeCtx(mismatchStub as any),
+    threadId: "thread-mismatch",
+    activePendingActionId: existingRow.id,
+    activePendingActionReviseCount: 0,
+  };
+
+  const result = expectOk(
+    await executeToolCall(mismatchCtx, {
+      name: "prepare_announcement",
+      args: {
+        title: "Practice moved",
+        body: "6pm Weight Room B",
+        audience: "all",
+      },
+    })
+  );
+
+  const data = result.data as {
+    pending_action: { id: string; was_revised?: boolean };
+  };
+  assert.equal(data.pending_action.id, "pending-announcement-fresh");
+  assert.equal(data.pending_action.was_revised, undefined);
+
+  const insertQueries = mismatchStub.queries.filter(
+    (q) => q.table === "ai_pending_actions" && q.method === "insert"
+  );
+  const updateQueries = mismatchStub.queries.filter(
+    (q) => q.table === "ai_pending_actions" && q.method === "update"
+  );
+  assert.equal(insertQueries.length, 1, "fresh insert on type mismatch");
+  assert.equal(updateQueries.length, 0, "no CAS attempted on type mismatch");
 });
 
 test("prepare_discussion_thread creates a pending confirmation action when complete", async () => {
