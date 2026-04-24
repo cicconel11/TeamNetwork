@@ -1399,7 +1399,11 @@ async function prepareJobPosting(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
       sourced_fields: Object.keys(sourceDraft),
@@ -1510,7 +1514,11 @@ async function prepareAnnouncement(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
     },
@@ -1646,7 +1654,11 @@ async function prepareEnterpriseInvite(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
     },
@@ -1732,7 +1744,11 @@ async function revokeEnterpriseInvite(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
     },
@@ -1828,7 +1844,11 @@ async function prepareDiscussionThread(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
     },
@@ -1933,7 +1953,11 @@ async function prepareDiscussionReply(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
     },
@@ -2100,7 +2124,11 @@ async function prepareChatMessage(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
     },
@@ -2298,7 +2326,11 @@ async function prepareGroupMessage(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
     },
@@ -2408,7 +2440,11 @@ async function prepareEvent(
         expires_at: created.record.expires_at,
         summary,
         ...(created.revised
-          ? { was_revised: true, revise_count: created.reviseCount }
+          ? {
+              was_revised: true,
+              revise_count: created.reviseCount,
+              previous_payload: created.previousPayload,
+            }
           : {}),
       },
     },
