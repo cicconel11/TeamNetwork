@@ -448,3 +448,58 @@ client: swaps card in place, keeps thread position, shows revise count
 - Related plans:
   - `docs/plans/2026-03-27-fix-ai-confirm-handler-race-and-error-handling-plan.md` — CAS race fix precedent for U2.
 - Related ideation: `docs/ideation/2026-04-23-ai-agent-improvements-ideation.md`
+
+---
+
+## Session Handoff (2026-04-23)
+
+### Landed (commits on `feat/ai-inline-pending-action-diff`)
+
+- **U1 complete** — `ai_pending_actions.previous_payload` + `revise_count` columns; `createPendingAction` accepts optional `previousPayload`; migration-contract tests.
+- **U2 partial** (commit `78c03018`) — CAS helper `updatePendingActionPayload` (4 outcomes: `updated` / `revise_limit` / `not_pending` / `not_found` / `conflict`) + new `pending_action_updated` SSE event type + optional `previousPayload`/`reviseCount` on existing `pending_action` event. 8 CAS tests pass; typecheck + lint clean.
+
+### U2 remaining work (picks up here)
+
+Scope: wire the CAS helper into the tool-execution path and emit the new SSE event. Split recommended as **U2a** (executor swap) then **U2b** (handler plumbing).
+
+**U2a — executor swap (mechanical, low-risk):**
+
+1. Extend `ToolExecutionContext` (`src/lib/ai/tools/executor.ts:92-108`):
+   - `activePendingActionId?: string`
+   - `activePendingActionReviseCount?: number`
+2. Add helper near top of `executor.ts`:
+   ```ts
+   async function createOrRevisePendingAction(sb, ctx, input) {
+     if (ctx.activePendingActionId != null && ctx.activePendingActionReviseCount != null) {
+       const result = await updatePendingActionPayload(sb, ctx.activePendingActionId, {
+         newPayload: input.payload,
+         previousPayload: input.previousPayload ?? null,
+         expectedReviseCount: ctx.activePendingActionReviseCount,
+       });
+       if (result.updated) return { record: result.row, revised: true };
+       // fall through to create on revise_limit / not_pending / conflict / not_found
+     }
+     const record = await createPendingAction(sb, input);
+     return { record, revised: false };
+   }
+   ```
+3. Swap the 11 `createPendingAction` call sites (lines 1155, 1376, 1482, 1613, 1694, 1785, 1885, 2047, 2240, 2345, + one in the events-batch path) to the helper. Tool-result `data` gains `was_revised: boolean`.
+
+**U2b — handler plumbing:**
+
+1. `src/app/api/ai/[orgId]/chat/handler.ts:5823` — populate `ctx.activePendingActionId` + `ctx.activePendingActionReviseCount` from `activeDraftSession` before `executeToolCallFn(...)`. The draft-session already carries `pending_action_id`; fetch `revise_count` alongside via a single `getPendingAction` call when `pending_action_id` is non-null.
+2. `handler.ts:5930-5948` — branch on `result.data.was_revised`:
+   - `false` → existing `pending_action` emit (unchanged).
+   - `true` → emit `pending_action_updated` with `previousPayload` + `reviseCount` from the row.
+3. Ensure the existing event-specific revise path (`handler.ts:5460-5499`) is **not** double-processed — it still cancels + re-enqueues today; U2b does not touch it (tracked as deferred in Risks).
+
+**Tests to add:**
+
+- Integration test (mocked supabase): executor sees `activePendingActionId` + count → calls `updatePendingActionPayload`, result data carries `was_revised: true`.
+- Handler test (existing pattern in `tests/ai-chat-handler-*`): confirms `pending_action_updated` SSE emit when draft-session has a pending_action_id.
+
+### Current branch state
+
+- Branch: `feat/ai-inline-pending-action-diff`, clean (committed).
+- Next commit boundary: land U2a as one commit, U2b as a separate commit.
+- Unverified in this session (requires live DB): `npm run gen:types` regeneration, migration apply against remote.
