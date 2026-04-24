@@ -35,6 +35,12 @@ export async function upsertConstituents(
   let unchanged = 0;
   let skipped = 0;
   let runningCount = currentAlumniCount;
+  const skippedReasons: Record<string, number> = {};
+
+  function markSkipped(reason: string) {
+    skipped += 1;
+    skippedReasons[reason] = (skippedReasons[reason] ?? 0) + 1;
+  }
 
   for (const chunk of chunkArray(constituents, 50)) {
     for (const record of chunk) {
@@ -64,7 +70,7 @@ export async function upsertConstituents(
               error: alumniError.message,
               code: alumniError.code,
             });
-            skipped += 1;
+            markSkipped("alumni_lookup_failed");
             continue;
           }
 
@@ -115,7 +121,7 @@ export async function upsertConstituents(
 
             if (updateError) {
               debugLog("blackbaud-storage", "update error", { alumniId: existingMapping.alumni_id, error: updateError.message });
-              skipped += 1;
+              markSkipped("alumni_update_failed");
               continue;
             }
 
@@ -135,7 +141,7 @@ export async function upsertConstituents(
 
         // Step 2: Create new alumni record (check quota first)
         if (alumniLimit !== null && runningCount >= alumniLimit) {
-          skipped += 1;
+          markSkipped("alumni_quota_reached");
           continue;
         }
 
@@ -156,7 +162,7 @@ export async function upsertConstituents(
 
         if (insertError) {
           debugLog("blackbaud-storage", "insert error", { record: record.external_id, error: insertError.message });
-          skipped += 1;
+          markSkipped("alumni_insert_failed");
           continue;
         }
 
@@ -175,7 +181,7 @@ export async function upsertConstituents(
             error: mappingError.message,
           });
           await supabase.from("alumni").delete().eq("id", newAlumni.id);
-          skipped += 1;
+          markSkipped("mapping_insert_failed");
           continue;
         }
 
@@ -186,10 +192,10 @@ export async function upsertConstituents(
           external_id: record.external_id,
           error: err instanceof Error ? err.message : String(err),
         });
-        skipped += 1;
+        markSkipped("record_error");
       }
     }
   }
 
-  return { ok: true, created, updated, unchanged, skipped };
+  return { ok: true, created, updated, unchanged, skipped, skippedReasons };
 }

@@ -47,7 +47,7 @@ describe("BlackbaudClient", () => {
 
   it("throws BlackbaudApiError with isQuotaExhausted on rate limit (429)", async () => {
     const mockFetch = mock.fn(async () => {
-      return new Response("Rate limited", { status: 429 });
+      return new Response("Rate limited", { status: 429, headers: { "Retry-After": "12" } });
     });
 
     const { createBlackbaudClient, BlackbaudApiError } = await import("../src/lib/blackbaud/client");
@@ -63,6 +63,7 @@ describe("BlackbaudClient", () => {
         assert.ok(err instanceof BlackbaudApiError);
         assert.equal(err.status, 429);
         assert.equal(err.isQuotaExhausted, true);
+        assert.equal(err.retryAfterHuman, "12s");
         return true;
       }
     );

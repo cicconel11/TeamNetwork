@@ -189,7 +189,52 @@ describe("upsertConstituents — soft-deleted alumni", () => {
 
     // Record should be skipped
     assert.equal(result.skipped, 1);
+    assert.equal(result.skippedReasons?.alumni_lookup_failed, 1);
     assert.equal(result.created, 0);
     assert.equal(result.unchanged, 0);
+  });
+
+  it("reports quota-limited skips separately from generic skipped count", async () => {
+    const { upsertConstituents } = await import("../src/lib/blackbaud/storage");
+
+    const fakeSupabase = {
+      from: () => {
+        const chain: any = {
+          select: () => chain,
+          insert: () => chain,
+          update: () => chain,
+          delete: () => chain,
+          eq: () => chain,
+          is: () => chain,
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          single: () => Promise.resolve({ data: null, error: null }),
+        };
+        return chain;
+      },
+    };
+
+    const result = await upsertConstituents(
+      {
+        supabase: fakeSupabase as any,
+        integrationId: "int-1",
+        organizationId: "org-1",
+        alumniLimit: 0,
+        currentAlumniCount: 0,
+      },
+      [{
+        external_id: "bb-quota",
+        first_name: "Quota",
+        last_name: "Blocked",
+        email: null,
+        phone_number: null,
+        address_summary: null,
+        graduation_year: null,
+        source: "integration_sync" as const,
+      }]
+    );
+
+    assert.equal(result.skipped, 1);
+    assert.equal(result.skippedReasons?.alumni_quota_reached, 1);
+    assert.equal(result.created, 0);
   });
 });

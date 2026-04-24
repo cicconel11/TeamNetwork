@@ -9,7 +9,7 @@ export class BlackbaudApiError extends Error {
   isQuotaExhausted: boolean;
   retryAfterHuman: string | null;
 
-  constructor(status: number, path: string, body: string) {
+  constructor(status: number, path: string, body: string, headers?: Headers) {
     super(`Blackbaud API error (${status}) on ${path}: ${body}`);
     this.status = status;
     this.path = path;
@@ -17,8 +17,23 @@ export class BlackbaudApiError extends Error {
 
     const quotaMatch = body.match(/Out of call volume quota.*?replenished in (\d{2}:\d{2}:\d{2})/i);
     this.isQuotaExhausted = !!quotaMatch || (status === 429);
-    this.retryAfterHuman = quotaMatch?.[1] ?? null;
+    this.retryAfterHuman = quotaMatch?.[1] ?? formatRetryAfter(headers?.get("Retry-After"));
   }
+}
+
+function formatRetryAfter(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return `${seconds}s`;
+  }
+
+  const retryAt = new Date(value);
+  if (Number.isNaN(retryAt.getTime())) return null;
+
+  const secondsUntilRetry = Math.max(0, Math.ceil((retryAt.getTime() - Date.now()) / 1000));
+  return `${secondsUntilRetry}s`;
 }
 
 export interface BlackbaudClientConfig {
@@ -54,7 +69,7 @@ export function createBlackbaudClient(config: BlackbaudClientConfig): BlackbaudC
 
     if (!response.ok) {
       const text = await response.text();
-      const err = new BlackbaudApiError(response.status, path, text);
+      const err = new BlackbaudApiError(response.status, path, text, response.headers);
       throw err;
     }
 
