@@ -28,11 +28,9 @@ import {
 import { filterAllowedTools } from "@/lib/ai/access-policy";
 import { resolveOwnThread, type AiThreadMetadata } from "@/lib/ai/thread-resolver";
 import {
-  buildSemanticCacheKeyParts,
   checkCacheEligibility,
   type CacheSurface,
 } from "@/lib/ai/semantic-cache-utils";
-import { lookupSemanticCache, writeCacheEntry } from "@/lib/ai/semantic-cache";
 import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
 import type { RagChunkInput } from "@/lib/ai/context-builder";
 import { resolveSurfaceRouting } from "@/lib/ai/intent-router";
@@ -139,6 +137,12 @@ import {
   type PendingEventActionRecord,
   type PendingEventRevisionAnalysis,
 } from "./handler/pending-event-revision";
+import {
+  checkCache,
+  retrieveRag,
+  skipRagStage,
+  writeCache,
+} from "./handler/cache-rag";
 
 export {
   CONNECTION_PASS2_TEMPLATE,
@@ -797,30 +801,24 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       messageSafety.riskLevel === "none"
     ) {
       preInitCacheLookupPerformed = true;
-      const cacheKey = buildSemanticCacheKeyParts({
+      const cacheResult = await checkCache({
         message: messageSafety.promptSafeMessage,
         orgId: ctx.orgId,
         role: ctx.role,
+        surface: effectiveSurface,
+        supabase: ctx.serviceSupabase,
+        stageTimings,
+        logContext: requestLogContext,
       });
 
-      const cacheResult = await runTimedStage(stageTimings, "cache_lookup", async () =>
-        lookupSemanticCache({
-          cacheKey,
-          orgId: ctx.orgId,
-          surface: effectiveSurface,
-          supabase: ctx.serviceSupabase,
-          logContext: requestLogContext,
-        })
-      );
-
-      if (cacheResult.ok) {
+      if (cacheResult.status === "hit") {
         preInitCacheHit = {
           id: cacheResult.hit.id,
           responseContent: cacheResult.hit.responseContent,
         };
       } else {
-        cacheStatus = cacheResult.reason === "miss" ? "miss" : "error";
-        if (cacheResult.reason === "error") {
+        cacheStatus = cacheResult.status === "miss" ? "miss" : "error";
+        if (cacheResult.status === "error") {
           cacheBypassReason = "cache_lookup_failed";
         }
       }
@@ -1095,26 +1093,20 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       !cacheDisabled &&
       executionPolicy.cachePolicy === "lookup_exact"
     ) {
-      const cacheKey = buildSemanticCacheKeyParts({
+      const cacheResult = await checkCache({
         message: messageSafety.promptSafeMessage,
         orgId: ctx.orgId,
         role: ctx.role,
+        surface: effectiveSurface,
+        supabase: ctx.serviceSupabase,
+        stageTimings,
+        logContext: {
+          ...requestLogContext,
+          threadId: threadId!,
+        },
       });
 
-      const cacheResult = await runTimedStage(stageTimings, "cache_lookup", async () =>
-        lookupSemanticCache({
-          cacheKey,
-          orgId: ctx.orgId,
-          surface: effectiveSurface,
-          supabase: ctx.serviceSupabase,
-          logContext: {
-            ...requestLogContext,
-            threadId: threadId!,
-          },
-        })
-      );
-
-      if (cacheResult.ok) {
+      if (cacheResult.status === "hit") {
         cacheStatus = "hit_exact";
         cacheEntryId = cacheResult.hit.id;
         stageTimings.retrieval = {
@@ -1171,8 +1163,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           );
         }
       } else {
-        cacheStatus = cacheResult.reason === "miss" ? "miss" : "error";
-        if (cacheResult.reason === "error") {
+        cacheStatus = cacheResult.status === "miss" ? "miss" : "error";
+        if (cacheResult.status === "error") {
           cacheBypassReason = "cache_lookup_failed";
         }
       }
@@ -1187,34 +1179,21 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
     const hasEmbeddingKey = !!process.env.EMBEDDING_API_KEY;
     if (hasEmbeddingKey && !skipRagRetrieval) {
-      try {
-        const retrieved = await runTimedStage(stageTimings, "rag_retrieval", async () =>
-          retrieveRelevantChunksFn({
-            query: messageSafety.promptSafeMessage,
-            orgId: ctx.orgId,
-            serviceSupabase: ctx.serviceSupabase,
-            logContext: {
-              ...requestLogContext,
-              threadId: threadId!,
-            },
-          })
-        );
-        ragChunkCount = retrieved.length;
-        if (retrieved.length > 0) {
-          ragTopSimilarity = Math.max(...retrieved.map((c) => c.similarity));
-          ragChunks = retrieved.map((c) => ({
-            contentText: c.contentText,
-            sourceTable: c.sourceTable,
-            metadata: c.metadata,
-          }));
-        }
-      } catch (err) {
-        ragError = err instanceof Error ? err.message : "rag_retrieval_failed";
-        aiLog("error", "ai-chat", "RAG retrieval failed (continuing without)", {
+      const ragResult = await retrieveRag({
+        retrieveRelevantChunksFn,
+        query: messageSafety.promptSafeMessage,
+        orgId: ctx.orgId,
+        serviceSupabase: ctx.serviceSupabase,
+        stageTimings,
+        logContext: {
           ...requestLogContext,
           threadId: threadId!,
-        }, { error: err });
-      }
+        },
+      });
+      ragChunks = ragResult.chunks;
+      ragChunkCount = ragResult.chunkCount;
+      ragTopSimilarity = ragResult.topSimilarity;
+      ragError = ragResult.error;
     } else {
       if (!hasEmbeddingKey && executionPolicy.retrieval.mode === "allow") {
         stageTimings.retrieval = {
@@ -1222,7 +1201,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           reason: "embedding_key_missing",
         };
       }
-      skipStage(stageTimings, "rag_retrieval");
+      skipRagStage(stageTimings);
     }
 
     const { data: assistantMsg, error: assistantError } = await runTimedStage(
@@ -2561,53 +2540,25 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           !toolCallMade;
 
         if (canWriteCache) {
-          const cacheKey = buildSemanticCacheKeyParts({
+          const cacheWriteResult = await writeCache({
             message: messageSafety.promptSafeMessage,
             orgId: ctx.orgId,
             role: ctx.role,
-          });
-
-          let cacheWriteResult;
-          try {
-            cacheWriteResult = await runTimedStage(stageTimings, "cache_write", async () => {
-              const result = await writeCacheEntry({
-                cacheKey,
-                responseContent: fullContent,
-                orgId: ctx.orgId,
-                surface: effectiveSurface,
-                sourceMessageId: assistantMessageId,
-                supabase: ctx.serviceSupabase,
-                logContext: {
-                  ...requestLogContext,
-                  threadId: threadId!,
-                },
-              });
-
-              if (result.status === "error") {
-                throw new Error("cache_write_failed");
-              }
-
-              return result;
-            });
-          } catch (error) {
-            cacheWriteResult = { status: "error" as const };
-            aiLog("error", "ai-chat", "cache write failed", {
+            surface: effectiveSurface,
+            responseContent: fullContent,
+            sourceMessageId: assistantMessageId,
+            supabase: ctx.serviceSupabase,
+            stageTimings,
+            logContext: {
               ...requestLogContext,
               threadId: threadId!,
-            }, { error, messageId: assistantMessageId });
-          }
+            },
+          });
 
           if (cacheWriteResult.status === "inserted") {
             cacheEntryId = cacheWriteResult.entryId;
-          } else if (cacheWriteResult.status === "duplicate" && !cacheBypassReason) {
-            cacheBypassReason = "cache_write_duplicate";
-          } else if (
-            cacheWriteResult.status === "skipped_too_large" &&
-            !cacheBypassReason
-          ) {
-            cacheBypassReason = "cache_write_skipped_too_large";
-          } else if (cacheWriteResult.status === "error" && !cacheBypassReason) {
-            cacheBypassReason = "cache_write_failed";
+          } else if (!cacheBypassReason) {
+            cacheBypassReason = cacheWriteResult.bypassReason;
           }
         } else {
           skipStage(stageTimings, "cache_write");
