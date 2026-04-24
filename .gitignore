@@ -88,3 +88,4 @@ docs/.obsidian/
 .understand-anything/
 .agents/
 skills-lock.json
+.compound-engineering/*.local.yaml
