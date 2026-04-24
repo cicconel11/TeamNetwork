@@ -11,7 +11,6 @@ import {
   composeResponse,
   type ToolCallRequestedEvent,
   type ToolResultMessage,
-  type UsageAccumulator,
 } from "@/lib/ai/response-composer";
 import { logAiRequest } from "@/lib/ai/audit";
 import { createSSEStream, SSE_HEADERS, type CacheStatus, type SSEEvent } from "@/lib/ai/sse";
@@ -50,13 +49,9 @@ import {
 } from "@/lib/ai/tool-grounding";
 import {
   classifySafety,
-  SAFETY_FALLBACK_TEXT,
-  type SafetyVerdict,
 } from "@/lib/ai/safety-gate";
 import {
   verifyRagGrounding,
-  buildRagGroundingFallback,
-  RAG_GROUNDING_ABSTAIN_TEXT,
   type RagGroundingMode,
 } from "@/lib/ai/rag-grounding";
 import { trackOpsEventServer } from "@/lib/analytics/events-server";
@@ -150,8 +145,12 @@ import {
   MEMBER_LIST_PASS2_INSTRUCTION,
   MENTOR_PASS2_TEMPLATE,
   ToolGroundingVerificationError,
+  applyRagGrounding,
+  applySafetyGate,
   buildSseResponse,
+  createTurnRuntimeState,
   getGroundingFallbackForTools,
+  recordTurnUsage,
 } from "./handler/sse-runtime";
 
 export {
@@ -1172,13 +1171,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       let fullContent = "";
       let pass1BufferedContent = "";
       let pass2BufferedContent = "";
-      let safetyVerdict: SafetyVerdict | undefined;
-      let safetyCategories: string[] | undefined;
-      let safetyLatencyMs: number | undefined;
-      let ragGrounded: boolean | undefined;
-      let ragGroundingFailures: string[] | undefined;
-      let ragGroundingLatencyMs: number | undefined;
-      let ragGroundingAudited: RagGroundingMode | undefined;
+      const runtimeState = createTurnRuntimeState();
       const safetyGateDisabled = process.env.DISABLE_SAFETY_GATE === "1";
       const safetyGateShadow = process.env.SAFETY_GATE_SHADOW === "1";
       const ragGroundingDisabled = process.env.DISABLE_RAG_GROUNDING === "1";
@@ -1188,159 +1181,43 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         process.env.RAG_GROUNDING_MIN_CHUNKS ?? "1",
         10
       );
-
-      const applySafetyGate = async (buffered: string): Promise<string> => {
-        if (safetyGateDisabled || !buffered) return buffered;
-        try {
-          const ownedEmails = new Set<string>();
-          const ownedPhones = new Set<string>();
-          const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-          // RAG chunks: emails are widely distributed directory identifiers
-          // (low marginal harm); phones may be personal cell numbers embedded
-          // in free-text bodies. Allowlist emails only. Phones from RAG free
-          // text are NOT allowlisted — the gate should flag them if echoed.
-          for (const chunk of ragChunks) {
-            const text = chunk.contentText ?? "";
-            const emailMatches = text.match(emailRegex) ?? [];
-            for (const m of emailMatches) ownedEmails.add(m.toLowerCase());
-          }
-          // Tool-row identifiers are org-owned data visible to this user by
-          // policy. Emails: flat regex over serialized JSON is fine.
-          // Phones: only collect from explicitly-modeled `phone_number`
-          // fields to avoid a poisoned free-text tool blob widening the
-          // allowlist. `list_parents` + `list_alumni` are the two surfaces
-          // that emit a structured phone_number.
-          try {
-            const serialized = JSON.stringify(successfulToolResults);
-            const emailMatches = serialized.match(emailRegex) ?? [];
-            for (const m of emailMatches) ownedEmails.add(m.toLowerCase());
-          } catch {
-            // Circular-ref tool data; skip.
-          }
-          collectPhoneNumberFields(successfulToolResults, ownedPhones);
-          const result = await classifySafetyFn({
-            content: buffered,
-            orgContext: { ownedEmails, ownedPhones },
-          });
-          safetyVerdict = result.verdict;
-          safetyCategories = result.categories;
-          safetyLatencyMs = result.latencyMs;
-
-          if (result.verdict === "unsafe") {
-            void trackOpsEventServerFn(
-              "api_error",
-              {
-                endpoint_group: safetyGateShadow
-                  ? "ai-safety-gate-shadow"
-                  : "ai-safety-gate",
-                http_status: 200,
-                error_code: safetyGateShadow
-                  ? "safety_gate_shadow_unsafe"
-                  : "safety_gate_blocked",
-                retryable: false,
-              },
-              ctx.orgId
-            );
-            if (!safetyGateShadow) {
-              return SAFETY_FALLBACK_TEXT;
-            }
-          }
-          return buffered;
-        } catch (err) {
-          aiLog("warn", "ai-safety-gate", "classify failed", {
-            ...requestLogContext,
-            threadId: threadId!,
-          }, { error: err });
-          return buffered;
-        }
-      };
-
-      const applyRagGrounding = async (buffered: string): Promise<string> => {
-        if (
-          ragGroundingDisabled ||
-          ragGroundingMode === "bypass" ||
-          !buffered ||
-          ragChunks.length < ragGroundingMinChunks
-        ) {
-          // Record which gate we short-circuited on so the audit row
-          // distinguishes bypass from normal ungrounded traffic.
-          // ragGrounded stays undefined → persisted as null ("not evaluated").
-          if (buffered) {
-            ragGroundingAudited = ragGroundingMode;
-          }
-          if (ragGroundingMode === "bypass" && !ragGroundingDisabled) {
-            void trackOpsEventServerFn(
-              "api_error",
-              {
-                endpoint_group: "ai-rag-grounding",
-                error_code: "rag_grounding_bypassed",
-                http_status: 200,
-                retryable: false,
-              },
-              ctx.orgId
-            );
-          }
-          return buffered;
-        }
-        try {
-          const result = await verifyRagGroundingFn({
-            content: buffered,
-            ragChunks,
-          });
-          ragGrounded = result.grounded;
-          ragGroundingFailures = result.uncoveredClaims;
-          ragGroundingLatencyMs = result.latencyMs;
-          ragGroundingAudited = ragGroundingMode;
-
-          if (result.grounded) return buffered;
-
-          void trackOpsEventServerFn(
-            "api_error",
-            {
-              endpoint_group:
-                ragGroundingMode === "shadow"
-                  ? "ai-rag-grounding-shadow"
-                  : "ai-rag-grounding",
-              http_status: 200,
-              error_code:
-                ragGroundingMode === "shadow"
-                  ? "rag_grounding_shadow_ungrounded"
-                  : "rag_grounding_failed",
-              retryable: false,
-            },
-            ctx.orgId
-          );
-
-          if (ragGroundingMode === "overwrite") {
-            return buildRagGroundingFallback(
-              result.uncoveredClaims,
-              ragChunks[0] ?? null
-            );
-          }
-          if (ragGroundingMode === "block") {
-            return RAG_GROUNDING_ABSTAIN_TEXT;
-          }
-          // shadow | bypass: passthrough
-          return buffered;
-        } catch (err) {
-          aiLog("warn", "ai-rag-grounding", "verify failed", {
-            ...requestLogContext,
-            threadId: threadId!,
-          }, { error: err });
-          return buffered;
-        }
-      };
-
-      const usageRef: { current: UsageAccumulator | null } = { current: null };
-      let streamCompletedSuccessfully = false;
-      let auditErrorMessage: string | undefined;
-      let contextMetadata: { surface: string; estimatedTokens: number } | undefined;
-      let toolCallMade = false;
-      let toolCallSucceeded = false;
       let terminateTurn = false;
       let toolPassBreakerOpen = false;
       const auditToolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
       const successfulToolResults: SuccessfulToolSummary[] = [];
+      const applyTurnSafetyGate = (buffered: string) =>
+        applySafetyGate({
+          buffered,
+          disabled: safetyGateDisabled,
+          shadow: safetyGateShadow,
+          ragChunks,
+          successfulToolResults,
+          classifySafetyFn,
+          trackOpsEventServerFn,
+          collectPhoneNumberFields,
+          state: runtimeState,
+          orgId: ctx.orgId,
+          logContext: {
+            ...requestLogContext,
+            threadId: threadId!,
+          },
+        });
+      const applyTurnRagGrounding = (buffered: string) =>
+        applyRagGrounding({
+          buffered,
+          disabled: ragGroundingDisabled,
+          mode: ragGroundingMode,
+          minChunks: ragGroundingMinChunks,
+          ragChunks,
+          verifyRagGroundingFn,
+          trackOpsEventServerFn,
+          state: runtimeState,
+          orgId: ctx.orgId,
+          logContext: {
+            ...requestLogContext,
+            threadId: threadId!,
+          },
+        });
       const toolAuthorization: ToolExecutionAuthorization =
         ctx.role === "admin"
           ? {
@@ -1353,12 +1230,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               role: ctx.role,
             };
       const toolAuthMode = getToolAuthorizationMode(toolAuthorization);
-      const recordUsage = (usage: UsageAccumulator) => {
-        usageRef.current = {
-          inputTokens: (usageRef.current?.inputTokens ?? 0) + usage.inputTokens,
-          outputTokens: (usageRef.current?.outputTokens ?? 0) + usage.outputTokens,
-        };
-      };
+      const recordUsage = (usage: Parameters<typeof recordTurnUsage>[1]) =>
+        recordTurnUsage(runtimeState, usage);
       const emitTimeoutError = () =>
         enqueue({
           type: "error",
@@ -1405,13 +1278,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           const failureReason = stageSignal.signal.reason ?? err;
           if (isStageTimeoutError(failureReason)) {
             setStageStatus(stageTimings, auditStage, "timed_out", Date.now() - stageStartedAt);
-            auditErrorMessage = `${stage}:timeout`;
+            runtimeState.auditErrorMessage = `${stage}:timeout`;
             emitTimeoutError();
             return "timeout";
           }
           if (streamSignal.aborted || stageSignal.signal.aborted) {
             setStageStatus(stageTimings, auditStage, "aborted", Date.now() - stageStartedAt);
-            auditErrorMessage = `${stage}:request_aborted`;
+            runtimeState.auditErrorMessage = `${stage}:request_aborted`;
             return "aborted";
           }
           setStageStatus(stageTimings, auditStage, "failed", Date.now() - stageStartedAt);
@@ -1436,7 +1309,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
           },
         });
-        streamCompletedSuccessfully = true;
+        runtimeState.streamCompletedSuccessfully = true;
         return;
       }
 
@@ -1453,7 +1326,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         .eq("id", assistantMessageId);
 
       if (streamingStatusError) {
-        auditErrorMessage = "assistant_streaming_status_failed";
+        runtimeState.auditErrorMessage = "assistant_streaming_status_failed";
         aiLog("error", "ai-chat", "assistant streaming status update failed", {
           ...requestLogContext,
           threadId: threadId!,
@@ -1484,7 +1357,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
           },
         });
-        streamCompletedSuccessfully = true;
+        runtimeState.streamCompletedSuccessfully = true;
         return;
       }
 
@@ -1508,7 +1381,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
           },
         });
-        streamCompletedSuccessfully = true;
+        runtimeState.streamCompletedSuccessfully = true;
         return;
       }
 
@@ -1538,7 +1411,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           action.payload.orgSlug.trim().length > 0
         )?.payload.orgSlug ?? null;
 
-        toolCallMade = true;
+        runtimeState.toolCallMade = true;
         auditToolCalls.push({
           name: revisionToolName,
           args: revisionArgs,
@@ -1617,7 +1490,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           auth_mode: toolAuthMode,
         });
         enqueue({ type: "tool_status", toolName: revisionToolName, status: "done" });
-        toolCallSucceeded = true;
+        runtimeState.toolCallSucceeded = true;
         successfulToolResults.push({
           name: revisionToolName,
           data: revisionResult.data,
@@ -1663,7 +1536,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
           },
         });
-        streamCompletedSuccessfully = true;
+        runtimeState.streamCompletedSuccessfully = true;
         return;
       }
 
@@ -1760,7 +1633,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           ]);
 
       const { systemPrompt, orgContextMessage, metadata } = contextResult;
-      contextMetadata = metadata;
+      runtimeState.contextMetadata = metadata;
 
       let historyRows = history;
       if (historyError) {
@@ -1856,13 +1729,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             }
 
             if (event.type === "error") {
-              auditErrorMessage = event.message;
+              runtimeState.auditErrorMessage = event.message;
               enqueue(event);
               return "stop";
             }
 
             const toolEvent = event as ToolCallRequestedEvent;
-            toolCallMade = true;
+            runtimeState.toolCallMade = true;
 
             let parsedArgs: Record<string, unknown>;
             try {
@@ -2096,7 +1969,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   auth_mode: toolAuthMode,
                 });
                 enqueue({ type: "tool_status", toolName: toolEvent.name, status: "done" });
-                toolCallSucceeded = true;
+                runtimeState.toolCallSucceeded = true;
                 toolResults.push({
                   toolCallId: toolEvent.id,
                   name: toolEvent.name,
@@ -2186,7 +2059,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   error_kind: result.kind,
                 });
                 enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
-                auditErrorMessage = `tool_${toolEvent.name}:${result.kind}`;
+                runtimeState.auditErrorMessage = `tool_${toolEvent.name}:${result.kind}`;
                 terminateTurn = true;
                 enqueue({
                   type: "error",
@@ -2202,30 +2075,30 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         );
 
         if (terminateTurn || pass1Outcome !== "completed") {
-          if (!toolCallMade) {
+          if (!runtimeState.toolCallMade) {
             skipStage(stageTimings, "tools");
           }
           return;
         }
 
-        if (!toolCallMade) {
+        if (!runtimeState.toolCallMade) {
           skipStage(stageTimings, "tools");
         }
 
-        if (!toolCallMade && pass1BufferedContent) {
-          pass1BufferedContent = await applyRagGrounding(pass1BufferedContent);
-          pass1BufferedContent = await applySafetyGate(pass1BufferedContent);
+        if (!runtimeState.toolCallMade && pass1BufferedContent) {
+          pass1BufferedContent = await applyTurnRagGrounding(pass1BufferedContent);
+          pass1BufferedContent = await applyTurnSafetyGate(pass1BufferedContent);
           fullContent += pass1BufferedContent;
           enqueue({ type: "chunk", content: pass1BufferedContent });
         }
 
-        if (toolCallMade && toolResults.length > 0) {
+        if (runtimeState.toolCallMade && toolResults.length > 0) {
           const willRenderNavigationDeterministically =
             toolResults.length === 1 &&
             successfulToolResults.length === 1 &&
             successfulToolResults[0]?.name === "find_navigation_targets";
           if (pass1BufferedContent && !willRenderNavigationDeterministically) {
-            pass1BufferedContent = await applySafetyGate(pass1BufferedContent);
+            pass1BufferedContent = await applyTurnSafetyGate(pass1BufferedContent);
             fullContent += pass1BufferedContent;
             enqueue({ type: "chunk", content: pass1BufferedContent });
           }
@@ -2334,7 +2207,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 }
 
                 if (event.type === "error") {
-                  auditErrorMessage = event.message;
+                  runtimeState.auditErrorMessage = event.message;
                   enqueue(event);
                   return "stop";
                 }
@@ -2350,7 +2223,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
           const groundedToolSummary =
             executionPolicy.groundingPolicy === "verify_tool_summary" &&
-            toolCallSucceeded &&
+            runtimeState.toolCallSucceeded &&
             successfulToolResults.length > 0 &&
             pass2BufferedContent.length > 0;
 
@@ -2372,7 +2245,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 throw error;
               }
 
-              auditErrorMessage = "tool_grounding_failed";
+              runtimeState.auditErrorMessage = "tool_grounding_failed";
               aiLog("warn", "ai-grounding", "verification failed", {
                 ...requestLogContext,
                 threadId: threadId!,
@@ -2402,7 +2275,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           if (pass2BufferedContent) {
             // Tool-backed pass-2: tool-grounding already ran. Still gate output
             // for safety (PII / toxicity) before release.
-            pass2BufferedContent = await applySafetyGate(pass2BufferedContent);
+            pass2BufferedContent = await applyTurnSafetyGate(pass2BufferedContent);
             fullContent += pass2BufferedContent;
             enqueue({ type: "chunk", content: pass2BufferedContent });
           }
@@ -2414,10 +2287,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       if (fullContent.trim().length === 0) {
         fullContent = EMPTY_ASSISTANT_RESPONSE_FALLBACK;
         enqueue({ type: "chunk", content: fullContent });
-        auditErrorMessage ??= "empty_response_fallback";
+        runtimeState.auditErrorMessage ??= "empty_response_fallback";
       }
 
-      const usage = usageRef.current;
+      const usage = runtimeState.usage;
       enqueue({
         type: "done",
         threadId: threadId!,
@@ -2428,20 +2301,20 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
         },
       });
-      streamCompletedSuccessfully = true;
+      runtimeState.streamCompletedSuccessfully = true;
       } catch (err) {
         aiLog("error", "ai-chat", "stream error", {
           ...requestLogContext,
           threadId: threadId!,
         }, { error: err, messageId: assistantMessageId });
-        auditErrorMessage = err instanceof Error ? err.message : "stream_failed";
+        runtimeState.auditErrorMessage = err instanceof Error ? err.message : "stream_failed";
         if (!streamSignal.aborted) {
           enqueue({ type: "error", message: "An error occurred", retryable: true });
         }
       } finally {
         const finalMessage = finalizeAssistantMessage({
           fullContent,
-          streamCompletedSuccessfully,
+          streamCompletedSuccessfully: runtimeState.streamCompletedSuccessfully,
           requestAborted: streamSignal.aborted,
         });
         const finalizeStartedAt = Date.now();
@@ -2465,19 +2338,19 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             ...requestLogContext,
             threadId: threadId!,
           }, { error: finalizeError, messageId: assistantMessageId });
-          auditErrorMessage ??= "assistant_finalize_failed";
+          runtimeState.auditErrorMessage ??= "assistant_finalize_failed";
         }
 
-        if (toolCallMade && !cacheBypassReason && executionPolicy.cachePolicy === "lookup_exact") {
+        if (runtimeState.toolCallMade && !cacheBypassReason && executionPolicy.cachePolicy === "lookup_exact") {
           cacheBypassReason = "tool_call_made";
         }
 
         const canWriteCache =
-          streamCompletedSuccessfully &&
+          runtimeState.streamCompletedSuccessfully &&
           !finalizeError &&
           executionPolicy.cachePolicy === "lookup_exact" &&
           cacheStatus === "miss" &&
-          !toolCallMade;
+          !runtimeState.toolCallMade;
 
         if (canWriteCache) {
           const cacheWriteResult = await writeCache({
@@ -2504,13 +2377,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           skipStage(stageTimings, "cache_write");
         }
 
-        const requestOutcome = streamCompletedSuccessfully
-          ? auditErrorMessage === "tool_grounding_failed"
+        const requestOutcome = runtimeState.streamCompletedSuccessfully
+          ? runtimeState.auditErrorMessage === "tool_grounding_failed"
             ? "tool_grounding_fallback"
             : "completed"
           : streamSignal.aborted
             ? "aborted"
-            : auditErrorMessage?.includes("timeout")
+            : runtimeState.auditErrorMessage?.includes("timeout")
               ? "timed_out"
               : "error";
 
@@ -2520,8 +2393,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           ? cacheBypassReason ?? "scope_refusal"
           : cacheBypassReason;
         const finalAuditError = modelRefusalDetected
-          ? auditErrorMessage ?? "scope_refusal:model_refusal_detected"
-          : auditErrorMessage;
+          ? runtimeState.auditErrorMessage ?? "scope_refusal:model_refusal_detected"
+          : runtimeState.auditErrorMessage;
 
         await logAiRequestFn(ctx.serviceSupabase, {
           threadId: threadId!,
@@ -2533,24 +2406,24 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           toolCalls: auditToolCalls.length > 0 ? auditToolCalls : undefined,
           latencyMs: Date.now() - startTime,
           model: process.env.ZAI_API_KEY ? getZaiModelFn() : undefined,
-          inputTokens: usageRef.current?.inputTokens,
-          outputTokens: usageRef.current?.outputTokens,
+          inputTokens: runtimeState.usage?.inputTokens,
+          outputTokens: runtimeState.usage?.outputTokens,
           error: finalAuditError,
           cacheStatus,
           cacheEntryId,
           cacheBypassReason: finalBypassReason,
-          contextSurface: (contextMetadata?.surface ?? effectiveSurface) as CacheSurface,
-          contextTokenEstimate: contextMetadata?.estimatedTokens,
+          contextSurface: (runtimeState.contextMetadata?.surface ?? effectiveSurface) as CacheSurface,
+          contextTokenEstimate: runtimeState.contextMetadata?.estimatedTokens,
           ragChunkCount: ragChunkCount > 0 ? ragChunkCount : undefined,
           ragTopSimilarity,
           ragError,
-          safetyVerdict,
-          safetyCategories,
-          safetyLatencyMs,
-          ragGrounded,
-          ragGroundingFailures,
-          ragGroundingLatencyMs,
-          ragGroundingMode: ragGroundingAudited,
+          safetyVerdict: runtimeState.safetyVerdict,
+          safetyCategories: runtimeState.safetyCategories,
+          safetyLatencyMs: runtimeState.safetyLatencyMs,
+          ragGrounded: runtimeState.ragGrounded,
+          ragGroundingFailures: runtimeState.ragGroundingFailures,
+          ragGroundingLatencyMs: runtimeState.ragGroundingLatencyMs,
+          ragGroundingMode: runtimeState.ragGroundingAudited,
           stageTimings: finalizeStageTimings(
             stageTimings,
             requestOutcome,
