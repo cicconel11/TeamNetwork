@@ -226,6 +226,12 @@ let supabaseStub: ReturnType<typeof createSupabaseStub>;
 const { createChatPostHandler } = await import(
   "../../../src/app/api/ai/[orgId]/chat/handler.ts"
 );
+const { shouldContinueDraftSession } = await import(
+  "../../../src/app/api/ai/[orgId]/chat/handler/draft-session.ts"
+);
+const { resolveSurfaceRouting } = await import(
+  "../../../src/lib/ai/intent-router.ts"
+);
 let POST: ReturnType<typeof createChatPostHandler>;
 
 function buildDefaultDeps(overrides: Record<string, any> = {}) {
@@ -554,6 +560,23 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
   };
 }
 
+function makeDraftSession(draftType: string, draftPayload: Record<string, unknown> = {}) {
+  return {
+    id: `draft-${draftType}`,
+    organization_id: ORG_ID,
+    user_id: ADMIN_USER.id,
+    thread_id: buildThreadId(98),
+    draft_type: draftType,
+    status: "collecting_fields",
+    draft_payload: draftPayload,
+    missing_fields: ["body"],
+    pending_action_id: null,
+    expires_at: "2099-01-01T00:00:00.000Z",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  };
+}
+
 beforeEach(() => {
   (globalThis as { __rateLimitStore?: Map<string, unknown> }).__rateLimitStore?.clear();
   supabaseStub = createSupabaseStub();
@@ -588,6 +611,38 @@ function toolNamesForCall(index = 0): string[] | undefined {
 function toolChoiceForCall(index = 0) {
   return composeResponseCalls[index]?.toolChoice;
 }
+
+test("direct message draft does not swallow a group message switch prompt", () => {
+  const message = "Message the CEO boss men group that practice starts at 7am.";
+  const routing = resolveSurfaceRouting(message, "general");
+
+  const shouldContinue = shouldContinueDraftSession(
+    message,
+    makeDraftSession("send_chat_message", {
+      person_query: "Jason Leonard",
+      body: "Can you join the alumni panel?",
+    }) as any,
+    routing
+  );
+
+  assert.equal(shouldContinue, false);
+});
+
+test("group message draft does not swallow a direct message switch prompt", () => {
+  const message = "Message Jason Leonard that practice starts at 7am.";
+  const routing = resolveSurfaceRouting(message, "general");
+
+  const shouldContinue = shouldContinueDraftSession(
+    message,
+    makeDraftSession("send_group_chat_message", {
+      group_name_query: "CEO boss men",
+      body: "Quick check-in.",
+    }) as any,
+    routing
+  );
+
+  assert.equal(shouldContinue, false);
+});
 
 test("tool call: SSE stream contains tool_status calling, done, and final chunk", async () => {
   const response = await POST(makeRequest() as any, {

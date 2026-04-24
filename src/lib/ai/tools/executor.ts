@@ -81,6 +81,13 @@ import type {
   ScheduleImageMimeType,
   ScheduleExtractionResult,
 } from "@/lib/ai/schedule-extraction";
+import { dispatchToolModule, getToolModule, isRegisteredTool } from "@/lib/ai/tools/registry";
+import {
+  buildMemberName,
+  getSafeErrorMessage,
+  safeToolQuery,
+  truncateBody,
+} from "@/lib/ai/tools/shared";
 
 export type ToolExecutionAuthorization =
   | {
@@ -152,26 +159,6 @@ const NON_ADMIN_RLS_READ_TOOL_NAMES: ReadonlySet<ToolName> = new Set<ToolName>([
   "list_philanthropy_events",
   "find_navigation_targets",
 ]);
-
-const listMembersSchema = z
-  .object({
-    limit: z.number().int().min(1).max(50).optional(),
-  })
-  .strict();
-
-const listEventsSchema = z
-  .object({
-    limit: z.number().int().min(1).max(25).optional(),
-    upcoming: z.boolean().optional(),
-  })
-  .strict();
-
-const listAnnouncementsSchema = z
-  .object({
-    limit: z.number().int().min(1).max(25).optional(),
-    pinned_only: z.boolean().optional(),
-  })
-  .strict();
 
 const listDiscussionsSchema = z
   .object({
@@ -407,10 +394,7 @@ const findNavigationTargetsSchema = z
   })
   .strict();
 
-const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
-  list_members: listMembersSchema,
-  list_events: listEventsSchema,
-  list_announcements: listAnnouncementsSchema,
+const ARG_SCHEMAS: Partial<Record<ToolName, z.ZodSchema>> = {
   list_discussions: listDiscussionsSchema,
   list_job_postings: listJobPostingsSchema,
   list_chat_groups: listChatGroupsSchema,
@@ -468,7 +452,13 @@ function validateArgs(
   name: ToolName,
   raw: unknown
 ): { valid: true; args: unknown } | { valid: false; error: string } {
-  const schema = ARG_SCHEMAS[name];
+  const schema = getToolModule(name)?.argsSchema ?? ARG_SCHEMAS[name];
+  if (!schema) {
+    return {
+      valid: false,
+      error: `No argument schema registered for ${name}`,
+    };
+  }
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -477,21 +467,6 @@ function validateArgs(
     };
   }
   return { valid: true, args: parsed.data };
-}
-
-function getSafeErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (error && typeof error === "object" && "message" in error) {
-    const message = error.message;
-    if (typeof message === "string" && message.length > 0) {
-      return message;
-    }
-  }
-
-  return "unknown_error";
 }
 
 function toolError(error: string, code?: ToolExecutionErrorCode): ToolExecutionResult {
@@ -565,30 +540,6 @@ function buildLogContext(
   };
 }
 
-async function safeToolQuery(
-  logContext: AiLogContext,
-  fn: () => Promise<{ data: unknown; error: unknown }>
-): Promise<ToolExecutionResult> {
-  try {
-    const { data, error } = await fn();
-    if (error) {
-      aiLog("warn", "ai-tools", "query failed", logContext, {
-        error: getSafeErrorMessage(error),
-      });
-      return toolError("Query failed");
-    }
-    return { kind: "ok", data: data ?? [] };
-  } catch (err) {
-    if (isStageTimeoutError(err)) {
-      throw err;
-    }
-    aiLog("warn", "ai-tools", "unexpected error", logContext, {
-      error: getSafeErrorMessage(err),
-    });
-    return toolError("Unexpected error");
-  }
-}
-
 async function safeToolCount(
   logContext: AiLogContext,
   fn: () => Promise<{ count: number | null; error: unknown }>
@@ -619,7 +570,6 @@ async function safeToolCount(
   }
 }
 
-const MAX_BODY_PREVIEW_CHARS = 500;
 const SCRAPE_SCHEDULE_FETCH_TIMEOUT_MS = 10_000;
 const SCRAPE_SCHEDULE_MAX_BYTES = 512 * 1024;
 const MAX_SOURCE_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB — prevents oversized base64 payloads to LLM
@@ -677,31 +627,8 @@ function isScheduleImageAttachment(
   );
 }
 
-function truncateBody(body: string | null | undefined): string | null {
-  if (typeof body !== "string" || body.trim().length === 0) {
-    return null;
-  }
-  return body.trim().slice(0, MAX_BODY_PREVIEW_CHARS);
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SB = any;
-
-interface MemberToolRow {
-  id: string;
-  user_id: string | null;
-  status: string | null;
-  role: string | null;
-  created_at: string | null;
-  first_name: string;
-  last_name: string;
-  email: string | null;
-}
-
-interface UserNameRow {
-  id: string;
-  name: string | null;
-}
 
 interface MembershipRow {
   role: string | null;
@@ -720,170 +647,6 @@ interface EventValidationErrorRecord {
   index: number;
   missing_fields: string[];
   draft: Record<string, unknown>;
-}
-
-function buildMemberName(firstName: string, lastName: string): string {
-  return [firstName, lastName].filter(Boolean).join(" ").trim();
-}
-
-function isPlaceholderMemberName(firstName: string, lastName: string): boolean {
-  const normalizedFirstName = firstName.trim();
-  const normalizedLastName = lastName.trim();
-
-  return (
-    (normalizedFirstName.length === 0 && normalizedLastName.length === 0) ||
-    (normalizedFirstName === "Member" && normalizedLastName.length === 0)
-  );
-}
-
-function isTrustworthyHumanName(value: string | null | undefined): value is string {
-  const normalizedValue = value?.trim() ?? "";
-  return normalizedValue.length > 0 && normalizedValue !== "Member" && !normalizedValue.includes("@");
-}
-
-async function listMembers(
-  sb: SB,
-  orgId: string,
-  args: z.infer<typeof listMembersSchema>,
-  logContext: AiLogContext
-): Promise<ToolExecutionResult> {
-  const limit = Math.min(args.limit ?? 20, 50);
-  return safeToolQuery(logContext, async () => {
-    const { data, error } = await sb
-      .from("members")
-      .select("id, user_id, status, role, created_at, first_name, last_name, email")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(limit);
-
-    if (!Array.isArray(data) || error) {
-      return { data, error };
-    }
-
-    const members = data as MemberToolRow[];
-    const linkedUserIds = [...new Set(
-      members
-        .map((member) => member.user_id)
-        .filter((userId): userId is string => typeof userId === "string" && userId.length > 0)
-    )];
-
-    const userNameById = new Map<string, string>();
-
-    if (linkedUserIds.length > 0) {
-      const { data: userRows, error: userError } = await sb
-        .from("users")
-        .select("id, name")
-        .in("id", linkedUserIds);
-
-      if (userError) {
-        return { data: null, error: userError };
-      }
-
-      if (Array.isArray(userRows)) {
-        for (const user of userRows as UserNameRow[]) {
-          if (isTrustworthyHumanName(user.name)) {
-            userNameById.set(user.id, user.name.trim());
-          }
-        }
-      }
-    }
-
-    return {
-      data: members.map((member) => {
-        const memberName = buildMemberName(member.first_name, member.last_name);
-        const fallbackUserName =
-          member.user_id && !isPlaceholderMemberName(member.first_name, member.last_name)
-            ? null
-            : member.user_id
-              ? userNameById.get(member.user_id) ?? null
-              : null;
-
-        return {
-          id: member.id,
-          user_id: member.user_id,
-          status: member.status,
-          role: member.role,
-          created_at: member.created_at,
-          name:
-            memberName && !isPlaceholderMemberName(member.first_name, member.last_name)
-              ? memberName
-              : fallbackUserName ?? "",
-          email: member.email,
-        };
-      }),
-      error,
-    };
-  });
-}
-
-async function listEvents(
-  sb: SB,
-  orgId: string,
-  args: z.infer<typeof listEventsSchema>,
-  logContext: AiLogContext
-): Promise<ToolExecutionResult> {
-  const limit = Math.min(args.limit ?? 10, 25);
-  const upcoming = args.upcoming ?? true;
-  const now = new Date().toISOString();
-  return safeToolQuery(logContext, () => {
-    let query = sb
-      .from("events")
-      .select("id, title, start_date, end_date, location, description")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .order("start_date", { ascending: upcoming })
-      .limit(limit);
-    if (upcoming) {
-      query = query.gte("start_date", now);
-    } else {
-      query = query.lt("start_date", now);
-    }
-    return query;
-  });
-}
-
-async function listAnnouncements(
-  sb: SB,
-  orgId: string,
-  args: z.infer<typeof listAnnouncementsSchema>,
-  logContext: AiLogContext
-): Promise<ToolExecutionResult> {
-  const limit = Math.min(args.limit ?? 10, 25);
-  const pinnedOnly = args.pinned_only ?? false;
-  return safeToolQuery(logContext, async () => {
-    let query = sb
-      .from("announcements")
-      .select("id, title, body, audience, is_pinned, published_at, created_at")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .order("is_pinned", { ascending: false })
-      .order("published_at", { ascending: false })
-      .limit(limit);
-
-    if (pinnedOnly) {
-      query = query.eq("is_pinned", true);
-    }
-
-    const { data, error } = await query;
-
-    if (!Array.isArray(data) || error) {
-      return { data, error };
-    }
-
-    return {
-      data: data.map((announcement) => ({
-        id: announcement.id,
-        title: announcement.title,
-        audience: announcement.audience,
-        is_pinned: Boolean(announcement.is_pinned),
-        published_at: announcement.published_at ?? announcement.created_at ?? null,
-        body_preview: truncateBody(announcement.body),
-      })),
-      error: null,
-    };
-  });
 }
 
 async function listDiscussions(
@@ -3316,18 +3079,10 @@ export async function executeToolCall(
         ? TOOL_EXECUTION_TIMEOUT_MS * 3
         : TOOL_EXECUTION_TIMEOUT_MS;
     return await withStageTimeout(`tool_${toolName}`, timeoutMs, async () => {
+      if (isRegisteredTool(toolName)) {
+        return dispatchToolModule(toolName, args, { ctx, sb, logContext });
+      }
       switch (toolName) {
-        case "list_members":
-          return listMembers(sb, ctx.orgId, args as z.infer<typeof listMembersSchema>, logContext);
-        case "list_events":
-          return listEvents(sb, ctx.orgId, args as z.infer<typeof listEventsSchema>, logContext);
-        case "list_announcements":
-          return listAnnouncements(
-            sb,
-            ctx.orgId,
-            args as z.infer<typeof listAnnouncementsSchema>,
-            logContext
-          );
         case "list_discussions":
           return listDiscussions(
             sb,
@@ -3512,6 +3267,10 @@ export async function executeToolCall(
             ctx,
             logContext
           );
+        default:
+          // Registered tools dispatched above; remaining cases are exhaustive.
+          // Throw rather than return so the catch surfaces unknown tool names.
+          throw new Error(`Unhandled tool: ${toolName as string}`);
       }
     });
   } catch (err) {
