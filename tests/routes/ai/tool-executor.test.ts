@@ -1099,7 +1099,6 @@ test("prepare_announcement revises in place when ctx carries an active pending a
     ...makeCtx(reviseSb as any, { kind: "preverified_admin", source: "ai_org_context" }),
     threadId: "thread-revise",
     activePendingActionId: existingRow.id,
-    activePendingActionReviseCount: 0,
   };
 
   const result = expectOk(
@@ -1119,13 +1118,11 @@ test("prepare_announcement revises in place when ctx carries an active pending a
     state: string;
     pending_action: {
       id: string;
-      was_revised?: boolean;
       revise_count?: number;
     };
   };
   assert.equal(data.state, "needs_confirmation");
   assert.equal(data.pending_action.id, existingRow.id);
-  assert.equal(data.pending_action.was_revised, true);
   assert.equal(data.pending_action.revise_count, 1);
 
   assert.equal(row.revise_count, 1);
@@ -1197,7 +1194,6 @@ test("prepare_announcement falls through to create when active pending action's 
     ...makeCtx(mismatchStub as any),
     threadId: "thread-mismatch",
     activePendingActionId: existingRow.id,
-    activePendingActionReviseCount: 0,
   };
 
   const result = expectOk(
@@ -1212,10 +1208,10 @@ test("prepare_announcement falls through to create when active pending action's 
   );
 
   const data = result.data as {
-    pending_action: { id: string; was_revised?: boolean };
+    pending_action: { id: string; revise_count?: number };
   };
   assert.equal(data.pending_action.id, "pending-announcement-fresh");
-  assert.equal(data.pending_action.was_revised, undefined);
+  assert.equal(data.pending_action.revise_count, undefined);
 
   const insertQueries = mismatchStub.queries.filter(
     (q) => q.table === "ai_pending_actions" && q.method === "insert"

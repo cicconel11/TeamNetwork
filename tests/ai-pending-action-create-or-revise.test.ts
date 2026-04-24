@@ -160,7 +160,6 @@ test("active id + matching action_type -> revise in place, no insert", async () 
     ...baseInput,
     payload: v2,
     activeActionId: "action-1",
-    activeReviseCount: 0,
   });
 
   assert.equal(result.revised, true);
@@ -184,7 +183,6 @@ test("active id but mismatched action_type -> falls through to create", async ()
     actionType: "create_announcement",
     payload: v2,
     activeActionId: "action-1",
-    activeReviseCount: 0,
   });
 
   assert.equal(result.revised, false);
@@ -203,7 +201,6 @@ test("active id at revise_limit -> falls through to create", async () => {
     ...baseInput,
     payload: v2,
     activeActionId: "action-1",
-    activeReviseCount: AI_PENDING_ACTION_MAX_REVISES,
   });
 
   assert.equal(result.revised, false);
@@ -219,7 +216,6 @@ test("active id but row missing -> falls through to create", async () => {
     ...baseInput,
     payload: v2,
     activeActionId: "action-stale",
-    activeReviseCount: 0,
   });
 
   assert.equal(result.revised, false);
@@ -235,7 +231,6 @@ test("active id but row no longer pending -> falls through to create", async () 
     ...baseInput,
     payload: v2,
     activeActionId: "action-1",
-    activeReviseCount: 0,
   });
 
   assert.equal(result.revised, false);

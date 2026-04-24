@@ -56,6 +56,8 @@ import {
   type CreateDiscussionReplyPendingPayload,
   createPendingAction,
   createOrRevisePendingAction,
+  type CreateOrReviseResult,
+  type PendingActionPayload,
   type CreateDiscussionThreadPendingPayload,
   type CreateEventPendingPayload,
   type CreateJobPostingPendingPayload,
@@ -101,7 +103,6 @@ export interface ToolExecutionContext {
   threadId?: string;
   requestId?: string;
   activePendingActionId?: string | null;
-  activePendingActionReviseCount?: number | null;
   attachment?: {
     storagePath: string;
     fileName: string;
@@ -490,6 +491,25 @@ function getSafeErrorMessage(error: unknown): string {
 
 function toolError(error: string, code?: ToolExecutionErrorCode): ToolExecutionResult {
   return code ? { kind: "tool_error", error, code } : { kind: "tool_error", error };
+}
+
+function buildPendingActionField(
+  created: CreateOrReviseResult,
+  payload: PendingActionPayload
+) {
+  return {
+    id: created.record.id,
+    action_type: created.record.action_type,
+    payload,
+    expires_at: created.record.expires_at,
+    summary: buildPendingActionSummary(created.record),
+    ...(created.revised
+      ? {
+          revise_count: created.reviseCount,
+          previous_payload: created.previousPayload,
+        }
+      : {}),
+  };
 }
 
 function isScheduleImageConfigurationError(error: unknown): boolean {
@@ -1383,29 +1403,13 @@ async function prepareJobPosting(
     actionType: "create_job_posting",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: prepared.data,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
       sourced_fields: Object.keys(sourceDraft),
     },
   };
@@ -1498,29 +1502,13 @@ async function prepareAnnouncement(
     actionType: "create_announcement",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: prepared.data,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
     },
   };
 }
@@ -1638,29 +1626,13 @@ async function prepareEnterpriseInvite(
     actionType: "create_enterprise_invite",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: pendingPayload,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
     },
   };
 }
@@ -1728,29 +1700,13 @@ async function revokeEnterpriseInvite(
     actionType: "revoke_enterprise_invite",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: pendingPayload,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
     },
   };
 }
@@ -1828,29 +1784,13 @@ async function prepareDiscussionThread(
     actionType: "create_discussion_thread",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: prepared.data,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
     },
   };
 }
@@ -1937,29 +1877,13 @@ async function prepareDiscussionReply(
     actionType: "create_discussion_reply",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: prepared.data,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
     },
   };
 }
@@ -2108,29 +2032,13 @@ async function prepareChatMessage(
     actionType: "send_chat_message",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: draftWithResolvedRecipient,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
     },
   };
 }
@@ -2310,29 +2218,13 @@ async function prepareGroupMessage(
     actionType: "send_group_chat_message",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: draftWithResolvedGroup,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
     },
   };
 }
@@ -2424,29 +2316,13 @@ async function prepareEvent(
     actionType: "create_event",
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
-    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(created.record);
-
   return {
     kind: "ok",
     data: {
       state: "needs_confirmation",
       draft: prepared.data,
-      pending_action: {
-        id: created.record.id,
-        action_type: created.record.action_type,
-        payload: pendingPayload,
-        expires_at: created.record.expires_at,
-        summary,
-        ...(created.revised
-          ? {
-              was_revised: true,
-              revise_count: created.reviseCount,
-              previous_payload: created.previousPayload,
-            }
-          : {}),
-      },
+      pending_action: buildPendingActionField(created, pendingPayload),
     },
   };
 }
