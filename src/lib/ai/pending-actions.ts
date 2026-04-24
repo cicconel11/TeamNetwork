@@ -306,6 +306,83 @@ export async function updatePendingActionPayload(
   return { updated: true, row };
 }
 
+export type CreateOrReviseResult =
+  | { record: PendingActionRecord; revised: false }
+  | {
+      record: PendingActionRecord;
+      revised: true;
+      reviseCount: number;
+      previousPayload: PendingActionPayload;
+    };
+
+/**
+ * Branches between create-new-row and update-in-place revise.
+ *
+ * When the caller has an active pending action on the thread (passed as
+ * activeActionId + activeReviseCount), attempt a CAS revise. The current row
+ * payload becomes previous_payload (revise lineage). On revise_limit /
+ * not_pending / not_found / conflict, fall back to create-new-row so the user
+ * still gets a draft.
+ *
+ * The 3-loop cap (AI_PENDING_ACTION_MAX_REVISES) lives in the CAS itself.
+ */
+export async function createOrRevisePendingAction(
+  supabase: PendingActionSupabase,
+  input: {
+    organizationId: string;
+    userId: string;
+    threadId: string;
+    actionType: PendingActionType;
+    payload: PendingActionPayload;
+    previousPayload?: PendingActionPayload | null;
+    activeActionId?: string | null;
+    activeReviseCount?: number | null;
+  }
+): Promise<CreateOrReviseResult> {
+  if (
+    input.activeActionId &&
+    typeof input.activeReviseCount === "number"
+  ) {
+    const existing = await getPendingAction(supabase, input.activeActionId);
+
+    if (
+      existing &&
+      existing.status === "pending" &&
+      existing.action_type === input.actionType &&
+      existing.revise_count === input.activeReviseCount &&
+      existing.revise_count < AI_PENDING_ACTION_MAX_REVISES
+    ) {
+      const previousPayload = existing.payload;
+      const result = await updatePendingActionPayload(supabase, input.activeActionId, {
+        newPayload: input.payload,
+        previousPayload,
+        expectedReviseCount: input.activeReviseCount,
+      });
+
+      if (result.updated) {
+        return {
+          record: result.row,
+          revised: true,
+          reviseCount: result.row.revise_count,
+          previousPayload,
+        };
+      }
+      // Fall through to create on revise_limit / not_pending / not_found / conflict.
+    }
+  }
+
+  const record = await createPendingAction(supabase, {
+    organizationId: input.organizationId,
+    userId: input.userId,
+    threadId: input.threadId,
+    actionType: input.actionType,
+    payload: input.payload,
+    previousPayload: input.previousPayload ?? null,
+  });
+
+  return { record, revised: false };
+}
+
 export async function cleanupStrandedPendingActions(
   supabase: PendingActionSupabase,
   input: {

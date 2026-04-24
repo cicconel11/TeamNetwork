@@ -55,6 +55,7 @@ import {
   type SendGroupChatMessagePendingPayload,
   type CreateDiscussionReplyPendingPayload,
   createPendingAction,
+  createOrRevisePendingAction,
   type CreateDiscussionThreadPendingPayload,
   type CreateEventPendingPayload,
   type CreateJobPostingPendingPayload,
@@ -99,6 +100,8 @@ export interface ToolExecutionContext {
   authorization: ToolExecutionAuthorization;
   threadId?: string;
   requestId?: string;
+  activePendingActionId?: string | null;
+  activePendingActionReviseCount?: number | null;
   attachment?: {
     storagePath: string;
     fileName: string;
@@ -1373,14 +1376,16 @@ async function prepareJobPosting(
     ...prepared.data,
     orgSlug: typeof org?.slug === "string" ? org.slug : null,
   };
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "create_job_posting",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -1388,11 +1393,14 @@ async function prepareJobPosting(
       state: "needs_confirmation",
       draft: prepared.data,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
       sourced_fields: Object.keys(sourceDraft),
     },
@@ -1479,14 +1487,16 @@ async function prepareAnnouncement(
     ...prepared.data,
     orgSlug: typeof org?.slug === "string" ? org.slug : null,
   };
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "create_announcement",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -1494,11 +1504,14 @@ async function prepareAnnouncement(
       state: "needs_confirmation",
       draft: prepared.data,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
     },
   };
@@ -1610,14 +1623,16 @@ async function prepareEnterpriseInvite(
     expiresAt: args.expires_at ?? null,
   };
 
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "create_enterprise_invite",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -1625,11 +1640,14 @@ async function prepareEnterpriseInvite(
       state: "needs_confirmation",
       draft: pendingPayload,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
     },
   };
@@ -1691,14 +1709,16 @@ async function revokeEnterpriseInvite(
     organizationId: typeof invite.organization_id === "string" ? invite.organization_id : null,
   };
 
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "revoke_enterprise_invite",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -1706,11 +1726,14 @@ async function revokeEnterpriseInvite(
       state: "needs_confirmation",
       draft: pendingPayload,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
     },
   };
@@ -1782,14 +1805,16 @@ async function prepareDiscussionThread(
     ...prepared.data,
     orgSlug: typeof org?.slug === "string" ? org.slug : null,
   };
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "create_discussion_thread",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -1797,11 +1822,14 @@ async function prepareDiscussionThread(
       state: "needs_confirmation",
       draft: prepared.data,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
     },
   };
@@ -1882,14 +1910,16 @@ async function prepareDiscussionReply(
     ...prepared.data,
     orgSlug: typeof org?.slug === "string" ? org.slug : null,
   };
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "create_discussion_reply",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -1897,11 +1927,14 @@ async function prepareDiscussionReply(
       state: "needs_confirmation",
       draft: prepared.data,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
     },
   };
@@ -2044,14 +2077,16 @@ async function prepareChatMessage(
     ...prepared.data,
     orgSlug: typeof org?.slug === "string" ? org.slug : null,
   };
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "send_chat_message",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -2059,11 +2094,14 @@ async function prepareChatMessage(
       state: "needs_confirmation",
       draft: draftWithResolvedRecipient,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
     },
   };
@@ -2237,14 +2275,16 @@ async function prepareGroupMessage(
     ...prepared.data,
     orgSlug: typeof org?.slug === "string" ? org.slug : null,
   };
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "send_group_chat_message",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -2252,11 +2292,14 @@ async function prepareGroupMessage(
       state: "needs_confirmation",
       draft: draftWithResolvedGroup,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
     },
   };
@@ -2342,14 +2385,16 @@ async function prepareEvent(
     ...prepared.data,
     orgSlug: typeof org?.slug === "string" ? org.slug : null,
   };
-  const pendingAction = await createPendingAction(sb, {
+  const created = await createOrRevisePendingAction(sb, {
     organizationId: ctx.orgId,
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "create_event",
     payload: pendingPayload,
+    activeActionId: ctx.activePendingActionId,
+    activeReviseCount: ctx.activePendingActionReviseCount,
   });
-  const summary = buildPendingActionSummary(pendingAction);
+  const summary = buildPendingActionSummary(created.record);
 
   return {
     kind: "ok",
@@ -2357,11 +2402,14 @@ async function prepareEvent(
       state: "needs_confirmation",
       draft: prepared.data,
       pending_action: {
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
+        id: created.record.id,
+        action_type: created.record.action_type,
         payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
+        expires_at: created.record.expires_at,
         summary,
+        ...(created.revised
+          ? { was_revised: true, revise_count: created.reviseCount }
+          : {}),
       },
     },
   };
