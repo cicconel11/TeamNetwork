@@ -107,6 +107,10 @@ test("confirm executes create_job_posting and appends assistant message", async 
   assert.equal(insertedMessages[0].thread_id, THREAD_ID);
   assert.match(String(insertedMessages[0].content), /Created job posting/);
   assert.match(String(insertedMessages[0].content), /upenn-sprint-football\/jobs\/job-123/);
+  // Regression: ai_messages.user_id is NOT NULL in schema; insert must
+  // populate it from ctx.userId or it dies with 23502 in production.
+  assert.equal(insertedMessages[0].org_id, ORG_ID);
+  assert.equal(insertedMessages[0].user_id, ADMIN_USER.id);
 });
 
 test("confirm executes send_chat_message and appends assistant message", async () => {

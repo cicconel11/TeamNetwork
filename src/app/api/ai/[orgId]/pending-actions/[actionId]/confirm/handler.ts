@@ -263,6 +263,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
@@ -331,6 +332,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
@@ -406,6 +408,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
@@ -478,6 +481,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
@@ -557,6 +561,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
@@ -627,6 +632,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
@@ -719,6 +725,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
@@ -820,6 +827,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
@@ -874,6 +882,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
             org_id: ctx.orgId,
+            user_id: ctx.userId,
             role: "assistant",
             content,
             status: "complete",
