@@ -285,18 +285,23 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
         },
         onPendingActionUpdated: (event) => {
           setState((prev) => {
-            const idx = prev.pendingActions.findIndex(
-              (a) => a.actionId === event.actionId
-            );
-            if (idx === -1) return prev;
-            const next = prev.pendingActions.slice();
-            next[idx] = {
+            const updatedAction = {
               actionId: event.actionId,
               actionType: event.actionType,
               summary: event.summary,
               payload: event.payload,
               expiresAt: event.expiresAt,
             };
+            const idx = prev.pendingActions.findIndex(
+              (action) => action.actionId === event.actionId
+            );
+
+            if (idx === -1) {
+              return { ...prev, pendingActions: [...prev.pendingActions, updatedAction] };
+            }
+
+            const next = prev.pendingActions.slice();
+            next[idx] = updatedAction;
             return { ...prev, pendingActions: next };
           });
         },

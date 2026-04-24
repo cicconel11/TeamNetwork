@@ -306,6 +306,13 @@ export async function updatePendingActionPayload(
   return { updated: true, row };
 }
 
+export type CreateOrReviseFailureReason =
+  | "revise_limit"
+  | "not_pending"
+  | "not_found"
+  | "conflict"
+  | "action_type_mismatch";
+
 export type CreateOrReviseResult =
   | { record: PendingActionRecord; revised: false }
   | {
@@ -313,13 +320,17 @@ export type CreateOrReviseResult =
       revised: true;
       reviseCount: number;
       previousPayload: PendingActionPayload;
-    };
+    }
+  | { record: null; revised: false; failed: true; reason: CreateOrReviseFailureReason };
 
 /**
- * Revises in place when an active pending row matches the caller's action_type
- * and is still under the 3-loop cap; otherwise creates a new row. Falls back
- * to create on any CAS guard miss (revise_limit / not_pending / not_found /
- * conflict) so the user always gets a draft.
+ * When activeActionId is supplied and points at a still-pending row of the
+ * same action_type, revises in place under the 3-loop cap. If the precondition
+ * fails (cap hit, cancelled/executed, missing, type mismatch, CAS race),
+ * returns a failure arm so callers surface revise_limit / etc instead of
+ * silently minting a fresh row that resets the cap counter.
+ *
+ * When activeActionId is absent, always creates a new row.
  */
 export async function createOrRevisePendingAction(
   supabase: PendingActionSupabase,
@@ -336,28 +347,41 @@ export async function createOrRevisePendingAction(
   if (input.activeActionId) {
     const existing = await getPendingAction(supabase, input.activeActionId);
 
-    if (
-      existing &&
-      existing.status === "pending" &&
-      existing.action_type === input.actionType &&
-      existing.revise_count < AI_PENDING_ACTION_MAX_REVISES
-    ) {
-      const previousPayload = existing.payload;
-      const result = await updatePendingActionPayload(supabase, input.activeActionId, {
-        newPayload: input.payload,
-        previousPayload,
-        expectedReviseCount: existing.revise_count,
-      });
-
-      if (result.updated) {
-        return {
-          record: result.row,
-          revised: true,
-          reviseCount: result.row.revise_count,
-          previousPayload,
-        };
-      }
+    if (!existing) {
+      return { record: null, revised: false, failed: true, reason: "not_found" };
     }
+    if (existing.status !== "pending") {
+      return { record: null, revised: false, failed: true, reason: "not_pending" };
+    }
+    if (existing.action_type !== input.actionType) {
+      return {
+        record: null,
+        revised: false,
+        failed: true,
+        reason: "action_type_mismatch",
+      };
+    }
+    if (existing.revise_count >= AI_PENDING_ACTION_MAX_REVISES) {
+      return { record: null, revised: false, failed: true, reason: "revise_limit" };
+    }
+
+    const previousPayload = existing.payload;
+    const result = await updatePendingActionPayload(supabase, input.activeActionId, {
+      newPayload: input.payload,
+      previousPayload,
+      expectedReviseCount: existing.revise_count,
+    });
+
+    if (result.updated) {
+      return {
+        record: result.row,
+        revised: true,
+        reviseCount: result.row.revise_count,
+        previousPayload,
+      };
+    }
+
+    return { record: null, revised: false, failed: true, reason: result.reason };
   }
 
   const record = await createPendingAction(supabase, {

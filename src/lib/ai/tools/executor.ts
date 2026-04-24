@@ -57,7 +57,9 @@ import {
   createPendingAction,
   createOrRevisePendingAction,
   type CreateOrReviseResult,
+  type CreateOrReviseFailureReason,
   type PendingActionPayload,
+  type PendingActionRecord,
   type CreateDiscussionThreadPendingPayload,
   type CreateEventPendingPayload,
   type CreateJobPostingPendingPayload,
@@ -125,7 +127,10 @@ export type ScheduleFileToolErrorCode =
 export type ToolExecutionErrorCode =
   | ScheduleFileToolErrorCode
   | "enterprise_billing_role_required"
-  | "enterprise_invite_role_required";
+  | "enterprise_invite_role_required"
+  | "pending_action_revise_limit"
+  | "pending_action_not_pending"
+  | "pending_action_conflict";
 
 export type ToolExecutionResult =
   | { kind: "ok"; data: unknown }
@@ -494,7 +499,7 @@ function toolError(error: string, code?: ToolExecutionErrorCode): ToolExecutionR
 }
 
 function buildPendingActionField(
-  created: CreateOrReviseResult,
+  created: Extract<CreateOrReviseResult, { record: PendingActionRecord }>,
   payload: PendingActionPayload
 ) {
   return {
@@ -510,6 +515,38 @@ function buildPendingActionField(
         }
       : {}),
   };
+}
+
+function pendingActionFailureToToolError(
+  reason: CreateOrReviseFailureReason
+): ToolExecutionResult {
+  switch (reason) {
+    case "revise_limit":
+      return toolError(
+        "Maximum revisions reached for this draft. Please confirm or cancel it before making more changes.",
+        "pending_action_revise_limit"
+      );
+    case "not_pending":
+      return toolError(
+        "That draft is no longer open for edits. Start a new request to create another draft.",
+        "pending_action_not_pending"
+      );
+    case "not_found":
+      return toolError(
+        "That draft is no longer available. Start a new request to create another draft.",
+        "pending_action_not_pending"
+      );
+    case "action_type_mismatch":
+      return toolError(
+        "That draft is for a different action type. Please confirm or cancel it before starting a new one.",
+        "pending_action_not_pending"
+      );
+    case "conflict":
+      return toolError(
+        "Another revision landed first — please retry your edit.",
+        "pending_action_conflict"
+      );
+  }
 }
 
 function isScheduleImageConfigurationError(error: unknown): boolean {
@@ -1404,6 +1441,7 @@ async function prepareJobPosting(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
@@ -1503,6 +1541,7 @@ async function prepareAnnouncement(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
@@ -1627,6 +1666,7 @@ async function prepareEnterpriseInvite(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
@@ -1701,6 +1741,7 @@ async function revokeEnterpriseInvite(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
@@ -1785,6 +1826,7 @@ async function prepareDiscussionThread(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
@@ -1878,6 +1920,7 @@ async function prepareDiscussionReply(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
@@ -2033,6 +2076,7 @@ async function prepareChatMessage(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
@@ -2219,6 +2263,7 @@ async function prepareGroupMessage(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
@@ -2317,6 +2362,7 @@ async function prepareEvent(
     payload: pendingPayload,
     activeActionId: ctx.activePendingActionId,
   });
+  if ("failed" in created) return pendingActionFailureToToolError(created.reason);
   return {
     kind: "ok",
     data: {
