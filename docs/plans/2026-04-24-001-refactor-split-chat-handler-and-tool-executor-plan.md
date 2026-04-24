@@ -334,22 +334,11 @@ interface ToolModule<A, R extends ToolExecutionResult> {
 
 ---
 
-- [ ] U7. **Collapse handler barrel; update route + tests**
+- [x] U7. **Collapse handler barrel; update route + tests** — **N/A (premise invalid)**
 
-**Goal:** Delete `src/app/api/ai/[orgId]/chat/handler.ts` shim; update `route.ts` and test imports to target `./handler` directory.
+**Resolution:** `handler.ts` was never a shim. It is the full implementation file (2441 LOC after Codex U6 conservative extraction). The `handler/` directory holds extracted helper modules (`cache-rag.ts`, `sse-runtime.ts`, `formatters/`, `pass1-tools.ts`, `discussion-reply.ts`, `draft-session.ts`, `pending-event-revision.ts`, `shared.ts`) that `handler.ts` imports from. `route.ts` imports `./handler` → resolves cleanly to `handler.ts`. Test files import `./handler.ts` directly. No shim window, no module-resolution ambiguity, nothing to collapse.
 
-**Requirements:** R1, R5
-
-**Dependencies:** U1–U6
-
-**Files:**
-- Delete: `src/app/api/ai/[orgId]/chat/handler.ts` (shim)
-- Modify: `src/app/api/ai/[orgId]/chat/route.ts` (`import { createChatPostHandler } from "./handler"`)
-- Modify: `tests/ai-suggest-connections-format.test.ts`, `tests/ai-safety-gate.test.ts`, `tests/routes/ai/chat-handler.test.ts`, `tests/routes/ai/chat-handler-tools.test.ts` — import paths only.
-
-**Test scenarios:** none — pure import-path change. Existing suites are the check.
-
-**Verification:** All tests green. `grep -r "chat/handler\"" src tests` finds only `./handler` directory imports.
+The plan assumed Phase 1 would land a `handler/index.ts` re-export shim during U1–U6 with `handler.ts` collapsing to it at U7. In practice U6 (Codex) deliberately left the runTurn loop in `handler.ts` rather than extract to `handler/index.ts`, so the prerequisite for U7 never materialized. Marking U7 N/A and proceeding to Phase 2 decision.
 
 ---
 
