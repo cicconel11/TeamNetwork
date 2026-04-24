@@ -42,11 +42,11 @@ export const MENTOR_PASS2_TEMPLATE = [
   "- If state=unauthorized, say mentor suggestions are currently available to admins only.",
 ].join("\n");
 
-export const TOOL_GROUNDING_FALLBACK =
+const TOOL_GROUNDING_FALLBACK =
   "I couldn’t verify that answer against your organization’s data, so I’m not returning it. Please try rephrasing or ask a narrower question.";
 export const EMPTY_ASSISTANT_RESPONSE_FALLBACK =
   "I didn’t get a usable response for that question. Please try again.";
-export const MEMBER_TOOL_GROUNDING_FALLBACK =
+const MEMBER_TOOL_GROUNDING_FALLBACK =
   "I can list specific members from the current roster, but I couldn’t verify that summary from this tool. Try asking for a smaller list, recent members, or specific people.";
 export const MEMBER_LIST_PASS2_INSTRUCTION = [
   "When using list_members results:",
