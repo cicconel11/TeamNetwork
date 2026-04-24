@@ -146,6 +146,43 @@ test("consumeSSEStream forwards pending_action events before completion", async 
   ]);
 });
 
+test("consumeSSEStream forwards pending_action_updated events", async () => {
+  const updates: Array<{ actionId: string; reviseCount: number; payload: unknown }> = [];
+
+  await consumeSSEStream(
+    makeSSEEventStream([
+      {
+        type: "pending_action_updated",
+        actionId: "action-123",
+        actionType: "create_event",
+        summary: { title: "Review event", description: "Confirm it" },
+        payload: { title: "Revised title" },
+        previousPayload: { title: "Old title" },
+        reviseCount: 1,
+        expiresAt: "2026-07-27T00:15:00.000Z",
+      },
+      { type: "done", threadId: "thread-123" },
+    ]),
+    {
+      onPendingActionUpdated: (event) => {
+        updates.push({
+          actionId: event.actionId,
+          reviseCount: event.reviseCount,
+          payload: event.payload,
+        });
+      },
+    }
+  );
+
+  assert.deepEqual(updates, [
+    {
+      actionId: "action-123",
+      reviseCount: 1,
+      payload: { title: "Revised title" },
+    },
+  ]);
+});
+
 test("MessageInput renders tool status label when provided", () => {
   const html = renderToStaticMarkup(
     React.createElement(MessageInput, {

@@ -54,6 +54,9 @@ interface StreamCallbacks {
   onError?: (message: string) => void;
   onToolStatus?: (event: Extract<SSEEvent, { type: "tool_status" }>) => void;
   onPendingAction?: (event: Extract<SSEEvent, { type: "pending_action" }>) => void;
+  onPendingActionUpdated?: (
+    event: Extract<SSEEvent, { type: "pending_action_updated" }>
+  ) => void;
   onPendingActionsBatch?: (event: Extract<SSEEvent, { type: "pending_actions_batch" }>) => void;
 }
 
@@ -138,6 +141,11 @@ export async function consumeSSEStream(
 
         if (event.type === "pending_action") {
           callbacks.onPendingAction?.(event);
+          continue;
+        }
+
+        if (event.type === "pending_action_updated") {
+          callbacks.onPendingActionUpdated?.(event);
           continue;
         }
 
@@ -274,6 +282,23 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
               },
             ],
           }));
+        },
+        onPendingActionUpdated: (event) => {
+          setState((prev) => {
+            const idx = prev.pendingActions.findIndex(
+              (a) => a.actionId === event.actionId
+            );
+            if (idx === -1) return prev;
+            const next = prev.pendingActions.slice();
+            next[idx] = {
+              actionId: event.actionId,
+              actionType: event.actionType,
+              summary: event.summary,
+              payload: event.payload,
+              expiresAt: event.expiresAt,
+            };
+            return { ...prev, pendingActions: next };
+          });
         },
         onPendingActionsBatch: (event) => {
           setState((prev) => ({
