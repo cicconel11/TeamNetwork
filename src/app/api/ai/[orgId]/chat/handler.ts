@@ -19,7 +19,6 @@ import {
   type ToolName,
 } from "@/lib/ai/tools/definitions";
 import {
-  buildPendingEventBatchFromDrafts,
   executeToolCall,
   getToolAuthorizationMode,
   type ToolExecutionAuthorization,
@@ -71,7 +70,6 @@ import {
   supportsDraftSessionsStore,
   type DraftSessionRecord,
 } from "@/lib/ai/draft-sessions";
-import { updatePendingActionStatus } from "@/lib/ai/pending-actions";
 import {
   createStageAbortSignal,
   isStageTimeoutError,
@@ -1390,12 +1388,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           revisedEvents.length > 1 ? "prepare_events_batch" : "prepare_event";
         const revisionArgs =
           revisedEvents.length > 1 ? { events: revisedEvents } : revisedEvents[0];
-        const revisedOrgSlug = activePendingEventActions.find((action) =>
-          action.payload &&
-          typeof action.payload === "object" &&
-          typeof action.payload.orgSlug === "string" &&
-          action.payload.orgSlug.trim().length > 0
-        )?.payload.orgSlug ?? null;
 
         runtimeState.toolCallMade = true;
         auditToolCalls.push({
@@ -1405,49 +1397,51 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         enqueue({ type: "tool_status", toolName: revisionToolName, status: "calling" });
 
         const toolStartedAt = Date.now();
-        const revisionResult =
-          revisedEvents.length > 10
-            ? ({
-                kind: "ok",
-                data: await buildPendingEventBatchFromDrafts(
-                  ctx.serviceSupabase as any,
-                  {
-                    orgId: ctx.orgId,
-                    userId: ctx.userId,
-                    enterpriseId: ctx.enterpriseId,
-                    enterpriseRole: ctx.enterpriseRole,
-                    serviceSupabase: ctx.serviceSupabase,
-                    authorization: toolAuthorization,
-                    threadId,
-                    requestId,
-                    attachment,
-                  },
-                  revisedEvents,
-                  {
-                    ...requestLogContext,
-                    threadId: threadId!,
-                  },
-                  revisedOrgSlug
-                ),
-              } as const)
-            : await executeToolCallFn(
-                {
-                  orgId: ctx.orgId,
-                  userId: ctx.userId,
-                  enterpriseId: ctx.enterpriseId,
-                  enterpriseRole: ctx.enterpriseRole,
-                  supabase: ctx.supabase,
-                  serviceSupabase: ctx.serviceSupabase,
-                  authorization: toolAuthorization,
-                  threadId,
-                  requestId,
-                  attachment,
-                },
-                {
-                  name: revisionToolName,
-                  args: revisionArgs,
-                }
-              );
+
+        // Batch revisions (>1 active event) cannot preserve the per-row revise
+        // cap because prepare_events_batch / buildPendingEventBatchFromDrafts
+        // mints fresh rows in a loop. Reject explicitly so the user confirms
+        // or cancels the existing batch instead of silently bypassing the cap.
+        if (activePendingEventActions.length > 1) {
+          addToolCallTiming(stageTimings, {
+            name: revisionToolName,
+            status: "failed",
+            duration_ms: Date.now() - toolStartedAt,
+            auth_mode: toolAuthMode,
+            error_kind: "tool_error",
+          });
+          enqueue({ type: "tool_status", toolName: revisionToolName, status: "error" });
+          enqueue({
+            type: "error",
+            message:
+              "I can't revise a multi-event draft in place. Please confirm or cancel the current pending events, then ask again with the changes you want.",
+            retryable: false,
+          });
+          return;
+        }
+
+        // Single-event revise: pass activePendingActionId so the executor's
+        // createOrRevisePendingAction revises the existing row under the
+        // 3-loop cap instead of minting a fresh one.
+        const revisionResult = await executeToolCallFn(
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            enterpriseId: ctx.enterpriseId,
+            enterpriseRole: ctx.enterpriseRole,
+            supabase: ctx.supabase,
+            serviceSupabase: ctx.serviceSupabase,
+            authorization: toolAuthorization,
+            threadId,
+            requestId,
+            attachment,
+            activePendingActionId: activePendingEventActions[0].id,
+          },
+          {
+            name: revisionToolName,
+            args: revisionArgs,
+          }
+        );
 
         if (revisionResult.kind !== "ok") {
           addToolCallTiming(stageTimings, {
@@ -1483,30 +1477,28 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         });
 
         const pendingAction = getPendingActionFromToolData(revisionResult.data);
-        const batchActions = getBatchPendingActionsFromToolData(revisionResult.data);
-        if (pendingAction || batchActions) {
-          for (const action of activePendingEventActions) {
-            await updatePendingActionStatus(ctx.serviceSupabase, action.id, {
-              status: "cancelled",
-              expectedStatus: "pending",
+        if (pendingAction) {
+          if (pendingAction.reviseCount !== null) {
+            enqueue({
+              type: "pending_action_updated",
+              actionId: pendingAction.actionId,
+              actionType: pendingAction.actionType,
+              summary: pendingAction.summary,
+              payload: pendingAction.payload,
+              previousPayload: pendingAction.previousPayload,
+              reviseCount: pendingAction.reviseCount,
+              expiresAt: pendingAction.expiresAt,
+            });
+          } else {
+            enqueue({
+              type: "pending_action",
+              actionId: pendingAction.actionId,
+              actionType: pendingAction.actionType,
+              summary: pendingAction.summary,
+              payload: pendingAction.payload,
+              expiresAt: pendingAction.expiresAt,
             });
           }
-        }
-
-        if (pendingAction) {
-          enqueue({
-            type: "pending_action",
-            actionId: pendingAction.actionId,
-            actionType: pendingAction.actionType,
-            summary: pendingAction.summary,
-            payload: pendingAction.payload,
-            expiresAt: pendingAction.expiresAt,
-          });
-        } else if (batchActions) {
-          enqueue({
-            type: "pending_actions_batch",
-            actions: batchActions,
-          });
         }
 
         fullContent =

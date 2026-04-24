@@ -1606,22 +1606,140 @@ test("POST /api/ai/[orgId]/chat revises pending imported schedule events and req
     params: Promise.resolve({ orgId: ORG_ID }),
   });
 
+  // Batch revisions of >1 active pending events are rejected: the underlying
+  // prepare_events_batch path mints new rows in a loop, which would silently
+  // bypass the per-row 3-revise cap. Reject and require the user to confirm
+  // or cancel the existing batch first.
   assert.equal(response.status, 200);
   const body = await response.text();
-  assert.equal(executedToolCall?.name, "prepare_events_batch");
-  assert.deepEqual(executedToolCall?.args?.events?.map((event: any) => event.event_type), [
-    "practice",
-    "practice",
-  ]);
-  assert.match(body, /revised/i);
-  assert.match(body, /confirm/i);
-  assert.match(body, /"type":"pending_actions_batch"/);
+  assert.equal(executedToolCall, null, "executor must not be invoked for batch revise reject");
+  assert.match(body, /can't revise a multi-event draft in place/i);
+  assert.match(body, /"type":"error"/);
+  assert.doesNotMatch(body, /"type":"pending_actions_batch"/);
   assert.doesNotMatch(body, /fallback revision prose should not appear/);
   assert.equal(composeCalls, 0);
+  // Old pending rows must remain pending — we are NOT cancelling and replacing.
   assert.deepEqual(
     pendingActions.map((action) => action.status),
-    ["cancelled", "cancelled"]
+    ["pending", "pending"]
   );
+});
+
+test("POST /api/ai/[orgId]/chat revises a single pending event in place and emits pending_action_updated", async () => {
+  let composeCalls = 0;
+  let executedToolCall: any = null;
+  let executedToolCtx: any = null;
+  const threadId = "11111111-1111-4111-8111-111111111141";
+  const pendingActions = [
+    {
+      id: "pending-single-1",
+      organization_id: ORG_ID,
+      user_id: ADMIN_USER.id,
+      thread_id: threadId,
+      action_type: "create_event",
+      status: "pending",
+      revise_count: 0,
+      expires_at: "2099-01-01T00:00:00.000Z",
+      payload: {
+        title: "Acme vs Central",
+        start_date: "2026-04-10",
+        start_time: "18:30",
+        event_type: "general",
+        is_philanthropy: false,
+        orgSlug: "acme",
+      },
+    },
+  ];
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => ({
+      ...aiContext,
+      serviceSupabase: createPendingActionServiceSupabase(pendingActions),
+    }),
+    buildPromptContext: async () => ({
+      systemPrompt: "System prompt",
+      orgContextMessage: null,
+      metadata: { surface: "general", estimatedTokens: 100 },
+    }),
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      composeCalls += 1;
+      yield { type: "chunk", content: "should not appear — revise path skips compose" };
+    }) as any,
+    executeToolCall: async (ctx: any, call: any) => {
+      executedToolCall = call;
+      executedToolCtx = ctx;
+      // Simulate the executor revising the existing row in place.
+      return {
+        kind: "ok",
+        data: {
+          state: "needs_confirmation",
+          draft: { ...call.args, event_type: "practice" },
+          pending_action: {
+            id: "pending-single-1",
+            action_type: "create_event",
+            payload: { ...call.args, event_type: "practice", orgSlug: "acme" },
+            previous_payload: pendingActions[0].payload,
+            revise_count: 1,
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: { title: "Acme vs Central", description: "Review before creating" },
+          },
+        },
+      };
+    },
+    logAiRequest: async () => {},
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: threadId,
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async () => {},
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      threadId,
+      message: "this is actually practice",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  // Executor must be called WITH activePendingActionId so it revises in place
+  // via createOrRevisePendingAction instead of minting a fresh row.
+  assert.equal(executedToolCall?.name, "prepare_event");
+  assert.equal(
+    executedToolCtx?.activePendingActionId,
+    "pending-single-1",
+    "handler must thread the active pending action id through to the executor"
+  );
+  // SSE must emit pending_action_updated (with previousPayload + reviseCount),
+  // not pending_action — replacement-style emission breaks the inline diff.
+  assert.match(body, /"type":"pending_action_updated"/);
+  assert.match(body, /"reviseCount":1/);
+  assert.match(body, /"previousPayload":/);
+  assert.doesNotMatch(body, /"type":"pending_action"[^_]/);
+  // Original row must still be the only one and still pending — no
+  // cancel-and-replace cycle.
+  assert.equal(pendingActions.length, 1);
+  assert.equal(pendingActions[0].status, "pending");
+  assert.equal(composeCalls, 0);
 });
 
 test("POST /api/ai/[orgId]/chat asks for clarification before revising an ambiguous pending schedule batch", async () => {
@@ -1807,27 +1925,21 @@ test("POST /api/ai/[orgId]/chat revises imported schedule batches larger than te
     params: Promise.resolve({ orgId: ORG_ID }),
   });
 
+  // Same reject path as the >1-and-≤10 batch case: large batch revisions used
+  // to short-circuit through buildPendingEventBatchFromDrafts which mints new
+  // rows in a loop, bypassing the 3-revise cap. Reject explicitly.
   assert.equal(response.status, 200);
   const body = await response.text();
-  assert.match(body, /revised/i);
-  assert.match(body, /confirm/i);
-  assert.match(body, /"type":"pending_actions_batch"/);
-  assert.match(body, /"event_type":"class"/);
-  assert.doesNotMatch(body, /Too big: expected array to have <=10 items/);
+  assert.match(body, /can't revise a multi-event draft in place/i);
+  assert.match(body, /"type":"error"/);
+  assert.doesNotMatch(body, /"type":"pending_actions_batch"/);
   assert.doesNotMatch(body, /large batch fallback prose should not appear/);
   assert.equal(composeCalls, 0);
+  // All 12 originals must remain pending — no cancellation, no replacement.
+  assert.equal(pendingActions.length, 12);
   assert.deepEqual(
-    pendingActions.slice(0, 12).map((action) => action.status),
-    Array.from({ length: 12 }, () => "cancelled")
-  );
-  assert.equal(pendingActions.length, 24);
-  assert.deepEqual(
-    pendingActions.slice(12).map((action) => action.status),
+    pendingActions.map((action) => action.status),
     Array.from({ length: 12 }, () => "pending")
-  );
-  assert.deepEqual(
-    pendingActions.slice(12).map((action) => action.payload.event_type),
-    Array.from({ length: 12 }, () => "class")
   );
 });
 
