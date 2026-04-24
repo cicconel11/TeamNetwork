@@ -157,22 +157,8 @@ export {
   CONNECTION_PASS2_TEMPLATE,
   collectPhoneNumberFields,
   formatSuggestConnectionsResponse,
-  formatDeterministicToolResponse,
-  formatDeterministicToolErrorResponse,
-  formatRevisedPendingEventResponse,
-  resolveHideDonorNamesPreference,
-  type DonationResponseOptions,
 } from "./handler/formatters/index";
-export {
-  CREATE_JOB_PROMPT_PATTERN,
-  DIRECT_QUERY_START_PATTERN,
-  getForcedPass1ToolChoice,
-  getPass1Tools,
-  isToolFirstEligible,
-  looksLikeStructuredJobDraft,
-} from "./handler/pass1-tools";
 export type { ChatAttachment } from "./handler/shared";
-export { SCHEDULE_ATTACHMENT_MIME_TYPES } from "./handler/shared";
 
 export interface ChatRouteDeps {
   createClient?: typeof createClient;
