@@ -142,6 +142,53 @@ test("verifyToolBackedResponse accepts member labels with presentation-only role
   assert.deepEqual(result.failures, []);
 });
 
+test("verifyToolBackedResponse accepts member labels decorated with positions or titles from RAG", () => {
+  // Regression: list_members rows only carry name/email/role/etc, no position
+  // or title. The model legitimately enriches names with parenthetical context
+  // pulled from RAG chunks (player position, board title, etc). Grounding
+  // should match on the bare name and ignore the trailing parenthetical.
+  const result = verifyToolBackedResponse({
+    content: [
+      "- JT Goodman (Running Back)",
+      "- Louis Ciccone (Chairman and CEO)",
+      "- Jacob Rios (DLINE)",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_members",
+        data: [
+          { name: "JT Goodman", email: "jt@example.com" },
+          { name: "Louis Ciccone", email: "louis@example.com" },
+          { name: "Jacob Rios", email: "jacob@example.com" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse still flags fabricated member names even when decorated", () => {
+  // Regression guard for the fix above: stripping parentheticals must not
+  // accidentally accept fabricated bare names. The bare name still has to
+  // exist in tool rows.
+  const result = verifyToolBackedResponse({
+    content: "- Ghost Player (Wide Receiver)",
+    toolResults: [
+      {
+        name: "list_members",
+        data: [
+          { name: "Jane Smith", email: "jane@example.com" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /ghost player/i);
+});
+
 test("verifyToolBackedResponse ignores list-member field labels", () => {
   const result = verifyToolBackedResponse({
     content: [

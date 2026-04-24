@@ -29,9 +29,13 @@ export interface ListDonationsGroundingContext {
 }
 
 function normalizeMemberCandidate(value: string): string {
+  // Strip trailing parenthetical decorations the model adds from RAG context
+  // (positions, titles, roles) so the lookup matches the bare name in
+  // list_members rows. Examples: "JT Goodman (Running Back)",
+  // "Louis Ciccone (Chairman and CEO)", "Sam Smith (active member)".
   return normalizeIdentifier(
     stripMarkdown(value)
-      .replace(/\s+\((?:active member|admin|alumni|parent|email-only member|email-only admin)\)\s*$/i, "")
+      .replace(/\s+\([^)]*\)\s*$/i, "")
       .replace(/^(?:name|member)\s*:\s*/i, "")
       .trim()
   );
