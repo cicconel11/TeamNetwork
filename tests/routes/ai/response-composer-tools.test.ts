@@ -298,3 +298,37 @@ test("composeResponse rethrows aborts instead of yielding error events", async (
     /aborted/
   );
 });
+
+test("composeResponse reports provider rate limits as retryable rate-limit errors", async () => {
+  const providerError = Object.assign(new Error("Rate limit reached for requests"), {
+    status: 429,
+    error: { code: "1302", message: "Rate limit reached for requests" },
+    code: "1302",
+  });
+  const client = {
+    chat: {
+      completions: {
+        create: async () => {
+          throw providerError;
+        },
+      },
+    },
+  } as unknown as OpenAI;
+
+  const events: Array<SSEEvent | ToolCallRequestedEvent> = [];
+  for await (const event of composeResponse({
+    client,
+    systemPrompt: "test",
+    messages: [{ role: "user", content: "Draft an announcement" }],
+  })) {
+    events.push(event);
+  }
+
+  assert.deepEqual(events, [
+    {
+      type: "error",
+      message: "The AI provider is rate limited right now. Please try again shortly.",
+      retryable: true,
+    },
+  ]);
+});
