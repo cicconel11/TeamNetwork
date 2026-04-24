@@ -644,6 +644,7 @@ export function shouldContinueDraftSession(
   const isAnnouncementPrompt = CREATE_ANNOUNCEMENT_PROMPT_PATTERN.test(message);
   const isJobPrompt = CREATE_JOB_PROMPT_PATTERN.test(message);
   const isChatMessagePrompt = SEND_CHAT_MESSAGE_PROMPT_PATTERN.test(message);
+  const isGroupMessagePrompt = SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN.test(message);
   const isDiscussionReplyPrompt = DISCUSSION_REPLY_PROMPT_PATTERN.test(message);
   const isDiscussionPrompt = CREATE_DISCUSSION_PROMPT_PATTERN.test(message);
   const isEventPrompt = EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN.test(message);
@@ -657,6 +658,10 @@ export function shouldContinueDraftSession(
   }
 
   if (draftSession.draft_type === "send_chat_message" && isChatMessagePrompt) {
+    return true;
+  }
+
+  if (draftSession.draft_type === "send_group_chat_message" && isGroupMessagePrompt) {
     return true;
   }
 
@@ -674,17 +679,19 @@ export function shouldContinueDraftSession(
 
   if (
     (draftSession.draft_type === "create_announcement" &&
-      (isJobPrompt || isChatMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
+      (isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
     (draftSession.draft_type === "create_job_posting" &&
-      (isAnnouncementPrompt || isChatMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
+      (isAnnouncementPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
     (draftSession.draft_type === "send_chat_message" &&
-      (isAnnouncementPrompt || isJobPrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
+      (isAnnouncementPrompt || isJobPrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
+    (draftSession.draft_type === "send_group_chat_message" &&
+      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
     (draftSession.draft_type === "create_discussion_reply" &&
-      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isDiscussionPrompt || isEventPrompt)) ||
+      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionPrompt || isEventPrompt)) ||
     (draftSession.draft_type === "create_discussion_thread" &&
-      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isDiscussionReplyPrompt || isEventPrompt)) ||
+      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isEventPrompt)) ||
     (draftSession.draft_type === "create_event" &&
-      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt))
+      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt))
   ) {
     return false;
   }

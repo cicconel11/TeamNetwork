@@ -2384,6 +2384,123 @@ test("announcement draft follow-up keeps prepare_announcement forced and merges 
   assert.match(secondBody, /"type":"pending_action"/);
 });
 
+test("group message draft follow-up keeps prepare_group_message forced and merges missing details", async () => {
+  let draftSession: any = null;
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getDraftSession: async () => draftSession,
+      saveDraftSession: async (_supabase: unknown, input: any) => {
+        draftSession = {
+          id: "draft-group-message-1",
+          organization_id: ORG_ID,
+          user_id: ADMIN_USER.id,
+          thread_id: input.threadId,
+          draft_type: input.draftType,
+          status: input.status,
+          draft_payload: input.draftPayload,
+          missing_fields: input.missingFields,
+          pending_action_id: input.pendingActionId ?? null,
+          expires_at: input.expiresAt ?? "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+        };
+        return draftSession;
+      },
+      clearDraftSession: async () => {
+        draftSession = null;
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_group_message",
+            argsJson: draftSession
+              ? '{"body":"Practice tomorrow at 7am, please confirm."}'
+              : '{"group_name_query":"CEO boss men"}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_group_message should not require a second model pass");
+      },
+      executeToolCall: async (_ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx: _ctx, call });
+
+        if (!draftSession) {
+          return okToolResult({
+            state: "missing_fields",
+            missing_fields: ["body"],
+            draft: {
+              group_name_query: "CEO boss men",
+            },
+          });
+        }
+
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: call.args,
+          pending_action: {
+            id: "pending-group-message-continue-123",
+            action_type: "send_group_chat_message",
+            payload: {
+              ...call.args,
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review group message",
+              description: "Confirm the drafted group message before it is sent.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const firstResponse = await POST(makeRequest("Send a message to the CEO boss men group") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const firstBody = await firstResponse.text();
+
+  assert.match(firstBody, /I can draft that group message, but I still need: body\./i);
+  assert.ok(draftSession, "draft session should be persisted after missing_fields response");
+  assert.equal(draftSession.draft_type, "send_group_chat_message");
+
+  composeResponseCalls = [];
+  executeToolCallCalls = [];
+
+  const followUpRequest = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Body: Practice tomorrow at 7am, please confirm.",
+      surface: "general",
+      threadId: draftSession.thread_id,
+      idempotencyKey: "66666666-6666-4666-8666-666666666666",
+    }),
+  });
+
+  const secondResponse = await POST(followUpRequest as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const secondBody = await secondResponse.text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_group_message"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_group_message" },
+  });
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    group_name_query: "CEO boss men",
+    body: "Practice tomorrow at 7am, please confirm.",
+  });
+  assert.match(secondBody, /I drafted the group message/i);
+  assert.match(secondBody, /"type":"pending_action"/);
+});
+
 test("discussion reply draft follow-up keeps prepare_discussion_reply forced and merges current thread context", async () => {
   let draftSession: any = null;
 
