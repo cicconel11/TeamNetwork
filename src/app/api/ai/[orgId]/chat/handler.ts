@@ -1871,6 +1871,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   (toolEvent.name === "prepare_announcement" ||
                     toolEvent.name === "prepare_job_posting" ||
                     toolEvent.name === "prepare_chat_message" ||
+                    toolEvent.name === "prepare_group_message" ||
                     toolEvent.name === "prepare_discussion_reply" ||
                     toolEvent.name === "prepare_discussion_thread" ||
                     toolEvent.name === "prepare_event") &&
@@ -1913,6 +1914,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                             ? "create_job_posting"
                             : toolEvent.name === "prepare_chat_message"
                             ? "send_chat_message"
+                            : toolEvent.name === "prepare_group_message"
+                            ? "send_group_chat_message"
                             : toolEvent.name === "prepare_discussion_reply"
                               ? "create_discussion_reply"
                             : toolEvent.name === "prepare_discussion_thread"
