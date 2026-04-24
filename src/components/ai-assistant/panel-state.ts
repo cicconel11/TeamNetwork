@@ -24,6 +24,8 @@ export interface PendingActionState {
   actionType: string;
   summary: PendingActionSummary;
   payload: Record<string, unknown>;
+  previousPayload: Record<string, unknown> | null;
+  reviseCount: number;
   expiresAt: string;
 }
 

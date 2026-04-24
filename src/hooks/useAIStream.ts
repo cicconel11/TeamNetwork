@@ -278,6 +278,8 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
                 actionType: event.actionType,
                 summary: event.summary,
                 payload: event.payload,
+                previousPayload: event.previousPayload ?? null,
+                reviseCount: event.reviseCount ?? 0,
                 expiresAt: event.expiresAt,
               },
             ],
@@ -290,6 +292,8 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
               actionType: event.actionType,
               summary: event.summary,
               payload: event.payload,
+              previousPayload: event.previousPayload,
+              reviseCount: event.reviseCount,
               expiresAt: event.expiresAt,
             };
             const idx = prev.pendingActions.findIndex(
@@ -313,6 +317,8 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
               actionType: a.actionType,
               summary: a.summary,
               payload: a.payload,
+              previousPayload: null,
+              reviseCount: 0,
               expiresAt: a.expiresAt,
             })),
           }));
