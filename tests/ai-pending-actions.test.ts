@@ -3,7 +3,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   cleanupStrandedPendingActions,
+  createPendingAction,
   updatePendingActionStatus,
+  AI_PENDING_ACTION_MAX_REVISES,
 } from "../src/lib/ai/pending-actions.ts";
 
 type PendingRow = {
@@ -79,6 +81,83 @@ function createPendingActionSupabase(rows: PendingRow[], raceActionId?: string) 
     },
   };
 }
+
+function createInsertCapturingSupabase(captured: Array<Record<string, unknown>>) {
+  return {
+    from(table: string) {
+      assert.equal(table, "ai_pending_actions");
+      return {
+        insert(payload: Record<string, unknown>) {
+          captured.push(payload);
+          return {
+            select(columns: string) {
+              void columns;
+              return {
+                async single() {
+                  return {
+                    data: {
+                      ...payload,
+                      id: "test-action-id",
+                      created_at: "2026-04-23T00:00:00.000Z",
+                      updated_at: "2026-04-23T00:00:00.000Z",
+                      revise_count: 0,
+                      previous_payload: payload.previous_payload ?? null,
+                      executed_at: null,
+                      result_entity_type: null,
+                      result_entity_id: null,
+                    },
+                    error: null,
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+test("AI_PENDING_ACTION_MAX_REVISES caps the revise loop", () => {
+  assert.equal(AI_PENDING_ACTION_MAX_REVISES, 3);
+});
+
+test("createPendingAction defaults previous_payload to null when not supplied", async () => {
+  const captured: Array<Record<string, unknown>> = [];
+  const supabase = createInsertCapturingSupabase(captured);
+
+  const record = await createPendingAction(supabase as any, {
+    organizationId: "org-1",
+    userId: "user-1",
+    threadId: "thread-1",
+    actionType: "create_announcement",
+    payload: { title: "Hello", body: "World" } as any,
+  });
+
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].previous_payload, null);
+  assert.equal(record.previous_payload, null);
+  assert.equal(record.revise_count, 0);
+});
+
+test("createPendingAction stores previous_payload snapshot when supplied for edits", async () => {
+  const captured: Array<Record<string, unknown>> = [];
+  const supabase = createInsertCapturingSupabase(captured);
+
+  const previousPayload = { title: "Old title", body: "Old body" } as any;
+
+  const record = await createPendingAction(supabase as any, {
+    organizationId: "org-1",
+    userId: "user-1",
+    threadId: "thread-1",
+    actionType: "create_announcement",
+    payload: { title: "New title", body: "New body" } as any,
+    previousPayload,
+  });
+
+  assert.deepEqual(captured[0].previous_payload, previousPayload);
+  assert.deepEqual(record.previous_payload, previousPayload);
+});
 
 test("updatePendingActionStatus non-CAS returns updated false when no row matches", async () => {
   const supabase = createPendingActionSupabase([]);
