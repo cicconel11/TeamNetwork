@@ -113,7 +113,7 @@ export interface PendingActionSummary {
 }
 
 interface PendingActionUpdateChain {
-  eq(column: string, value: string): PendingActionUpdateChain & Promise<{ error: unknown }>;
+  eq(column: string, value: string | number): PendingActionUpdateChain & Promise<{ error: unknown }>;
   select(columns: string): Promise<{ data: unknown[] | null; error: unknown }>;
 }
 
@@ -238,6 +238,72 @@ export async function updatePendingActionStatus(
   }
 
   return { updated: Array.isArray(data) && data.length > 0 };
+}
+
+export type RevisePayloadResult =
+  | { updated: true; row: PendingActionRecord }
+  | { updated: false; reason: "revise_limit" | "not_pending" | "not_found" | "conflict" };
+
+/**
+ * CAS revise: swap the pending row's payload in place, snapshotting the old
+ * payload into previous_payload and incrementing revise_count. Guarded on
+ * status = 'pending' AND revise_count = expectedReviseCount, so concurrent
+ * revises cannot race past each other and the 3-loop cap is enforced in the
+ * CAS itself (caller computes next count = current + 1, rejects >= MAX).
+ *
+ * Returns { updated: true, row } on success, or { updated: false, reason }
+ * when the guard blocks the update.
+ */
+export async function updatePendingActionPayload(
+  supabase: PendingActionSupabase,
+  actionId: string,
+  input: {
+    newPayload: PendingActionPayload;
+    previousPayload: PendingActionPayload;
+    expectedReviseCount: number;
+  }
+): Promise<RevisePayloadResult> {
+  const nextCount = input.expectedReviseCount + 1;
+
+  if (nextCount > AI_PENDING_ACTION_MAX_REVISES) {
+    return { updated: false, reason: "revise_limit" };
+  }
+
+  const chain = supabase
+    .from("ai_pending_actions")
+    .update({
+      payload: input.newPayload,
+      previous_payload: input.previousPayload,
+      revise_count: nextCount,
+    })
+    .eq("id", actionId)
+    .eq("status", "pending")
+    .eq("revise_count", input.expectedReviseCount);
+
+  const { data: updateData, error: updateError } = await chain.select("id");
+
+  if (updateError) {
+    throw new Error("Failed to update pending action payload");
+  }
+
+  const matched = Array.isArray(updateData) && updateData.length > 0;
+
+  if (!matched) {
+    // Guard blocked. Disambiguate by re-reading the row.
+    const existing = await getPendingAction(supabase, actionId);
+    if (!existing) return { updated: false, reason: "not_found" };
+    if (existing.status !== "pending") return { updated: false, reason: "not_pending" };
+    if (existing.revise_count >= AI_PENDING_ACTION_MAX_REVISES) {
+      return { updated: false, reason: "revise_limit" };
+    }
+    // Row is still pending and under the cap, but revise_count did not match
+    // the caller's expected value — a concurrent revise landed first.
+    return { updated: false, reason: "conflict" };
+  }
+
+  const row = await getPendingAction(supabase, actionId);
+  if (!row) return { updated: false, reason: "not_found" };
+  return { updated: true, row };
 }
 
 export async function cleanupStrandedPendingActions(

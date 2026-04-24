@@ -18,6 +18,21 @@ export type SSEEvent =
         description: string;
       };
       payload: Record<string, unknown>;
+      previousPayload?: Record<string, unknown> | null;
+      reviseCount?: number;
+      expiresAt: string;
+    }
+  | {
+      type: "pending_action_updated";
+      actionId: string;
+      actionType: string;
+      summary: {
+        title: string;
+        description: string;
+      };
+      payload: Record<string, unknown>;
+      previousPayload: Record<string, unknown> | null;
+      reviseCount: number;
       expiresAt: string;
     }
   | {
