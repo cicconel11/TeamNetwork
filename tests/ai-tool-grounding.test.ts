@@ -172,9 +172,14 @@ test("verifyToolBackedResponse accepts member labels decorated with positions or
 test("verifyToolBackedResponse still flags fabricated member names even when decorated", () => {
   // Regression guard for the fix above: stripping parentheticals must not
   // accidentally accept fabricated bare names. The bare name still has to
-  // exist in tool rows.
+  // exist in tool rows. Includes an asymmetric case (Jane Doe shares the
+  // first token "Jane" with real row Jane Smith) to prove the matcher
+  // requires the *full* bare name, not just a prefix.
   const result = verifyToolBackedResponse({
-    content: "- Ghost Player (Wide Receiver)",
+    content: [
+      "- Ghost Player (Wide Receiver)",
+      "- Jane Doe (Captain)",
+    ].join("\n"),
     toolResults: [
       {
         name: "list_members",
@@ -186,7 +191,9 @@ test("verifyToolBackedResponse still flags fabricated member names even when dec
   });
 
   assert.equal(result.grounded, false);
-  assert.match(result.failures.join("\n"), /ghost player/i);
+  const joined = result.failures.join("\n");
+  assert.match(joined, /ghost player/i);
+  assert.match(joined, /jane doe/i);
 });
 
 test("verifyToolBackedResponse ignores list-member field labels", () => {
