@@ -34,6 +34,40 @@ interface ComposeOptions {
   logContext?: AiLogContext;
 }
 
+function getProviderErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== "object" || error === null || !("status" in error)) {
+    return undefined;
+  }
+
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function getProviderErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) {
+    return undefined;
+  }
+
+  const directCode = (error as { code?: unknown }).code;
+  if (typeof directCode === "string") {
+    return directCode;
+  }
+
+  const nestedError = (error as { error?: unknown }).error;
+  if (typeof nestedError === "object" && nestedError !== null) {
+    const nestedCode = (nestedError as { code?: unknown }).code;
+    if (typeof nestedCode === "string") {
+      return nestedCode;
+    }
+  }
+
+  return undefined;
+}
+
+function isProviderRateLimitError(error: unknown): boolean {
+  return getProviderErrorStatus(error) === 429 || getProviderErrorCode(error) === "1302";
+}
+
 /**
  * Streams a composed response from z.ai as SSE chunk/error events.
  * The route owns completion semantics and emits the final done event.
@@ -154,6 +188,14 @@ export async function* composeResponse(
       requestId: "unknown_request",
       orgId: "unknown_org",
     }, { error: err });
+    if (isProviderRateLimitError(err)) {
+      yield {
+        type: "error",
+        message: "The AI provider is rate limited right now. Please try again shortly.",
+        retryable: true,
+      };
+      return;
+    }
     yield {
       type: "error",
       message: "Failed to generate response",
