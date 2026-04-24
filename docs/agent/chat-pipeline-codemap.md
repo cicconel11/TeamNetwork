@@ -38,6 +38,7 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/schemas/ai-assistant.ts` | Zod schemas for request validation and cache eligibility | `sendMessageSchema` (L25), `listThreadsSchema` (L34), `cacheEligibilitySchema` (L54) |
 | `src/app/api/ai/[orgId]/chat/route.ts` | Thin Next.js entrypoint — exports runtime config and `POST` handler | `POST` |
 | `src/app/api/ai/[orgId]/chat/handler.ts` | Chat pipeline orchestrator — auth, policy, retrieval, tools, SSE, persistence | `createChatPostHandler`, `ChatRouteDeps` |
+| `src/app/api/ai/[orgId]/chat/handler/sse-runtime.ts` | SSE runtime helpers — response builder, model-loop constants, turn audit/gating state, safety/RAG output gates | `buildSseResponse`, `createTurnRuntimeState`, `applySafetyGate`, `applyRagGrounding` |
 | `src/app/api/ai/[orgId]/upload-schedule/route.ts` | Thin Next.js entrypoint for private schedule uploads and pending-upload cleanup | `POST`, `DELETE` |
 | `src/app/api/ai/[orgId]/upload-schedule/handler.ts` | Schedule upload handler — auth, rate limit, MIME/header validation, runtime bucket reconciliation, private storage write, and idempotent pending-upload deletion | `createAiScheduleUploadHandler`, `createAiScheduleUploadDeleteHandler`, `AiScheduleUploadRouteDeps` |
 | `src/app/api/ai/[orgId]/pending-actions/[actionId]/confirm/route.ts` | POST handler — confirms and executes a pending assistant action | `POST` |

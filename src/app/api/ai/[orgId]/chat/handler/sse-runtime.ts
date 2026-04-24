@@ -1,5 +1,23 @@
 import type { ToolName } from "@/lib/ai/tools/definitions";
-import type { verifyToolBackedResponse } from "@/lib/ai/tool-grounding";
+import type { RagChunkInput } from "@/lib/ai/context-builder";
+import type { UsageAccumulator } from "@/lib/ai/response-composer";
+import {
+  buildRagGroundingFallback,
+  RAG_GROUNDING_ABSTAIN_TEXT,
+  type RagGroundingMode,
+  type verifyRagGrounding,
+} from "@/lib/ai/rag-grounding";
+import {
+  SAFETY_FALLBACK_TEXT,
+  type SafetyVerdict,
+  type classifySafety,
+} from "@/lib/ai/safety-gate";
+import type {
+  SuccessfulToolSummary,
+  verifyToolBackedResponse,
+} from "@/lib/ai/tool-grounding";
+import type { trackOpsEventServer } from "@/lib/analytics/events-server";
+import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 
 export const CONNECTION_PASS1_DISAMBIGUATION_INSTRUCTION = [
   "CONNECTION TOOL ROUTING:",
@@ -52,6 +70,206 @@ export class ToolGroundingVerificationError extends Error {
     readonly failures: ReturnType<typeof verifyToolBackedResponse>["failures"]
   ) {
     super("tool_grounding_failed");
+  }
+}
+
+export interface TurnRuntimeState {
+  usage: UsageAccumulator | null;
+  streamCompletedSuccessfully: boolean;
+  auditErrorMessage: string | undefined;
+  contextMetadata: { surface: string; estimatedTokens: number } | undefined;
+  toolCallMade: boolean;
+  toolCallSucceeded: boolean;
+  safetyVerdict: SafetyVerdict | undefined;
+  safetyCategories: string[] | undefined;
+  safetyLatencyMs: number | undefined;
+  ragGrounded: boolean | undefined;
+  ragGroundingFailures: string[] | undefined;
+  ragGroundingLatencyMs: number | undefined;
+  ragGroundingAudited: RagGroundingMode | undefined;
+}
+
+export function createTurnRuntimeState(): TurnRuntimeState {
+  return {
+    usage: null,
+    streamCompletedSuccessfully: false,
+    auditErrorMessage: undefined,
+    contextMetadata: undefined,
+    toolCallMade: false,
+    toolCallSucceeded: false,
+    safetyVerdict: undefined,
+    safetyCategories: undefined,
+    safetyLatencyMs: undefined,
+    ragGrounded: undefined,
+    ragGroundingFailures: undefined,
+    ragGroundingLatencyMs: undefined,
+    ragGroundingAudited: undefined,
+  };
+}
+
+export function recordTurnUsage(
+  state: TurnRuntimeState,
+  usage: UsageAccumulator
+): void {
+  state.usage = {
+    inputTokens: (state.usage?.inputTokens ?? 0) + usage.inputTokens,
+    outputTokens: (state.usage?.outputTokens ?? 0) + usage.outputTokens,
+  };
+}
+
+export async function applySafetyGate(args: {
+  buffered: string;
+  disabled: boolean;
+  shadow: boolean;
+  ragChunks: RagChunkInput[];
+  successfulToolResults: SuccessfulToolSummary[];
+  classifySafetyFn: typeof classifySafety;
+  trackOpsEventServerFn: typeof trackOpsEventServer;
+  collectPhoneNumberFields: (value: unknown, owned: Set<string>) => void;
+  state: TurnRuntimeState;
+  orgId: string;
+  logContext: AiLogContext;
+}): Promise<string> {
+  if (args.disabled || !args.buffered) return args.buffered;
+
+  try {
+    const ownedEmails = new Set<string>();
+    const ownedPhones = new Set<string>();
+    const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+    for (const chunk of args.ragChunks) {
+      const text = chunk.contentText ?? "";
+      const emailMatches = text.match(emailRegex) ?? [];
+      for (const match of emailMatches) ownedEmails.add(match.toLowerCase());
+    }
+
+    try {
+      const serialized = JSON.stringify(args.successfulToolResults);
+      const emailMatches = serialized.match(emailRegex) ?? [];
+      for (const match of emailMatches) ownedEmails.add(match.toLowerCase());
+    } catch {
+      // Circular-ref tool data; skip.
+    }
+
+    args.collectPhoneNumberFields(args.successfulToolResults, ownedPhones);
+    const result = await args.classifySafetyFn({
+      content: args.buffered,
+      orgContext: { ownedEmails, ownedPhones },
+    });
+    args.state.safetyVerdict = result.verdict;
+    args.state.safetyCategories = result.categories;
+    args.state.safetyLatencyMs = result.latencyMs;
+
+    if (result.verdict === "unsafe") {
+      void args.trackOpsEventServerFn(
+        "api_error",
+        {
+          endpoint_group: args.shadow
+            ? "ai-safety-gate-shadow"
+            : "ai-safety-gate",
+          http_status: 200,
+          error_code: args.shadow
+            ? "safety_gate_shadow_unsafe"
+            : "safety_gate_blocked",
+          retryable: false,
+        },
+        args.orgId
+      );
+      if (!args.shadow) {
+        return SAFETY_FALLBACK_TEXT;
+      }
+    }
+
+    return args.buffered;
+  } catch (err) {
+    aiLog("warn", "ai-safety-gate", "classify failed", args.logContext, {
+      error: err,
+    });
+    return args.buffered;
+  }
+}
+
+export async function applyRagGrounding(args: {
+  buffered: string;
+  disabled: boolean;
+  mode: RagGroundingMode;
+  minChunks: number;
+  ragChunks: RagChunkInput[];
+  verifyRagGroundingFn: typeof verifyRagGrounding;
+  trackOpsEventServerFn: typeof trackOpsEventServer;
+  state: TurnRuntimeState;
+  orgId: string;
+  logContext: AiLogContext;
+}): Promise<string> {
+  if (
+    args.disabled ||
+    args.mode === "bypass" ||
+    !args.buffered ||
+    args.ragChunks.length < args.minChunks
+  ) {
+    if (args.buffered) {
+      args.state.ragGroundingAudited = args.mode;
+    }
+    if (args.mode === "bypass" && !args.disabled) {
+      void args.trackOpsEventServerFn(
+        "api_error",
+        {
+          endpoint_group: "ai-rag-grounding",
+          error_code: "rag_grounding_bypassed",
+          http_status: 200,
+          retryable: false,
+        },
+        args.orgId
+      );
+    }
+    return args.buffered;
+  }
+
+  try {
+    const result = await args.verifyRagGroundingFn({
+      content: args.buffered,
+      ragChunks: args.ragChunks,
+    });
+    args.state.ragGrounded = result.grounded;
+    args.state.ragGroundingFailures = result.uncoveredClaims;
+    args.state.ragGroundingLatencyMs = result.latencyMs;
+    args.state.ragGroundingAudited = args.mode;
+
+    if (result.grounded) return args.buffered;
+
+    void args.trackOpsEventServerFn(
+      "api_error",
+      {
+        endpoint_group:
+          args.mode === "shadow"
+            ? "ai-rag-grounding-shadow"
+            : "ai-rag-grounding",
+        http_status: 200,
+        error_code:
+          args.mode === "shadow"
+            ? "rag_grounding_shadow_ungrounded"
+            : "rag_grounding_failed",
+        retryable: false,
+      },
+      args.orgId
+    );
+
+    if (args.mode === "overwrite") {
+      return buildRagGroundingFallback(
+        result.uncoveredClaims,
+        args.ragChunks[0] ?? null
+      );
+    }
+    if (args.mode === "block") {
+      return RAG_GROUNDING_ABSTAIN_TEXT;
+    }
+
+    return args.buffered;
+  } catch (err) {
+    aiLog("warn", "ai-rag-grounding", "verify failed", args.logContext, {
+      error: err,
+    });
+    return args.buffered;
   }
 }
 
