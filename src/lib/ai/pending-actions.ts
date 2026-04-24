@@ -93,6 +93,8 @@ export interface PendingActionRecord<TActionType extends PendingActionType = Pen
   thread_id: string;
   action_type: TActionType;
   payload: PendingActionPayloadByType[TActionType];
+  previous_payload: PendingActionPayloadByType[TActionType] | null;
+  revise_count: number;
   status: PendingActionStatus;
   expires_at: string;
   created_at: string;
@@ -102,6 +104,8 @@ export interface PendingActionRecord<TActionType extends PendingActionType = Pen
   result_entity_type: string | null;
   result_entity_id: string | null;
 }
+
+export const AI_PENDING_ACTION_MAX_REVISES = 3;
 
 export interface PendingActionSummary {
   title: string;
@@ -144,6 +148,7 @@ export async function createPendingAction(
     threadId: string;
     actionType: PendingActionType;
     payload: PendingActionPayload;
+    previousPayload?: PendingActionPayload | null;
   }
 ): Promise<PendingActionRecord> {
   const expiresAt = new Date(Date.now() + AI_PENDING_ACTION_EXPIRY_MS).toISOString();
@@ -155,6 +160,7 @@ export async function createPendingAction(
       thread_id: input.threadId,
       action_type: input.actionType,
       payload: input.payload,
+      previous_payload: input.previousPayload ?? null,
       status: "pending",
       expires_at: expiresAt,
     })
