@@ -8,6 +8,7 @@ import { listDiscussionsModule } from "./list-discussions";
 import { listJobPostingsModule } from "./list-job-postings";
 import { listChatGroupsModule } from "./list-chat-groups";
 import { listAlumniModule } from "./list-alumni";
+import { listEnterpriseAlumniModule } from "./list-enterprise-alumni";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: ReadonlyArray<ToolModule<any>> = [
@@ -18,6 +19,7 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   listJobPostingsModule,
   listChatGroupsModule,
   listAlumniModule,
+  listEnterpriseAlumniModule,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -2,7 +2,6 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PrepareEventArgs, ToolName } from "./definitions";
 import { TOOL_NAMES } from "./definitions";
-import { listEnterpriseAlumni } from "./enterprise/list-alumni";
 import { getEnterpriseStats } from "./enterprise/stats";
 import { listManagedOrgs } from "./enterprise/managed-orgs";
 import { getEnterpriseOrgCapacity, getEnterpriseQuota } from "./enterprise/quota";
@@ -306,20 +305,6 @@ const revokeEnterpriseInviteSchema = z
       (typeof value.invite_code === "string" && value.invite_code.length > 0),
     { message: "Expected invite_id or invite_code" },
   );
-const listEnterpriseAlumniSchema = z
-  .object({
-    org: z.string().trim().min(1).optional(),
-    graduation_year: z.number().int().min(1900).max(2100).optional(),
-    industry: z.string().trim().min(1).optional(),
-    company: z.string().trim().min(1).optional(),
-    city: z.string().trim().min(1).optional(),
-    position: z.string().trim().min(1).optional(),
-    has_email: z.boolean().optional(),
-    has_phone: z.boolean().optional(),
-    limit: z.number().int().min(1).max(100).optional(),
-    offset: z.number().int().min(0).max(5000).optional(),
-  })
-  .strict();
 const suggestConnectionsSchema = z
   .object({
     person_type: z.enum(["member", "alumni"]).optional(),
@@ -365,7 +350,6 @@ const findNavigationTargetsSchema = z
   .strict();
 
 const ARG_SCHEMAS: Partial<Record<ToolName, z.ZodSchema>> = {
-  list_enterprise_alumni: listEnterpriseAlumniSchema,
   list_donations: listDonationsSchema,
   list_parents: listParentsSchema,
   list_philanthropy_events: listPhilanthropyEventsSchema,
@@ -2896,14 +2880,6 @@ export async function executeToolCall(
         return dispatchToolModule(toolName, args, { ctx, sb, logContext });
       }
       switch (toolName) {
-        case "list_enterprise_alumni":
-          return safeToolQuery(logContext, () =>
-            listEnterpriseAlumni(
-              sb,
-              ctx.enterpriseId!,
-              args as z.infer<typeof listEnterpriseAlumniSchema>,
-            )
-          );
         case "list_donations":
           return listDonations(
             sb,
