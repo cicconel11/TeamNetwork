@@ -74,6 +74,9 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
   function applyFilters(rows: any[], filters: any[]) {
     return rows.filter((row) =>
       filters.every((filter) => {
+        if (filter.op === "or") {
+          return true;
+        }
         if (!Object.prototype.hasOwnProperty.call(row, filter.col) && filter.val == null) {
           return true;
         }
@@ -85,6 +88,13 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
         }
         if (filter.op === "lt") {
           return row[filter.col] < filter.val;
+        }
+        if (filter.op === "ilike") {
+          const pattern = String(filter.val);
+          const needle = pattern.replace(/^%/u, "").replace(/%$/u, "");
+          return String(row[filter.col] ?? "")
+            .toLowerCase()
+            .includes(needle.toLowerCase());
         }
         if (filter.val == null) {
           return row[filter.col] == null;
@@ -153,6 +163,14 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
       },
       lt(col: string, val: unknown) {
         entry.filters.push({ col, op: "lt", val });
+        return builder;
+      },
+      or(_expr: string) {
+        entry.filters.push({ op: "or", expr: _expr });
+        return builder;
+      },
+      ilike(col: string, val: string) {
+        entry.filters.push({ col, op: "ilike", val });
         return builder;
       },
       order(column: string, opts?: { ascending?: boolean }) {
@@ -718,6 +736,247 @@ test("list_events returns past events", async () => {
   assert.ok(eventQuery.filters.some((f: any) => f.col === "start_date" && f.op === "lt"));
 });
 
+
+
+test("list_parents returns mapped parent rows", async () => {
+  stub = createToolSupabaseStub({
+    parents: {
+      select: {
+        data: [
+          {
+            id: "p1",
+            organization_id: ORG_ID,
+            first_name: "Jane",
+            last_name: "Doe",
+            email: "jane@example.com",
+            relationship: "Mother",
+            student_name: "Jimmy",
+            phone_number: "555-0100",
+            deleted_at: null,
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  ctx = makeCtx(stub as any);
+
+  const result = expectOk(await executeToolCall(ctx, { name: "list_parents", args: {} }));
+  assert.ok(Array.isArray(result.data));
+  assert.equal((result.data as any[]).length, 1);
+  assert.deepEqual((result.data as any[])[0], {
+    id: "p1",
+    name: "Jane Doe",
+    relationship: "Mother",
+    student_name: "Jimmy",
+    email: "jane@example.com",
+    phone_number: "555-0100",
+  });
+
+  const parentQuery = stub.queries.find((q) => q.table === "parents");
+  assert.ok(parentQuery);
+  assert.ok(parentQuery.filters.some((f: any) => f.col === "organization_id" && f.val === ORG_ID));
+  assert.deepEqual(parentQuery.orderBy, { column: "last_name", ascending: true });
+  assert.equal(parentQuery.limitValue, 10);
+});
+
+test("list_parents applies relationship ilike filter", async () => {
+  stub = createToolSupabaseStub({
+    parents: {
+      select: {
+        data: [
+          {
+            id: "p1",
+            organization_id: ORG_ID,
+            first_name: "A",
+            last_name: "One",
+            email: null,
+            relationship: "Mother",
+            student_name: "S1",
+            phone_number: null,
+            deleted_at: null,
+          },
+          {
+            id: "p2",
+            organization_id: ORG_ID,
+            first_name: "B",
+            last_name: "Two",
+            email: null,
+            relationship: "Father",
+            student_name: "S2",
+            phone_number: null,
+            deleted_at: null,
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  ctx = makeCtx(stub as any);
+
+  const result = expectOk(
+    await executeToolCall(ctx, { name: "list_parents", args: { relationship: "Moth" } })
+  );
+  assert.equal((result.data as any[]).length, 1);
+  assert.equal((result.data as any[])[0].id, "p1");
+
+  const parentQuery = stub.queries.find((q) => q.table === "parents");
+  assert.ok(parentQuery?.filters.some((f: any) => f.op === "ilike" && f.col === "relationship"));
+});
+
+test("list_philanthropy_events scopes to org and philanthropy OR filter", async () => {
+  stub = createToolSupabaseStub({
+    events: {
+      select: {
+        data: [
+          {
+            id: "pe1",
+            organization_id: ORG_ID,
+            title: "Gala",
+            start_date: "2099-01-01T12:00:00.000Z",
+            end_date: null,
+            location: null,
+            description: null,
+            deleted_at: null,
+            is_philanthropy: true,
+            event_type: "general",
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  ctx = makeCtx(stub as any);
+
+  const result = expectOk(
+    await executeToolCall(ctx, { name: "list_philanthropy_events", args: { upcoming: true } })
+  );
+  assert.ok(Array.isArray(result.data));
+  assert.equal((result.data as any[]).length, 1);
+  assert.equal((result.data as any[])[0].id, "pe1");
+
+  const eventQuery = stub.queries.find((q) => q.table === "events");
+  assert.ok(eventQuery);
+  assert.ok(eventQuery.filters.some((f: any) => f.op === "or"));
+  assert.ok(eventQuery.filters.some((f: any) => f.col === "start_date" && f.op === "gte"));
+});
+
+
+test("list_donations maps rows including anonymous donor masking", async () => {
+  stub = createToolSupabaseStub({
+    organization_donations: {
+      select: {
+        data: [
+          {
+            id: "d1",
+            organization_id: ORG_ID,
+            donor_name: "Pat",
+            donor_email: "pat@example.com",
+            amount_cents: 5000,
+            purpose: "Equipment",
+            status: "succeeded",
+            created_at: "2026-01-01T00:00:00.000Z",
+            anonymous: false,
+            deleted_at: null,
+          },
+          {
+            id: "d2",
+            organization_id: ORG_ID,
+            donor_name: "Secret",
+            donor_email: "secret@example.com",
+            amount_cents: 1000,
+            purpose: "General",
+            status: "succeeded",
+            created_at: "2026-01-02T00:00:00.000Z",
+            anonymous: true,
+            deleted_at: null,
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  ctx = makeCtx(stub as any);
+
+  const result = expectOk(await executeToolCall(ctx, { name: "list_donations", args: {} }));
+  const rows = result.data as any[];
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[0], {
+    id: "d1",
+    donor_name: "Pat",
+    donor_email: "pat@example.com",
+    amount_dollars: 50,
+    purpose: "Equipment",
+    status: "succeeded",
+    created_at: "2026-01-01T00:00:00.000Z",
+    anonymous: false,
+  });
+  assert.deepEqual(rows[1], {
+    id: "d2",
+    donor_name: "Anonymous",
+    donor_email: "Anonymous",
+    amount_dollars: 10,
+    purpose: "General",
+    status: "succeeded",
+    created_at: "2026-01-02T00:00:00.000Z",
+    anonymous: true,
+  });
+
+  const q = stub.queries.find((x) => x.table === "organization_donations");
+  assert.ok(q);
+  assert.deepEqual(q.orderBy, { column: "created_at", ascending: false });
+});
+
+test("list_donations applies status and purpose filters", async () => {
+  stub = createToolSupabaseStub({
+    organization_donations: {
+      select: {
+        data: [
+          {
+            id: "d1",
+            organization_id: ORG_ID,
+            donor_name: null,
+            donor_email: null,
+            amount_cents: 100,
+            purpose: "Spring drive",
+            status: "pending",
+            created_at: "2026-01-01T00:00:00.000Z",
+            anonymous: false,
+            deleted_at: null,
+          },
+          {
+            id: "d2",
+            organization_id: ORG_ID,
+            donor_name: "Q",
+            donor_email: null,
+            amount_cents: 200,
+            purpose: "Other",
+            status: "succeeded",
+            created_at: "2026-01-02T00:00:00.000Z",
+            anonymous: false,
+            deleted_at: null,
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  ctx = makeCtx(stub as any);
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "list_donations",
+      args: { status: "pending", purpose: "Spring" },
+    })
+  );
+  const rows = result.data as any[];
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, "d1");
+
+  const q = stub.queries.find((x) => x.table === "organization_donations");
+  assert.ok(q?.filters.some((f: any) => f.col === "status" && f.val === "pending"));
+  assert.ok(q?.filters.some((f: any) => f.op === "ilike" && f.col === "purpose"));
+});
 test("get_org_stats returns counts object", async () => {
   stub = createToolSupabaseStub({
     members: { select: { data: [], error: null, count: 42 } },

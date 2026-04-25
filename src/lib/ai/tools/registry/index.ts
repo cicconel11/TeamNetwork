@@ -31,6 +31,10 @@ import { prepareDiscussionReplyModule } from "./prepare-discussion-reply";
 import { prepareDiscussionThreadModule } from "./prepare-discussion-thread";
 import { prepareEventModule } from "./prepare-event";
 import { prepareEventsBatchModule } from "./prepare-events-batch";
+import { prepareEnterpriseInviteModule } from "./prepare-enterprise-invite";
+import { revokeEnterpriseInviteModule } from "./revoke-enterprise-invite";
+import { scrapeScheduleWebsiteModule } from "./scrape-schedule-website";
+import { extractSchedulePdfModule } from "./extract-schedule-pdf";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: ReadonlyArray<ToolModule<any>> = [
@@ -64,6 +68,10 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   prepareDiscussionThreadModule,
   prepareEventModule,
   prepareEventsBatchModule,
+  prepareEnterpriseInviteModule,
+  revokeEnterpriseInviteModule,
+  scrapeScheduleWebsiteModule,
+  extractSchedulePdfModule,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
