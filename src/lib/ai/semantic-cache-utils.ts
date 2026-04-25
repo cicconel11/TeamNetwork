@@ -91,6 +91,14 @@ const TEMPORAL_MARKERS = [
 
 const PERSONALIZATION_MARKERS = ["my", "mine", "i am", "i'm", "me", "myself"];
 
+/**
+ * Load-bearing safety contract: prompts mentioning these terms are excluded
+ * from the cache so mutable org data never gets cached. This is the primary
+ * defense against stale-data hits — there is no mutation-site invalidation.
+ *
+ * Modifying this list requires updating tests/ai-semantic-cache.test.ts so
+ * the eligibility regression suite still locks the contract.
+ */
 const LIVE_CONTEXT_MARKERS = [
   "member",
   "members",
