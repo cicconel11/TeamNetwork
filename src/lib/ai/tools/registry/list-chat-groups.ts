@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { aiLog } from "@/lib/ai/logger";
 import { listUserChatGroups, type GroupChatSupabase } from "@/lib/chat/group-chat";
-import { toolError } from "@/lib/ai/tools/executor";
+import { toolError } from "@/lib/ai/tools/result";
 import { getSafeErrorMessage } from "@/lib/ai/tools/shared";
 import type { ToolModule } from "./types";
 

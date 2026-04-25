@@ -1,9 +1,7 @@
 import type { z } from "zod";
 import type { AiLogContext } from "@/lib/ai/logger";
-import type {
-  ToolExecutionContext,
-  ToolExecutionResult,
-} from "@/lib/ai/tools/executor";
+import type { ToolExecutionContext } from "@/lib/ai/tools/executor";
+import type { ToolExecutionResult } from "@/lib/ai/tools/result";
 
 // Mirrors executor.ts local `SB = any` — the supabase query builder relies on
 // thenable behavior that the strict client type strips out. Tightening is
