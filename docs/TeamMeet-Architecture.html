@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TeamMeet — Interactive System Design</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --bg-2: #161b22;
+    --bg-3: #1f2630;
+    --rule: #2a313c;
+    --ink: #e6edf3;
+    --ink-2: #9da7b3;
+    --ink-3: #6b7684;
+    --accent: #58a6ff;
+    --accent-2: #79c0ff;
+    --warn: #f0883e;
+    --success: #3fb950;
+    --danger: #f85149;
+    --layer-client: #1e3a5f;
+    --layer-edge: #4a3a1a;
+    --layer-api: #4a2a4a;
+    --layer-logic: #1a3a2a;
+    --layer-data: #3a1a4a;
+    --layer-external: #2a2a3a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: 100vh;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────── */
+  aside {
+    background: var(--bg-2);
+    border-right: 1px solid var(--rule);
+    overflow-y: auto;
+    padding: 16px 14px;
+  }
+  aside h1 {
+    font-size: 14px;
+    margin: 0 0 4px 0;
+    color: var(--accent);
+    letter-spacing: -0.01em;
+  }
+  aside .subtitle {
+    color: var(--ink-3);
+    font-size: 11px;
+    margin-bottom: 18px;
+  }
+  aside h2 {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 18px 0 6px 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+  }
+  aside h2:first-of-type { padding-top: 0; border-top: none; }
+  .preset-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .preset-grid button {
+    background: var(--bg-3);
+    border: 1px solid var(--rule);
+    color: var(--ink);
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.1s;
+    text-align: left;
+  }
+  .preset-grid button:hover { background: var(--rule); border-color: var(--accent); }
+  .preset-grid button.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  .toggle-row:hover { background: var(--bg-3); }
+  .toggle-row input { margin: 0; cursor: pointer; }
+  .swatch {
+    display: inline-block;
+    width: 16px;
+    height: 4px;
+    border-radius: 2px;
+  }
+  .swatch.dashed {
+    background: repeating-linear-gradient(to right, currentColor 0 4px, transparent 4px 7px);
+    height: 2px;
+    margin-top: 1px;
+  }
+  .layer-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .comments-empty {
+    color: var(--ink-3);
+    font-size: 11px;
+    font-style: italic;
+    padding: 4px;
+  }
+  .comment-item {
+    background: var(--bg-3);
+    border-left: 3px solid var(--accent);
+    border-radius: 3px;
+    padding: 6px 8px;
+    margin: 4px 0;
+    font-size: 11px;
+    position: relative;
+  }
+  .comment-item .target {
+    font-weight: 600;
+    color: var(--accent-2);
+    margin-bottom: 2px;
+  }
+  .comment-item .file {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    color: var(--ink-3);
+    margin-bottom: 4px;
+  }
+  .comment-item .text {
+    color: var(--ink);
+    line-height: 1.4;
+  }
+  .comment-item .delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: transparent;
+    border: none;
+    color: var(--ink-3);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 3px;
+  }
+  .comment-item .delete:hover { background: var(--danger); color: white; }
+
+  /* ── Main canvas ─────────────────────────────────────── */
+  main {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    overflow: hidden;
+  }
+  .canvas-wrap {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 10% 20%, rgba(88,166,255,0.04), transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(63,185,113,0.03), transparent 40%),
+      var(--bg);
+  }
+  #diagram {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+  #diagram.dragging { cursor: grabbing; }
+  .controls-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 4px;
+    display: flex;
+    gap: 2px;
+    z-index: 10;
+  }
+  .controls-overlay button {
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .controls-overlay button:hover { background: var(--bg-3); }
+  .legend {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 10.5px;
+    z-index: 10;
+    max-width: 320px;
+  }
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 0;
+    color: var(--ink-2);
+  }
+  .legend-line {
+    width: 22px;
+    height: 0;
+    border-top: 1.5px solid;
+  }
+
+  /* ── Prompt output ────────────────────────────────────── */
+  .prompt-bar {
+    background: var(--bg-2);
+    border-top: 1px solid var(--rule);
+    padding: 10px 14px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: start;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .prompt-text {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--ink);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    margin: 0;
+  }
+  .copy-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 11.5px;
+    white-space: nowrap;
+    align-self: start;
+  }
+  .copy-btn:hover { background: var(--accent-2); }
+  .copy-btn.copied { background: var(--success); color: white; }
+
+  /* ── SVG node + connection styles ─────────────────────── */
+  .node-rect {
+    fill: var(--bg-3);
+    stroke: var(--ink-3);
+    stroke-width: 1;
+    cursor: pointer;
+    transition: stroke 0.15s, stroke-width 0.15s;
+  }
+  .node-rect:hover { stroke: var(--accent); stroke-width: 2; }
+  .node-rect.commented { stroke: var(--warn); stroke-width: 2; }
+  .node-title {
+    font-family: -apple-system, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    fill: var(--ink);
+    pointer-events: none;
+  }
+  .node-sub {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 8.5px;
+    fill: var(--ink-3);
+    pointer-events: none;
+  }
+  .layer-band {
+    fill: var(--bg-2);
+    opacity: 0.4;
+  }
+  .layer-label {
+    font-family: -apple-system, sans-serif;
+    font-size: 9.5px;
+    font-weight: 600;
+    fill: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+  }
+  .conn-data { stroke: #58a6ff; stroke-width: 1.4; fill: none; }
+  .conn-tool { stroke: #3fb950; stroke-width: 1.4; fill: none; stroke-dasharray: 6 3; }
+  .conn-event { stroke: #f85149; stroke-width: 1.3; fill: none; stroke-dasharray: 3 3; }
+  .conn-confirm { stroke: #f0883e; stroke-width: 1.4; fill: none; stroke-dasharray: 8 4; }
+  .conn-dep { stroke: #6b7684; stroke-width: 1; fill: none; stroke-dasharray: 1 3; }
+  .conn-label {
+    font-family: "SF Mono", monospace;
+    font-size: 8px;
+    fill: var(--ink-2);
+    pointer-events: none;
+  }
+
+  /* ── Modal ────────────────────────────────────────────── */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--bg-2);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 18px 20px;
+    width: 460px;
+    max-width: 90vw;
+  }
+  .modal h3 {
+    margin: 0 0 4px 0;
+    color: var(--accent);
+    font-size: 14px;
+  }
+  .modal .file {
+    font-family: "SF Mono", monospace;
+    font-size: 10px;
+    color: var(--ink-3);
+    margin-bottom: 12px;
+  }
+  .modal textarea {
+    width: 100%;
+    min-height: 100px;
+    background: var(--bg-3);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    color: var(--ink);
+    padding: 8px;
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    resize: vertical;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 12px;
+  }
+  .modal-actions button {
+    padding: 6px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+    background: var(--bg-3);
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .modal-actions button.primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .modal-actions button:hover { border-color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside>
+    <h1>TeamMeet · System Design</h1>
+    <div class="subtitle">Click a component to leave feedback. Toggle layers and connection types to focus.</div>
+
+    <h2>View presets</h2>
+    <div class="preset-grid" id="presets"></div>
+
+    <h2>Layers</h2>
+    <div id="layer-toggles"></div>
+
+    <h2>Connection types</h2>
+    <div id="conn-toggles"></div>
+
+    <h2>Comments (<span id="comment-count">0</span>)</h2>
+    <div id="comment-list"><div class="comments-empty">Click any node to add feedback.</div></div>
+  </aside>
+
+  <main>
+    <div class="canvas-wrap">
+      <svg id="diagram" viewBox="0 0 1500 760" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="ah-data" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/>
+          </marker>
+          <marker id="ah-tool" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#3fb950"/>
+          </marker>
+          <marker id="ah-event" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#f85149"/>
+          </marker>
+          <marker id="ah-confirm" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#f0883e"/>
+          </marker>
+          <marker id="ah-dep" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#6b7684"/>
+          </marker>
+        </defs>
+        <g id="layer-bands"></g>
+        <g id="connections"></g>
+        <g id="nodes"></g>
+      </svg>
+
+      <div class="controls-overlay">
+        <button id="zoom-in" title="Zoom in">+</button>
+        <button id="zoom-out" title="Zoom out">−</button>
+        <button id="zoom-reset" title="Reset view">⌂</button>
+      </div>
+
+      <div class="legend">
+        <div class="legend-row"><span class="legend-line" style="border-color:#58a6ff"></span> data flow (request/response)</div>
+        <div class="legend-row"><span class="legend-line" style="border-color:#3fb950; border-style:dashed"></span> tool call</div>
+        <div class="legend-row"><span class="legend-line" style="border-color:#f85149; border-style:dashed"></span> event / SSE / webhook</div>
+        <div class="legend-row"><span class="legend-line" style="border-color:#f0883e; border-style:dashed"></span> confirm loop (user-mediated)</div>
+        <div class="legend-row"><span class="legend-line" style="border-color:#6b7684; border-style:dotted"></span> dependency</div>
+      </div>
+    </div>
+
+    <div class="prompt-bar">
+      <pre class="prompt-text" id="prompt-output"></pre>
+      <button class="copy-btn" id="copy-btn">Copy prompt</button>
+    </div>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <h3 id="modal-title"></h3>
+    <div class="file" id="modal-file"></div>
+    <textarea id="modal-textarea" placeholder="Add feedback, questions, or proposed changes for this component..."></textarea>
+    <div class="modal-actions">
+      <button id="modal-cancel">Cancel</button>
+      <button id="modal-save" class="primary">Save comment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Layers (Y bands) ──────────────────────────────────────────
+const LAYERS = {
+  client:   { y: 30,  h: 80,  label: 'Client',                color: '#1e3a5f' },
+  edge:     { y: 130, h: 80,  label: 'Edge (middleware)',     color: '#4a3a1a' },
+  api:      { y: 230, h: 80,  label: 'API routes',            color: '#4a2a4a' },
+  logic:    { y: 330, h: 170, label: 'Lib (handlers + primitives)', color: '#1a3a2a' },
+  data:     { y: 520, h: 80,  label: 'Data (Supabase)',       color: '#3a1a4a' },
+  external: { y: 620, h: 100, label: 'External services',     color: '#2a2a3a' },
+};
+
+// ─── Nodes ─────────────────────────────────────────────────────
+const NODES = [
+  // CLIENT
+  { id: 'browser',     label: 'Browser',          file: 'React + RSC', x: 40,   y: 50, w: 130, h: 50, layer: 'client' },
+  { id: 'chat-ui',     label: 'Chat UI + Card',   file: 'src/components/ai/', x: 220, y: 50, w: 160, h: 50, layer: 'client' },
+
+  // EDGE
+  { id: 'middleware',  label: 'middleware.ts',    file: 'JWT + org membership', x: 130, y: 150, w: 200, h: 50, layer: 'edge' },
+
+  // API
+  { id: 'chat-api',     label: 'POST /chat',       file: 'api/ai/[orgId]/chat',           x: 40,   y: 250, w: 150, h: 50, layer: 'api' },
+  { id: 'confirm-api',  label: 'POST /confirm',    file: 'api/ai/[orgId]/.../confirm',    x: 220,  y: 250, w: 200, h: 50, layer: 'api' },
+  { id: 'pending-api',  label: 'GET /pending',     file: 'api/ai/[orgId]/pending-actions', x: 450, y: 250, w: 180, h: 50, layer: 'api' },
+  { id: 'domain-api',   label: 'Domain API',       file: 'api/announcements, api/jobs, …', x: 660, y: 250, w: 180, h: 50, layer: 'api' },
+  { id: 'schedule-api', label: 'Schedule API',     file: 'api/schedules/*',                x: 870, y: 250, w: 160, h: 50, layer: 'api' },
+  { id: 'stripe-hook',  label: 'Stripe webhook',   file: 'api/stripe/webhook',             x: 1290, y: 150, w: 180, h: 50, layer: 'edge' },
+
+  // LOGIC row 1: AI pipeline
+  { id: 'chat-handler', label: 'Chat handler',     file: 'lib/ai/chat/handler.ts',         x: 40,   y: 350, w: 150, h: 50, layer: 'logic' },
+  { id: 'turn-policy',  label: 'Turn policy',      file: 'lib/ai/turn-execution-policy',   x: 215,  y: 350, w: 150, h: 50, layer: 'logic' },
+  { id: 'context',      label: 'Context builder',  file: 'lib/ai/context-builder.ts',      x: 390,  y: 350, w: 150, h: 50, layer: 'logic' },
+  { id: 'sem-cache',    label: 'Semantic cache',   file: 'lib/ai/semantic-cache-utils',    x: 565,  y: 350, w: 150, h: 50, layer: 'logic' },
+  { id: 'tool-exec',    label: 'Tool executor',    file: 'lib/ai/tools/executor.ts',       x: 740,  y: 350, w: 150, h: 50, layer: 'logic' },
+  { id: 'resolver',     label: 'Target resolver',  file: 'lib/ai/tools/target-resolver',   x: 915,  y: 350, w: 150, h: 50, layer: 'logic' },
+
+  // LOGIC row 2: confirm + primitives + cross-cutting
+  { id: 'dispatchers',  label: 'Dispatchers',      file: 'confirm/dispatchers/*.ts',       x: 220,  y: 430, w: 170, h: 50, layer: 'logic' },
+  { id: 'primitives',   label: 'Domain primitives', file: 'updateAnnouncement, updateEvent', x: 415, y: 430, w: 200, h: 50, layer: 'logic' },
+  { id: 'idempotency',  label: 'Payment idempotency', file: 'lib/payments/idempotency',    x: 1080, y: 430, w: 180, h: 50, layer: 'logic' },
+  { id: 'safe-fetch',   label: 'safeFetch',        file: 'lib/schedule-security/',         x: 870,  y: 430, w: 150, h: 50, layer: 'logic' },
+
+  // DATA
+  { id: 'pg',           label: 'Postgres + RLS',   file: 'Supabase',                       x: 40,   y: 540, w: 160, h: 50, layer: 'data' },
+  { id: 'ai-tables',    label: 'ai_* tables',      file: 'threads, msgs, pending_actions, drafts', x: 220, y: 540, w: 220, h: 50, layer: 'data' },
+  { id: 'domain-tbl',   label: 'Domain tables',    file: 'announcements, events, jobs, …', x: 470, y: 540, w: 200, h: 50, layer: 'data' },
+  { id: 'pay-tables',   label: 'Payment tables',   file: 'payment_attempts, stripe_events', x: 700, y: 540, w: 200, h: 50, layer: 'data' },
+
+  // EXTERNAL
+  { id: 'llm',          label: 'z.ai LLM',         file: 'glm-5.1 / glm-5v-turbo',         x: 740,  y: 640, w: 150, h: 50, layer: 'external' },
+  { id: 'falkor',       label: 'Falkor graph',     file: 'connection ranking',             x: 915,  y: 640, w: 150, h: 50, layer: 'external' },
+  { id: 'resend',       label: 'Resend',           file: 'transactional email',            x: 1080, y: 640, w: 130, h: 50, layer: 'external' },
+  { id: 'stripe',       label: 'Stripe + Connect', file: 'subs + donations',               x: 1230, y: 640, w: 180, h: 50, layer: 'external' },
+  { id: 'oauth',        label: 'Google/Outlook/LinkedIn', file: 'OAuth + APIs',            x: 540,  y: 640, w: 180, h: 50, layer: 'external' },
+];
+
+// ─── Connections ───────────────────────────────────────────────
+const CONNS = [
+  // Browser → middleware → API
+  { from: 'browser',     to: 'middleware',  type: 'data',    label: 'HTTPS' },
+  { from: 'middleware',  to: 'chat-api',    type: 'data' },
+  { from: 'middleware',  to: 'confirm-api', type: 'data' },
+  { from: 'middleware',  to: 'pending-api', type: 'data' },
+  { from: 'middleware',  to: 'domain-api',  type: 'data' },
+  { from: 'middleware',  to: 'schedule-api',type: 'data' },
+  { from: 'middleware',  to: 'pg',          type: 'data',    label: 'org check' },
+
+  // Pending Card receives SSE
+  { from: 'pending-api', to: 'chat-ui',     type: 'event',   label: 'SSE pending_action' },
+  { from: 'chat-ui',     to: 'confirm-api', type: 'confirm', label: 'user confirms' },
+
+  // AI chat pipeline
+  { from: 'chat-api',    to: 'chat-handler', type: 'data' },
+  { from: 'chat-handler', to: 'turn-policy', type: 'data' },
+  { from: 'chat-handler', to: 'context',     type: 'data' },
+  { from: 'chat-handler', to: 'sem-cache',   type: 'data' },
+  { from: 'sem-cache',    to: 'ai-tables',   type: 'data',   label: 'cache lookup' },
+  { from: 'chat-handler', to: 'llm',         type: 'tool',   label: 'SSE stream' },
+  { from: 'llm',          to: 'tool-exec',   type: 'tool',   label: 'tool call' },
+  { from: 'tool-exec',    to: 'resolver',    type: 'data' },
+  { from: 'resolver',     to: 'ai-tables',   type: 'data',   label: 'recent actions' },
+  { from: 'tool-exec',    to: 'ai-tables',   type: 'data',   label: 'pending insert' },
+  { from: 'tool-exec',    to: 'falkor',      type: 'tool',   label: 'suggest_connections' },
+  { from: 'chat-handler', to: 'ai-tables',   type: 'data',   label: 'msg persist' },
+
+  // Confirm path
+  { from: 'confirm-api',  to: 'dispatchers', type: 'data' },
+  { from: 'dispatchers',  to: 'primitives',  type: 'data' },
+  { from: 'dispatchers',  to: 'ai-tables',   type: 'data',   label: 'CAS executed' },
+  { from: 'primitives',   to: 'domain-tbl',  type: 'data',   label: 'UPDATE w/ OCC' },
+  { from: 'primitives',   to: 'resend',      type: 'event',  label: 'notify' },
+  { from: 'primitives',   to: 'oauth',       type: 'event',  label: 'syncEventToUsers' },
+
+  // Domain API also calls primitives (UI parity)
+  { from: 'domain-api',   to: 'primitives',  type: 'data',   label: 'UI parity' },
+
+  // Schedule import
+  { from: 'schedule-api', to: 'safe-fetch',  type: 'data' },
+  { from: 'safe-fetch',   to: 'oauth',       type: 'data',   label: 'allowlisted host' },
+  { from: 'safe-fetch',   to: 'pg',          type: 'data',   label: 'allowlist check' },
+
+  // Payments
+  { from: 'stripe',       to: 'stripe-hook', type: 'event',  label: 'webhook' },
+  { from: 'stripe-hook',  to: 'idempotency', type: 'data' },
+  { from: 'idempotency',  to: 'pay-tables',  type: 'data',   label: 'event_id dedup' },
+  { from: 'domain-api',   to: 'stripe',      type: 'tool',   label: 'checkout' },
+
+  // Data dependencies
+  { from: 'pg',           to: 'ai-tables',   type: 'dep' },
+  { from: 'pg',           to: 'domain-tbl',  type: 'dep' },
+  { from: 'pg',           to: 'pay-tables',  type: 'dep' },
+];
+
+// ─── Presets ───────────────────────────────────────────────────
+const PRESETS = {
+  'Full system': {
+    layers: { client: true, edge: true, api: true, logic: true, data: true, external: true },
+    conns:  { data: true, tool: true, event: true, confirm: true, dep: true },
+  },
+  'AI agent loop': {
+    layers: { client: true, edge: false, api: true, logic: true, data: true, external: true },
+    conns:  { data: true, tool: true, event: true, confirm: true, dep: false },
+    focus:  ['browser','chat-ui','chat-api','confirm-api','pending-api','chat-handler','turn-policy','context','sem-cache','tool-exec','resolver','dispatchers','primitives','ai-tables','domain-tbl','llm','falkor'],
+  },
+  'Auth & request': {
+    layers: { client: true, edge: true, api: true, logic: false, data: true, external: false },
+    conns:  { data: true, tool: false, event: false, confirm: false, dep: true },
+    focus:  ['browser','middleware','chat-api','confirm-api','pending-api','domain-api','schedule-api','pg'],
+  },
+  'Payment flow': {
+    layers: { client: true, edge: true, api: true, logic: true, data: true, external: true },
+    conns:  { data: true, tool: true, event: true, confirm: false, dep: false },
+    focus:  ['browser','middleware','domain-api','stripe-hook','idempotency','pay-tables','stripe','pg'],
+  },
+  'Edit/delete path': {
+    layers: { client: true, edge: false, api: true, logic: true, data: true, external: false },
+    conns:  { data: true, tool: false, event: true, confirm: true, dep: false },
+    focus:  ['browser','chat-ui','chat-api','confirm-api','pending-api','tool-exec','resolver','dispatchers','primitives','ai-tables','domain-tbl'],
+  },
+  'Data layer': {
+    layers: { client: false, edge: false, api: true, logic: true, data: true, external: true },
+    conns:  { data: true, tool: false, event: false, confirm: false, dep: true },
+  },
+};
+
+// ─── State ─────────────────────────────────────────────────────
+const state = {
+  preset: 'Full system',
+  layers: { ...PRESETS['Full system'].layers },
+  conns:  { ...PRESETS['Full system'].conns },
+  focus:  null,
+  comments: [],
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+};
+
+// ─── Init UI ───────────────────────────────────────────────────
+const presetsEl = document.getElementById('presets');
+Object.keys(PRESETS).forEach(name => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  if (name === state.preset) b.classList.add('active');
+  b.onclick = () => applyPreset(name);
+  presetsEl.appendChild(b);
+});
+
+const LAYER_ORDER = ['client','edge','api','logic','data','external'];
+const layerTogglesEl = document.getElementById('layer-toggles');
+LAYER_ORDER.forEach(key => {
+  const lbl = document.createElement('label');
+  lbl.className = 'toggle-row';
+  lbl.innerHTML = `
+    <input type="checkbox" ${state.layers[key] ? 'checked' : ''}>
+    <span class="layer-dot" style="background:${LAYERS[key].color}"></span>
+    <span>${LAYERS[key].label}</span>
+  `;
+  lbl.querySelector('input').onchange = (e) => {
+    state.layers[key] = e.target.checked;
+    state.preset = 'Custom';
+    state.focus = null;
+    refreshPresetButtons();
+    render();
+  };
+  layerTogglesEl.appendChild(lbl);
+});
+
+const CONN_TYPES = [
+  { key: 'data',    label: 'Data flow',     color: '#58a6ff' },
+  { key: 'tool',    label: 'Tool call',     color: '#3fb950' },
+  { key: 'event',   label: 'Event / SSE',   color: '#f85149' },
+  { key: 'confirm', label: 'Confirm loop',  color: '#f0883e' },
+  { key: 'dep',     label: 'Dependency',    color: '#6b7684' },
+];
+const connTogglesEl = document.getElementById('conn-toggles');
+CONN_TYPES.forEach(c => {
+  const lbl = document.createElement('label');
+  lbl.className = 'toggle-row';
+  lbl.innerHTML = `
+    <input type="checkbox" ${state.conns[c.key] ? 'checked' : ''}>
+    <span class="swatch" style="background:${c.color}"></span>
+    <span>${c.label}</span>
+  `;
+  lbl.querySelector('input').onchange = (e) => {
+    state.conns[c.key] = e.target.checked;
+    state.preset = 'Custom';
+    refreshPresetButtons();
+    render();
+  };
+  connTogglesEl.appendChild(lbl);
+});
+
+function refreshPresetButtons() {
+  presetsEl.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('active', b.textContent === state.preset);
+  });
+}
+
+function applyPreset(name) {
+  state.preset = name;
+  const p = PRESETS[name];
+  state.layers = { ...p.layers };
+  state.conns  = { ...p.conns };
+  state.focus  = p.focus || null;
+  // sync checkbox UI
+  layerTogglesEl.querySelectorAll('input').forEach((el, i) => {
+    el.checked = state.layers[LAYER_ORDER[i]];
+  });
+  connTogglesEl.querySelectorAll('input').forEach((el, i) => {
+    el.checked = state.conns[CONN_TYPES[i].key];
+  });
+  refreshPresetButtons();
+  render();
+}
+
+// ─── Render ────────────────────────────────────────────────────
+const bandsG = document.getElementById('layer-bands');
+const connG  = document.getElementById('connections');
+const nodeG  = document.getElementById('nodes');
+
+function isNodeVisible(node) {
+  if (!state.layers[node.layer]) return false;
+  if (state.focus && !state.focus.includes(node.id)) return false;
+  return true;
+}
+
+function visibleNodeIds() {
+  return new Set(NODES.filter(isNodeVisible).map(n => n.id));
+}
+
+function render() {
+  // Layer bands
+  bandsG.innerHTML = '';
+  Object.entries(LAYERS).forEach(([key, layer]) => {
+    if (!state.layers[key]) return;
+    const r = svg('rect', {
+      class: 'layer-band',
+      x: 10, y: layer.y - 12, width: 1480, height: layer.h + 4,
+      rx: 6, fill: layer.color, opacity: 0.18,
+    });
+    bandsG.appendChild(r);
+    const t = svg('text', {
+      class: 'layer-label',
+      x: 22, y: layer.y - 1,
+    });
+    t.textContent = layer.label;
+    bandsG.appendChild(t);
+  });
+
+  // Connections
+  connG.innerHTML = '';
+  const visible = visibleNodeIds();
+  CONNS.forEach(c => {
+    if (!state.conns[c.type]) return;
+    if (!visible.has(c.from) || !visible.has(c.to)) return;
+    const a = NODES.find(n => n.id === c.from);
+    const b = NODES.find(n => n.id === c.to);
+    const path = bezier(a, b);
+    const p = svg('path', {
+      class: `conn-${c.type}`,
+      d: path,
+      'marker-end': `url(#ah-${c.type})`,
+    });
+    connG.appendChild(p);
+    if (c.label) {
+      const mid = midpoint(a, b);
+      const t = svg('text', {
+        class: 'conn-label',
+        x: mid.x, y: mid.y - 3,
+        'text-anchor': 'middle',
+      });
+      t.textContent = c.label;
+      connG.appendChild(t);
+    }
+  });
+
+  // Nodes
+  nodeG.innerHTML = '';
+  NODES.forEach(n => {
+    if (!isNodeVisible(n)) return;
+    const g = svg('g', { transform: `translate(${n.x},${n.y})` });
+    const isCommented = state.comments.some(c => c.target === n.id);
+    const rect = svg('rect', {
+      class: 'node-rect' + (isCommented ? ' commented' : ''),
+      width: n.w, height: n.h, rx: 6,
+      fill: LAYERS[n.layer].color,
+      'fill-opacity': 0.55,
+    });
+    rect.addEventListener('click', () => openModal(n));
+    g.appendChild(rect);
+    const t1 = svg('text', { class: 'node-title', x: n.w / 2, y: 20, 'text-anchor': 'middle' });
+    t1.textContent = n.label;
+    g.appendChild(t1);
+    const t2 = svg('text', { class: 'node-sub', x: n.w / 2, y: 36, 'text-anchor': 'middle' });
+    t2.textContent = n.file;
+    g.appendChild(t2);
+    if (isCommented) {
+      const dot = svg('circle', { cx: n.w - 8, cy: 8, r: 4, fill: '#f0883e' });
+      g.appendChild(dot);
+    }
+    nodeG.appendChild(g);
+  });
+
+  updatePrompt();
+}
+
+function svg(tag, attrs = {}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function bezier(a, b) {
+  const ax = a.x + a.w / 2, ay = a.y + a.h / 2;
+  const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+  // Anchor on the edge in the dominant direction
+  const dx = bx - ax, dy = by - ay;
+  let sx, sy, ex, ey, c1x, c1y, c2x, c2y;
+  if (Math.abs(dy) > Math.abs(dx) * 0.6) {
+    // mostly vertical
+    sy = ay + (dy > 0 ? a.h / 2 : -a.h / 2);
+    sx = ax;
+    ey = by + (dy > 0 ? -b.h / 2 : b.h / 2);
+    ex = bx;
+    const ctrlOffset = Math.abs(dy) * 0.4;
+    c1x = sx; c1y = sy + (dy > 0 ? ctrlOffset : -ctrlOffset);
+    c2x = ex; c2y = ey + (dy > 0 ? -ctrlOffset : ctrlOffset);
+  } else {
+    // mostly horizontal
+    sx = ax + (dx > 0 ? a.w / 2 : -a.w / 2);
+    sy = ay;
+    ex = bx + (dx > 0 ? -b.w / 2 : b.w / 2);
+    ey = by;
+    const ctrlOffset = Math.abs(dx) * 0.4;
+    c1x = sx + (dx > 0 ? ctrlOffset : -ctrlOffset); c1y = sy;
+    c2x = ex + (dx > 0 ? -ctrlOffset : ctrlOffset); c2y = ey;
+  }
+  return `M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${ex} ${ey}`;
+}
+
+function midpoint(a, b) {
+  return {
+    x: (a.x + a.w / 2 + b.x + b.w / 2) / 2,
+    y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
+  };
+}
+
+// ─── Modal ─────────────────────────────────────────────────────
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modal-title');
+const modalFile = document.getElementById('modal-file');
+const modalText = document.getElementById('modal-textarea');
+let activeNode = null;
+let editingId = null;
+
+function openModal(node, existingId = null) {
+  activeNode = node;
+  editingId = existingId;
+  modalTitle.textContent = node.label;
+  modalFile.textContent = node.file;
+  const existing = state.comments.find(c => c.id === existingId);
+  modalText.value = existing ? existing.text : '';
+  modal.classList.add('open');
+  setTimeout(() => modalText.focus(), 50);
+}
+
+document.getElementById('modal-cancel').onclick = () => {
+  modal.classList.remove('open');
+  activeNode = null;
+  editingId = null;
+};
+document.getElementById('modal-save').onclick = () => {
+  const text = modalText.value.trim();
+  if (!text) {
+    modal.classList.remove('open');
+    return;
+  }
+  if (editingId) {
+    const c = state.comments.find(c => c.id === editingId);
+    c.text = text;
+  } else {
+    state.comments.push({
+      id: Date.now(),
+      target: activeNode.id,
+      targetLabel: activeNode.label,
+      targetFile: activeNode.file,
+      text,
+    });
+  }
+  modal.classList.remove('open');
+  renderComments();
+  render();
+};
+modal.onclick = (e) => {
+  if (e.target === modal) document.getElementById('modal-cancel').click();
+};
+
+// ─── Comments list ─────────────────────────────────────────────
+function renderComments() {
+  const listEl = document.getElementById('comment-list');
+  document.getElementById('comment-count').textContent = state.comments.length;
+  if (state.comments.length === 0) {
+    listEl.innerHTML = '<div class="comments-empty">Click any node to add feedback.</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  state.comments.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'comment-item';
+    div.innerHTML = `
+      <button class="delete" title="Remove">×</button>
+      <div class="target">${escapeHtml(c.targetLabel)}</div>
+      <div class="file">${escapeHtml(c.targetFile)}</div>
+      <div class="text">${escapeHtml(c.text)}</div>
+    `;
+    div.querySelector('.delete').onclick = (e) => {
+      e.stopPropagation();
+      state.comments = state.comments.filter(x => x.id !== c.id);
+      renderComments();
+      render();
+    };
+    div.onclick = () => {
+      const node = NODES.find(n => n.id === c.target);
+      if (node) openModal(node, c.id);
+    };
+    listEl.appendChild(div);
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+}
+
+// ─── Prompt output ─────────────────────────────────────────────
+function updatePrompt() {
+  const out = document.getElementById('prompt-output');
+  const visibleLayers = LAYER_ORDER.filter(k => state.layers[k]).map(k => LAYERS[k].label.toLowerCase());
+  const allLayersVisible = visibleLayers.length === LAYER_ORDER.length;
+  const visibleConnTypes = CONN_TYPES.filter(c => state.conns[c.key]).map(c => c.label.toLowerCase());
+  const allConnsVisible = visibleConnTypes.length === CONN_TYPES.length;
+
+  const parts = [];
+  parts.push("This is the TeamMeet system architecture (Next.js 14 multi-tenant SaaS, Supabase + Stripe + z.ai LLM).");
+
+  if (state.preset !== 'Custom' && state.preset !== 'Full system') {
+    parts.push(`I'm focused on the **${state.preset}** view.`);
+  }
+  if (!allLayersVisible) {
+    parts.push(`Visible layers: ${visibleLayers.join(', ')}.`);
+  }
+  if (!allConnsVisible) {
+    parts.push(`Visible connection types: ${visibleConnTypes.join(', ')}.`);
+  }
+
+  if (state.comments.length === 0) {
+    parts.push("");
+    parts.push("Walk me through this architecture and call out anything that looks risky, missing, or worth improving.");
+  } else {
+    parts.push("");
+    parts.push(`Feedback on ${state.comments.length} component${state.comments.length === 1 ? '' : 's'}:`);
+    parts.push("");
+    state.comments.forEach(c => {
+      parts.push(`**${c.targetLabel}** (\`${c.targetFile}\`):`);
+      parts.push(c.text);
+      parts.push("");
+    });
+    parts.push("Address each comment. For each, propose a concrete change (file paths, primitives, or migrations) and flag downstream impact.");
+  }
+
+  out.textContent = parts.join('\n').trim();
+}
+
+// ─── Copy ──────────────────────────────────────────────────────
+const copyBtn = document.getElementById('copy-btn');
+copyBtn.onclick = async () => {
+  await navigator.clipboard.writeText(document.getElementById('prompt-output').textContent);
+  copyBtn.textContent = 'Copied!';
+  copyBtn.classList.add('copied');
+  setTimeout(() => {
+    copyBtn.textContent = 'Copy prompt';
+    copyBtn.classList.remove('copied');
+  }, 1400);
+};
+
+// ─── Zoom / pan ────────────────────────────────────────────────
+const svgEl = document.getElementById('diagram');
+const VIEWBOX = { x: 0, y: 0, w: 1500, h: 760 };
+function applyViewBox() {
+  const w = VIEWBOX.w / state.zoom;
+  const h = VIEWBOX.h / state.zoom;
+  svgEl.setAttribute('viewBox', `${VIEWBOX.x + state.pan.x} ${VIEWBOX.y + state.pan.y} ${w} ${h}`);
+}
+document.getElementById('zoom-in').onclick = () => { state.zoom = Math.min(3, state.zoom * 1.2); applyViewBox(); };
+document.getElementById('zoom-out').onclick = () => { state.zoom = Math.max(0.4, state.zoom / 1.2); applyViewBox(); };
+document.getElementById('zoom-reset').onclick = () => { state.zoom = 1; state.pan = { x: 0, y: 0 }; applyViewBox(); };
+
+// drag-to-pan
+let dragStart = null;
+svgEl.addEventListener('mousedown', (e) => {
+  if (e.target.tagName === 'rect' && e.target.classList.contains('node-rect')) return;
+  dragStart = { x: e.clientX, y: e.clientY, panX: state.pan.x, panY: state.pan.y };
+  svgEl.classList.add('dragging');
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragStart) return;
+  const rect = svgEl.getBoundingClientRect();
+  const sx = VIEWBOX.w / rect.width / state.zoom;
+  state.pan.x = dragStart.panX - (e.clientX - dragStart.x) * sx;
+  state.pan.y = dragStart.panY - (e.clientY - dragStart.y) * sx;
+  applyViewBox();
+});
+window.addEventListener('mouseup', () => {
+  dragStart = null;
+  svgEl.classList.remove('dragging');
+});
+svgEl.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.91;
+  state.zoom = Math.max(0.4, Math.min(3, state.zoom * factor));
+  applyViewBox();
+}, { passive: false });
+
+// ─── Boot ──────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
