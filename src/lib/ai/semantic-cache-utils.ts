@@ -16,7 +16,6 @@ export type CacheSurface = (typeof CACHE_SURFACES)[number];
  * freshness policy changes that should invalidate existing rows.
  */
 export const CACHE_CONTRACT_VERSION = 3 as const;
-export const CACHE_VERSION = CACHE_CONTRACT_VERSION;
 export const CACHE_KEY_SALT = `ai-semantic-cache:v${CACHE_CONTRACT_VERSION}`;
 
 /** Surface-specific TTLs (hours) — shorter for data-heavy surfaces */
@@ -216,7 +215,7 @@ export function buildSemanticCacheKeyParts(params: {
     normalizedPrompt,
     promptHash: hashPrompt(normalizedPrompt),
     permissionScopeKey: buildPermissionScopeKey(params.orgId, params.role),
-    cacheVersion: CACHE_VERSION,
+    cacheVersion: CACHE_CONTRACT_VERSION,
     cacheSalt: CACHE_KEY_SALT,
   };
 }

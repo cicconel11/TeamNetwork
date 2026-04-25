@@ -1,6 +1,5 @@
 export type CacheStatus =
   | "hit_exact"
-  | "hit_semantic"
   | "miss"
   | "bypass"
   | "ineligible"

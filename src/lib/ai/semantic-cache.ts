@@ -11,7 +11,7 @@ import { aiLog, type AiLogContext } from "./logger";
 // Types
 // ---------------------------------------------------------------------------
 
-export type CacheHitType = "exact" | "semantic";
+export type CacheHitType = "exact";
 
 export type CacheHit = Readonly<{
   id: string;
