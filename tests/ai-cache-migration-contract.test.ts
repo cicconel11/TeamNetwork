@@ -127,3 +127,54 @@ describe("ai_semantic_cache migration contract", () => {
     assert.equal(cachePurgeCron?.schedule, "0 * * * *");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hit-rate view — service-role-only aggregation, used by /api/admin/ai/cache-stats
+// ---------------------------------------------------------------------------
+
+const hitRateViewMigration = readFileSync(
+  new URL(
+    "../supabase/migrations/20261024000000_ai_cache_hit_rate_view.sql",
+    import.meta.url
+  ),
+  "utf8"
+);
+
+describe("ai_cache_hit_rate_daily view contract", () => {
+  it("uses CREATE OR REPLACE VIEW for idempotent re-run", () => {
+    assert.match(
+      hitRateViewMigration,
+      /CREATE OR REPLACE VIEW public\.ai_cache_hit_rate_daily/i
+    );
+  });
+
+  it("aggregates over ai_audit_log", () => {
+    assert.match(hitRateViewMigration, /FROM public\.ai_audit_log/i);
+  });
+
+  it("buckets by day and cache_status", () => {
+    assert.match(hitRateViewMigration, /date_trunc\('day', created_at\)/i);
+    assert.match(hitRateViewMigration, /cache_status/i);
+    assert.match(hitRateViewMigration, /GROUP BY day, cache_status/i);
+  });
+
+  it("limits window to 30 days", () => {
+    assert.match(hitRateViewMigration, /interval '30 days'/i);
+  });
+
+  it("revokes access from public, anon, authenticated", () => {
+    assert.match(hitRateViewMigration, /REVOKE ALL ON public\.ai_cache_hit_rate_daily FROM PUBLIC/i);
+    assert.match(hitRateViewMigration, /REVOKE ALL ON public\.ai_cache_hit_rate_daily FROM anon/i);
+    assert.match(
+      hitRateViewMigration,
+      /REVOKE ALL ON public\.ai_cache_hit_rate_daily FROM authenticated/i
+    );
+  });
+
+  it("grants SELECT to service_role only", () => {
+    assert.match(
+      hitRateViewMigration,
+      /GRANT SELECT ON public\.ai_cache_hit_rate_daily TO service_role/i
+    );
+  });
+});
