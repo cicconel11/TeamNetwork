@@ -18,7 +18,7 @@ export const listJobPostingsModule: ToolModule<Args> = {
     return safeToolQuery(logContext, async () => {
       const { data, error } = await sb
         .from("job_postings")
-        .select("id, title, company, location, job_type, description, created_at")
+        .select("id, title, company, location, location_type, description, created_at")
         .eq("organization_id", ctx.orgId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
@@ -34,7 +34,7 @@ export const listJobPostingsModule: ToolModule<Args> = {
           title: job.title,
           company: job.company ?? null,
           location: job.location ?? null,
-          job_type: job.job_type ?? null,
+          location_type: job.location_type ?? null,
           created_at: job.created_at ?? null,
           description_preview: truncateBody(job.description),
         })),
