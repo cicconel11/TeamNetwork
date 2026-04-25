@@ -1,5 +1,6 @@
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import { isStageTimeoutError } from "@/lib/ai/timeout";
+import type { ScheduleImageMimeType } from "@/lib/ai/schedule-extraction";
 
 export type ToolQueryResult =
   | { kind: "ok"; data: unknown }
@@ -28,6 +29,41 @@ export async function safeToolQuery(
     return { kind: "tool_error", error: "Unexpected error" };
   }
 }
+
+export type ToolCountResult =
+  | { ok: true; count: number }
+  | { ok: false; error: string };
+
+export async function safeToolCount(
+  logContext: AiLogContext,
+  fn: () => Promise<{ count: number | null; error: unknown }>
+): Promise<ToolCountResult> {
+  try {
+    const { count, error } = await fn();
+    if (error || count === null) {
+      if (error) {
+        aiLog("warn", "ai-tools", "count query failed", logContext, {
+          error: getSafeErrorMessage(error),
+        });
+      } else {
+        aiLog("warn", "ai-tools", "count query failed", logContext, {
+          error: "count_unavailable",
+        });
+      }
+      return { ok: false, error: "Query failed" };
+    }
+    return { ok: true, count };
+  } catch (err) {
+    if (isStageTimeoutError(err)) {
+      throw err;
+    }
+    aiLog("warn", "ai-tools", "unexpected count error", logContext, {
+      error: getSafeErrorMessage(err),
+    });
+    return { ok: false, error: "Unexpected error" };
+  }
+}
+
 
 export function getSafeErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
@@ -86,4 +122,19 @@ export function isPlaceholderMemberName(firstName: string, lastName: string): bo
 export function isTrustworthyHumanName(value: string | null | undefined): value is string {
   const normalizedValue = value?.trim() ?? "";
   return normalizedValue.length > 0 && normalizedValue !== "Member" && !normalizedValue.includes("@");
+}
+
+const SCHEDULE_IMAGE_MIME_TYPES = new Set<ScheduleImageMimeType>([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+]);
+
+/** True when the attachment is a schedule image accepted for AI extraction (PNG/JPEG). */
+export function isScheduleImageAttachment(attachment?: {
+  mimeType: string;
+} | null): boolean {
+  return Boolean(
+    attachment && SCHEDULE_IMAGE_MIME_TYPES.has(attachment.mimeType as ScheduleImageMimeType)
+  );
 }
