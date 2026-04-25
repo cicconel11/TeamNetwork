@@ -430,6 +430,23 @@ test("verifyToolBackedResponse accepts grounded list_discussions output", () => 
   assert.deepEqual(result.failures, []);
 });
 
+test("verifyToolBackedResponse accepts partial discussion title quote", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "My new Thread" has 2 replies',
+    toolResults: [
+      {
+        name: "list_discussions",
+        data: [
+          { title: "My new Thread - Check it out!", body: "...", reply_count: 2, is_pinned: false, is_locked: false },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
 test("verifyToolBackedResponse flags fabricated discussion title", () => {
   const result = verifyToolBackedResponse({
     content: '- "Real Thread"\n- "Ghost Thread"',

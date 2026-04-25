@@ -515,16 +515,26 @@ export function verifyListDiscussions(content: string, data: unknown): string[] 
       .map((row) => [normalizeIdentifier(row.title as string), row.reply_count as number])
   );
 
+  const titleList = [...titles];
+  const titleHeads = titleList.map((row) =>
+    row.split(/\s*(?:[-—:|]|\bon\b)\s*/i)[0]?.trim() ?? row
+  );
+  const matchesAnyTitle = (claimed: string): boolean => {
+    const normalized = normalizeIdentifier(claimed);
+    if (titles.has(normalized)) return true;
+    if (titleList.some((row) => row.includes(normalized))) return true;
+    return titleHeads.some((head) => head.length > 0 && normalized.startsWith(head));
+  };
+
   const failures: string[] = [];
   for (const title of extractQuotedTitles(content)) {
-    if (!titles.has(normalizeIdentifier(title))) {
+    if (!matchesAnyTitle(title)) {
       failures.push(`discussion title ${title} was not present in tool rows`);
     }
   }
 
   for (const candidate of extractListEntryHeads(content)) {
-    const normalizedCandidate = normalizeIdentifier(candidate);
-    if (!titles.has(normalizedCandidate)) {
+    if (!matchesAnyTitle(candidate)) {
       failures.push(`discussion title ${candidate} was not present in tool rows`);
     }
   }
