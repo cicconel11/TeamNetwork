@@ -4,12 +4,14 @@ import type { ToolModule, ToolModuleRunContext } from "./types";
 import { listMembersModule } from "./list-members";
 import { listEventsModule } from "./list-events";
 import { listAnnouncementsModule } from "./list-announcements";
+import { listDiscussionsModule } from "./list-discussions";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: ReadonlyArray<ToolModule<any>> = [
   listMembersModule,
   listEventsModule,
   listAnnouncementsModule,
+  listDiscussionsModule,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
