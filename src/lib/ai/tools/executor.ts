@@ -73,7 +73,6 @@ import {
   type DirectChatSupabase,
 } from "@/lib/chat/direct-chat";
 import {
-  listUserChatGroups,
   resolveGroupChatTarget,
   type GroupChatSupabase,
 } from "@/lib/chat/group-chat";
@@ -242,12 +241,6 @@ const prepareChatMessageSchema = z
   })
   .strict();
 
-const listChatGroupsSchema = z
-  .object({
-    limit: z.number().int().min(1).max(50).optional(),
-  })
-  .strict();
-
 const prepareGroupMessageSchema = z
   .object({
     chat_group_id: z.string().uuid().optional(),
@@ -382,7 +375,6 @@ const findNavigationTargetsSchema = z
   .strict();
 
 const ARG_SCHEMAS: Partial<Record<ToolName, z.ZodSchema>> = {
-  list_chat_groups: listChatGroupsSchema,
   list_alumni: listAlumniSchema,
   list_enterprise_alumni: listEnterpriseAlumniSchema,
   list_donations: listDonationsSchema,
@@ -454,7 +446,7 @@ function validateArgs(
   return { valid: true, args: parsed.data };
 }
 
-function toolError(error: string, code?: ToolExecutionErrorCode): ToolExecutionResult {
+export function toolError(error: string, code?: ToolExecutionErrorCode): ToolExecutionResult {
   return code ? { kind: "tool_error", error, code } : { kind: "tool_error", error };
 }
 
@@ -1766,38 +1758,6 @@ async function prepareChatMessage(
   };
 }
 
-async function listChatGroups(
-  sb: SB,
-  ctx: ToolExecutionContext,
-  args: z.infer<typeof listChatGroupsSchema>,
-  logContext: AiLogContext
-): Promise<ToolExecutionResult> {
-  const limit = Math.min(args.limit ?? 25, 50);
-  const { data, error } = await listUserChatGroups(sb as GroupChatSupabase, {
-    organizationId: ctx.orgId,
-    userId: ctx.userId,
-    limit,
-  });
-
-  if (error) {
-    aiLog("warn", "ai-tools", "list_chat_groups failed", logContext, {
-      error: getSafeErrorMessage(error),
-    });
-    return toolError("Failed to load chat groups");
-  }
-
-  return {
-    kind: "ok",
-    data: (data ?? []).map((group) => ({
-      id: group.id,
-      name: group.name,
-      description: group.description,
-      role: group.role,
-      updated_at: group.updated_at,
-    })),
-  };
-}
-
 async function prepareGroupMessage(
   sb: SB,
   ctx: ToolExecutionContext,
@@ -2999,13 +2959,6 @@ export async function executeToolCall(
         return dispatchToolModule(toolName, args, { ctx, sb, logContext });
       }
       switch (toolName) {
-        case "list_chat_groups":
-          return listChatGroups(
-            sb,
-            ctx,
-            args as z.infer<typeof listChatGroupsSchema>,
-            logContext
-          );
         case "list_alumni":
           return listAlumni(
             sb,
