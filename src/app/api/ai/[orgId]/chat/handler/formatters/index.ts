@@ -21,7 +21,7 @@ import {
   formatPhilanthropyEventsResponse,
   formatChatGroupsResponse,
   formatNavigationTargetsResponse,
-  type DonationResponseOptions,
+  type FormatterOptions,
 } from "./reads";
 import {
   formatPrepareJobPostingResponse,
@@ -87,6 +87,7 @@ export {
   formatChatGroupsResponse,
   formatNavigationTargetsResponse,
   type DonationResponseOptions,
+  type FormatterOptions,
 } from "./reads";
 export {
   formatPrepareJobPostingResponse,
@@ -192,10 +193,32 @@ export async function resolveHideDonorNamesPreference(
   }
 }
 
+export async function resolveOrgSlug(
+  serviceSupabase: { from: (table: string) => any },
+  orgId: string,
+): Promise<string | undefined> {
+  try {
+    const { data, error } = await serviceSupabase
+      .from("organizations")
+      .select("slug")
+      .eq("id", orgId)
+      .maybeSingle();
+
+    if (error) {
+      return undefined;
+    }
+
+    const slug = (data as { slug?: unknown } | null)?.slug;
+    return typeof slug === "string" && slug.trim().length > 0 ? slug : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function formatDeterministicToolResponse(
   name: string,
   data: unknown,
-  options?: DonationResponseOptions,
+  options?: FormatterOptions,
 ): string | null {
   switch (name) {
     case "suggest_connections":
@@ -209,7 +232,7 @@ export function formatDeterministicToolResponse(
     case "list_announcements":
       return formatAnnouncementsResponse(data);
     case "list_chat_groups":
-      return formatChatGroupsResponse(data);
+      return formatChatGroupsResponse(data, options);
     case "list_discussions":
       return formatDiscussionsResponse(data);
     case "list_job_postings":

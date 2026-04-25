@@ -73,6 +73,10 @@ export interface DonationResponseOptions {
   hideDonorNames?: boolean;
 }
 
+export interface FormatterOptions extends DonationResponseOptions {
+  orgSlug?: string;
+}
+
 export function formatSuggestMentorsResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
 
@@ -1239,33 +1243,119 @@ export function formatPhilanthropyEventsResponse(data: unknown): string | null {
   return lines.join("\n");
 }
 
-export function formatChatGroupsResponse(data: unknown): string | null {
+function formatLastActivity(updatedAt: string | null): string | null {
+  if (!updatedAt) return null;
+  const ts = Date.parse(updatedAt);
+  if (Number.isNaN(ts)) return null;
+  const diffMs = Date.now() - ts;
+  if (diffMs < 0) return null;
+  const day = 24 * 60 * 60 * 1000;
+  const days = Math.floor(diffMs / day);
+  if (days < 1) {
+    const hours = Math.floor(diffMs / (60 * 60 * 1000));
+    if (hours < 1) return "Last activity just now";
+    return `Last activity ${hours}h ago`;
+  }
+  return `Last activity ${days}d ago`;
+}
+
+export function formatChatGroupsResponse(
+  data: unknown,
+  options?: FormatterOptions,
+): string | null {
   if (!Array.isArray(data)) {
     return null;
   }
 
-  const groups = data
-    .map((row) => {
-      if (!row || typeof row !== "object") {
-        return null;
-      }
+  const orgSlug = getNonEmptyString(options?.orgSlug);
 
-      const name = getNonEmptyString((row as { name?: unknown }).name);
-      if (!name) {
-        return null;
-      }
+  type NormalizedRow = {
+    id: string | null;
+    name: string;
+    role: string | null;
+    updatedAt: string | null;
+    memberCount: number | null;
+    isMember: boolean | null;
+  };
 
-      const role = getNonEmptyString((row as { role?: unknown }).role);
-      return role ? `${name} (${role})` : name;
-    })
-    .filter((row): row is string => Boolean(row))
-    .slice(0, 8);
+  const rows: NormalizedRow[] = [];
+  let hasAllShape = false;
 
-  if (groups.length === 0) {
-    return "You do not have any active chat groups available right now.";
+  for (const raw of data) {
+    if (!raw || typeof raw !== "object") continue;
+    const obj = raw as Record<string, unknown>;
+    const name = getNonEmptyString(obj.name);
+    if (!name) continue;
+
+    const memberCountRaw = obj.member_count;
+    const memberCount =
+      typeof memberCountRaw === "number" && Number.isFinite(memberCountRaw)
+        ? memberCountRaw
+        : null;
+    const isMember =
+      typeof obj.is_member === "boolean" ? obj.is_member : null;
+
+    if (memberCount !== null || isMember !== null) {
+      hasAllShape = true;
+    }
+
+    rows.push({
+      id: getNonEmptyString(obj.id),
+      name,
+      role: getNonEmptyString(obj.role),
+      updatedAt: getNonEmptyString(obj.updated_at),
+      memberCount,
+      isMember,
+    });
   }
 
-  return `You can message these chat groups:\n- ${groups.join("\n- ")}`;
+  const limited = rows.slice(0, 8);
+
+  if (limited.length === 0) {
+    return hasAllShape
+      ? "There are no active chat groups in this organization."
+      : "You do not have any active chat groups available right now.";
+  }
+
+  const header = hasAllShape
+    ? "Chat groups in this organization:"
+    : "You can message these chat groups:";
+
+  const lines: string[] = [header];
+
+  for (const row of limited) {
+    const isMember = row.isMember ?? true;
+    const canLink = Boolean(orgSlug && row.id) && isMember;
+    const namePart = canLink
+      ? `[${row.name}](/${orgSlug}/messages/chat/${row.id})`
+      : row.name;
+    const segments: string[] = [namePart];
+    if (row.role) {
+      segments.push(`(${row.role})`);
+    }
+
+    if (hasAllShape) {
+      if (row.memberCount !== null) {
+        segments.push(`- ${row.memberCount} members`);
+      }
+      if (!isMember) {
+        segments.push("- you're not a member");
+      }
+      const activity = formatLastActivity(row.updatedAt);
+      if (activity) {
+        segments.push(`- ${activity.toLowerCase()}`);
+      }
+      lines.push(`- ${segments.join(" ")}`);
+    } else {
+      lines.push(`- ${segments.join(" ")}`);
+      const activity = formatLastActivity(row.updatedAt);
+      if (activity) {
+        lines.push(`  ${activity}`);
+      }
+    }
+  }
+
+  return lines.join("\n");
 }
 
 export function formatNavigationTargetsResponse(data: unknown): string | null {
