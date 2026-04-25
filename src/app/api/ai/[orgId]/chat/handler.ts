@@ -95,6 +95,7 @@ import {
   formatDeterministicToolErrorResponse,
   formatRevisedPendingEventResponse,
   resolveHideDonorNamesPreference,
+  resolveOrgSlug,
   CONNECTION_PASS2_TEMPLATE,
 } from "./handler/formatters/index";
 import {
@@ -2099,10 +2100,22 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 ctx.orgId,
               )
             : false;
-          const deterministicDonationOptions =
+          const needsOrgSlug =
+            successfulToolResults.length === 1 &&
+            successfulToolResults[0]?.name === "list_chat_groups";
+          const orgSlug = needsOrgSlug
+            ? await resolveOrgSlug(
+                ctx.serviceSupabase as { from: (table: string) => any },
+                ctx.orgId,
+              )
+            : undefined;
+          const deterministicFormatterOptions =
             successfulToolResults.length === 1 &&
             successfulToolResults[0]?.name === "list_donations"
               ? { hideDonorNames }
+              : successfulToolResults.length === 1 &&
+                successfulToolResults[0]?.name === "list_chat_groups"
+              ? { orgSlug }
               : undefined;
           const deterministicToolContent =
             toolResults.length === 1 &&
@@ -2112,7 +2125,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               ? formatDeterministicToolResponse(
                   successfulToolResults[0].name,
                   successfulToolResults[0].data,
-                  deterministicDonationOptions,
+                  deterministicFormatterOptions,
                 )
               : null;
           const singleToolError =
