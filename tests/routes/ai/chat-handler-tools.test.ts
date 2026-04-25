@@ -176,6 +176,10 @@ function createSupabaseStub() {
         }
       }
 
+      if (table === "organizations" && query.op === "select") {
+        return { data: { slug: "acme" }, error: null };
+      }
+
       if (table === "discussion_threads" && query.op === "select") {
         if (state.discussionThreadLookupError) {
           return { data: null, error: state.discussionThreadLookupError };
@@ -754,7 +758,8 @@ test("list group chat requests route to list_chat_groups", async () => {
   assert.deepEqual(toolNamesForCall(0), ["list_chat_groups"]);
   assert.equal(executeToolCallCalls[0].call.name, "list_chat_groups");
   assert.match(body, /You can message these chat groups/i);
-  assert.match(body, /CEO boss men \(admin\)/);
+  assert.match(body, /\[CEO boss men\]\(\/acme\/messages\/chat\/group-1\)/);
+  assert.match(body, /CEO boss men\]\(\/acme\/messages\/chat\/group-1\) \(admin\)/);
 });
 
 test("explicit group message requests route to prepare_group_message", async () => {
