@@ -2855,3 +2855,125 @@ test("unknown tool name returns tool_error", async () => {
   assert.equal(result.kind, "tool_error");
   assert.match(result.error, /unknown/i);
 });
+
+test("list_chat_groups scope: all returns every org group with member_count and is_member for admins", async () => {
+  const groupId = "44444444-4444-4444-8444-444444444444";
+  const otherGroupId = "55555555-5555-4555-8555-555555555555";
+  const chatStub = createToolSupabaseStub({
+    chat_groups: {
+      select: {
+        data: [
+          {
+            id: groupId,
+            organization_id: ORG_ID,
+            name: "Admin",
+            description: null,
+            updated_at: "2026-04-20T12:00:00.000Z",
+            deleted_at: null,
+          },
+          {
+            id: otherGroupId,
+            organization_id: ORG_ID,
+            name: "Marketing",
+            description: null,
+            updated_at: "2026-04-15T12:00:00.000Z",
+            deleted_at: null,
+          },
+        ],
+        error: null,
+      },
+    },
+    chat_group_members: {
+      select: {
+        data: [
+          {
+            chat_group_id: groupId,
+            user_id: USER_ID,
+            role: "admin",
+            removed_at: null,
+          },
+          {
+            chat_group_id: groupId,
+            user_id: "other-user",
+            role: "member",
+            removed_at: null,
+          },
+          {
+            chat_group_id: otherGroupId,
+            user_id: "other-user-2",
+            role: "member",
+            removed_at: null,
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+
+  const adminCtx = makeCtx(chatStub as any, {
+    kind: "preverified_admin",
+    source: "ai_org_context",
+  });
+
+  const result = expectOk(
+    await executeToolCall(adminCtx, {
+      name: "list_chat_groups",
+      args: { scope: "all" },
+    })
+  );
+
+  const rows = result.data as Array<Record<string, unknown>>;
+  assert.equal(rows.length, 2);
+  const admin = rows.find((r) => r.id === groupId);
+  const marketing = rows.find((r) => r.id === otherGroupId);
+  assert.deepEqual(admin, {
+    id: groupId,
+    name: "Admin",
+    description: null,
+    updated_at: "2026-04-20T12:00:00.000Z",
+    member_count: 2,
+    is_member: true,
+    role: "admin",
+  });
+  assert.deepEqual(marketing, {
+    id: otherGroupId,
+    name: "Marketing",
+    description: null,
+    updated_at: "2026-04-15T12:00:00.000Z",
+    member_count: 1,
+    is_member: false,
+    role: null,
+  });
+});
+
+test("list_chat_groups scope: all rejects non-admin callers with tool_error", async () => {
+  const previous = process.env.AI_MEMBER_ACCESS_KILL;
+  process.env.AI_MEMBER_ACCESS_KILL = "0";
+  try {
+    const chatStub = createToolSupabaseStub({});
+    const memberCtx: ToolExecutionContext = {
+      ...makeCtx(chatStub as any, {
+        kind: "preverified_role",
+        source: "ai_org_context",
+        role: "active_member",
+      }),
+      supabase: chatStub as any,
+    };
+
+    const result = await executeToolCall(memberCtx, {
+      name: "list_chat_groups",
+      args: { scope: "all" },
+    });
+
+    assert.equal(result.kind, "tool_error");
+    if (result.kind === "tool_error") {
+      assert.match(result.error, /Admin role required/i);
+    }
+  } finally {
+    if (previous == null) {
+      delete process.env.AI_MEMBER_ACCESS_KILL;
+    } else {
+      process.env.AI_MEMBER_ACCESS_KILL = previous;
+    }
+  }
+});
