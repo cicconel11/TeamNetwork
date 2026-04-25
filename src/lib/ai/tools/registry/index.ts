@@ -9,6 +9,28 @@ import { listJobPostingsModule } from "./list-job-postings";
 import { listChatGroupsModule } from "./list-chat-groups";
 import { listAlumniModule } from "./list-alumni";
 import { listEnterpriseAlumniModule } from "./list-enterprise-alumni";
+import { listParentsModule } from "./list-parents";
+import { listPhilanthropyEventsModule } from "./list-philanthropy-events";
+import { listDonationsModule } from "./list-donations";
+import { getOrgStatsModule } from "./get-org-stats";
+import { getDonationAnalyticsModule } from "./get-donation-analytics";
+import { listManagedOrgsModule } from "./list-managed-orgs";
+import { listEnterpriseAuditEventsModule } from "./list-enterprise-audit-events";
+import { getEnterpriseStatsModule } from "./get-enterprise-stats";
+import { getEnterpriseQuotaModule } from "./get-enterprise-quota";
+import { getEnterpriseOrgCapacityModule } from "./get-enterprise-org-capacity";
+import { findNavigationTargetsModule } from "./find-navigation-targets";
+import { suggestConnectionsModule } from "./suggest-connections";
+import { suggestMentorsModule } from "./suggest-mentors";
+import { listAvailableMentorsModule } from "./list-available-mentors";
+import { prepareAnnouncementModule } from "./prepare-announcement";
+import { prepareJobPostingModule } from "./prepare-job-posting";
+import { prepareChatMessageModule } from "./prepare-chat-message";
+import { prepareGroupMessageModule } from "./prepare-group-message";
+import { prepareDiscussionReplyModule } from "./prepare-discussion-reply";
+import { prepareDiscussionThreadModule } from "./prepare-discussion-thread";
+import { prepareEventModule } from "./prepare-event";
+import { prepareEventsBatchModule } from "./prepare-events-batch";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: ReadonlyArray<ToolModule<any>> = [
@@ -20,6 +42,28 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   listChatGroupsModule,
   listAlumniModule,
   listEnterpriseAlumniModule,
+  listParentsModule,
+  listPhilanthropyEventsModule,
+  listDonationsModule,
+  getOrgStatsModule,
+  getDonationAnalyticsModule,
+  listManagedOrgsModule,
+  listEnterpriseAuditEventsModule,
+  getEnterpriseStatsModule,
+  getEnterpriseQuotaModule,
+  getEnterpriseOrgCapacityModule,
+  findNavigationTargetsModule,
+  suggestConnectionsModule,
+  suggestMentorsModule,
+  listAvailableMentorsModule,
+  prepareAnnouncementModule,
+  prepareJobPostingModule,
+  prepareChatMessageModule,
+  prepareGroupMessageModule,
+  prepareDiscussionReplyModule,
+  prepareDiscussionThreadModule,
+  prepareEventModule,
+  prepareEventsBatchModule,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
