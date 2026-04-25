@@ -34,6 +34,26 @@ test("formatChatGroupsResponse falls back to plain name when orgSlug missing", (
   assert.match(out!, /- Admin \(admin\)/);
 });
 
+test("formatChatGroupsResponse escapes markdown link labels for group names", () => {
+  const out = formatChatGroupsResponse(
+    [
+      {
+        id: "group-1",
+        name: "Ops [urgent] \\ fallback",
+        role: "member",
+        updated_at: RECENT,
+      },
+    ],
+    { orgSlug: "acme" },
+  );
+
+  assert.ok(out);
+  assert.match(
+    out!,
+    /\[Ops \\\[urgent\\\] \\\\ fallback\]\(\/acme\/messages\/chat\/group-1\)/
+  );
+});
+
 test("formatChatGroupsResponse renders all-mode with member counts and non-member suffix", () => {
   const out = formatChatGroupsResponse(
     [
