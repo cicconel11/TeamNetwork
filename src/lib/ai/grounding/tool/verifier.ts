@@ -1,6 +1,6 @@
-// Per-tool dispatcher for the tool-grounding validator. Each successful tool
-// summary routes to its matching coverage check; failures from all tools are
-// collected and returned together.
+// Per-tool dispatcher for deterministic tool-result grounding. Each successful
+// tool summary routes to its matching coverage check; failures are collected
+// and returned together.
 
 import type { ToolName } from "@/lib/ai/tools/definitions";
 import {

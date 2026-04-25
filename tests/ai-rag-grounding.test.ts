@@ -5,7 +5,7 @@ import {
   extractFreeformClaims,
   claimCoveredByChunks,
   buildRagGroundingFallback,
-} from "../src/lib/ai/rag-grounding.ts";
+} from "../src/lib/ai/grounding/rag.ts";
 
 const chunkAnnouncement = {
   contentText:

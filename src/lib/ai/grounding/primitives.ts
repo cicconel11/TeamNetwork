@@ -1,5 +1,4 @@
-// Shared primitives used by tool-grounding and rag-grounding validators.
-// Extracted from tool-grounding.ts so both validators share one implementation.
+// Shared claim-parsing primitives used by tool and RAG grounding validators.
 
 export function normalizeIdentifier(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");

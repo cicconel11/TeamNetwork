@@ -45,14 +45,14 @@ import { loadRouteEntityContext } from "@/lib/ai/route-entity-loaders";
 import {
   verifyToolBackedResponse,
   type SuccessfulToolSummary,
-} from "@/lib/ai/tool-grounding";
+} from "@/lib/ai/grounding/tool/verifier";
 import {
   classifySafety,
 } from "@/lib/ai/safety-gate";
 import {
   verifyRagGrounding,
   type RagGroundingMode,
-} from "@/lib/ai/rag-grounding";
+} from "@/lib/ai/grounding/rag";
 import { trackOpsEventServer } from "@/lib/analytics/events-server";
 import {
   assessAiMessageSafety,

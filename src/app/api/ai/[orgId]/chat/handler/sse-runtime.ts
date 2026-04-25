@@ -6,7 +6,7 @@ import {
   RAG_GROUNDING_ABSTAIN_TEXT,
   type RagGroundingMode,
   type verifyRagGrounding,
-} from "@/lib/ai/rag-grounding";
+} from "@/lib/ai/grounding/rag";
 import {
   SAFETY_FALLBACK_TEXT,
   type SafetyVerdict,
@@ -15,7 +15,7 @@ import {
 import type {
   SuccessfulToolSummary,
   verifyToolBackedResponse,
-} from "@/lib/ai/tool-grounding";
+} from "@/lib/ai/grounding/tool/verifier";
 import type { trackOpsEventServer } from "@/lib/analytics/events-server";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 

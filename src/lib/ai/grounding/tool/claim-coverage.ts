@@ -12,7 +12,7 @@ import {
   normalizeIdentifier,
   parseCurrencyClaim,
   stripMarkdown,
-} from "@/lib/ai/grounding-primitives";
+} from "@/lib/ai/grounding/primitives";
 import {
   extractMentorReasonCodes,
   extractSuggestConnectionReasonCodes,
@@ -516,25 +516,45 @@ export function verifyListDiscussions(content: string, data: unknown): string[] 
   );
 
   const titleList = [...titles];
-  const titleHeads = titleList.map((row) =>
-    row.split(/\s*(?:[-—:|]|\bon\b)\s*/i)[0]?.trim() ?? row
-  );
-  const matchesAnyTitle = (claimed: string): boolean => {
+  const titleHeadToFullTitle = new Map<string, string | null>();
+  for (const title of titleList) {
+    const head = title.split(/\s*(?:[-—:|]|\bon\b)\s*/i)[0]?.trim() ?? title;
+    if (!head) continue;
+    const existing = titleHeadToFullTitle.get(head);
+    if (existing === undefined) {
+      titleHeadToFullTitle.set(head, title);
+    } else if (existing !== title) {
+      titleHeadToFullTitle.set(head, null);
+    }
+  }
+
+  const matchKnownTitle = (claimed: string): string | null => {
     const normalized = normalizeIdentifier(claimed);
-    if (titles.has(normalized)) return true;
-    if (titleList.some((row) => row.includes(normalized))) return true;
-    return titleHeads.some((head) => head.length > 0 && normalized.startsWith(head));
+    if (!normalized) return null;
+    if (titles.has(normalized)) return normalized;
+    return titleHeadToFullTitle.get(normalized) ?? null;
   };
+
+  const extractUnquotedListEntryHeads = (value: string): string[] =>
+    value
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^(?:[-*]|\d+\.)\s+/.test(line) && !/"[^"\n]+"/.test(line))
+      .map((line) => {
+        const stripped = stripMarkdown(line.replace(/^(?:[-*]|\d+\.)\s+/, ""));
+        return stripped.split(/\s*(?:[-—:|]|\bon\b)\s*/i)[0]?.trim() ?? "";
+      })
+      .filter(Boolean);
 
   const failures: string[] = [];
   for (const title of extractQuotedTitles(content)) {
-    if (!matchesAnyTitle(title)) {
+    if (!matchKnownTitle(title)) {
       failures.push(`discussion title ${title} was not present in tool rows`);
     }
   }
 
-  for (const candidate of extractListEntryHeads(content)) {
-    if (!matchesAnyTitle(candidate)) {
+  for (const candidate of extractUnquotedListEntryHeads(content)) {
+    if (!matchKnownTitle(candidate)) {
       failures.push(`discussion title ${candidate} was not present in tool rows`);
     }
   }
@@ -543,9 +563,9 @@ export function verifyListDiscussions(content: string, data: unknown): string[] 
   for (const line of content.split("\n")) {
     const replyMatch = line.match(/"([^"\n]+)"\s+has\s+(\d+)\s+replies?/i);
     if (!replyMatch) continue;
-    const titleKey = normalizeIdentifier(replyMatch[1] ?? "");
+    const titleKey = matchKnownTitle(replyMatch[1] ?? "");
     const claimed = Number(replyMatch[2]);
-    const expected = replyCountByTitle.get(titleKey);
+    const expected = titleKey ? replyCountByTitle.get(titleKey) : undefined;
     if (expected !== undefined && claimed !== expected) {
       failures.push(`reply count claim ${claimed} did not match ${expected}`);
     }

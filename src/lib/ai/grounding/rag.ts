@@ -17,7 +17,8 @@ import {
   extractEmails,
   extractMentionedDates,
   extractQuotedTitles,
-} from "@/lib/ai/grounding-primitives";
+  normalizeIdentifier,
+} from "@/lib/ai/grounding/primitives";
 
 export type RagGroundingMode = "shadow" | "overwrite" | "block" | "bypass";
 
@@ -107,10 +108,6 @@ export function extractFreeformClaims(content: string): Claim[] {
 // Chunk coverage
 // ---------------------------------------------------------------------------
 
-function normalize(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, " ").trim();
-}
-
 function tokenize(value: string): Set<string> {
   return new Set(
     value
@@ -137,10 +134,10 @@ export function claimCoveredByChunks(
   jaccardThreshold: number
 ): ClaimCoverage {
   if (chunks.length === 0) return "uncovered";
-  const combined = normalize(chunks.map((c) => c.contentText ?? "").join("\n"));
+  const combined = normalizeIdentifier(chunks.map((c) => c.contentText ?? "").join("\n"));
 
   if (claim.kind === "email" || claim.kind === "date") {
-    return combined.includes(normalize(claim.text)) ? "covered" : "uncovered";
+    return combined.includes(normalizeIdentifier(claim.text)) ? "covered" : "uncovered";
   }
 
   if (claim.kind === "currency") {
@@ -151,7 +148,7 @@ export function claimCoveredByChunks(
   }
 
   if (claim.kind === "quoted") {
-    return combined.includes(normalize(claim.text)) ? "covered" : "uncovered";
+    return combined.includes(normalizeIdentifier(claim.text)) ? "covered" : "uncovered";
   }
 
   // prose: token overlap first, hand to judge if too thin.
