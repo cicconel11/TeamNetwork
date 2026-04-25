@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { listEnterpriseAlumni } from "@/lib/ai/tools/enterprise/list-alumni";
-import { toolError } from "@/lib/ai/tools/executor";
+import { toolError } from "@/lib/ai/tools/result";
 import { safeToolQuery } from "@/lib/ai/tools/shared";
 import type { ToolModule } from "./types";
 

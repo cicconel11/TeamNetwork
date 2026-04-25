@@ -1,4 +1,4 @@
-import type { ToolExecutionResult } from "@/lib/ai/tools/executor";
+import type { ToolExecutionResult } from "@/lib/ai/tools/result";
 import type { ToolName } from "@/lib/ai/tools/definitions";
 import type { ToolModule, ToolModuleRunContext } from "./types";
 import { listMembersModule } from "./list-members";
