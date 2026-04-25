@@ -537,7 +537,7 @@ export function formatJobPostingsResponse(data: unknown): string | null {
       const metadata = [
         getNonEmptyString((row as { company?: unknown }).company),
         getNonEmptyString((row as { location?: unknown }).location),
-        getNonEmptyString((row as { job_type?: unknown }).job_type),
+        getNonEmptyString((row as { location_type?: unknown }).location_type),
       ].filter((value): value is string => Boolean(value));
       const preview = getNonEmptyString(
         (row as { description_preview?: unknown }).description_preview
