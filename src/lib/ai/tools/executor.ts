@@ -86,7 +86,6 @@ import {
   buildMemberName,
   getSafeErrorMessage,
   safeToolQuery,
-  truncateBody,
 } from "@/lib/ai/tools/shared";
 
 export type ToolExecutionAuthorization =
@@ -159,12 +158,6 @@ const NON_ADMIN_RLS_READ_TOOL_NAMES: ReadonlySet<ToolName> = new Set<ToolName>([
   "list_philanthropy_events",
   "find_navigation_targets",
 ]);
-
-const listJobPostingsSchema = z
-  .object({
-    limit: z.number().int().min(1).max(25).optional(),
-  })
-  .strict();
 
 const listAlumniSchema = z
   .object({
@@ -389,7 +382,6 @@ const findNavigationTargetsSchema = z
   .strict();
 
 const ARG_SCHEMAS: Partial<Record<ToolName, z.ZodSchema>> = {
-  list_job_postings: listJobPostingsSchema,
   list_chat_groups: listChatGroupsSchema,
   list_alumni: listAlumniSchema,
   list_enterprise_alumni: listEnterpriseAlumniSchema,
@@ -640,41 +632,6 @@ interface EventValidationErrorRecord {
   index: number;
   missing_fields: string[];
   draft: Record<string, unknown>;
-}
-
-async function listJobPostings(
-  sb: SB,
-  orgId: string,
-  args: z.infer<typeof listJobPostingsSchema>,
-  logContext: AiLogContext
-): Promise<ToolExecutionResult> {
-  const limit = Math.min(args.limit ?? 10, 25);
-  return safeToolQuery(logContext, async () => {
-    const { data, error } = await sb
-      .from("job_postings")
-      .select("id, title, company, location, job_type, description, created_at")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-
-    if (!Array.isArray(data) || error) {
-      return { data, error };
-    }
-
-    return {
-      data: data.map((job) => ({
-        id: job.id,
-        title: job.title,
-        company: job.company ?? null,
-        location: job.location ?? null,
-        job_type: job.job_type ?? null,
-        created_at: job.created_at ?? null,
-        description_preview: truncateBody(job.description),
-      })),
-      error: null,
-    };
-  });
 }
 
 async function listAlumni(
@@ -3042,13 +2999,6 @@ export async function executeToolCall(
         return dispatchToolModule(toolName, args, { ctx, sb, logContext });
       }
       switch (toolName) {
-        case "list_job_postings":
-          return listJobPostings(
-            sb,
-            ctx.orgId,
-            args as z.infer<typeof listJobPostingsSchema>,
-            logContext
-          );
         case "list_chat_groups":
           return listChatGroups(
             sb,
