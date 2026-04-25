@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseCurrencyClaim, verifyToolBackedResponse } from "../src/lib/ai/tool-grounding.ts";
+import fc from "fast-check";
+import { parseCurrencyClaim } from "../src/lib/ai/grounding/primitives.ts";
+import { verifyToolBackedResponse } from "../src/lib/ai/grounding/tool/verifier.ts";
 
 const FRESH_FRESHNESS = { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" } as const;
 
@@ -438,6 +440,99 @@ test("verifyToolBackedResponse accepts partial discussion title quote", () => {
         name: "list_discussions",
         data: [
           { title: "My new Thread - Check it out!", body: "...", reply_count: 2, is_pinned: false, is_locked: false },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse accepts generated discussion title heads but rejects suffix fragments", () => {
+  const word = fc.constantFrom(
+    "Roadmap",
+    "Budget",
+    "Volunteer",
+    "Parent",
+    "Mentor",
+    "Launch",
+    "Donor",
+    "Travel",
+    "Engineering",
+    "Alumni",
+  );
+  const titlePart = fc
+    .tuple(word, word)
+    .map(([first, second]) => `${first} ${second}`);
+
+  fc.assert(
+    fc.property(
+      fc.tuple(titlePart, titlePart).filter(([head, suffix]) => head !== suffix),
+      ([head, suffix]) => {
+        const fullTitle = `${head} - ${suffix}`;
+        const toolResults = [
+          {
+            name: "list_discussions" as const,
+            data: [
+              { title: fullTitle, body: "...", reply_count: 4, is_pinned: false, is_locked: false },
+            ],
+          },
+        ];
+
+        const grounded = verifyToolBackedResponse({
+          content: `- "${head}" has 4 replies`,
+          toolResults,
+        });
+
+        assert.equal(grounded.grounded, true, `${head} should match ${fullTitle}`);
+
+        const suffixOnly = verifyToolBackedResponse({
+          content: `- "${suffix}" has 4 replies`,
+          toolResults,
+        });
+
+        assert.equal(suffixOnly.grounded, false, `${suffix} should not match ${fullTitle}`);
+
+        const suffixProse = verifyToolBackedResponse({
+          content: `The discussion "${suffix}" looks active.`,
+          toolResults,
+        });
+
+        assert.equal(suffixProse.grounded, false, `${suffix} prose should not match ${fullTitle}`);
+      }
+    ),
+    { numRuns: 50 }
+  );
+});
+
+test("verifyToolBackedResponse keeps repeated discussion title heads ambiguous", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "Sprint 3" has 2 replies',
+    toolResults: [
+      {
+        name: "list_discussions",
+        data: [
+          { title: "Sprint 3 - Backend", body: "...", reply_count: 2, is_pinned: false, is_locked: false },
+          { title: "Sprint 3 - Frontend", body: "...", reply_count: 2, is_pinned: false, is_locked: false },
+          { title: "Sprint 3 - Design", body: "...", reply_count: 2, is_pinned: false, is_locked: false },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((failure) => /sprint 3/i.test(failure)));
+});
+
+test("verifyToolBackedResponse accepts exact discussion titles containing reply-like text", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "Forum has 5 replies per policy"',
+    toolResults: [
+      {
+        name: "list_discussions",
+        data: [
+          { title: "Forum has 5 replies per policy", body: "...", reply_count: 1, is_pinned: false, is_locked: false },
         ],
       },
     ],

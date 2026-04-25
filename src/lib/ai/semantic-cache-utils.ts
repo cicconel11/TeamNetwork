@@ -16,7 +16,6 @@ export type CacheSurface = (typeof CACHE_SURFACES)[number];
  * freshness policy changes that should invalidate existing rows.
  */
 export const CACHE_CONTRACT_VERSION = 3 as const;
-export const CACHE_VERSION = CACHE_CONTRACT_VERSION;
 export const CACHE_KEY_SALT = `ai-semantic-cache:v${CACHE_CONTRACT_VERSION}`;
 
 /** Surface-specific TTLs (hours) — shorter for data-heavy surfaces */
@@ -92,6 +91,14 @@ const TEMPORAL_MARKERS = [
 
 const PERSONALIZATION_MARKERS = ["my", "mine", "i am", "i'm", "me", "myself"];
 
+/**
+ * Load-bearing safety contract: prompts mentioning these terms are excluded
+ * from the cache so mutable org data never gets cached. This is the primary
+ * defense against stale-data hits — there is no mutation-site invalidation.
+ *
+ * Modifying this list requires updating tests/ai-semantic-cache.test.ts so
+ * the eligibility regression suite still locks the contract.
+ */
 const LIVE_CONTEXT_MARKERS = [
   "member",
   "members",
@@ -216,7 +223,7 @@ export function buildSemanticCacheKeyParts(params: {
     normalizedPrompt,
     promptHash: hashPrompt(normalizedPrompt),
     permissionScopeKey: buildPermissionScopeKey(params.orgId, params.role),
-    cacheVersion: CACHE_VERSION,
+    cacheVersion: CACHE_CONTRACT_VERSION,
     cacheSalt: CACHE_KEY_SALT,
   };
 }

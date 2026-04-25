@@ -59,6 +59,7 @@ export async function checkCache(args: {
     role: args.role,
   });
 
+  const lookupStart = Date.now();
   const cacheResult = await runTimedStage(
     args.stageTimings,
     "cache_lookup",
@@ -71,6 +72,21 @@ export async function checkCache(args: {
         logContext: args.logContext,
       })
   );
+  const durationMs = Date.now() - lookupStart;
+
+  const status: "hit" | "miss" | "error" = cacheResult.ok
+    ? "hit"
+    : cacheResult.reason === "miss"
+      ? "miss"
+      : "error";
+
+  // Hit-rate observability. No prompt, no hash — only status + surface.
+  aiLog("info", "ai-cache", "lookup", args.logContext, {
+    event: "lookup",
+    status,
+    surface: args.surface,
+    durationMs,
+  });
 
   if (cacheResult.ok) {
     return {
@@ -222,6 +238,11 @@ export async function writeCache(args: {
     );
 
     if (result.status === "inserted") {
+      aiLog("info", "ai-cache", "write", args.logContext, {
+        event: "write",
+        surface: args.surface,
+        entryId: result.entryId,
+      });
       return { status: "inserted", entryId: result.entryId };
     }
     if (result.status === "duplicate") {

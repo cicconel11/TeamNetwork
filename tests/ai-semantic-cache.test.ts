@@ -366,6 +366,51 @@ describe("checkCacheEligibility", () => {
     assert.equal(result.eligible, false);
     assert.equal(result.reason, "implies_write_or_tool");
   });
+
+  // ---------------------------------------------------------------------------
+  // Regression: live-context safety contract
+  //
+  // Locks the LIVE_CONTEXT_MARKERS list against silent weakening. The cache
+  // has no mutation-site invalidation; this gate is the only thing keeping
+  // mutable-data prompts out of the 12h-TTL store.
+  // ---------------------------------------------------------------------------
+
+  const liveContextRegressionCases: Array<{ name: string; message: string }> = [
+    { name: "team roster", message: "Summarize the team roster" },
+    { name: "donations this month", message: "Tell me about donations this month" },
+    { name: "new announcement", message: "Was there a new announcement posted" },
+    { name: "member counts", message: "How many members are active" },
+    { name: "alumni listing", message: "Who are the alumni in our group" },
+    { name: "event details", message: "Describe the event for our chapter" },
+    { name: "discussion threads", message: "What are people saying in the discussion" },
+    { name: "job postings", message: "Show open job postings for our org" },
+  ];
+
+  for (const tc of liveContextRegressionCases) {
+    it(`live-context regression: '${tc.name}' is ineligible`, () => {
+      const result = checkCacheEligibility({ message: tc.message, surface: "general" });
+      assert.equal(result.eligible, false, `expected ineligible: ${tc.message}`);
+      // Multiple markers may overlap (e.g. 'upcoming' + 'event'); accept any
+      // safety reason that keeps mutable data out of the cache.
+      assert.ok(
+        [
+          "requires_live_org_context",
+          "contains_temporal_marker",
+          "implies_write_or_tool",
+        ].includes(result.reason),
+        `expected safety-tier reason, got: ${result.reason}`
+      );
+    });
+  }
+
+  it("positive control: a generic informational prompt remains eligible", () => {
+    const result = checkCacheEligibility({
+      message: "Explain how the organization makes group decisions",
+      surface: "general",
+    });
+    assert.equal(result.eligible, true);
+    assert.equal(result.reason, "cacheable");
+  });
 });
 
 // ---------------------------------------------------------------------------

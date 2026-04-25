@@ -4,6 +4,33 @@
 
 The AI semantic cache is a conservative v1 exact-match cache for a narrow subset of **standalone first-turn `general` prompts only**. Pure cache eligibility still evaluates prompt safety, but the chat handler now applies an internal execution-policy layer before lookup/write. That means some prompts that are technically safe to hash, such as casual acknowledgements, are intentionally treated as non-cacheable low-value turns. Cache lookups that remain eligible use `shared_static` context and skip RAG retrieval entirely so cached responses stay derived from stable org overview data. Entries use a 12-hour active TTL on the only live cached surface (`general`), soft-invalidate expired conflicts at write time, and are later hard-deleted by an hourly cron route that drains multiple 500-row purge batches up to 5,000 rows per run.
 
+## Module Boundary
+
+The cache lives in two files split by trust boundary, not by accident:
+
+- **`semantic-cache-utils.ts`** — pure / sync. Crypto, normalization, eligibility, TTL constants. No Supabase. **Six importers** today: `handler.ts`, `cache-rag.ts`, `pass1-tools.ts`, `turn-execution-policy.ts`, `context-builder.ts`, `audit.ts`.
+- **`semantic-cache.ts`** — async I/O against the `ai_semantic_cache` Postgres table. **One importer**: `cache-rag.ts`.
+
+The pure file feeds many call sites that never need I/O (eligibility checks during policy build, key derivation during audit). The split keeps eligibility logic test-friendly and lets policy code reason about cacheability without paying for a DB round-trip. Do not collapse the files unless one of those properties stops mattering.
+
+## Invalidation Model (no mutation hooks)
+
+There is **no mutation-site cache invalidation**. Three mechanisms keep the cache from serving stale data:
+
+1. **TTL** per surface (general `12h`, members `4h`, analytics `2h`, events `4h`).
+2. **Soft-invalidation on write collision** — an expired same-key row is marked `invalidated_at = now` before the new INSERT.
+3. **Manual epoch** — bumping `CACHE_CONTRACT_VERSION` invalidates all rows logically (the value is baked into both `cache_version` and the salted prompt hash).
+
+The actual safety contract is the **eligibility gate**: `LIVE_CONTEXT_MARKERS` in `semantic-cache-utils.ts` rejects prompts mentioning member, event, donation, announcement, roster, etc., so mutable-data prompts never enter the cache in the first place. Only the `general` surface is live; `members`, `analytics`, and `events` are blocked at the eligibility check. **Modifying `LIVE_CONTEXT_MARKERS` requires updating `tests/ai-semantic-cache.test.ts`** — the regression suite locks the contract.
+
+## Telemetry
+
+Hit-rate is observable via two channels:
+
+- `ai_audit_log.cache_status` per request — `hit_exact | miss | bypass | ineligible | disabled | error`. Aggregated by the `ai_cache_hit_rate_daily` SQL view (last 30 days, day × status, counts only).
+- `GET /api/admin/ai/cache-stats` — platform-admin-only endpoint that returns last-7-day hit rate, totals by status, and per-day breakdown. Service-role under the hood.
+- Per-request structured info logs in `cache-rag.ts`: one `ai-cache` log line per lookup (`event/status/surface/durationMs`), one on successful write (`event/surface/entryId`). No prompt content, no hash.
+
 ## File Map
 
 ### Source
