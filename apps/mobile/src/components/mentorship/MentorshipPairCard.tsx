@@ -3,6 +3,7 @@ import { View, Text, Pressable, Alert, StyleSheet } from "react-native";
 import { Trash2, ChevronRight } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { normalizeMentorshipStatus, isUserInMentorshipPair } from "@teammeet/core";
+import { canCreateMentorshipLog } from "@/lib/mentorship";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import type { NeutralColors, SemanticColors } from "@/lib/design-tokens";
@@ -16,24 +17,26 @@ export function MentorshipPairCard({
   menteeLabel,
   logs,
   isAdmin,
-  canLogActivity,
+  viewerRole,
   orgId,
   userId,
   userLabel,
   onRefresh,
   onArchive,
+  onOpenPair,
 }: {
   pair: MentorshipPair;
   mentorLabel: string;
   menteeLabel: string;
   logs: MentorshipLog[];
   isAdmin: boolean;
-  canLogActivity: boolean;
+  viewerRole: string | null;
   orgId: string;
   userId: string | null;
   userLabel: (id: string) => string;
   onRefresh: () => void;
   onArchive: (pairId: string) => void;
+  onOpenPair?: (pairId: string) => void;
 }) {
   const styles = useThemedStyles(createStyles);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -84,6 +87,10 @@ export function MentorshipPairCard({
 
   const isMine = isUserInMentorshipPair(pair, userId ?? undefined);
   const status = normalizeMentorshipStatus(pair.status);
+  const canLogActivity = canCreateMentorshipLog({
+    role: viewerRole,
+    status: pair.status,
+  });
   const statusColor =
     status === "completed"
       ? styles.statusCompleted.color
@@ -158,6 +165,21 @@ export function MentorshipPairCard({
             userId={userId}
             onSaved={onRefresh}
           />
+        </View>
+      ) : null}
+
+      {onOpenPair ? (
+        <View style={styles.footerRow}>
+          <Pressable
+            onPress={() => onOpenPair(pair.id)}
+            style={({ pressed }) => [
+              styles.openButton,
+              pressed && styles.openButtonPressed,
+            ]}
+          >
+            <Text style={styles.openButtonText}>Open pair</Text>
+            <ChevronRight size={16} color={styles.openButtonText.color} />
+          </Pressable>
         </View>
       ) : null}
     </View>
@@ -283,5 +305,26 @@ const createStyles = (n: NeutralColors, s: SemanticColors) =>
       paddingTop: SPACING.sm,
       borderTopWidth: 1,
       borderTopColor: n.border,
+    },
+    footerRow: {
+      paddingTop: SPACING.xs,
+      alignItems: "flex-end",
+    },
+    openButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.xs,
+      paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.sm,
+      borderRadius: RADIUS.md,
+      backgroundColor: n.divider,
+    },
+    openButtonPressed: {
+      opacity: 0.85,
+    },
+    openButtonText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: n.foreground,
     },
   });

@@ -1,23 +1,54 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getMentorProfile } from "@/lib/mentorship-api";
+import {
+  partitionMentorshipPairs,
+  type MentorshipPairRecord,
+} from "@/lib/mentorship";
 import {
   MENTORSHIP_MENTEE_ROLES,
   MENTORSHIP_MENTOR_ROLES,
   getMentorshipSectionOrder,
   getVisibleMentorshipPairs,
-  isUserInMentorshipPair,
-  memberDisplayLabel,
   partitionPairableOrgMembers,
   type PairableOrgMemberRow,
 } from "@teammeet/core";
-import type { MentorshipLog, MentorshipPair, User } from "@teammeet/types";
+import type { MentorshipLog, User } from "@teammeet/types";
 import type {
   MentorDirectoryEntry,
   MentorProfileRecord,
-  SelectOption,
+  MentorProfileSuggestedDefaults,
 } from "@/types/mentorship";
 
 const STALE_TIME_MS = 30_000;
+
+type MentorProfileDirectoryRow = {
+  id: string;
+  user_id: string;
+  bio: string | null;
+  expertise_areas: string[] | null;
+  contact_email: string | null;
+  contact_linkedin: string | null;
+  contact_phone: string | null;
+  topics: string[] | null;
+  sports: string[] | null;
+  positions: string[] | null;
+  industries: string[] | null;
+  role_families: string[] | null;
+  accepting_new: boolean | null;
+  max_mentees: number | null;
+  current_mentee_count: number | null;
+  meeting_preferences: string[] | null;
+  time_commitment: string | null;
+  years_of_experience: number | null;
+};
+
+type UserLookupRow = Pick<User, "id" | "name" | "email">;
+
+type CurrentUserProfileResult = {
+  profile: MentorProfileRecord | null;
+  suggested?: MentorProfileSuggestedDefaults | null;
+};
 
 export async function loadPairableOrgMembers(orgId: string) {
   const { data, error } = await supabase
@@ -35,23 +66,26 @@ export async function loadPairableOrgMembers(orgId: string) {
 }
 
 export interface UseMentorshipReturn {
-  pairs: MentorshipPair[];
+  pairs: MentorshipPairRecord[];
+  workingPairs: MentorshipPairRecord[];
+  proposalPairs: MentorshipPairRecord[];
   logs: MentorshipLog[];
   users: User[];
   mentorDirectory: MentorDirectoryEntry[];
   mentorIndustries: string[];
   mentorYears: number[];
   currentUserMentorProfile: MentorProfileRecord | null;
+  currentUserMentorProfileSuggested: MentorProfileSuggestedDefaults | null;
   archivedPairIds: string[];
   loading: boolean;
   refreshing: boolean;
   error: string | null;
-  filteredPairs: MentorshipPair[];
-  visibleFilteredPairs: MentorshipPair[];
+  filteredPairs: MentorshipPairRecord[];
+  visibleFilteredPairs: MentorshipPairRecord[];
   userMap: Record<string, string>;
   userLabel: (id: string) => string;
   logsByPair: Record<string, MentorshipLog[]>;
-  myPair: MentorshipPair | null;
+  myPair: MentorshipPairRecord | null;
   myMentorName: string | null;
   myLastLogDate: string | null;
   sectionOrder: ReturnType<typeof getMentorshipSectionOrder>;
@@ -70,7 +104,7 @@ export function useMentorship(
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
 
-  const [pairs, setPairs] = useState<MentorshipPair[]>([]);
+  const [pairs, setPairs] = useState<MentorshipPairRecord[]>([]);
   const [logs, setLogs] = useState<MentorshipLog[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [mentorDirectory, setMentorDirectory] = useState<MentorDirectoryEntry[]>([]);
@@ -78,6 +112,8 @@ export function useMentorship(
   const [mentorYears, setMentorYears] = useState<number[]>([]);
   const [currentUserMentorProfile, setCurrentUserMentorProfile] =
     useState<MentorProfileRecord | null>(null);
+  const [currentUserMentorProfileSuggested, setCurrentUserMentorProfileSuggested] =
+    useState<MentorProfileSuggestedDefaults | null>(null);
   const [archivedPairIds, setArchivedPairIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -94,6 +130,7 @@ export function useMentorship(
           setMentorIndustries([]);
           setMentorYears([]);
           setCurrentUserMentorProfile(null);
+          setCurrentUserMentorProfileSuggested(null);
           setArchivedPairIds([]);
           setLoading(false);
           setRefreshing(false);
@@ -109,9 +146,12 @@ export function useMentorship(
       }
 
       try {
+        const shouldLoadCurrentUserProfile =
+          Boolean(userId) && (isAdmin || role === "alumni");
+
         const [
           { data: pairsData, error: pairsError },
-          { data: currentUserProfileData, error: currentUserProfileError },
+          currentUserProfileResult,
           { data: mentorProfilesData, error: mentorProfilesError },
         ] = await Promise.all([
           supabase
@@ -120,27 +160,40 @@ export function useMentorship(
             .eq("organization_id", orgId)
             .is("deleted_at", null)
             .order("created_at", { ascending: false }),
-          userId
-            ? supabase
-                .from("mentor_profiles")
-                .select("*")
-                .eq("organization_id", orgId)
-                .eq("user_id", userId)
-                .maybeSingle()
-            : Promise.resolve({ data: null, error: null }),
+          shouldLoadCurrentUserProfile
+            ? getMentorProfile(orgId).catch((profileError) => {
+                console.warn(
+                  "Failed to load current mentor profile:",
+                  profileError
+                );
+                return { profile: null, suggested: null };
+              })
+            : Promise.resolve({
+                profile: null,
+                suggested: null,
+              } satisfies CurrentUserProfileResult),
           supabase
             .from("mentor_profiles")
-            .select("*, users!mentor_profiles_user_id_fkey(id, name, email)")
+            .select("*")
             .eq("organization_id", orgId)
             .eq("is_active", true),
         ]);
 
         if (pairsError) throw pairsError;
-        if (currentUserProfileError) throw currentUserProfileError;
-        if (mentorProfilesError) throw mentorProfilesError;
+        if (mentorProfilesError) {
+          console.warn(
+            "Failed to load mentor directory profiles:",
+            mentorProfilesError
+          );
+        }
 
         const pairIds = (pairsData || []).map((pair) => pair.id);
-        const mentorUserIds = (mentorProfilesData || []).map(
+        const mentorProfileRows = mentorProfilesError
+          ? []
+          : (((mentorProfilesData || []) ??
+              []) as unknown as MentorProfileDirectoryRow[]);
+
+        const mentorUserIds = mentorProfileRows.map(
           (profile) => profile.user_id
         );
 
@@ -149,6 +202,7 @@ export function useMentorship(
           if (pair.mentor_user_id) userIdSet.add(pair.mentor_user_id);
           if (pair.mentee_user_id) userIdSet.add(pair.mentee_user_id);
         });
+        mentorUserIds.forEach((mentorUserId) => userIdSet.add(mentorUserId));
 
         const [
           { data: logsData, error: logsError },
@@ -185,37 +239,53 @@ export function useMentorship(
 
         if (usersError) throw usersError;
         if (logsError) throw logsError;
-        if (mentorAlumniError) throw mentorAlumniError;
+        if (mentorAlumniError) {
+          console.warn("Failed to load mentor alumni metadata:", mentorAlumniError);
+        }
 
         const alumniMap = new Map(
-          (mentorAlumniData || []).map((alumni) => [alumni.user_id, alumni])
+          mentorAlumniError
+            ? []
+            : (mentorAlumniData || []).map((alumni) => [alumni.user_id, alumni])
+        );
+        const userLookupMap = new Map(
+          ((usersData || []) as UserLookupRow[]).map((user) => [user.id, user])
         );
 
-        const mentorsForDirectory: MentorDirectoryEntry[] = (
-          mentorProfilesData || []
-        ).map((profile) => {
-          const profileUser = Array.isArray(profile.users)
-            ? profile.users[0]
-            : profile.users;
-          const alumni = alumniMap.get(profile.user_id);
+        const mentorsForDirectory: MentorDirectoryEntry[] = mentorProfileRows.map(
+          (profile) => {
+            const profileUser = userLookupMap.get(profile.user_id);
+            const alumni = alumniMap.get(profile.user_id);
 
-          return {
-            id: profile.id,
-            user_id: profile.user_id,
-            name: profileUser?.name || "Unknown",
-            email: profileUser?.email || null,
-            photo_url: alumni?.photo_url || null,
-            industry: alumni?.industry || null,
-            graduation_year: alumni?.graduation_year || null,
-            current_company: alumni?.current_company || null,
-            current_city: alumni?.current_city || null,
-            expertise_areas: profile.expertise_areas || null,
-            bio: profile.bio || null,
-            contact_email: profile.contact_email || null,
-            contact_linkedin: profile.contact_linkedin || null,
-            contact_phone: profile.contact_phone || null,
-          };
-        });
+            return {
+              id: profile.id,
+              user_id: profile.user_id,
+              name: profileUser?.name || "Unknown",
+              email: profileUser?.email || null,
+              photo_url: alumni?.photo_url || null,
+              industry: alumni?.industry || null,
+              graduation_year: alumni?.graduation_year || null,
+              current_company: alumni?.current_company || null,
+              current_city: alumni?.current_city || null,
+              expertise_areas: profile.expertise_areas || null,
+              bio: profile.bio || null,
+              contact_email: profile.contact_email || null,
+              contact_linkedin: profile.contact_linkedin || null,
+              contact_phone: profile.contact_phone || null,
+              topics: profile.topics || null,
+              sports: profile.sports || null,
+              positions: profile.positions || null,
+              industries: profile.industries || null,
+              role_families: profile.role_families || null,
+              accepting_new: profile.accepting_new ?? true,
+              max_mentees: profile.max_mentees ?? 3,
+              current_mentee_count: profile.current_mentee_count ?? 0,
+              meeting_preferences: profile.meeting_preferences || null,
+              time_commitment: profile.time_commitment || null,
+              years_of_experience: profile.years_of_experience ?? null,
+            };
+          }
+        );
 
         const industries = Array.from(
           new Set(
@@ -234,14 +304,15 @@ export function useMentorship(
         ).sort((a, b) => b - a);
 
         if (isMountedRef.current) {
-          setPairs((pairsData || []) as MentorshipPair[]);
+          setPairs((pairsData || []) as MentorshipPairRecord[]);
           setLogs((logsData || []) as MentorshipLog[]);
           setUsers((usersData || []) as User[]);
           setMentorDirectory(mentorsForDirectory);
           setMentorIndustries(industries);
           setMentorYears(years);
-          setCurrentUserMentorProfile(
-            (currentUserProfileData as MentorProfileRecord | null) ?? null
+          setCurrentUserMentorProfile(currentUserProfileResult.profile ?? null);
+          setCurrentUserMentorProfileSuggested(
+            currentUserProfileResult.suggested ?? null
           );
           setArchivedPairIds((current) =>
             current.filter((pairId) =>
@@ -264,7 +335,7 @@ export function useMentorship(
         }
       }
     },
-    [orgId, userId]
+    [orgId, userId, role, isAdmin]
   );
 
   useEffect(() => {
@@ -293,17 +364,22 @@ export function useMentorship(
     );
   }, []);
 
+  const { workingPairs, proposalPairs } = useMemo(
+    () => partitionMentorshipPairs(pairs),
+    [pairs]
+  );
+
   const filteredPairs = useMemo(() => {
-    if (isAdmin) return pairs;
+    if (isAdmin) return workingPairs;
     if (!userId) return [];
     if (role === "active_member") {
-      return pairs.filter((pair) => pair.mentee_user_id === userId);
+      return workingPairs.filter((pair) => pair.mentee_user_id === userId);
     }
     if (role === "alumni") {
-      return pairs.filter((pair) => pair.mentor_user_id === userId);
+      return workingPairs.filter((pair) => pair.mentor_user_id === userId);
     }
     return [];
-  }, [pairs, isAdmin, role, userId]);
+  }, [workingPairs, isAdmin, role, userId]);
 
   const visibleFilteredPairs = useMemo(
     () => getVisibleMentorshipPairs(filteredPairs, archivedPairIds),
@@ -357,12 +433,15 @@ export function useMentorship(
 
   return {
     pairs,
+    workingPairs,
+    proposalPairs,
     logs,
     users,
     mentorDirectory,
     mentorIndustries,
     mentorYears,
     currentUserMentorProfile,
+    currentUserMentorProfileSuggested,
     archivedPairIds,
     loading,
     refreshing,

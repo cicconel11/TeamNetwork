@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,80 +8,155 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/hooks/useAuth";
-import { useOrg } from "@/contexts/OrgContext";
+import { saveMentorProfile } from "@/lib/mentorship-api";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import type { NeutralColors, SemanticColors } from "@/lib/design-tokens";
-import type { MentorProfileRecord } from "@/types/mentorship";
+import type {
+  MentorProfilePayload,
+  MentorProfileRecord,
+  MentorProfileSuggestedDefaults,
+} from "@/types/mentorship";
+
+const MEETING_OPTIONS: Array<"video" | "phone" | "in_person" | "async"> = [
+  "video",
+  "phone",
+  "in_person",
+  "async",
+];
+
+function parseCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function joinCsv(value: string[] | null | undefined): string {
+  return (value ?? []).join(", ");
+}
+
+function buildInitialState(
+  currentUserProfile: MentorProfileRecord | null,
+  suggestedDefaults: MentorProfileSuggestedDefaults | null
+) {
+  return {
+    bio: currentUserProfile?.bio ?? suggestedDefaults?.bio ?? "",
+    expertiseAreas: joinCsv(currentUserProfile?.expertise_areas),
+    topics: joinCsv(currentUserProfile?.topics),
+    sports: joinCsv(currentUserProfile?.sports),
+    positions: joinCsv(currentUserProfile?.positions ?? suggestedDefaults?.positions),
+    industries: joinCsv(currentUserProfile?.industries ?? suggestedDefaults?.industries),
+    roleFamilies: joinCsv(
+      currentUserProfile?.role_families ?? suggestedDefaults?.role_families
+    ),
+    maxMentees: String(currentUserProfile?.max_mentees ?? 3),
+    acceptingNew: currentUserProfile?.accepting_new ?? true,
+    meetingPreferences: currentUserProfile?.meeting_preferences ?? [],
+    timeCommitment: currentUserProfile?.time_commitment ?? "",
+    yearsOfExperience:
+      currentUserProfile?.years_of_experience != null
+        ? String(currentUserProfile.years_of_experience)
+        : "",
+  };
+}
 
 export function MentorProfileForm({
+  orgId,
   currentUserProfile,
+  suggestedDefaults,
   onCancel,
   onSaved,
 }: {
+  orgId: string;
   currentUserProfile: MentorProfileRecord | null;
+  suggestedDefaults: MentorProfileSuggestedDefaults | null;
   onCancel: () => void;
   onSaved: () => void;
 }) {
   const styles = useThemedStyles(createStyles);
-  const { user } = useAuth();
-  const { orgId } = useOrg();
-  const [bio, setBio] = useState(currentUserProfile?.bio ?? "");
-  const [expertiseAreas, setExpertiseAreas] = useState(
-    currentUserProfile?.expertise_areas.join(", ") ?? ""
+  const initialState = useMemo(
+    () => buildInitialState(currentUserProfile, suggestedDefaults),
+    [currentUserProfile, suggestedDefaults]
   );
-  const [contactEmail, setContactEmail] = useState(currentUserProfile?.contact_email ?? "");
-  const [contactLinkedin, setContactLinkedin] = useState(
-    currentUserProfile?.contact_linkedin ?? ""
+
+  const [bio, setBio] = useState(initialState.bio);
+  const [expertiseAreas, setExpertiseAreas] = useState(initialState.expertiseAreas);
+  const [topics, setTopics] = useState(initialState.topics);
+  const [sports, setSports] = useState(initialState.sports);
+  const [positions, setPositions] = useState(initialState.positions);
+  const [industries, setIndustries] = useState(initialState.industries);
+  const [roleFamilies, setRoleFamilies] = useState(initialState.roleFamilies);
+  const [maxMentees, setMaxMentees] = useState(initialState.maxMentees);
+  const [acceptingNew, setAcceptingNew] = useState(initialState.acceptingNew);
+  const [meetingPreferences, setMeetingPreferences] = useState(
+    initialState.meetingPreferences
   );
-  const [contactPhone, setContactPhone] = useState(currentUserProfile?.contact_phone ?? "");
-  const [isActive, setIsActive] = useState(currentUserProfile?.is_active ?? true);
+  const [timeCommitment, setTimeCommitment] = useState(initialState.timeCommitment);
+  const [yearsOfExperience, setYearsOfExperience] = useState(
+    initialState.yearsOfExperience
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setBio(initialState.bio);
+    setExpertiseAreas(initialState.expertiseAreas);
+    setTopics(initialState.topics);
+    setSports(initialState.sports);
+    setPositions(initialState.positions);
+    setIndustries(initialState.industries);
+    setRoleFamilies(initialState.roleFamilies);
+    setMaxMentees(initialState.maxMentees);
+    setAcceptingNew(initialState.acceptingNew);
+    setMeetingPreferences(initialState.meetingPreferences);
+    setTimeCommitment(initialState.timeCommitment);
+    setYearsOfExperience(initialState.yearsOfExperience);
+  }, [initialState]);
+
+  const toggleMeetingPreference = (
+    value: (typeof MEETING_OPTIONS)[number]
+  ) => {
+    setMeetingPreferences((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value]
+    );
+  };
+
   const handleSave = async () => {
-    if (!user?.id || !orgId) {
-      setError("You must be signed in to update your mentor profile.");
-      return;
-    }
+    const parsedMaxMentees = Math.max(0, Number.parseInt(maxMentees, 10) || 0);
+    const parsedYears =
+      yearsOfExperience.trim().length > 0
+        ? Math.max(0, Number.parseInt(yearsOfExperience, 10) || 0)
+        : null;
+
+    const payload: MentorProfilePayload = {
+      bio: bio.trim(),
+      expertise_areas: parseCsv(expertiseAreas),
+      topics: parseCsv(topics),
+      sports: parseCsv(sports),
+      positions: parseCsv(positions),
+      industries: parseCsv(industries),
+      role_families: parseCsv(roleFamilies),
+      max_mentees: parsedMaxMentees,
+      accepting_new: acceptingNew,
+      meeting_preferences: meetingPreferences,
+      time_commitment: timeCommitment.trim(),
+      years_of_experience: parsedYears,
+    };
 
     setIsSaving(true);
     setError(null);
 
-    const payload = {
-      organization_id: orgId,
-      user_id: user.id,
-      bio: bio.trim() || null,
-      expertise_areas: expertiseAreas
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean),
-      contact_email: contactEmail.trim() || null,
-      contact_linkedin: contactLinkedin.trim() || null,
-      contact_phone: contactPhone.trim() || null,
-      is_active: isActive,
-    };
-
-    const query = currentUserProfile
-      ? supabase
-          .from("mentor_profiles")
-          .update(payload)
-          .eq("id", currentUserProfile.id)
-          .eq("user_id", user.id)
-      : supabase.from("mentor_profiles").insert(payload);
-
-    const { error: saveError } = await query;
-
-    if (saveError) {
-      setError(saveError.message);
+    try {
+      await saveMentorProfile(orgId, payload);
+      onSaved();
+    } catch (saveError) {
+      setError((saveError as Error).message || "Failed to save mentor profile.");
+    } finally {
       setIsSaving(false);
-      return;
     }
-
-    setIsSaving(false);
-    onSaved();
   };
 
   return (
@@ -91,86 +166,130 @@ export function MentorProfileForm({
           {currentUserProfile ? "Edit mentor profile" : "Become a mentor"}
         </Text>
         <Text style={styles.sectionSubtitle}>
-          Share what you can help with so current members know how to reach you.
+          Share the areas where you can help so members can find the right fit.
         </Text>
       </View>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Bio</Text>
-        <TextInput
-          value={bio}
-          onChangeText={setBio}
-          placeholder="Tell members about your background and what you can help with."
-          placeholderTextColor={styles.placeholderColor.color}
-          multiline
-          textAlignVertical="top"
-          style={[styles.input, styles.textArea]}
-        />
+      <Field
+        label="Bio"
+        value={bio}
+        onChangeText={setBio}
+        placeholder="Tell members about your background and how you can help."
+        multiline
+        textArea
+      />
+      <Field
+        label="Expertise"
+        value={expertiseAreas}
+        onChangeText={setExpertiseAreas}
+        placeholder="Interview prep, career transitions, leadership"
+        helperText="Separate multiple values with commas."
+      />
+      <Field
+        label="Topics"
+        value={topics}
+        onChangeText={setTopics}
+        placeholder="College recruiting, networking, first jobs"
+        helperText="Separate multiple values with commas."
+      />
+      <Field
+        label="Sports"
+        value={sports}
+        onChangeText={setSports}
+        placeholder="Lacrosse, soccer, swimming"
+        helperText="Separate multiple values with commas."
+      />
+      <Field
+        label="Positions"
+        value={positions}
+        onChangeText={setPositions}
+        placeholder="Goalie, midfielder, captain"
+        helperText="Separate multiple values with commas."
+      />
+      <Field
+        label="Industries"
+        value={industries}
+        onChangeText={setIndustries}
+        placeholder="Healthcare, finance, software"
+        helperText="Separate multiple values with commas."
+      />
+      <Field
+        label="Job fields"
+        value={roleFamilies}
+        onChangeText={setRoleFamilies}
+        placeholder="Product, design, sales"
+        helperText="Separate multiple values with commas."
+      />
+
+      <View style={styles.twoColumnRow}>
+        <View style={styles.twoColumnField}>
+          <Field
+            label="Max mentees"
+            value={maxMentees}
+            onChangeText={setMaxMentees}
+            placeholder="3"
+            keyboardType="number-pad"
+          />
+        </View>
+        <View style={styles.twoColumnField}>
+          <Field
+            label="Years of experience"
+            value={yearsOfExperience}
+            onChangeText={setYearsOfExperience}
+            placeholder="10"
+            keyboardType="number-pad"
+          />
+        </View>
       </View>
 
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Areas of expertise</Text>
-        <TextInput
-          value={expertiseAreas}
-          onChangeText={setExpertiseAreas}
-          placeholder="Career advice, interview prep, industry insights"
-          placeholderTextColor={styles.placeholderColor.color}
-          style={styles.input}
-        />
-        <Text style={styles.helperText}>Separate multiple areas with commas.</Text>
-      </View>
+      <Field
+        label="Time commitment"
+        value={timeCommitment}
+        onChangeText={setTimeCommitment}
+        placeholder="30 minutes"
+      />
 
       <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Email</Text>
-        <TextInput
-          value={contactEmail}
-          onChangeText={setContactEmail}
-          placeholder="your.email@example.com"
-          placeholderTextColor={styles.placeholderColor.color}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>LinkedIn URL</Text>
-        <TextInput
-          value={contactLinkedin}
-          onChangeText={setContactLinkedin}
-          placeholder="https://linkedin.com/in/yourprofile"
-          placeholderTextColor={styles.placeholderColor.color}
-          autoCapitalize="none"
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Phone</Text>
-        <TextInput
-          value={contactPhone}
-          onChangeText={setContactPhone}
-          placeholder="+1 (555) 123-4567"
-          placeholderTextColor={styles.placeholderColor.color}
-          keyboardType="phone-pad"
-          style={styles.input}
-        />
+        <Text style={styles.fieldLabel}>Meeting preferences</Text>
+        <View style={styles.chipRow}>
+          {MEETING_OPTIONS.map((option) => {
+            const active = meetingPreferences.includes(option);
+            return (
+              <Pressable
+                key={option}
+                onPress={() => toggleMeetingPreference(option)}
+                style={({ pressed }) => [
+                  styles.chip,
+                  active && styles.chipActive,
+                  pressed && styles.chipPressed,
+                ]}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {option.replace("_", " ")}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <View style={styles.toggleRow}>
-        <Text style={styles.toggleLabel}>Visible in directory</Text>
+        <View style={styles.toggleText}>
+          <Text style={styles.toggleLabel}>Accepting new mentees</Text>
+          <Text style={styles.toggleHint}>
+            Turn this off to stay in the directory without new requests.
+          </Text>
+        </View>
         <Switch
-          value={isActive}
-          onValueChange={setIsActive}
+          value={acceptingNew}
+          onValueChange={setAcceptingNew}
           trackColor={{
             false: styles.trackOff.color,
             true: styles.trackOn.color,
           }}
-          thumbColor={
-            isActive ? styles.thumbOn.color : styles.thumbOff.color
-          }
+          thumbColor={acceptingNew ? styles.thumbOn.color : styles.thumbOff.color}
         />
       </View>
 
@@ -197,11 +316,50 @@ export function MentorProfileForm({
             <ActivityIndicator color={styles.primaryButtonText.color} />
           ) : (
             <Text style={styles.primaryButtonText}>
-              {currentUserProfile ? "Save profile" : "Register as mentor"}
+              {currentUserProfile ? "Save profile" : "Create profile"}
             </Text>
           )}
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  helperText,
+  multiline = false,
+  textArea = false,
+  keyboardType,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  helperText?: string;
+  multiline?: boolean;
+  textArea?: boolean;
+  keyboardType?: "default" | "number-pad";
+}) {
+  const styles = useThemedStyles(createStyles);
+
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={styles.placeholderColor.color}
+        multiline={multiline}
+        textAlignVertical={textArea ? "top" : "center"}
+        keyboardType={keyboardType}
+        style={[styles.input, textArea && styles.textArea]}
+      />
+      {helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
     </View>
   );
 }
@@ -258,16 +416,62 @@ const createStyles = (n: NeutralColors, s: SemanticColors) =>
       backgroundColor: n.background,
     },
     textArea: {
-      minHeight: 90,
+      minHeight: 96,
+    },
+    twoColumnRow: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    twoColumnField: {
+      flex: 1,
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: SPACING.xs,
+    },
+    chip: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    },
+    chipActive: {
+      backgroundColor: s.success,
+      borderColor: s.success,
+    },
+    chipPressed: {
+      opacity: 0.85,
+    },
+    chipText: {
+      fontSize: 13,
+      color: n.foreground,
+      textTransform: "capitalize",
+    },
+    chipTextActive: {
+      color: "#ffffff",
+      fontWeight: "600",
     },
     toggleRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      gap: SPACING.md,
+    },
+    toggleText: {
+      flex: 1,
+      gap: 2,
     },
     toggleLabel: {
       fontSize: 14,
       color: n.foreground,
+      fontWeight: "500",
+    },
+    toggleHint: {
+      fontSize: 12,
+      color: n.muted,
     },
     trackOff: {
       color: n.border,
@@ -310,6 +514,7 @@ const createStyles = (n: NeutralColors, s: SemanticColors) =>
       paddingHorizontal: SPACING.md,
       alignItems: "center",
       justifyContent: "center",
+      minWidth: 132,
     },
     primaryButtonPressed: {
       opacity: 0.9,

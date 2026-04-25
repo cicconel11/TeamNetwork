@@ -16,6 +16,9 @@ interface PairableMembers {
 
 const MENTOR_ROLES = ["alumni", "admin"] as const;
 const MENTEE_ROLES = ["active_member"] as const;
+const RICH_MENTOR_PROFILE_SELECT =
+  "user_id, topics, expertise_areas, sports, positions, industries, role_families, max_mentees, current_mentee_count, accepting_new, is_active, meeting_preferences, years_of_experience";
+const BASE_MENTOR_PROFILE_SELECT = "user_id, expertise_areas, is_active";
 
 /**
  * Fetch the two role-segmented lists used by the mentorship pair-creation
@@ -86,6 +89,27 @@ function sortByDisplayLabel(members: PairableOrgMember[]): PairableOrgMember[] {
   );
 }
 
+function isMissingColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const err = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  const code = typeof err.code === "string" ? err.code : "";
+  const text = [err.message, err.details, err.hint]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    code === "42703" ||
+    code === "PGRST204" ||
+    text.includes("does not exist") ||
+    text.includes("could not find") ||
+    text.includes("schema cache")
+  );
+}
+
 /**
  * Hydrate MentorInput[] for all active mentors in an organization.
  * Joins mentor_profiles with alumni table for career signals.
@@ -107,13 +131,30 @@ export async function loadMentorInputs(
     };
   };
 
-  const mentorProfilesRes = await sb
+  let mentorProfilesRes = await sb
     .from("mentor_profiles")
-    .select(
-      "user_id, topics, expertise_areas, sports, positions, industries, role_families, max_mentees, current_mentee_count, accepting_new, is_active, meeting_preferences, years_of_experience, custom_attributes"
-    )
+    .select(RICH_MENTOR_PROFILE_SELECT)
     .eq("organization_id", orgId)
     .eq("is_active", true);
+
+  if (mentorProfilesRes.error && isMissingColumnError(mentorProfilesRes.error)) {
+    mentorProfilesRes = await sb
+      .from("mentor_profiles")
+      .select(BASE_MENTOR_PROFILE_SELECT)
+      .eq("organization_id", orgId)
+      .eq("is_active", true);
+  }
+
+  if (mentorProfilesRes.error) {
+    const message =
+      mentorProfilesRes.error &&
+      typeof mentorProfilesRes.error === "object" &&
+      "message" in mentorProfilesRes.error &&
+      typeof mentorProfilesRes.error.message === "string"
+        ? mentorProfilesRes.error.message
+        : "Unknown error";
+    throw new Error(`Failed to load mentor profiles: ${message}`);
+  }
 
   const mentorProfiles = mentorProfilesRes.data ?? [];
   const mentorUserIds = mentorProfiles.map((p) => p.user_id as string);

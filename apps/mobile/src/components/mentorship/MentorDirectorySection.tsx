@@ -10,6 +10,7 @@ import { MentorRequestSheet } from "./MentorRequestSheet";
 import type {
   MentorDirectoryEntry,
   MentorProfileRecord,
+  MentorProfileSuggestedDefaults,
   SelectOption,
 } from "@/types/mentorship";
 
@@ -19,6 +20,7 @@ export function MentorDirectorySection({
   years,
   showRegistration,
   currentUserProfile,
+  suggestedDefaults,
   onRefresh,
   canRequest,
   orgId,
@@ -29,6 +31,7 @@ export function MentorDirectorySection({
   years: number[];
   showRegistration: boolean;
   currentUserProfile: MentorProfileRecord | null;
+  suggestedDefaults: MentorProfileSuggestedDefaults | null;
   onRefresh: () => void;
   canRequest?: boolean;
   orgId?: string | null;
@@ -162,7 +165,9 @@ export function MentorDirectorySection({
 
       {showRegistration && showProfileForm ? (
         <MentorProfileForm
+          orgId={orgId || ""}
           currentUserProfile={currentUserProfile}
+          suggestedDefaults={suggestedDefaults}
           onCancel={() => setShowProfileForm(false)}
           onSaved={() => {
             setShowProfileForm(false);
@@ -186,118 +191,169 @@ export function MentorDirectorySection({
         </View>
       ) : (
         <View style={styles.directoryList}>
-          {filteredMentors.map((mentor) => (
-            <View key={mentor.id} style={styles.directoryCard}>
-              <View style={styles.directoryCardHeader}>
-                {mentor.photo_url ? (
-                  <Image
-                    source={mentor.photo_url}
-                    style={styles.directoryAvatar}
-                    contentFit="cover"
-                    transition={200}
-                  />
-                ) : (
-                  <View style={styles.directoryAvatarFallback}>
-                    <Text style={styles.directoryAvatarFallbackText}>
-                      {mentor.name[0] ?? "M"}
+          {filteredMentors.map((mentor) => {
+            const isPending = pendingMentorIds?.has(mentor.user_id) ?? false;
+            const isUnavailable = !mentor.accepting_new;
+            const isFull = mentor.current_mentee_count >= mentor.max_mentees;
+            const requestDisabled = isPending || isUnavailable || isFull;
+            const requestLabel = isPending
+              ? "Pending"
+              : isUnavailable
+                ? "Unavailable"
+                : isFull
+                  ? "Full"
+                  : "Request mentorship";
+
+            return (
+              <View key={mentor.id} style={styles.directoryCard}>
+                <View style={styles.directoryCardHeader}>
+                  {mentor.photo_url ? (
+                    <Image
+                      source={mentor.photo_url}
+                      style={styles.directoryAvatar}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : (
+                    <View style={styles.directoryAvatarFallback}>
+                      <Text style={styles.directoryAvatarFallbackText}>
+                        {mentor.name[0] ?? "M"}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.directoryHeaderText}>
+                    <Text style={styles.directoryName}>{mentor.name}</Text>
+                    <Text style={styles.directoryMeta}>
+                      {[mentor.current_company, mentor.current_city]
+                        .filter(Boolean)
+                        .join(" · ") || "Mentor"}
+                    </Text>
+                    <Text style={styles.directoryMeta}>
+                      {mentor.current_mentee_count} / {mentor.max_mentees} mentees
+                      {mentor.years_of_experience != null
+                        ? ` · ${mentor.years_of_experience} yrs exp`
+                        : ""}
                     </Text>
                   </View>
-                )}
-                <View style={styles.directoryHeaderText}>
-                  <Text style={styles.directoryName}>{mentor.name}</Text>
-                  <Text style={styles.directoryMeta}>
-                    {[mentor.current_company, mentor.current_city]
-                      .filter(Boolean)
-                      .join(" · ") || "Mentor"}
+                </View>
+
+                <View style={styles.directoryBadgeRow}>
+                  {mentor.industry ? (
+                    <View style={styles.directoryBadge}>
+                      <Text style={styles.directoryBadgeText}>{mentor.industry}</Text>
+                    </View>
+                  ) : null}
+                  {mentor.graduation_year ? (
+                    <View style={styles.directoryBadge}>
+                      <Text style={styles.directoryBadgeText}>
+                        Class of {mentor.graduation_year}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {!mentor.accepting_new ? (
+                    <View style={styles.directoryBadgeWarning}>
+                      <Text style={styles.directoryBadgeWarningText}>
+                        Not taking new mentees
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {mentor.bio ? (
+                  <Text style={styles.directoryBio}>{mentor.bio}</Text>
+                ) : null}
+
+                {mentor.expertise_areas?.length ? (
+                  <Text style={styles.directoryExpertise}>
+                    Expertise: {mentor.expertise_areas.join(", ")}
                   </Text>
+                ) : null}
+                {mentor.topics?.length ? (
+                  <Text style={styles.directoryExpertise}>
+                    Topics: {mentor.topics.join(", ")}
+                  </Text>
+                ) : null}
+                {mentor.sports?.length ? (
+                  <Text style={styles.directoryExpertise}>
+                    Sports: {mentor.sports.join(", ")}
+                  </Text>
+                ) : null}
+                {mentor.positions?.length ? (
+                  <Text style={styles.directoryExpertise}>
+                    Positions: {mentor.positions.join(", ")}
+                  </Text>
+                ) : null}
+                {mentor.meeting_preferences?.length ? (
+                  <Text style={styles.directoryExpertise}>
+                    Meeting preferences:{" "}
+                    {mentor.meeting_preferences.map((value) => value.replace("_", " ")).join(", ")}
+                  </Text>
+                ) : null}
+
+                <View style={styles.directoryContactRow}>
+                  {canRequest ? (
+                    <Pressable
+                      onPress={() => setRequestMentor(mentor)}
+                      disabled={requestDisabled}
+                      style={({ pressed }) => [
+                        styles.requestButton,
+                        pressed && styles.contactButtonPressed,
+                        requestDisabled && styles.requestButtonDisabled,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.requestButtonText,
+                          requestDisabled && styles.requestButtonTextDisabled,
+                        ]}
+                      >
+                        {requestLabel}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {mentor.contact_email ? (
+                    <Pressable
+                      onPress={() => void Linking.openURL(`mailto:${mentor.contact_email}`)}
+                      style={({ pressed }) => [
+                        styles.contactButton,
+                        pressed && styles.contactButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.contactButtonText}>Email</Text>
+                    </Pressable>
+                  ) : null}
+                  {mentor.contact_linkedin ? (
+                    <Pressable
+                      onPress={() =>
+                        void Linking.openURL(
+                          mentor.contact_linkedin?.startsWith("http")
+                            ? mentor.contact_linkedin
+                            : `https://${mentor.contact_linkedin}`
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.contactButton,
+                        pressed && styles.contactButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.contactButtonText}>LinkedIn</Text>
+                    </Pressable>
+                  ) : null}
+                  {mentor.contact_phone ? (
+                    <Pressable
+                      onPress={() => void Linking.openURL(`tel:${mentor.contact_phone}`)}
+                      style={({ pressed }) => [
+                        styles.contactButton,
+                        pressed && styles.contactButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.contactButtonText}>Call</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </View>
-
-              <View style={styles.directoryBadgeRow}>
-                {mentor.industry ? (
-                  <View style={styles.directoryBadge}>
-                    <Text style={styles.directoryBadgeText}>{mentor.industry}</Text>
-                  </View>
-                ) : null}
-                {mentor.graduation_year ? (
-                  <View style={styles.directoryBadge}>
-                    <Text style={styles.directoryBadgeText}>
-                      Class of {mentor.graduation_year}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {mentor.bio ? (
-                <Text style={styles.directoryBio}>{mentor.bio}</Text>
-              ) : null}
-
-              {mentor.expertise_areas?.length ? (
-                <Text style={styles.directoryExpertise}>
-                  Expertise: {mentor.expertise_areas.join(", ")}
-                </Text>
-              ) : null}
-
-              <View style={styles.directoryContactRow}>
-                {canRequest ? (
-                  <Pressable
-                    onPress={() => setRequestMentor(mentor)}
-                    disabled={pendingMentorIds?.has(mentor.user_id)}
-                    style={({ pressed }) => [
-                      styles.requestButton,
-                      pressed && styles.contactButtonPressed,
-                      pendingMentorIds?.has(mentor.user_id) && styles.requestButtonDisabled,
-                    ]}
-                  >
-                    <Text style={styles.requestButtonText}>
-                      {pendingMentorIds?.has(mentor.user_id)
-                        ? "Pending"
-                        : "Request mentorship"}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {mentor.contact_email ? (
-                  <Pressable
-                    onPress={() => void Linking.openURL(`mailto:${mentor.contact_email}`)}
-                    style={({ pressed }) => [
-                      styles.contactButton,
-                      pressed && styles.contactButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.contactButtonText}>Email</Text>
-                  </Pressable>
-                ) : null}
-                {mentor.contact_linkedin ? (
-                  <Pressable
-                    onPress={() =>
-                      void Linking.openURL(
-                        mentor.contact_linkedin?.startsWith("http")
-                          ? mentor.contact_linkedin
-                          : `https://${mentor.contact_linkedin}`
-                      )
-                    }
-                    style={({ pressed }) => [
-                      styles.contactButton,
-                      pressed && styles.contactButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.contactButtonText}>LinkedIn</Text>
-                  </Pressable>
-                ) : null}
-                {mentor.contact_phone ? (
-                  <Pressable
-                    onPress={() => void Linking.openURL(`tel:${mentor.contact_phone}`)}
-                    style={({ pressed }) => [
-                      styles.contactButton,
-                      pressed && styles.contactButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.contactButtonText}>Call</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -520,10 +576,23 @@ const createStyles = (n: NeutralColors, s: SemanticColors) =>
       paddingHorizontal: SPACING.sm,
       paddingVertical: 4,
     },
+    directoryBadgeWarning: {
+      borderRadius: 999,
+      backgroundColor: `${s.warning}18`,
+      borderWidth: 1,
+      borderColor: `${s.warning}30`,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: 4,
+    },
     directoryBadgeText: {
       fontSize: 12,
       color: n.foreground,
       fontWeight: "500",
+    },
+    directoryBadgeWarningText: {
+      fontSize: 12,
+      color: s.warning,
+      fontWeight: "600",
     },
     directoryBio: {
       fontSize: 14,
@@ -569,5 +638,8 @@ const createStyles = (n: NeutralColors, s: SemanticColors) =>
       fontSize: 14,
       fontWeight: "600",
       color: "#ffffff",
+    },
+    requestButtonTextDisabled: {
+      color: n.foreground,
     },
   });

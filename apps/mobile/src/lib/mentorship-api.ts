@@ -1,4 +1,10 @@
 import { fetchWithAuth } from "@/lib/web-api";
+import type {
+  MentorMatch,
+  MentorProfilePayload,
+  MentorProfileRecord,
+  MentorProfileSuggestedDefaults,
+} from "@/types/mentorship";
 
 async function asJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -79,6 +85,11 @@ export type ProposalQueueRow = {
     time_availability: string | null;
   } | null;
 };
+
+function buildMentorProfileUrl(orgId: string, userId?: string) {
+  const params = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
+  return `/api/organizations/${orgId}/mentorship/mentor-profile${params}`;
+}
 
 export type MentorshipTask = {
   id: string;
@@ -174,6 +185,52 @@ export async function savePreferences(orgId: string, prefs: MenteePreferences) {
     }
   );
   return asJson<{ preferences: MenteePreferences }>(res);
+}
+
+export async function getMentorProfile(orgId: string, userId?: string) {
+  const res = await fetchWithAuth(buildMentorProfileUrl(orgId, userId), {
+    method: "GET",
+  });
+  return asJson<{
+    profile: MentorProfileRecord | null;
+    suggested?: MentorProfileSuggestedDefaults | null;
+  }>(res);
+}
+
+export async function saveMentorProfile(
+  orgId: string,
+  payload: MentorProfilePayload,
+  userId?: string
+) {
+  const res = await fetchWithAuth(buildMentorProfileUrl(orgId, userId), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return asJson<{ profile: MentorProfileRecord }>(res);
+}
+
+export async function getMentorMatches(
+  orgId: string,
+  menteeUserId: string,
+  options?: { limit?: number; focus_areas?: string[] }
+) {
+  const res = await fetchWithAuth(
+    `/api/organizations/${orgId}/mentorship/suggestions`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mentee_user_id: menteeUserId,
+        limit: options?.limit,
+        focus_areas: options?.focus_areas,
+      }),
+    }
+  );
+  const body = await asJson<{ matches?: unknown }>(res);
+  return {
+    matches: Array.isArray(body.matches) ? (body.matches as MentorMatch[]) : [],
+  };
 }
 
 export async function getTasks(orgId: string, pairId: string) {

@@ -26,6 +26,7 @@ import {
   ActiveMemberMentorshipSummary,
   AdminProposalsList,
   MentorDirectorySection,
+  MentorMatchesSection,
   MenteePreferencesSheet,
   MentorshipAdminPanel,
   MentorshipPairCard,
@@ -45,11 +46,14 @@ export default function MentorshipIndexScreen() {
 
   const {
     pairs,
+    workingPairs,
+    proposalPairs,
     visibleFilteredPairs,
     mentorDirectory,
     mentorIndustries,
     mentorYears,
     currentUserMentorProfile,
+    currentUserMentorProfileSuggested,
     logsByPair,
     userLabel,
     myMentorName,
@@ -68,40 +72,31 @@ export default function MentorshipIndexScreen() {
   const myProposals: MentorshipPair[] = useMemo(() => {
     if (!user?.id) return [];
     if (isActiveMember) {
-      return pairs.filter(
-        (p) =>
-          p.mentee_user_id === user.id &&
-          ["proposed", "declined"].includes(p.status as string)
-      );
+      return proposalPairs.filter((p) => p.mentee_user_id === user.id);
     }
     if (isAlumni) {
-      return pairs.filter(
-        (p) =>
-          p.mentor_user_id === user.id &&
-          ["proposed", "declined"].includes(p.status as string)
-      );
+      return proposalPairs.filter((p) => p.mentor_user_id === user.id);
     }
     return [];
-  }, [pairs, user?.id, isActiveMember, isAlumni]);
+  }, [proposalPairs, user?.id, isActiveMember, isAlumni]);
 
-  const proposedToMeCount = useMemo(() => {
+  const proposalTabCount = useMemo(() => {
     if (!user?.id) return 0;
     if (isActiveMember) {
-      return pairs.filter(
-        (p) => p.mentee_user_id === user.id && p.status === "proposed"
-      ).length;
+      return proposalPairs.filter((p) => p.mentee_user_id === user.id).length;
     }
     if (isAlumni) {
-      return pairs.filter(
-        (p) => p.mentor_user_id === user.id && p.status === "proposed"
-      ).length;
+      return proposalPairs.filter((p) => p.mentor_user_id === user.id).length;
     }
     return 0;
-  }, [pairs, user?.id, isActiveMember, isAlumni]);
+  }, [proposalPairs, user?.id, isActiveMember, isAlumni]);
 
   const adminProposalCount = useMemo(
-    () => (isAdmin ? pairs.filter((p) => p.status === "proposed").length : 0),
-    [pairs, isAdmin]
+    () =>
+      isAdmin
+        ? proposalPairs.filter((p) => p.status === "proposed").length
+        : 0,
+    [proposalPairs, isAdmin]
   );
 
   const pendingMentorIds = useMemo(() => {
@@ -126,14 +121,14 @@ export default function MentorshipIndexScreen() {
       list.push({
         id: "proposals",
         label: "Proposals",
-        badge: proposedToMeCount || undefined,
+        badge: proposalTabCount || undefined,
       });
     }
-    if (isAdmin) {
+    if (isActiveMember || isAdmin) {
       list.push({
         id: "matches",
         label: "Matches",
-        badge: adminProposalCount || undefined,
+        badge: isAdmin ? adminProposalCount || undefined : undefined,
       });
     }
     return list;
@@ -142,7 +137,7 @@ export default function MentorshipIndexScreen() {
     isActiveMember,
     isAlumni,
     isAdmin,
-    proposedToMeCount,
+    proposalTabCount,
     adminProposalCount,
   ]);
 
@@ -191,7 +186,7 @@ export default function MentorshipIndexScreen() {
               {showLoading
                 ? "Loading…"
                 : isAdmin
-                  ? `${pairs.length} ${pairs.length === 1 ? "pair" : "pairs"}`
+                  ? `${workingPairs.length} ${workingPairs.length === 1 ? "pair" : "pairs"}`
                   : isActiveMember
                     ? myMentorName
                       ? `Paired with ${myMentorName}`
@@ -300,26 +295,23 @@ export default function MentorshipIndexScreen() {
               ) : (
                 <View style={styles.list}>
                   {visibleFilteredPairs.map((pair) => (
-                    <Pressable
+                    <MentorshipPairCard
                       key={pair.id}
-                      onPress={() =>
-                        router.push(`/${orgSlug}/mentorship/${pair.id}`)
+                      pair={pair}
+                      mentorLabel={userLabel(pair.mentor_user_id)}
+                      menteeLabel={userLabel(pair.mentee_user_id)}
+                      logs={logsByPair[pair.id] || []}
+                      isAdmin={isAdmin}
+                      viewerRole={role}
+                      orgId={orgId || ""}
+                      userId={user?.id ?? null}
+                      userLabel={userLabel}
+                      onRefresh={refetch}
+                      onArchive={archivePair}
+                      onOpenPair={(selectedPairId) =>
+                        router.push(`/${orgSlug}/mentorship/${selectedPairId}`)
                       }
-                    >
-                      <MentorshipPairCard
-                        pair={pair}
-                        mentorLabel={userLabel(pair.mentor_user_id)}
-                        menteeLabel={userLabel(pair.mentee_user_id)}
-                        logs={logsByPair[pair.id] || []}
-                        isAdmin={isAdmin}
-                        canLogActivity={isAdmin || isActiveMember}
-                        orgId={orgId || ""}
-                        userId={user?.id ?? null}
-                        userLabel={userLabel}
-                        onRefresh={refetch}
-                        onArchive={archivePair}
-                      />
-                    </Pressable>
+                    />
                   ))}
                 </View>
               )}
@@ -333,6 +325,7 @@ export default function MentorshipIndexScreen() {
               years={mentorYears}
               showRegistration={isAlumni}
               currentUserProfile={currentUserMentorProfile}
+              suggestedDefaults={currentUserMentorProfileSuggested}
               onRefresh={refetch}
               canRequest={isActiveMember}
               orgId={orgId}
@@ -340,8 +333,24 @@ export default function MentorshipIndexScreen() {
             />
           ) : null}
 
-          {activeTab === "proposals" ? (
-            <MyProposalsSection pairs={myProposals} userLabel={userLabel} />
+          {activeTab === "proposals" && orgId && user?.id ? (
+            <MyProposalsSection
+              orgId={orgId}
+              currentUserId={user.id}
+              pairs={myProposals}
+              userLabel={userLabel}
+              onChanged={refetch}
+            />
+          ) : null}
+
+          {activeTab === "matches" && isActiveMember && orgId && user?.id ? (
+            <MentorMatchesSection
+              orgId={orgId}
+              currentUserId={user.id}
+              mentors={mentorDirectory}
+              pendingMentorIds={pendingMentorIds}
+              onRequested={refetch}
+            />
           ) : null}
 
           {activeTab === "matches" && isAdmin && orgId ? (

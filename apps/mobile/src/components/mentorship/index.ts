@@ -1,9 +1,8 @@
 export { ActiveMemberMentorshipSummary } from "./ActiveMemberMentorshipSummary";
 export { AdminProposalsList } from "./AdminProposalsList";
 export { MenteePreferencesSheet } from "./MenteePreferencesSheet";
-export { MenteeStatusToggle } from "./MenteeStatusToggle";
 export { MentorDirectorySection } from "./MentorDirectorySection";
-export { MentorPairManager } from "./MentorPairManager";
+export { MentorMatchesSection } from "./MentorMatchesSection";
 export { MentorProfileForm } from "./MentorProfileForm";
 export { MentorRequestSheet } from "./MentorRequestSheet";
 export { MentorshipAdminPanel } from "./MentorshipAdminPanel";

@@ -58,10 +58,43 @@ export interface SuggestMentorsOptions {
 /*  Internal helpers                                                  */
 /* ------------------------------------------------------------------ */
 
-interface MemberRow {
-  user_id: string;
+interface UserDisplayRow {
+  id?: string;
+  user_id?: string;
   name: string | null;
   email: string | null;
+}
+
+async function loadUserDisplayMap(
+  supabase: SupabaseClient<Database>,
+  userIds: string[]
+): Promise<Map<string, { name: string | null; email: string | null }>> {
+  const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, email")
+    .in("id", uniqueIds);
+
+  if (error) {
+    return new Map();
+  }
+
+  const byId = new Map<string, { name: string | null; email: string | null }>();
+  for (const row of data ?? []) {
+    const user = row as UserDisplayRow;
+    const id = user.id ?? user.user_id;
+    if (!id) continue;
+    byId.set(id, {
+      name: user.name ?? null,
+      email: user.email ?? null,
+    });
+  }
+
+  return byId;
 }
 
 async function resolveMentee(
@@ -80,7 +113,7 @@ async function resolveMentee(
   if (opts.menteeUserId) {
     const { data } = await supabase
       .from("user_organization_roles")
-      .select("user_id, users(name, email)")
+      .select("user_id")
       .eq("organization_id", orgId)
       .eq("user_id", opts.menteeUserId)
       .eq("status", "active")
@@ -89,13 +122,14 @@ async function resolveMentee(
 
     if (!data) return { state: "not_found" };
 
-    const u = Array.isArray(data.users) ? data.users[0] : data.users;
+    const displayMap = await loadUserDisplayMap(supabase, [data.user_id]);
+    const u = displayMap.get(data.user_id);
     return {
       state: "resolved",
       userId: data.user_id,
       display: {
         user_id: data.user_id,
-        name: (u as MemberRow | null)?.name ?? "Member",
+        name: u?.name ?? u?.email ?? "Member",
         subtitle: null,
       },
     };
@@ -106,18 +140,23 @@ async function resolveMentee(
 
     const { data: rows } = await supabase
       .from("user_organization_roles")
-      .select("user_id, users(name, email)")
+      .select("user_id")
       .eq("organization_id", orgId)
       .eq("status", "active")
       .in("role", [...MENTEE_ELIGIBLE_ROLES]);
 
+    const displayMap = await loadUserDisplayMap(
+      supabase,
+      (rows ?? []).map((r) => r.user_id)
+    );
+
     const candidates = (rows ?? [])
       .map((r) => {
-        const u = Array.isArray(r.users) ? r.users[0] : r.users;
+        const u = displayMap.get(r.user_id);
         return {
           user_id: r.user_id,
-          name: (u as MemberRow | null)?.name ?? null,
-          email: (u as MemberRow | null)?.email ?? null,
+          name: u?.name ?? null,
+          email: u?.email ?? null,
         };
       })
       .filter((c) => {
@@ -292,20 +331,18 @@ export async function suggestMentors(
   // 6. Build display-ready suggestions
   // Load names for matched mentors
   const matchedIds = matches.slice(0, limit).map((m) => m.mentorUserId);
-  const { data: mentorUsers } = await supabase
+  const { data: mentorRoleRows } = await supabase
     .from("user_organization_roles")
-    .select("user_id, users(name, email)")
+    .select("user_id")
     .eq("organization_id", orgId)
+    .eq("status", "active")
+    .in("role", ["alumni", "admin"])
     .in("user_id", matchedIds);
 
-  const mentorLookup = new Map<string, { name: string | null; email: string | null }>();
-  for (const row of mentorUsers ?? []) {
-    const u = Array.isArray(row.users) ? row.users[0] : row.users;
-    mentorLookup.set(row.user_id, {
-      name: (u as MemberRow | null)?.name ?? null,
-      email: (u as MemberRow | null)?.email ?? null,
-    });
-  }
+  const mentorLookup = await loadUserDisplayMap(
+    supabase,
+    (mentorRoleRows ?? []).map((row) => row.user_id)
+  );
 
   const mentorInputLookup = new Map<string, MentorInput>();
   for (const mi of mentorInputs) {

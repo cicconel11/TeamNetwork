@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { canCreateMentorshipLog } from "@/lib/mentorship";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import type { NeutralColors, SemanticColors } from "@/lib/design-tokens";
@@ -32,7 +33,7 @@ export default function MentorshipPairDetail() {
   const router = useRouter();
   const { orgId } = useOrg();
   const { user } = useAuth();
-  const { isAdmin } = useOrgRole();
+  const { role, isAdmin } = useOrgRole();
   const styles = useThemedStyles(createStyles);
 
   const [pair, setPair] = useState<MentorshipPair | null>(null);
@@ -101,8 +102,9 @@ export default function MentorshipPairDetail() {
   }, [load]);
 
   const isMentor = pair && user?.id === pair.mentor_user_id;
-  const isMentee = pair && user?.id === pair.mentee_user_id;
-  const canLogActivity = Boolean(isMentor || isMentee || isAdmin);
+  const canLogActivity = pair
+    ? canCreateMentorshipLog({ role, status: pair.status })
+    : false;
   const canEditTasks = Boolean(isMentor || isAdmin);
   const canEditMeetings = Boolean(isMentor || isAdmin);
 

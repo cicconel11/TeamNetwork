@@ -4,28 +4,31 @@ import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import type { NeutralColors, SemanticColors } from "@/lib/design-tokens";
 import { MentorshipPairCard } from "./MentorshipPairCard";
-import type { MentorshipLog, MentorshipPair } from "@teammeet/types";
+import type { MentorshipPairRecord } from "@/lib/mentorship";
+import type { MentorshipLog } from "@teammeet/types";
 
 export function MentorshipPairsList({
   pairs,
   logsByPair,
   userLabel,
   isAdmin,
-  canLogActivity,
+  viewerRole,
   orgId,
   userId,
   onRefresh,
   onArchive,
+  onOpenPair,
 }: {
-  pairs: MentorshipPair[];
+  pairs: MentorshipPairRecord[];
   logsByPair: Record<string, MentorshipLog[]>;
   userLabel: (id: string) => string;
   isAdmin: boolean;
-  canLogActivity: boolean;
+  viewerRole: string | null;
   orgId: string;
   userId: string | null;
   onRefresh: () => void;
   onArchive: (pairId: string) => void;
+  onOpenPair?: (pairId: string) => void;
 }) {
   const styles = useThemedStyles(createStyles);
 
@@ -48,12 +51,13 @@ export function MentorshipPairsList({
           menteeLabel={userLabel(pair.mentee_user_id)}
           logs={logsByPair[pair.id] || []}
           isAdmin={isAdmin}
-          canLogActivity={canLogActivity}
+          viewerRole={viewerRole}
           orgId={orgId}
           userId={userId}
           userLabel={userLabel}
           onRefresh={onRefresh}
           onArchive={onArchive}
+          onOpenPair={onOpenPair}
         />
       ))}
     </View>
