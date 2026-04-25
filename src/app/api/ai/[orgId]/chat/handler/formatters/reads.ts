@@ -1259,6 +1259,10 @@ function formatLastActivity(updatedAt: string | null): string | null {
   return `Last activity ${days}d ago`;
 }
 
+function escapeMarkdownLinkLabel(label: string): string {
+  return label.replace(/([\\[\]])/g, "\\$1");
+}
+
 export function formatChatGroupsResponse(
   data: unknown,
   options?: FormatterOptions,
@@ -1327,7 +1331,7 @@ export function formatChatGroupsResponse(
     const isMember = row.isMember ?? true;
     const canLink = Boolean(orgSlug && row.id) && isMember;
     const namePart = canLink
-      ? `[${row.name}](/${orgSlug}/messages/chat/${row.id})`
+      ? `[${escapeMarkdownLinkLabel(row.name)}](/${orgSlug}/messages/chat/${row.id})`
       : row.name;
     const segments: string[] = [namePart];
     if (row.role) {
