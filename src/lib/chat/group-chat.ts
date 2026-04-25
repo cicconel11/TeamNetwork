@@ -25,6 +25,16 @@ export interface UserChatGroup {
   updated_at: string | null;
 }
 
+export interface OrgChatGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  updated_at: string | null;
+  member_count: number;
+  is_member: boolean;
+  role: "admin" | "moderator" | "member" | null;
+}
+
 type GroupTargetUnavailableReason =
   | "group_not_found"
   | "group_deleted"
@@ -114,6 +124,86 @@ export async function listUserChatGroups(
     }));
 
   return { data: activeGroups, error: null };
+}
+
+/**
+ * Lists every active chat group in an org for admin discovery.
+ * Returns member_count + is_member so admins can see groups they have not joined.
+ */
+export async function listAllOrgChatGroups(
+  supabase: GroupChatSupabase,
+  input: {
+    organizationId: string;
+    userId: string;
+    limit?: number;
+  }
+): Promise<{ data: OrgChatGroup[] | null; error: unknown }> {
+  const limit = Math.min(input.limit ?? 25, 50);
+
+  const { data: groupRows, error: groupsError } = await supabase
+    .from("chat_groups")
+    .select("id, name, description, updated_at")
+    .eq("organization_id", input.organizationId)
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (groupsError) {
+    return { data: null, error: groupsError };
+  }
+
+  const groups = (groupRows as unknown as Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    updated_at: string | null;
+  }> | null) ?? [];
+
+  if (groups.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const groupIds = groups.map((g) => g.id);
+
+  const { data: memberRows, error: membersError } = await supabase
+    .from("chat_group_members")
+    .select("chat_group_id, user_id, role")
+    .in("chat_group_id", groupIds)
+    .is("removed_at", null);
+
+  if (membersError) {
+    return { data: null, error: membersError };
+  }
+
+  const members = (memberRows as unknown as Array<{
+    chat_group_id: string;
+    user_id: string;
+    role: "admin" | "moderator" | "member";
+  }> | null) ?? [];
+
+  const counts = new Map<string, number>();
+  const userRoles = new Map<string, "admin" | "moderator" | "member">();
+  for (const m of members) {
+    counts.set(m.chat_group_id, (counts.get(m.chat_group_id) ?? 0) + 1);
+    if (m.user_id === input.userId) {
+      userRoles.set(m.chat_group_id, m.role);
+    }
+  }
+
+  const enriched: OrgChatGroup[] = groups.map((g) => {
+    const role = userRoles.get(g.id) ?? null;
+    return {
+      id: g.id,
+      name: g.name,
+      description: g.description,
+      updated_at: g.updated_at,
+      member_count: counts.get(g.id) ?? 0,
+      is_member: role !== null,
+      role,
+    };
+  });
+
+  return { data: enriched, error: null };
 }
 
 /**

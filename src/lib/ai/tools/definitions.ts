@@ -51,6 +51,7 @@ export interface PrepareChatMessageArgs {
 
 export interface ListChatGroupsArgs {
   limit?: number;
+  scope?: "mine" | "all";
 }
 
 export interface PrepareGroupMessageArgs {
@@ -424,7 +425,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_chat_groups" as const,
       description:
-        "List chat groups the current user belongs to. Returns group name, description, user role, and last activity. Use for questions about available chat groups or when the user wants to see which groups they can message.",
+        "List chat groups visible to the user. With scope: \"mine\" (default) returns groups the user belongs to with their role. With scope: \"all\" (admin only) returns every active chat group in the org with member_count and is_member so admins can see groups they have not joined. Use \"mine\" for \"what can I message?\" and \"all\" for admin discovery like \"what chat groups exist in this org?\".",
       parameters: {
         type: "object" as const,
         properties: {
@@ -433,6 +434,12 @@ const TOOL_BY_NAME = {
             minimum: 1,
             maximum: 50,
             description: "Max groups to return (default 25)",
+          },
+          scope: {
+            type: "string" as const,
+            enum: ["mine", "all"] as const,
+            description:
+              "\"mine\" (default) returns the caller's groups; \"all\" returns every active org chat group (admin only).",
           },
         },
         additionalProperties: false as const,
