@@ -1,5 +1,3 @@
-import { featureFromHref } from "./action-guidance";
-
 export type RouteEntityKind =
   | "member"
   | "discussion_thread"
@@ -95,28 +93,6 @@ export function extractCurrentMemberRouteId(pathname: string | undefined): strin
 export function extractCurrentDiscussionThreadRouteId(pathname: string | undefined): string | null {
   const ref = extractRouteEntity(pathname);
   return ref?.kind === "discussion_thread" ? ref.id : null;
-}
-
-export function pageLabelForPath(pathname: string | undefined): string {
-  const path = cleanPath(pathname);
-  if (!path) return "Current page";
-  const feature = featureFromHref(path);
-  switch (feature) {
-    case "members":
-      return "Member profile";
-    case "announcements":
-      return "Announcement";
-    case "jobs":
-      return "Job posting";
-    case "discussions":
-    case "messages":
-      return "Discussion thread";
-    case "events":
-    case "calendar":
-      return "Event";
-    default:
-      return "Current page";
-  }
 }
 
 function buildRef(
