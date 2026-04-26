@@ -305,3 +305,57 @@ export async function executeToolCall(
     return toolError("Unexpected error");
   }
 }
+
+export interface ExecuteToolCallsOptions {
+  /** Cap on simultaneously running tool calls. Must be >= 1. */
+  maxInflight: number;
+  /** Optional override for per-call execution (tests). Defaults to executeToolCall. */
+  executeFn?: (
+    ctx: ToolExecutionContext,
+    call: { name: string; args: unknown },
+  ) => Promise<ToolExecutionResult>;
+}
+
+/**
+ * Run N tool calls concurrently, capped at `maxInflight`. Results are returned
+ * in input order regardless of completion order. Failures (and unexpected
+ * throws) become `tool_error` rows; the batch never throws.
+ *
+ * Each call goes through the same `executeToolCall` path so per-tool timeout,
+ * auth, validation, and policy checks behave identically to the serial path.
+ */
+export async function executeToolCalls(
+  ctx: ToolExecutionContext,
+  calls: ReadonlyArray<{ name: string; args: unknown }>,
+  opts: ExecuteToolCallsOptions,
+): Promise<ToolExecutionResult[]> {
+  if (calls.length === 0) return [];
+  const maxInflight = Math.max(1, Math.floor(opts.maxInflight));
+  const runOne = opts.executeFn ?? executeToolCall;
+
+  const results: ToolExecutionResult[] = new Array(calls.length);
+  let nextIndex = 0;
+
+  const runWorker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= calls.length) return;
+      try {
+        results[index] = await runOne(ctx, calls[index]);
+      } catch (err) {
+        // runOne already maps known failure modes to result rows. Defense-
+        // in-depth: any throw from within still yields a result row so
+        // siblings continue.
+        results[index] = toolError(getSafeErrorMessage(err));
+      }
+    }
+  };
+
+  const workers = Array.from(
+    { length: Math.min(maxInflight, calls.length) },
+    () => runWorker(),
+  );
+  await Promise.all(workers);
+
+  return results;
+}
