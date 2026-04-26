@@ -1,0 +1,8 @@
+STATUS 200
+HEADER content-type: text/event-stream
+HEADER x-ai-thread-id: thread-1
+---BODY---
+data: {"type":"chunk","content":"I can only help with TeamNetwork tasks for your organization — like members, events, announcements, discussions, jobs, donations, or finding the right page. That request is outside what I do."}
+
+data: {"type":"done","threadId":"thread-1","cache":{"status":"bypass","bypassReason":"scope_refusal"}}
+
