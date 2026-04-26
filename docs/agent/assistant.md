@@ -119,6 +119,7 @@ Ten migrations create all AI-related schema (plus two cross-cutting performance 
 | `ZAI_MODEL` | No | Model override (default: `glm-5.1`) |
 | `ZAI_IMAGE_MODEL` | No | Vision-model override for uploaded schedule images (default: `glm-5v-turbo`) |
 | `DISABLE_AI_CACHE` | No | Set `"true"` to disable semantic cache |
+| `AI_PASS1_BYPASS` | No | `on` skips pass-1 model round-trip for forced single-tool reads with derivable args; `shadow` runs model + tags telemetry; default / unknown → `off` (fail-closed) |
 | `CRON_SECRET` | Yes (for purge) | Auth header for the cache purge cron endpoint |
 
 ## API Routes
