@@ -1,0 +1,16 @@
+STATUS 200
+HEADER content-type: text/event-stream
+HEADER x-ai-thread-id: thread-1
+---BODY---
+data: {"type":"tool_status","toolName":"list_events","status":"calling"}
+
+data: {"type":"tool_status","toolName":"list_events","status":"done"}
+
+data: {"type":"tool_status","toolName":"list_announcements","status":"calling"}
+
+data: {"type":"tool_status","toolName":"list_announcements","status":"done"}
+
+data: {"type":"chunk","content":"I couldn’t verify that answer against your organization’s data, so I’m not returning it. Please try rephrasing or ask a narrower question."}
+
+data: {"type":"done","threadId":"thread-1","usage":{"inputTokens":21,"outputTokens":4},"cache":{"status":"disabled","bypassReason":"unsupported_surface"}}
+

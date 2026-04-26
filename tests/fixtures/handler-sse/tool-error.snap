@@ -1,0 +1,12 @@
+STATUS 200
+HEADER content-type: text/event-stream
+HEADER x-ai-thread-id: thread-1
+---BODY---
+data: {"type":"tool_status","toolName":"list_events","status":"calling"}
+
+data: {"type":"tool_status","toolName":"list_events","status":"error"}
+
+data: {"type":"chunk","content":"I couldn't fetch events right now."}
+
+data: {"type":"done","threadId":"thread-1","usage":{"inputTokens":21,"outputTokens":4},"cache":{"status":"disabled","bypassReason":"unsupported_surface"}}
+
