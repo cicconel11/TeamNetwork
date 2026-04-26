@@ -27,16 +27,12 @@ import type { loadRouteEntityContext } from "@/lib/ai/route-entity-loaders";
 import {
   clearDraftSession as clearDraftSessionDefault,
   getDraftSession as getDraftSessionDefault,
-  isDraftSessionExpired,
   type DraftSessionRecord,
 } from "@/lib/ai/draft-sessions";
 import { extractRouteEntity } from "@/lib/ai/route-entity";
-import { filterAllowedTools } from "@/lib/ai/access-policy";
-import { AI_TOOL_MAP, type ToolName } from "@/lib/ai/tools/definitions";
 import {
   INTERRUPTED_ASSISTANT_MESSAGE,
 } from "@/lib/ai/assistant-message-display";
-import { sanitizeHistoryMessageForPrompt } from "@/lib/ai/message-safety";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import {
   runTimedStage,
@@ -46,14 +42,8 @@ import {
 } from "@/lib/ai/chat-telemetry";
 import { createSSEStream, SSE_HEADERS } from "@/lib/ai/sse";
 import type { CacheStatus } from "@/lib/ai/sse";
+import { shouldContinueDraftSession } from "../draft-session";
 import {
-  getToolNameForDraftType,
-  inferDraftSessionFromHistory,
-  shouldContinueDraftSession,
-} from "../draft-session";
-import {
-  listPendingEventActionsForThread,
-  resolvePendingEventRevisionAnalysis,
   type PendingEventActionRecord,
   type PendingEventRevisionAnalysis,
 } from "../pending-event-revision";
@@ -61,6 +51,7 @@ import { isToolFirstEligible } from "../pass1-tools";
 import { buildSseResponse } from "../sse-runtime";
 import type { getPass1Tools } from "../pass1-tools";
 import type { StageOutcome, ThreadIdempotencySlice } from "./state";
+import { resolveThreadState } from "./resolve-thread-state";
 
 export interface ThreadIdempotencyStageInput {
   ctx: Extract<AiOrgContext, { ok: true }>;
@@ -123,182 +114,29 @@ export async function runThreadIdempotencyStage(
   let routeEntityContext: Awaited<ReturnType<typeof loadRouteEntityContext>> | null = null;
 
   if (threadId) {
-    const resolution = await runTimedStage(
+    const resolveOutcome = await resolveThreadState({
+      ctx,
+      threadId,
+      rateLimit,
+      requestLogContext,
+      canUseDraftSessions,
       stageTimings,
-      "thread_resolution",
-      async () =>
-        resolveOwnThreadFn(
-          threadId!,
-          ctx.userId,
-          ctx.orgId,
-          ctx.serviceSupabase,
-          { ...requestLogContext, threadId: threadId! },
-        ),
-    );
-    if (!resolution.ok) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { error: resolution.message },
-          { status: resolution.status, headers: rateLimit.headers },
-        ),
-      };
+      attachment,
+      messageSafetyPromptSafeMessage,
+      routing,
+      pass1Tools,
+      resolveOwnThreadFn,
+      getDraftSessionFn,
+      clearDraftSessionFn,
+    });
+    if (!resolveOutcome.ok) {
+      return resolveOutcome;
     }
-    threadMetadata = resolution.thread.metadata;
-
-    if (canUseDraftSessions) {
-      try {
-        activeDraftSession = await getDraftSessionFn(ctx.serviceSupabase, {
-          organizationId: ctx.orgId,
-          userId: ctx.userId,
-          threadId,
-        });
-
-        if (activeDraftSession && isDraftSessionExpired(activeDraftSession)) {
-          try {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
-              organizationId: ctx.orgId,
-              userId: ctx.userId,
-              threadId,
-              pendingActionId: activeDraftSession.pending_action_id,
-            });
-          } catch (error) {
-            aiLog("warn", "ai-chat", "failed to clear expired draft session", {
-              ...requestLogContext,
-              threadId,
-            }, { error });
-          }
-          activeDraftSession = null;
-        }
-
-        if (activeDraftSession) {
-          if (
-            shouldContinueDraftSession(
-              messageSafetyPromptSafeMessage,
-              activeDraftSession,
-              routing,
-            )
-          ) {
-            pass1Tools = filterAllowedTools(
-              [AI_TOOL_MAP[getToolNameForDraftType(activeDraftSession.draft_type) as ToolName]],
-              {
-                role: ctx.role,
-                enterpriseRole: ctx.enterpriseRole,
-              },
-            );
-          } else {
-            try {
-              await clearDraftSessionFn(ctx.serviceSupabase, {
-                organizationId: ctx.orgId,
-                userId: ctx.userId,
-                threadId,
-                pendingActionId: activeDraftSession.pending_action_id,
-              });
-            } catch (error) {
-              aiLog("warn", "ai-chat", "failed to clear abandoned draft session", {
-                ...requestLogContext,
-                threadId,
-              }, { error });
-            }
-            activeDraftSession = null;
-          }
-        }
-      } catch (error) {
-        activeDraftSession = null;
-        aiLog("warn", "ai-chat", "failed to load draft session; continuing without it", {
-          ...requestLogContext,
-          threadId,
-        }, { error });
-      }
-
-      if (!activeDraftSession) {
-        try {
-          const { data: draftHistory, error: draftHistoryError } = await ctx.supabase
-            .from("ai_messages")
-            .select("role, content")
-            .eq("thread_id", threadId)
-            .eq("status", "complete")
-            .order("created_at", { ascending: true })
-            .limit(12);
-
-          if (draftHistoryError) {
-            aiLog("warn", "ai-chat", "failed to load thread history for draft inference", {
-              ...requestLogContext,
-              threadId,
-            }, { error: draftHistoryError });
-          } else {
-            const inferredDraftSession = inferDraftSessionFromHistory({
-              organizationId: ctx.orgId,
-              userId: ctx.userId,
-              threadId,
-              messages: (draftHistory ?? [])
-                .filter(
-                  (row: { role: unknown; content: unknown }): row is { role: "user" | "assistant"; content: string } =>
-                    (row?.role === "user" || row?.role === "assistant") &&
-                    typeof row?.content === "string" &&
-                    row.content.trim().length > 0,
-                )
-                .map((row: { role: "user" | "assistant"; content: string }) => ({
-                  role: row.role,
-                  content:
-                    row.role === "user"
-                      ? sanitizeHistoryMessageForPrompt(row.content).promptSafeMessage
-                      : row.content,
-                })),
-            });
-
-            if (
-              inferredDraftSession &&
-              shouldContinueDraftSession(
-                messageSafetyPromptSafeMessage,
-                inferredDraftSession,
-                routing,
-              )
-            ) {
-              activeDraftSession = inferredDraftSession;
-              pass1Tools = filterAllowedTools(
-                [AI_TOOL_MAP[getToolNameForDraftType(inferredDraftSession.draft_type) as ToolName]],
-                {
-                  role: ctx.role,
-                  enterpriseRole: ctx.enterpriseRole,
-                },
-              );
-            }
-          }
-        } catch (error) {
-          aiLog("warn", "ai-chat", "failed to infer draft session from thread history", {
-            ...requestLogContext,
-            threadId,
-          }, { error });
-        }
-      }
-    }
-
-    if (
-      !attachment &&
-      !activeDraftSession &&
-      ctx.serviceSupabase &&
-      typeof (ctx.serviceSupabase as { from?: unknown }).from === "function"
-    ) {
-      try {
-        activePendingEventActions = await listPendingEventActionsForThread(ctx.serviceSupabase, {
-          organizationId: ctx.orgId,
-          userId: ctx.userId,
-          threadId,
-        });
-        pendingEventRevisionAnalysis = resolvePendingEventRevisionAnalysis(
-          messageSafetyPromptSafeMessage,
-          activePendingEventActions,
-        );
-      } catch (error) {
-        activePendingEventActions = [];
-        pendingEventRevisionAnalysis = { kind: "none" };
-        aiLog("warn", "ai-chat", "failed to load pending event actions; continuing without revision support", {
-          ...requestLogContext,
-          threadId,
-        }, { error });
-      }
-    }
+    threadMetadata = resolveOutcome.value.threadMetadata;
+    activeDraftSession = resolveOutcome.value.activeDraftSession;
+    activePendingEventActions = resolveOutcome.value.activePendingEventActions;
+    pendingEventRevisionAnalysis = resolveOutcome.value.pendingEventRevisionAnalysis;
+    pass1Tools = resolveOutcome.value.pass1Tools;
   } else {
     skipStage(stageTimings, "thread_resolution");
   }
