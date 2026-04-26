@@ -316,6 +316,11 @@ export interface ExecuteToolCallsOptions {
   ) => Promise<ToolExecutionResult>;
 }
 
+function normalizeMaxInflight(maxInflight: number): number {
+  if (!Number.isFinite(maxInflight)) return 1;
+  return Math.max(1, Math.floor(maxInflight));
+}
+
 /**
  * Run N tool calls concurrently, capped at `maxInflight`. Results are returned
  * in input order regardless of completion order. Failures (and unexpected
@@ -330,7 +335,7 @@ export async function executeToolCalls(
   opts: ExecuteToolCallsOptions,
 ): Promise<ToolExecutionResult[]> {
   if (calls.length === 0) return [];
-  const maxInflight = Math.max(1, Math.floor(opts.maxInflight));
+  const maxInflight = normalizeMaxInflight(opts.maxInflight);
   const runOne = opts.executeFn ?? executeToolCall;
 
   const results: ToolExecutionResult[] = new Array(calls.length);
