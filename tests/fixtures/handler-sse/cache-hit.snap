@@ -1,0 +1,8 @@
+STATUS 200
+HEADER content-type: text/event-stream
+HEADER x-ai-thread-id: thread-1
+---BODY---
+data: {"type":"chunk","content":"Cached reply."}
+
+data: {"type":"done","threadId":"thread-1","replayed":true,"cache":{"status":"hit_exact","entryId":"cache-entry-1"}}
+
