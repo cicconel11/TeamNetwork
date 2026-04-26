@@ -164,10 +164,8 @@ export function formatDonationAnalyticsResponse(data: unknown): string | null {
   }
 
   const payload = data as DonationAnalyticsDisplayPayload;
-  const totals = payload.totals;
-  if (!totals || typeof totals !== "object") {
-    return null;
-  }
+  const totals =
+    payload.totals && typeof payload.totals === "object" ? payload.totals : null;
 
   const windowDays =
     typeof payload.window_days === "number" ? payload.window_days : null;
@@ -175,44 +173,46 @@ export function formatDonationAnalyticsResponse(data: unknown): string | null {
     `Donation analytics${windowDays ? ` (${windowDays}-day window)` : ""}`,
   ];
 
-  if (typeof totals.successful_donation_count === "number") {
-    lines.push(`- Successful donations: ${totals.successful_donation_count}`);
-  }
-  if (typeof totals.successful_amount_cents === "number") {
-    lines.push(`- Raised: $${(totals.successful_amount_cents / 100).toFixed(0)}`);
-  }
-  if (typeof totals.average_successful_amount_cents === "number") {
-    lines.push(
-      `- Average successful donation: $${(totals.average_successful_amount_cents / 100).toFixed(0)}`
-    );
-  }
-  if (typeof totals.largest_successful_amount_cents === "number") {
-    lines.push(
-      `- Largest successful donation: $${(totals.largest_successful_amount_cents / 100).toFixed(0)}`
-    );
-  }
-
-  if (totals.status_counts && typeof totals.status_counts === "object") {
-    const statusSummary = [
-      typeof totals.status_counts.succeeded === "number"
-        ? `${totals.status_counts.succeeded} succeeded`
-        : null,
-      typeof totals.status_counts.pending === "number"
-        ? `${totals.status_counts.pending} pending`
-        : null,
-      typeof totals.status_counts.failed === "number"
-        ? `${totals.status_counts.failed} failed`
-        : null,
-    ].filter((value): value is string => Boolean(value));
-
-    if (statusSummary.length > 0) {
-      lines.push(`- Status mix: ${statusSummary.join(" - ")}`);
+  if (totals) {
+    if (typeof totals.successful_donation_count === "number") {
+      lines.push(`- Successful donations: ${totals.successful_donation_count}`);
     }
-  }
+    if (typeof totals.successful_amount_cents === "number") {
+      lines.push(`- Raised: $${(totals.successful_amount_cents / 100).toFixed(0)}`);
+    }
+    if (typeof totals.average_successful_amount_cents === "number") {
+      lines.push(
+        `- Average successful donation: $${(totals.average_successful_amount_cents / 100).toFixed(0)}`
+      );
+    }
+    if (typeof totals.largest_successful_amount_cents === "number") {
+      lines.push(
+        `- Largest successful donation: $${(totals.largest_successful_amount_cents / 100).toFixed(0)}`
+      );
+    }
 
-  const latestSuccessfulDonationAt = formatIsoDate(totals.latest_successful_donation_at);
-  if (latestSuccessfulDonationAt) {
-    lines.push(`- Latest successful donation: ${latestSuccessfulDonationAt}`);
+    if (totals.status_counts && typeof totals.status_counts === "object") {
+      const statusSummary = [
+        typeof totals.status_counts.succeeded === "number"
+          ? `${totals.status_counts.succeeded} succeeded`
+          : null,
+        typeof totals.status_counts.pending === "number"
+          ? `${totals.status_counts.pending} pending`
+          : null,
+        typeof totals.status_counts.failed === "number"
+          ? `${totals.status_counts.failed} failed`
+          : null,
+      ].filter((value): value is string => Boolean(value));
+
+      if (statusSummary.length > 0) {
+        lines.push(`- Status mix: ${statusSummary.join(" - ")}`);
+      }
+    }
+
+    const latestSuccessfulDonationAt = formatIsoDate(totals.latest_successful_donation_at);
+    if (latestSuccessfulDonationAt) {
+      lines.push(`- Latest successful donation: ${latestSuccessfulDonationAt}`);
+    }
   }
 
   const topPurposes = Array.isArray(payload.top_purposes)

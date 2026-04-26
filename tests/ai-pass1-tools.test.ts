@@ -41,6 +41,9 @@ import {
   getPass1Tools,
   getForcedPass1ToolChoice,
   isToolFirstEligible,
+  deriveOrgStatsScope,
+  deriveDonationAnalyticsDimension,
+  deriveForcedPass1ToolArgs,
 } from "../src/app/api/ai/[orgId]/chat/handler/pass1-tools";
 import type { CacheSurface } from "../src/lib/ai/semantic-cache-utils";
 import type { TurnExecutionPolicy } from "../src/lib/ai/turn-execution-policy";
@@ -862,5 +865,88 @@ describe("pattern export coverage", () => {
     // EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN is exported for external use
     // (pending-event-revision); assert it matches a sample.
     assert.ok(EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN.test("create an event for Friday"));
+  });
+});
+
+describe("deriveOrgStatsScope", () => {
+  const cases: Array<[string, string]> = [
+    ["how many active members", "members"],
+    ["how many members do we have", "members"],
+    ["how many alumni", "alumni"],
+    ["count of graduates", "alumni"],
+    ["how many parents", "parents"],
+    ["number of guardians", "parents"],
+    ["how many upcoming events", "events"],
+    ["how many donors", "donations"],
+    ["total donations this year", "donations"],
+    ["org stats overview", "all"],
+    ["snapshot please", "all"],
+  ];
+  for (const [message, expected] of cases) {
+    it(`maps "${message}" → ${expected}`, () => {
+      assert.equal(deriveOrgStatsScope(message), expected);
+    });
+  }
+});
+
+describe("deriveDonationAnalyticsDimension", () => {
+  const cases: Array<[string, string]> = [
+    ["show donation trends by month", "trend"],
+    ["donations over time", "trend"],
+    ["monthly donation breakdown", "trend"],
+    ["what purposes are donors giving to", "top_purposes"],
+    ["donations by category", "top_purposes"],
+    ["status mix of donations", "status_mix"],
+    ["how many failed donations", "status_mix"],
+    ["total donations raised", "totals"],
+    ["largest donation this quarter", "totals"],
+    ["donation analytics", "all"],
+    ["donor performance overview", "all"],
+  ];
+  for (const [message, expected] of cases) {
+    it(`maps "${message}" → ${expected}`, () => {
+      assert.equal(deriveDonationAnalyticsDimension(message), expected);
+    });
+  }
+});
+
+describe("deriveForcedPass1ToolArgs", () => {
+  it("returns scope for get_org_stats when sub-pattern matches", () => {
+    assert.deepEqual(
+      deriveForcedPass1ToolArgs("get_org_stats", "how many active members"),
+      { scope: "members" },
+    );
+  });
+
+  it("returns undefined for get_org_stats when scope is generic", () => {
+    assert.equal(
+      deriveForcedPass1ToolArgs("get_org_stats", "give me the snapshot"),
+      undefined,
+    );
+  });
+
+  it("returns dimension for get_donation_analytics when sub-pattern matches", () => {
+    assert.deepEqual(
+      deriveForcedPass1ToolArgs("get_donation_analytics", "show donation trends by month"),
+      { dimension: "trend" },
+    );
+  });
+
+  it("returns undefined for get_donation_analytics when dimension is generic", () => {
+    assert.equal(
+      deriveForcedPass1ToolArgs("get_donation_analytics", "donation analytics"),
+      undefined,
+    );
+  });
+
+  it("returns undefined for unrelated tools", () => {
+    assert.equal(
+      deriveForcedPass1ToolArgs("list_members", "how many active members"),
+      undefined,
+    );
+    assert.equal(
+      deriveForcedPass1ToolArgs("prepare_event", "create an event for Friday"),
+      undefined,
+    );
   });
 });

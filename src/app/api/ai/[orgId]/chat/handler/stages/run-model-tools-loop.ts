@@ -46,6 +46,9 @@ import { runPass2 } from "./run-pass2";
 import { runGroundingCheck } from "./run-grounding-check";
 import { createToolCallHandler } from "./run-tool-calls";
 
+export const PASS2_ANSWER_NARROWNESS_INSTRUCTION =
+  "Answer narrowness: only mention the specific slice of tool data the user asked about. If they asked for a single number (e.g., 'how many active members'), return one short sentence with that number — do not enumerate other categories. If they asked for a single dimension (e.g., 'donation trends by month'), report only that dimension — do not lead with totals, averages, or top purposes. Mention other slices only when the user explicitly asked for the full picture.";
+
 export interface RunModelToolsLoopInput {
   client: OpenAI;
   systemPrompt: string;
@@ -310,6 +313,7 @@ export async function runModelToolsLoop(
         ? "\n\nSome tool calls failed. Only cite data from successful tool results. Acknowledge any failures honestly — do not fabricate data."
         : "";
       const pass2Instructions = [
+        PASS2_ANSWER_NARROWNESS_INSTRUCTION,
         connectionPass2 ? CONNECTION_PASS2_TEMPLATE : null,
         mentorPass2 ? MENTOR_PASS2_TEMPLATE : null,
         memberRosterPass2 ? MEMBER_LIST_PASS2_INSTRUCTION : null,

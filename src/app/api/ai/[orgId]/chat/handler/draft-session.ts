@@ -233,6 +233,86 @@ export function extractAnnouncementDraftFromHistory(messages: DraftHistoryMessag
   return draft;
 }
 
+
+const ANNOUNCEMENT_REVISION_CUE_PATTERN =
+  /\b(actually|change|update|set|make|switch|rename|edit|correct|fix|should be|should actually be|title|body|audience|pin|pinned|notify|notification)\b/i;
+const ANNOUNCEMENT_TITLE_REVISION_PATTERNS: RegExp[] = [
+  /\b(?:change|update|set|make|rename|correct|fix|edit)\s+(?:the\s+)?title\s+(?:to|as|=|:)\s*["“]?([^"”\n]+?)["”]?\s*(?:[.!\n]|$)/i,
+  /\btitle\s+should\s+(?:be|actually\s+be)\s+["“]?([^"”\n]+?)["”]?\s*(?:[.!\n]|$)/i,
+];
+const ANNOUNCEMENT_BODY_REVISION_PATTERNS: RegExp[] = [
+  /\b(?:change|update|set|make|rewrite|edit)\s+(?:the\s+)?body\s+(?:to|as|=|:)\s*:?\s*["“]?([^"”\n]+?)["”]?\s*(?:[.!\n]|$)/i,
+  /\bbody\s+should\s+(?:be|actually\s+be)\s+["“]?([^"”\n]+?)["”]?\s*(?:[.!\n]|$)/i,
+];
+
+export function extractAnnouncementRevisionOverrides(
+  message: string
+): Record<string, unknown> {
+  const overrides: Record<string, unknown> = {};
+  const fields = extractStructuredFieldMap(message);
+
+  const structuredTitle = getNonEmptyString(fields.title);
+  if (structuredTitle) overrides.title = structuredTitle;
+
+  const structuredBody = getNonEmptyString(fields.body);
+  if (structuredBody) overrides.body = structuredBody;
+
+  const audience = getNonEmptyString(fields.audience);
+  if (
+    audience === "all" ||
+    audience === "members" ||
+    audience === "active_members" ||
+    audience === "alumni" ||
+    audience === "parents" ||
+    audience === "individuals"
+  ) {
+    overrides.audience = audience;
+  }
+
+  const isPinned = normalizeBooleanFlag(
+    getNonEmptyString(fields["pin it"] ?? fields["is pinned"] ?? fields.pinned ?? fields.pin) ?? undefined
+  );
+  if (typeof isPinned === "boolean") overrides.is_pinned = isPinned;
+
+  const sendNotification = normalizeBooleanFlag(
+    getNonEmptyString(
+      fields["send notification"] ??
+        fields.notification ??
+        fields.notify ??
+        fields.email
+    ) ?? undefined
+  );
+  if (typeof sendNotification === "boolean") overrides.send_notification = sendNotification;
+
+  if (!("title" in overrides)) {
+    for (const pattern of ANNOUNCEMENT_TITLE_REVISION_PATTERNS) {
+      const match = message.match(pattern);
+      const candidate = getNonEmptyString(match?.[1]);
+      if (candidate) {
+        overrides.title = candidate;
+        break;
+      }
+    }
+  }
+
+  if (!("body" in overrides)) {
+    for (const pattern of ANNOUNCEMENT_BODY_REVISION_PATTERNS) {
+      const match = message.match(pattern);
+      const candidate = getNonEmptyString(match?.[1]);
+      if (candidate) {
+        overrides.body = candidate;
+        break;
+      }
+    }
+  }
+
+  return overrides;
+}
+
+export function isAnnouncementRevisionMessage(message: string): boolean {
+  return ANNOUNCEMENT_REVISION_CUE_PATTERN.test(message);
+}
+
 export function extractDiscussionDraftFromHistory(messages: DraftHistoryMessage[]): Record<string, unknown> {
   const draft: Record<string, unknown> = {};
 
