@@ -152,6 +152,11 @@ export async function finalizeTurnAudit(input: FinalizeAuditInput): Promise<void
     ? input.runtimeState.auditErrorMessage ?? "scope_refusal:model_refusal_detected"
     : input.runtimeState.auditErrorMessage;
 
+  if (input.runtimeState.timeToFirstEventMs !== undefined) {
+    input.stageTimings.request.time_to_first_event_ms =
+      input.runtimeState.timeToFirstEventMs;
+  }
+
   await input.logAiRequestFn(
     input.ctx.serviceSupabase,
     {
