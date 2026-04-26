@@ -6,6 +6,10 @@ export function formatToolStatusLabel(toolName: string): string {
   switch (toolName) {
     case "list_members":
       return "Looking up members...";
+    case "list_alumni":
+      return "Looking up alumni...";
+    case "list_parents":
+      return "Looking up parents...";
     case "list_events":
       return "Looking up events...";
     case "list_announcements":

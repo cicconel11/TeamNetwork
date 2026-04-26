@@ -93,6 +93,21 @@ const MESSAGE_SAFETY_FALLBACK =
 const SCOPE_REFUSAL_FALLBACK =
   "I can only help with TeamNetwork tasks for your organization — like members, events, announcements, discussions, jobs, donations, or finding the right page. That request is outside what I do.";
 
+/**
+ * Resolve the Pass-1 bypass flag fail-closed: any unrecognized value (or
+ * read error) maps to "off". Bypass is opt-in; never default-on under failure.
+ */
+function resolvePass1BypassMode(): "off" | "shadow" | "on" {
+  try {
+    const raw = (process.env.AI_PASS1_BYPASS ?? "").trim().toLowerCase();
+    if (raw === "on") return "on";
+    if (raw === "shadow") return "shadow";
+    return "off";
+  } catch {
+    return "off";
+  }
+}
+
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const createClientFn = deps.createClient ?? createClient;
   const getAiOrgContextFn = deps.getAiOrgContext ?? getAiOrgContext;
@@ -386,9 +401,17 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     const assistantMessageId = placeholderOutcome.value.assistantMessageId;
 
     // 10–12. Stream SSE response
-    const stream = createSSEStream(async (enqueue, streamSignal) => {
+    const streamStartedAt = Date.now();
+    const stream = createSSEStream(async (rawEnqueue, streamSignal) => {
       let fullContent = "";
       const runtimeState = createTurnRuntimeState();
+      const enqueue: typeof rawEnqueue = (event) => {
+        if (runtimeState.timeToFirstEventMs === undefined) {
+          runtimeState.timeToFirstEventMs = Date.now() - streamStartedAt;
+        }
+        rawEnqueue(event);
+      };
+      const pass1BypassMode = resolvePass1BypassMode();
       const safetyGateDisabled = process.env.DISABLE_SAFETY_GATE === "1";
       const safetyGateShadow = process.env.SAFETY_GATE_SHADOW === "1";
       const ragGroundingDisabled = process.env.DISABLE_RAG_GROUNDING === "1";
@@ -627,6 +650,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           canUseDraftSessions,
           executionPolicy,
           requestLogContext,
+          pass1BypassMode,
+          pendingEventRevisionAnalysis,
+          pendingConnectionDisambiguation,
           auditToolCalls,
           successfulToolResults,
           runtimeState,

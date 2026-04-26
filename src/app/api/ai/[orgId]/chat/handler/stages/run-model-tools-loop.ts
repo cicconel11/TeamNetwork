@@ -35,7 +35,9 @@ import {
   resolveHideDonorNamesPreference,
   resolveOrgSlug,
 } from "../formatters/index";
-import { MEMBER_ROSTER_PROMPT_PATTERN } from "../pass1-tools";
+import { MEMBER_ROSTER_PROMPT_PATTERN, canBypassPass1 } from "../pass1-tools";
+import { runPass1Bypass } from "./run-pass1-bypass";
+import type { PendingEventRevisionAnalysis } from "../pending-event-revision";
 import {
   MEMBER_LIST_PASS2_INSTRUCTION,
   MENTOR_PASS2_TEMPLATE,
@@ -79,6 +81,13 @@ export interface RunModelToolsLoopInput {
   canUseDraftSessions: boolean;
   executionPolicy: TurnExecutionPolicy;
   requestLogContext: AiLogContext;
+
+  /** Pass-1 bypass flag mode (env-snapshot). */
+  pass1BypassMode: "off" | "shadow" | "on";
+  /** Pending-event-revision analysis (drives bypass suppression). */
+  pendingEventRevisionAnalysis: PendingEventRevisionAnalysis | null;
+  /** True when the latest user message is a connection-disambiguation reply. */
+  pendingConnectionDisambiguation: boolean;
 
   /** Mutable accumulators owned by orchestrator (read after loop returns). */
   auditToolCalls: Array<{ name: string; args: Record<string, unknown> }>;
@@ -171,36 +180,96 @@ export async function runModelToolsLoop(
     saveDraftSessionFn: input.saveDraftSessionFn,
   });
 
-  const pass1Outcome = await runPass1({
-    client: input.client,
-    systemPrompt: input.effectivePass1SystemPrompt,
-    messages: input.contextMessages,
-    tools: input.pass1Tools,
-    toolChoice: input.pass1ToolChoice,
-    composeResponseFn: input.composeResponseFn,
-    stageTimings: input.stageTimings,
-    streamSignal: input.streamSignal,
-    threadId: input.threadId,
-    requestLogContext: input.requestLogContext,
-    runtimeState: input.runtimeState,
-    emitTimeoutError: input.emitTimeoutError,
-    onUsage: input.recordUsage,
-    onChunk: (content) => {
-      pass1BufferedContent += content;
-    },
-    onError: (event) => {
-      input.runtimeState.auditErrorMessage = event.message;
-      input.enqueue(event);
-    },
-    onToolCall,
-  });
-
-  if (input.isTerminateTurn() || pass1Outcome !== "completed") {
-    if (!input.runtimeState.toolCallMade) {
-      skipStage(input.stageTimings, "tools");
-    }
-    return { fullContent, completed: false };
+  const forcedFirstTool =
+    input.pass1Tools && input.pass1Tools.length === 1 && input.pass1ToolChoice
+      ? input.pass1Tools[0]
+      : null;
+  const forcedSingleToolName =
+    forcedFirstTool && "function" in forcedFirstTool
+      ? forcedFirstTool.function.name
+      : null;
+  if (forcedSingleToolName) {
+    input.enqueue({
+      type: "tool_status",
+      toolName: forcedSingleToolName,
+      status: "calling",
+    });
+    input.runtimeState.eagerStatusEmittedFor.add(forcedSingleToolName);
   }
+
+  const bypassEligible =
+    forcedSingleToolName != null &&
+    canBypassPass1({
+      pass1Tools: input.pass1Tools,
+      pass1ToolChoice: input.pass1ToolChoice,
+      activeDraftSession: input.getActiveDraftSession(),
+      pendingEventRevisionAnalysis: input.pendingEventRevisionAnalysis,
+      pendingConnectionDisambiguation: input.pendingConnectionDisambiguation,
+      attachment: input.attachment,
+      executionPolicy: input.executionPolicy,
+    });
+
+  const usingBypass = bypassEligible && input.pass1BypassMode === "on";
+
+  if (!usingBypass) {
+    input.stageTimings.request.pass1_path =
+      bypassEligible && input.pass1BypassMode === "shadow"
+        ? "model_shadow_bypass_eligible"
+        : "model";
+  }
+
+  if (usingBypass) {
+    const bypassOutcome = await runPass1Bypass({
+      toolName: forcedSingleToolName!,
+      message: input.message,
+      requestId: input.requestId,
+      stageTimings: input.stageTimings,
+      onToolCall,
+    });
+
+    if (input.isTerminateTurn() || bypassOutcome.callOutcome === "stop") {
+      if (!input.runtimeState.toolCallMade) {
+        skipStage(input.stageTimings, "tools");
+      }
+      input.runtimeState.eagerStatusEmittedFor.clear();
+      return { fullContent, completed: false };
+    }
+  } else {
+    const pass1Outcome = await runPass1({
+      client: input.client,
+      systemPrompt: input.effectivePass1SystemPrompt,
+      messages: input.contextMessages,
+      tools: input.pass1Tools,
+      toolChoice: input.pass1ToolChoice,
+      composeResponseFn: input.composeResponseFn,
+      stageTimings: input.stageTimings,
+      streamSignal: input.streamSignal,
+      threadId: input.threadId,
+      requestLogContext: input.requestLogContext,
+      runtimeState: input.runtimeState,
+      emitTimeoutError: input.emitTimeoutError,
+      onUsage: input.recordUsage,
+      onChunk: (content) => {
+        pass1BufferedContent += content;
+      },
+      onError: (event) => {
+        input.runtimeState.auditErrorMessage = event.message;
+        input.enqueue(event);
+      },
+      onToolCall,
+    });
+
+    if (input.isTerminateTurn() || pass1Outcome !== "completed") {
+      if (!input.runtimeState.toolCallMade) {
+        skipStage(input.stageTimings, "tools");
+      }
+      input.runtimeState.eagerStatusEmittedFor.clear();
+      return { fullContent, completed: false };
+    }
+  }
+
+  // Clear eager-emit set so subsequent tool-loop iterations re-emit.
+  input.runtimeState.eagerStatusEmittedFor.clear();
 
   if (!input.runtimeState.toolCallMade) {
     skipStage(input.stageTimings, "tools");

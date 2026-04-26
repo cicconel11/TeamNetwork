@@ -254,11 +254,13 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
     if (syntheticToolResult) {
       result = syntheticToolResult;
     } else {
-      input.enqueue({
-        type: "tool_status",
-        toolName: toolEvent.name,
-        status: "calling",
-      });
+      if (!input.runtimeState.eagerStatusEmittedFor.has(toolEvent.name)) {
+        input.enqueue({
+          type: "tool_status",
+          toolName: toolEvent.name,
+          status: "calling",
+        });
+      }
 
       const activePendingActionId =
         toolEvent.name.startsWith("prepare_") &&
