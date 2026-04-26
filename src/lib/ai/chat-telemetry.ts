@@ -43,6 +43,12 @@ export type AiAuditRetrievalReason =
 
 export type AiToolAuthMode = "reused_verified_admin" | "db_lookup";
 
+export type AiPass1Path =
+  | "model"
+  | "model_shadow_bypass_eligible"
+  | "bypass_derived"
+  | "bypass_zero_arg";
+
 export interface AiAuditStageSummary {
   status: AiAuditStageStatus;
   duration_ms: number;
@@ -86,6 +92,8 @@ export interface AiAuditStageTimings {
     requestId: string;
     outcome: string;
     total_duration_ms: number;
+    pass1_path?: AiPass1Path;
+    time_to_first_event_ms?: number;
   };
   retrieval: {
     decision: AiAuditRetrievalDecision;
@@ -224,6 +232,7 @@ export function finalizeStageTimings(
   return {
     ...stageTimings,
     request: {
+      ...stageTimings.request,
       requestId: stageTimings.request.requestId,
       outcome,
       total_duration_ms: totalDurationMs,
