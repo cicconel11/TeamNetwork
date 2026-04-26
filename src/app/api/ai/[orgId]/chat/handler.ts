@@ -2,9 +2,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
-import { sendMessageSchema } from "@/lib/schemas";
-import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { validateJson, validationErrorResponse, ValidationError } from "@/lib/security/validation";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { buildPromptContext } from "@/lib/ai/context-builder";
 import {
@@ -13,7 +10,7 @@ import {
   type ToolResultMessage,
 } from "@/lib/ai/response-composer";
 import { logAiRequest } from "@/lib/ai/audit";
-import { createSSEStream, SSE_HEADERS, type CacheStatus, type SSEEvent } from "@/lib/ai/sse";
+import { createSSEStream, SSE_HEADERS, type SSEEvent } from "@/lib/ai/sse";
 import {
   AI_TOOL_MAP,
   type ToolName,
@@ -23,23 +20,17 @@ import {
   getToolAuthorizationMode,
   type ToolExecutionAuthorization,
 } from "@/lib/ai/tools/executor";
-import { filterAllowedTools } from "@/lib/ai/access-policy";
-import { resolveOwnThread, type AiThreadMetadata } from "@/lib/ai/thread-resolver";
+import { resolveOwnThread } from "@/lib/ai/thread-resolver";
 import {
-  checkCacheEligibility,
   type CacheSurface,
 } from "@/lib/ai/semantic-cache-utils";
 import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
 import type { RagChunkInput } from "@/lib/ai/context-builder";
-import { resolveSurfaceRouting } from "@/lib/ai/intent-router";
 import {
   buildTurnExecutionPolicy,
-  type TurnExecutionPolicy,
 } from "@/lib/ai/turn-execution-policy";
 import {
   extractCurrentMemberRouteId,
-  extractRouteEntity,
-  type RouteEntityContext,
 } from "@/lib/ai/route-entity";
 import { loadRouteEntityContext } from "@/lib/ai/route-entity-loaders";
 import {
@@ -55,20 +46,15 @@ import {
 } from "@/lib/ai/grounding/rag";
 import { trackOpsEventServer } from "@/lib/analytics/events-server";
 import {
-  assessAiMessageSafety,
   sanitizeHistoryMessageForPrompt,
 } from "@/lib/ai/message-safety";
 import {
   finalizeAssistantMessage,
-  INTERRUPTED_ASSISTANT_MESSAGE,
 } from "@/lib/ai/assistant-message-display";
 import {
   clearDraftSession,
   getDraftSession,
-  isDraftSessionExpired,
   saveDraftSession,
-  supportsDraftSessionsStore,
-  type DraftSessionRecord,
 } from "@/lib/ai/draft-sessions";
 import {
   createStageAbortSignal,
@@ -85,7 +71,7 @@ import {
   addToolCallTiming,
   finalizeStageTimings,
 } from "@/lib/ai/chat-telemetry";
-import { aiLog, type AiLogContext } from "@/lib/ai/logger";
+import { aiLog } from "@/lib/ai/logger";
 import {
   getNonEmptyString,
   hasPendingConnectionDisambiguation,
@@ -99,20 +85,13 @@ import {
   CONNECTION_PASS2_TEMPLATE,
 } from "./handler/formatters/index";
 import {
-  type ChatAttachment,
-} from "./handler/shared";
-import {
   MEMBER_ROSTER_PROMPT_PATTERN,
   getForcedPass1ToolChoice,
-  getPass1Tools,
-  isToolFirstEligible,
 } from "./handler/pass1-tools";
 import {
   buildDraftSessionContextMessage,
   getToolNameForDraftType,
-  inferDraftSessionFromHistory,
   mergeDraftPayload,
-  shouldContinueDraftSession,
 } from "./handler/draft-session";
 import {
   buildDiscussionReplyClarificationPayload,
@@ -125,14 +104,9 @@ import {
   buildPrepareEventArgsFromPendingAction,
   getBatchPendingActionsFromToolData,
   getPendingActionFromToolData,
-  listPendingEventActionsForThread,
-  resolvePendingEventRevisionAnalysis,
   SUPPORTED_EVENT_TYPE_LABELS,
-  type PendingEventActionRecord,
-  type PendingEventRevisionAnalysis,
 } from "./handler/pending-event-revision";
 import {
-  checkCache,
   retrieveRag,
   skipRagStage,
   writeCache,
@@ -158,35 +132,18 @@ export {
   formatSuggestConnectionsResponse,
 } from "./handler/formatters/index";
 export type { ChatAttachment } from "./handler/shared";
-
-export interface ChatRouteDeps {
-  createClient?: typeof createClient;
-  getAiOrgContext?: typeof getAiOrgContext;
-  buildPromptContext?: typeof buildPromptContext;
-  createZaiClient?: typeof createZaiClient;
-  getZaiModel?: typeof getZaiModel;
-  composeResponse?: typeof composeResponse;
-  logAiRequest?: typeof logAiRequest;
-  resolveOwnThread?: typeof resolveOwnThread;
-  retrieveRelevantChunks?: typeof retrieveRelevantChunks;
-  executeToolCall?: typeof executeToolCall;
-  buildTurnExecutionPolicy?: typeof buildTurnExecutionPolicy;
-  verifyToolBackedResponse?: typeof verifyToolBackedResponse;
-  classifySafety?: typeof classifySafety;
-  verifyRagGrounding?: typeof verifyRagGrounding;
-  trackOpsEventServer?: typeof trackOpsEventServer;
-  getDraftSession?: typeof getDraftSession;
-  saveDraftSession?: typeof saveDraftSession;
-  clearDraftSession?: typeof clearDraftSession;
-  loadRouteEntityContext?: typeof loadRouteEntityContext;
-}
-
-const DEFAULT_AI_ORG_RATE_LIMIT = 60;
-
-function getAiOrgRateLimit(): number {
-  const parsed = Number.parseInt(process.env.AI_ORG_RATE_LIMIT ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AI_ORG_RATE_LIMIT;
-}
+import type { ChatRouteDeps } from "./handler-types";
+export type { ChatRouteDeps } from "./handler-types";
+import { runAuthContextStage } from "./handler/stages/auth-context";
+import { runValidatePolicyStage } from "./handler/stages/validate-policy";
+import { runThreadIdempotencyStage } from "./handler/stages/thread-idempotency";
+import {
+  runPreInitCacheLookup,
+  runPostInitCacheLookup,
+  serveCacheHit,
+} from "./handler/stages/cache-rag-stage";
+import { runInitChatRpcStage } from "./handler/stages/init-chat-rpc";
+import { runInitChatHistoryStage } from "./handler/stages/init-chat-history";
 
 const MESSAGE_SAFETY_FALLBACK =
   "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
@@ -227,577 +184,129 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     const startTime = Date.now();
     const requestId = crypto.randomUUID();
     const stageTimings = createStageTimings(requestId);
-    const cacheDisabled = process.env.DISABLE_AI_CACHE === "true";
-    const baseLogContext: AiLogContext = { requestId, orgId };
-    // 1. Rate limit — get user first to allow per-user limiting
-    const supabase = await createClientFn();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
-    const rateLimit = checkRateLimit(request, {
+    // Stage 1: auth + org context
+    const authOutcome = await runAuthContextStage({
+      request,
       orgId,
-      userId: user?.id ?? null,
-      feature: "ai-chat",
-      limitPerIp: 30,
-      limitPerUser: 20,
-      limitPerOrg: getAiOrgRateLimit(),
+      requestId,
+      stageTimings,
+      createClientFn,
+      getAiOrgContextFn,
+      draftSessionDeps: {
+        getDraftSession: deps.getDraftSession,
+        saveDraftSession: deps.saveDraftSession,
+        clearDraftSession: deps.clearDraftSession,
+      },
     });
-    if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
+    if (!authOutcome.ok) return authOutcome.response;
+    const {
+      ctx,
+      rateLimit,
+      canUseDraftSessions,
+      requestLogContext,
+      cacheDisabled,
+    } = authOutcome.value;
 
-    // 2. Auth — validate role (admins always allowed; members/alumni gated by
-    // AI_MEMBER_ACCESS_KILL env var inside getAiOrgContext)
-    const ctx = await runTimedStage(stageTimings, "auth_org_context", async () =>
-      getAiOrgContextFn(
-        orgId,
-        user,
-        rateLimit,
-        { supabase, logContext: baseLogContext },
-        { allowedRoles: ["admin", "active_member", "alumni"] },
-      )
-    );
-    if (!ctx.ok) return ctx.response;
-    const canUseDraftSessions =
-      supportsDraftSessionsStore(ctx.serviceSupabase) ||
-      Boolean(deps.getDraftSession || deps.saveDraftSession || deps.clearDraftSession);
-    const requestLogContext: AiLogContext = {
-      ...baseLogContext,
-      userId: ctx.userId,
-    };
+    // Stage 2: validate body + build execution policy
+    const policyOutcome = await runValidatePolicyStage({
+      request,
+      ctx,
+      rateLimit,
+      cacheDisabled,
+      stageTimings,
+      buildTurnExecutionPolicyFn,
+    });
+    if (!policyOutcome.ok) return policyOutcome.response;
 
-    // 3. Validate body and build policy
-    let validatedBody: ReturnType<typeof sendMessageSchema.parse> extends infer T ? T : never;
-    let message = "";
-    let surface: typeof validatedBody.surface = "general";
-    let existingThreadId: string | undefined;
-    let idempotencyKey = "";
-    let currentPath: string | undefined;
-    let attachment: ChatAttachment | undefined;
-    let messageSafety!: ReturnType<typeof assessAiMessageSafety>;
-    let routing!: ReturnType<typeof resolveSurfaceRouting>;
-    let effectiveSurface!: CacheSurface;
-    let resolvedIntent!: ReturnType<typeof resolveSurfaceRouting>["intent"];
-    let resolvedIntentType!: ReturnType<typeof resolveSurfaceRouting>["intentType"];
-    let executionPolicy!: TurnExecutionPolicy;
-    let usesSharedStaticContext = false;
-    let pass1Tools: ReturnType<typeof getPass1Tools>;
-    let activeDraftSession: DraftSessionRecord | null = null;
-    let routeEntityContext: RouteEntityContext | null = null;
-    let activePendingEventActions: PendingEventActionRecord[] = [];
-    let pendingEventRevisionAnalysis: PendingEventRevisionAnalysis = { kind: "none" };
-    let cacheStatus: CacheStatus;
-    let cacheEntryId: string | undefined;
-    let cacheBypassReason: string | undefined;
-
-    try {
-      await runTimedStage(stageTimings, "request_validation_policy", async () => {
-        validatedBody = await validateJson(request, sendMessageSchema);
-        ({
-          message,
-          surface,
-          threadId: existingThreadId,
-          idempotencyKey,
-          currentPath,
-          attachment,
-        } = validatedBody);
-        messageSafety = assessAiMessageSafety(message);
-        routing = resolveSurfaceRouting(messageSafety.promptSafeMessage, surface);
-        effectiveSurface = routing.effectiveSurface as CacheSurface;
-        resolvedIntent = routing.intent;
-        resolvedIntentType = routing.intentType;
-
-        const eligibility = checkCacheEligibility({
-          message: messageSafety.promptSafeMessage,
-          threadId: existingThreadId,
-          surface: effectiveSurface,
-          bypassCache: validatedBody.bypassCache,
-        });
-
-        executionPolicy = buildTurnExecutionPolicyFn({
-          message: messageSafety.promptSafeMessage,
-          threadId: existingThreadId,
-          requestedSurface: surface,
-          routing,
-          cacheEligibility: eligibility,
-        });
-        usesSharedStaticContext =
-          executionPolicy.contextPolicy === "shared_static";
-        stageTimings.retrieval = {
-          decision: executionPolicy.retrieval.mode,
-          reason: executionPolicy.retrieval.reason,
-        };
-
-        cacheStatus = cacheDisabled
-          ? "disabled"
-          : validatedBody.bypassCache
-            ? "bypass"
-            : "ineligible";
-        cacheEntryId = undefined;
-        cacheBypassReason = undefined;
-
-        if (cacheDisabled && executionPolicy.cachePolicy === "lookup_exact") {
-          cacheStatus = "disabled";
-          cacheBypassReason = "disabled_via_env";
-        } else if (executionPolicy.cachePolicy === "skip") {
-          cacheBypassReason =
-            executionPolicy.profile === "casual"
-              ? "casual_turn"
-              : executionPolicy.profile === "out_of_scope"
-                ? "out_of_scope_request"
-                : executionPolicy.profile === "out_of_scope_unrelated"
-                  ? "scope_refusal"
-                  : eligibility.eligible
-                    ? executionPolicy.reasons[0]
-                    : eligibility.reason;
-        } else if (!eligibility.eligible) {
-          cacheBypassReason = eligibility.reason;
-        }
-
-        pass1Tools = getPass1Tools(
-          messageSafety.promptSafeMessage,
-          effectiveSurface,
-          executionPolicy.toolPolicy,
-          executionPolicy.intentType,
-          attachment,
-          currentPath,
-          Boolean(ctx.enterpriseId),
-          ctx.enterpriseRole,
-        );
-        pass1Tools = filterAllowedTools(pass1Tools, {
-          role: ctx.role,
-          enterpriseRole: ctx.enterpriseRole,
-        });
-      });
-    } catch (err) {
-      if (err instanceof ValidationError) {
-        return validationErrorResponse(err);
-      }
-      return NextResponse.json(
-        { error: "Invalid JSON" },
-        { status: 400, headers: rateLimit.headers }
-      );
-    }
+    const {
+      message,
+      surface,
+      existingThreadId,
+      idempotencyKey,
+      currentPath,
+      attachment,
+      messageSafety,
+      routing,
+      effectiveSurface,
+      resolvedIntent,
+      resolvedIntentType,
+      executionPolicy,
+      usesSharedStaticContext,
+    } = policyOutcome.value;
+    let { pass1Tools, cacheStatus, cacheEntryId, cacheBypassReason } =
+      policyOutcome.value;
 
     const requestNow = new Date().toISOString();
     const requestTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
     const skipRagRetrieval = executionPolicy.retrieval.mode === "skip";
-    let usesToolFirstContext =
-      !usesSharedStaticContext &&
-      executionPolicy.retrieval.reason === "tool_only_structured_query" &&
-      isToolFirstEligible(pass1Tools);
 
-    // 4. Validate provided thread ownership before any cleanup or writes
-    let threadId = existingThreadId;
-    let threadMetadata: AiThreadMetadata = {};
-    if (threadId) {
-      const resolution = await runTimedStage(
-        stageTimings,
-        "thread_resolution",
-        async () =>
-          resolveOwnThreadFn(
-            threadId!,
-            ctx.userId,
-            ctx.orgId,
-            ctx.serviceSupabase,
-            { ...requestLogContext, threadId: threadId! }
-          )
-      );
-      if (!resolution.ok) {
-        return NextResponse.json(
-          { error: resolution.message },
-          { status: resolution.status, headers: rateLimit.headers }
-        );
-      }
-      threadMetadata = resolution.thread.metadata;
-
-      if (canUseDraftSessions) {
-        try {
-          activeDraftSession = await getDraftSessionFn(ctx.serviceSupabase, {
-            organizationId: ctx.orgId,
-            userId: ctx.userId,
-            threadId,
-          });
-
-          if (activeDraftSession && isDraftSessionExpired(activeDraftSession)) {
-            try {
-              await clearDraftSessionFn(ctx.serviceSupabase, {
-                organizationId: ctx.orgId,
-                userId: ctx.userId,
-                threadId,
-                pendingActionId: activeDraftSession.pending_action_id,
-              });
-            } catch (error) {
-              aiLog("warn", "ai-chat", "failed to clear expired draft session", {
-                ...requestLogContext,
-                threadId,
-              }, { error });
-            }
-            activeDraftSession = null;
-          }
-
-          if (activeDraftSession) {
-            if (
-              shouldContinueDraftSession(
-                messageSafety.promptSafeMessage,
-                activeDraftSession,
-                routing
-              )
-            ) {
-              pass1Tools = filterAllowedTools(
-                [AI_TOOL_MAP[getToolNameForDraftType(activeDraftSession.draft_type)]],
-                {
-                  role: ctx.role,
-                  enterpriseRole: ctx.enterpriseRole,
-                },
-              );
-            } else {
-              try {
-                await clearDraftSessionFn(ctx.serviceSupabase, {
-                  organizationId: ctx.orgId,
-                  userId: ctx.userId,
-                  threadId,
-                  pendingActionId: activeDraftSession.pending_action_id,
-                });
-              } catch (error) {
-                aiLog("warn", "ai-chat", "failed to clear abandoned draft session", {
-                  ...requestLogContext,
-                  threadId,
-                }, { error });
-              }
-              activeDraftSession = null;
-            }
-          }
-        } catch (error) {
-          activeDraftSession = null;
-          aiLog("warn", "ai-chat", "failed to load draft session; continuing without it", {
-            ...requestLogContext,
-            threadId,
-          }, { error });
-        }
-
-        if (!activeDraftSession) {
-          try {
-            const { data: draftHistory, error: draftHistoryError } = await ctx.supabase
-              .from("ai_messages")
-              .select("role, content")
-              .eq("thread_id", threadId)
-              .eq("status", "complete")
-              .order("created_at", { ascending: true })
-              .limit(12);
-
-            if (draftHistoryError) {
-              aiLog("warn", "ai-chat", "failed to load thread history for draft inference", {
-                ...requestLogContext,
-                threadId,
-              }, { error: draftHistoryError });
-            } else {
-              const inferredDraftSession = inferDraftSessionFromHistory({
-                organizationId: ctx.orgId,
-                userId: ctx.userId,
-                threadId,
-                messages: (draftHistory ?? [])
-                  .filter(
-                    (row: any): row is { role: "user" | "assistant"; content: string } =>
-                      (row?.role === "user" || row?.role === "assistant") &&
-                      typeof row?.content === "string" &&
-                      row.content.trim().length > 0
-                  )
-                  .map((row: { role: "user" | "assistant"; content: string }) => ({
-                    role: row.role,
-                    content:
-                      row.role === "user"
-                        ? sanitizeHistoryMessageForPrompt(row.content).promptSafeMessage
-                        : row.content,
-                  })),
-              });
-
-              if (
-                inferredDraftSession &&
-                shouldContinueDraftSession(
-                  messageSafety.promptSafeMessage,
-                  inferredDraftSession,
-                  routing
-                )
-              ) {
-                activeDraftSession = inferredDraftSession;
-                pass1Tools = filterAllowedTools(
-                  [AI_TOOL_MAP[getToolNameForDraftType(inferredDraftSession.draft_type)]],
-                  {
-                    role: ctx.role,
-                    enterpriseRole: ctx.enterpriseRole,
-                  },
-                );
-              }
-            }
-          } catch (error) {
-            aiLog("warn", "ai-chat", "failed to infer draft session from thread history", {
-              ...requestLogContext,
-              threadId,
-            }, { error });
-          }
-        }
-      }
-
-      if (
-        !attachment &&
-        !activeDraftSession &&
-        ctx.serviceSupabase &&
-        typeof (ctx.serviceSupabase as { from?: unknown }).from === "function"
-      ) {
-        try {
-          activePendingEventActions = await listPendingEventActionsForThread(ctx.serviceSupabase, {
-            organizationId: ctx.orgId,
-            userId: ctx.userId,
-            threadId,
-          });
-          pendingEventRevisionAnalysis = resolvePendingEventRevisionAnalysis(
-            messageSafety.promptSafeMessage,
-            activePendingEventActions
-          );
-        } catch (error) {
-          activePendingEventActions = [];
-          pendingEventRevisionAnalysis = { kind: "none" };
-          aiLog("warn", "ai-chat", "failed to load pending event actions; continuing without revision support", {
-            ...requestLogContext,
-            threadId,
-          }, { error });
-        }
-      }
-    } else {
-      skipStage(stageTimings, "thread_resolution");
-    }
-
-    usesToolFirstContext =
-      !usesSharedStaticContext &&
-      executionPolicy.retrieval.reason === "tool_only_structured_query" &&
-      isToolFirstEligible(pass1Tools);
-
-    const routeEntityRef = extractRouteEntity(currentPath);
-    if (routeEntityRef) {
-      try {
-        routeEntityContext = await loadRouteEntityContextFn({
-          supabase: ctx.supabase as any,
-          organizationId: ctx.orgId,
-          currentPath,
-          routeEntity: routeEntityRef,
-        });
-        if (!routeEntityContext) {
-          aiLog("warn", "ai-chat", "route entity context omitted", requestLogContext, {
-            currentPath,
-            routeEntityKind: routeEntityRef.kind,
-          });
-        }
-      } catch (error) {
-        aiLog("error", "ai-chat", "route entity resolution failed", requestLogContext, {
-          error,
-          currentPath,
-          routeEntityKind: routeEntityRef.kind,
-        });
-        if (routeEntityRef.kind === "discussion_thread") {
-          return NextResponse.json(
-            { error: "Failed to resolve the current discussion thread" },
-            { status: 500, headers: rateLimit.headers }
-          );
-        }
-      }
-    }
-
-    // 5. Abandoned stream cleanup (5-min threshold)
-    if (existingThreadId) {
-      skipStage(stageTimings, "abandoned_stream_cleanup");
-      void ctx.supabase
-        .from("ai_messages")
-        .update({ status: "error", content: INTERRUPTED_ASSISTANT_MESSAGE })
-        .eq("thread_id", existingThreadId)
-        .eq("role", "assistant")
-        .in("status", ["pending", "streaming"])
-        .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString())
-        .then(({ error: cleanupError }: { error: unknown }) => {
-          if (cleanupError) {
-            aiLog("error", "ai-chat", "abandoned stream cleanup failed", {
-              ...requestLogContext,
-              threadId: existingThreadId,
-            }, { error: cleanupError });
-          }
-        })
-        .catch((cleanupError: unknown) => {
-          aiLog("error", "ai-chat", "abandoned stream cleanup failed", {
-            ...requestLogContext,
-            threadId: existingThreadId,
-          }, { error: cleanupError });
-        });
-    } else {
-      skipStage(stageTimings, "abandoned_stream_cleanup");
-    }
-
-    // 6. Idempotency check — look up by idempotency_key
-    const { data: existingMsg, error: idempError } = await runTimedStage(
+    // Stage 3: thread resolution + draft + route entity + abandoned cleanup + idempotency
+    const threadOutcome = await runThreadIdempotencyStage({
+      ctx,
+      rateLimit,
+      requestLogContext,
+      canUseDraftSessions,
       stageTimings,
-      "idempotency_lookup",
-      async () =>
-        ctx.supabase
-          .from("ai_messages")
-          .select("id, status, thread_id, created_at")
-          .eq("idempotency_key", idempotencyKey)
-          .maybeSingle()
-    );
+      existingThreadId,
+      idempotencyKey,
+      currentPath,
+      attachment,
+      messageSafetyPromptSafeMessage: messageSafety.promptSafeMessage,
+      routing,
+      usesSharedStaticContext,
+      retrievalReason: executionPolicy.retrieval.reason,
+      pass1Tools,
+      cacheStatus,
+      cacheBypassReason,
+      resolveOwnThreadFn,
+      loadRouteEntityContextFn,
+      getDraftSessionFn,
+      clearDraftSessionFn,
+    });
+    if (!threadOutcome.ok) return threadOutcome.response;
+    let threadId: string | undefined = threadOutcome.value.threadId;
+    const threadMetadata = threadOutcome.value.threadMetadata;
+    let activeDraftSession = threadOutcome.value.activeDraftSession;
+    const activePendingEventActions = threadOutcome.value.activePendingEventActions;
+    const pendingEventRevisionAnalysis = threadOutcome.value.pendingEventRevisionAnalysis;
+    const routeEntityContext = threadOutcome.value.routeEntityContext;
+    pass1Tools = threadOutcome.value.pass1Tools;
+    const usesToolFirstContext = threadOutcome.value.usesToolFirstContext;
 
-    if (idempError) {
-      aiLog("error", "ai-chat", "idempotency check failed", requestLogContext, {
-        error: idempError,
-      });
-      return NextResponse.json({ error: "Failed to check message idempotency" }, { status: 500 });
-    }
-
-    if (existingMsg) {
-      if (existingMsg.status === "complete") {
-        stageTimings.retrieval = {
-          decision: "skip",
-          reason: "cache_hit",
-        };
-        skipRemainingStages(stageTimings, "cache_lookup");
-
-        // Find the assistant reply that immediately follows the user message with this idempotency key
-        const { data: assistantReplay, error: assistantReplayError } = await ctx.supabase
-          .from("ai_messages")
-          .select("content")
-          .eq("thread_id", existingMsg.thread_id)
-          .eq("role", "assistant")
-          .eq("status", "complete")
-          .gt("created_at", existingMsg.created_at)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        if (assistantReplayError) {
-          aiLog("error", "ai-chat", "idempotency replay lookup failed", {
-            ...requestLogContext,
-            threadId: existingMsg.thread_id,
-          }, { error: assistantReplayError });
-          return NextResponse.json(
-            { error: "Failed to replay completed response" },
-            { status: 500, headers: rateLimit.headers }
-          );
-        }
-
-        if (!assistantReplay?.content) {
-          return NextResponse.json(
-            { error: "Request already in progress", threadId: existingMsg.thread_id },
-            { status: 409, headers: rateLimit.headers }
-          );
-        }
-
-        return buildSseResponse(
-          createSSEStream(async (enqueue) => {
-            enqueue({ type: "chunk", content: assistantReplay.content });
-            enqueue({
-              type: "done",
-              threadId: existingMsg.thread_id,
-              replayed: true,
-              cache: {
-                status: cacheStatus,
-                ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
-              },
-            });
-          }),
-          { ...SSE_HEADERS, ...rateLimit.headers },
-          existingMsg.thread_id
-        );
-      }
-      return NextResponse.json(
-        { error: "Request already in progress", threadId: existingMsg.thread_id },
-        { status: 409, headers: rateLimit.headers }
-      );
-    }
-
-    let preInitCacheHit:
-      | {
-          id: string;
-          responseContent: string;
-        }
-      | undefined;
-    let preInitCacheLookupPerformed = false;
-
-    if (
-      !cacheDisabled &&
-      executionPolicy.cachePolicy === "lookup_exact" &&
-      !existingThreadId &&
-      messageSafety.riskLevel === "none"
-    ) {
-      preInitCacheLookupPerformed = true;
-      const cacheResult = await checkCache({
-        message: messageSafety.promptSafeMessage,
-        orgId: ctx.orgId,
-        role: ctx.role,
-        surface: effectiveSurface,
-        supabase: ctx.serviceSupabase,
-        stageTimings,
-        logContext: requestLogContext,
-      });
-
-      if (cacheResult.status === "hit") {
-        preInitCacheHit = {
-          id: cacheResult.hit.id,
-          responseContent: cacheResult.hit.responseContent,
-        };
-      } else {
-        cacheStatus = cacheResult.status === "miss" ? "miss" : "error";
-        if (cacheResult.status === "error") {
-          cacheBypassReason = "cache_lookup_failed";
-        }
-      }
-    }
+    const preInitLookup = await runPreInitCacheLookup({
+      ctx,
+      cacheDisabled,
+      executionPolicy,
+      existingThreadId,
+      messageSafetyRiskLevel: messageSafety.riskLevel,
+      promptSafeMessage: messageSafety.promptSafeMessage,
+      effectiveSurface,
+      stageTimings,
+      requestLogContext,
+    });
+    const preInitCacheLookupPerformed = preInitLookup.performed;
+    const preInitCacheHit = preInitLookup.hit;
+    if (preInitLookup.cacheStatus) cacheStatus = preInitLookup.cacheStatus;
+    if (preInitLookup.cacheBypassReason) cacheBypassReason = preInitLookup.cacheBypassReason;
 
     // 7+8. Atomically create/reuse thread and insert user message via RPC
-    const { data: initResult, error: initError } = await runTimedStage(
+    const initOutcome = await runInitChatRpcStage({
+      ctx,
+      rateLimit,
       stageTimings,
-      "init_chat_rpc",
-      async () =>
-        (ctx.serviceSupabase as any).rpc("init_ai_chat", {
-          p_user_id: ctx.userId,
-          p_org_id: ctx.orgId,
-          p_surface: surface,
-          p_title: message.slice(0, 100),
-          p_message: message,
-          p_idempotency_key: idempotencyKey,
-          p_thread_id: threadId ?? null,
-          p_intent: resolvedIntent,
-          p_context_surface: effectiveSurface,
-          p_intent_type: resolvedIntentType,
-        })
-    );
-
-    if (initError || !initResult) {
-      aiLog("error", "ai-chat", "init_ai_chat RPC failed", requestLogContext, {
-        error: initError,
-      });
-      return NextResponse.json(
-        { error: "Failed to initialize chat" },
-        { status: 500, headers: rateLimit.headers }
-      );
-    }
-
-    threadId = initResult.thread_id;
-
-    const insertAssistantMessage = async (input: {
-      content: string | null;
-      status: "pending" | "complete";
-    }) =>
-      ctx.supabase
-        .from("ai_messages")
-        .insert({
-          thread_id: threadId,
-          org_id: ctx.orgId,
-          user_id: ctx.userId,
-          role: "assistant",
-          intent: resolvedIntent,
-          intent_type: resolvedIntentType,
-          context_surface: effectiveSurface,
-          status: input.status,
-          content: input.content,
-        })
-        .select("id")
-        .single();
+      requestLogContext,
+      surface,
+      message,
+      idempotencyKey,
+      threadId,
+      resolvedIntent,
+      resolvedIntentType,
+      effectiveSurface,
+    });
+    if (!initOutcome.ok) return initOutcome.response;
+    threadId = initOutcome.value.threadId;
+    const insertAssistantMessage = initOutcome.value.insertAssistantMessage;
 
     if (messageSafety.riskLevel !== "none") {
       cacheStatus = "bypass";
@@ -955,145 +464,55 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     }
 
     if (preInitCacheHit) {
-      const { data: cachedAssistantMsg, error: cachedAssistantError } =
-        await insertAssistantMessage({
-          content: preInitCacheHit.responseContent,
-          status: "complete",
-        });
-
-      if (cachedAssistantError || !cachedAssistantMsg) {
-        aiLog("error", "ai-chat", "cache hit assistant message failed", {
-          ...requestLogContext,
-          threadId: threadId!,
-        }, { error: cachedAssistantError });
-        cacheStatus = "error";
-        cacheBypassReason = "cache_hit_persist_failed";
-      } else {
+      const served = await serveCacheHit({
+        ctx,
+        threadId: threadId!,
+        cacheEntryId: preInitCacheHit.id,
+        responseContent: preInitCacheHit.responseContent,
+        effectiveSurface,
+        resolvedIntent,
+        resolvedIntentType,
+        startTime,
+        stageTimings,
+        rateLimit,
+        requestLogContext,
+        insertAssistantMessage,
+        logAiRequestFn,
+      });
+      if (served.kind === "served") {
         cacheStatus = "hit_exact";
         cacheEntryId = preInitCacheHit.id;
-        stageTimings.retrieval = {
-          decision: "skip",
-          reason: "cache_hit",
-        };
-        skipRemainingStages(stageTimings, "rag_retrieval");
-
-        const cachedStream = createSSEStream(async (enqueue) => {
-          enqueue({ type: "chunk", content: preInitCacheHit!.responseContent });
-          enqueue({
-            type: "done",
-            threadId: threadId!,
-            replayed: true,
-            cache: { status: "hit_exact", entryId: preInitCacheHit!.id },
-          });
-        });
-
-        await logAiRequestFn(ctx.serviceSupabase, {
-          threadId: threadId!,
-          messageId: cachedAssistantMsg.id,
-          userId: ctx.userId,
-          orgId: ctx.orgId,
-          intent: resolvedIntent,
-          intentType: resolvedIntentType,
-          latencyMs: Date.now() - startTime,
-          cacheStatus: "hit_exact",
-          cacheEntryId: preInitCacheHit.id,
-          contextSurface: effectiveSurface,
-          stageTimings: finalizeStageTimings(stageTimings, "cache_hit", Date.now() - startTime),
-        }, {
-          ...requestLogContext,
-          threadId: threadId!,
-        });
-
-        return buildSseResponse(
-          cachedStream,
-          { ...SSE_HEADERS, ...rateLimit.headers },
-          threadId!
-        );
+        return served.response;
       }
+      cacheStatus = served.cacheStatus;
+      cacheBypassReason = served.cacheBypassReason;
     }
 
-    if (
-      !preInitCacheLookupPerformed &&
-      !cacheDisabled &&
-      executionPolicy.cachePolicy === "lookup_exact"
-    ) {
-      const cacheResult = await checkCache({
-        message: messageSafety.promptSafeMessage,
-        orgId: ctx.orgId,
-        role: ctx.role,
-        surface: effectiveSurface,
-        supabase: ctx.serviceSupabase,
-        stageTimings,
-        logContext: {
-          ...requestLogContext,
-          threadId: threadId!,
-        },
-      });
-
-      if (cacheResult.status === "hit") {
-        cacheStatus = "hit_exact";
-        cacheEntryId = cacheResult.hit.id;
-        stageTimings.retrieval = {
-          decision: "skip",
-          reason: "cache_hit",
-        };
-        skipRemainingStages(stageTimings, "rag_retrieval");
-
-        const { data: cachedAssistantMsg, error: cachedAssistantError } =
-          await insertAssistantMessage({
-            content: cacheResult.hit.responseContent,
-            status: "complete",
-          });
-
-        if (cachedAssistantError || !cachedAssistantMsg) {
-          aiLog("error", "ai-chat", "cache hit assistant message failed", {
-            ...requestLogContext,
-            threadId: threadId!,
-          }, { error: cachedAssistantError });
-          cacheStatus = "error";
-          cacheBypassReason = "cache_hit_persist_failed";
-        } else {
-          const cachedStream = createSSEStream(async (enqueue) => {
-            enqueue({ type: "chunk", content: cacheResult.hit.responseContent });
-            enqueue({
-              type: "done",
-              threadId: threadId!,
-              replayed: true,
-              cache: { status: "hit_exact", entryId: cacheResult.hit.id },
-            });
-          });
-
-          await logAiRequestFn(ctx.serviceSupabase, {
-            threadId: threadId!,
-            messageId: cachedAssistantMsg.id,
-            userId: ctx.userId,
-            orgId: ctx.orgId,
-            intent: resolvedIntent,
-            intentType: resolvedIntentType,
-            latencyMs: Date.now() - startTime,
-            cacheStatus: "hit_exact",
-            cacheEntryId: cacheResult.hit.id,
-            contextSurface: effectiveSurface,
-            stageTimings: finalizeStageTimings(stageTimings, "cache_hit", Date.now() - startTime),
-          }, {
-            ...requestLogContext,
-            threadId: threadId!,
-          });
-
-          return buildSseResponse(
-            cachedStream,
-            { ...SSE_HEADERS, ...rateLimit.headers },
-            threadId!
-          );
-        }
-      } else {
-        cacheStatus = cacheResult.status === "miss" ? "miss" : "error";
-        if (cacheResult.status === "error") {
-          cacheBypassReason = "cache_lookup_failed";
-        }
-      }
-    } else if (!preInitCacheLookupPerformed) {
-      skipStage(stageTimings, "cache_lookup");
+    const postInit = await runPostInitCacheLookup({
+      ctx,
+      threadId: threadId!,
+      cacheDisabled,
+      executionPolicy,
+      preInitCacheLookupPerformed,
+      promptSafeMessage: messageSafety.promptSafeMessage,
+      effectiveSurface,
+      resolvedIntent,
+      resolvedIntentType,
+      startTime,
+      stageTimings,
+      rateLimit,
+      requestLogContext,
+      insertAssistantMessage,
+      logAiRequestFn,
+    });
+    if (postInit.kind === "served") {
+      cacheStatus = "hit_exact";
+      cacheEntryId = postInit.cacheEntryId;
+      return postInit.response;
+    }
+    if (postInit.kind === "miss" || postInit.kind === "persist_failed") {
+      cacheStatus = postInit.cacheStatus;
+      if (postInit.cacheBypassReason) cacheBypassReason = postInit.cacheBypassReason;
     }
 
     let ragChunks: RagChunkInput[] = [];
@@ -1519,114 +938,27 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         return;
       }
 
-        const contextBuildStartedAt = Date.now();
-        const historyLoadStartedAt = Date.now();
-        const historyPromise = existingThreadId
-          ? ctx.supabase
-              .from("ai_messages")
-              .select("role, content")
-              .eq("thread_id", threadId)
-              .eq("status", "complete")
-              .order("created_at", { ascending: true })
-              .limit(20)
-              .then((result: { data: unknown; error: unknown }) => {
-                setStageStatus(
-                  stageTimings,
-                  "history_load",
-                  result.error ? "failed" : "completed",
-                  Date.now() - historyLoadStartedAt
-                );
-                return result;
-              })
-              .catch((error: unknown) => {
-                setStageStatus(
-                  stageTimings,
-                  "history_load",
-                  "failed",
-                  Date.now() - historyLoadStartedAt
-                );
-                throw error;
-              })
-          : Promise.resolve().then(() => {
-              setStageStatus(
-                stageTimings,
-                "history_load",
-                "completed",
-                Date.now() - historyLoadStartedAt
-              );
-              return {
-                data: [
-                  {
-                    role: "user",
-                    content: messageSafety.promptSafeMessage,
-                  },
-                ],
-                error: null,
-              };
-            });
-
-        const [contextResult, { data: history, error: historyError }] =
-          await Promise.all([
-            buildPromptContextFn({
-              orgId: ctx.orgId,
-              userId: ctx.userId,
-              role: ctx.role,
-              enterpriseId: ctx.enterpriseId,
-              enterpriseRole: ctx.enterpriseRole,
-              serviceSupabase: ctx.serviceSupabase,
-              logContext: {
-                ...requestLogContext,
-                threadId: threadId!,
-              },
-              contextMode: usesSharedStaticContext
-                ? "shared_static"
-                : usesToolFirstContext
-                  ? "tool_first"
-                  : "full",
-              surface: effectiveSurface,
-              ragChunks: ragChunks.length > 0 ? ragChunks : undefined,
-              now: requestNow,
-              timeZone: requestTimeZone,
-              currentPath,
-              routeEntity: routeEntityContext,
-              availableTools: pass1Tools?.map((tool) => tool.function.name as ToolName),
-              threadTurnCount: existingThreadId ? 2 : 1,
-            }).then((result: Awaited<ReturnType<typeof buildPromptContext>>) => {
-              setStageStatus(
-                stageTimings,
-                "context_build",
-                "completed",
-                Date.now() - contextBuildStartedAt
-              );
-              return result;
-            }).catch((error: unknown) => {
-              setStageStatus(
-                stageTimings,
-                "context_build",
-                "failed",
-                Date.now() - contextBuildStartedAt
-              );
-                throw error;
-              }),
-            historyPromise,
-          ]);
-
-      const { systemPrompt, orgContextMessage, metadata } = contextResult;
+      const initHistory = await runInitChatHistoryStage({
+        ctx,
+        threadId: threadId!,
+        existingThreadId,
+        promptSafeMessage: messageSafety.promptSafeMessage,
+        effectiveSurface,
+        usesSharedStaticContext,
+        usesToolFirstContext,
+        ragChunks,
+        requestNow,
+        requestTimeZone,
+        currentPath,
+        routeEntityContext,
+        availableTools: pass1Tools?.map((tool) => tool.function.name as ToolName),
+        stageTimings,
+        requestLogContext,
+        buildPromptContextFn,
+      });
+      const { systemPrompt, orgContextMessage, metadata } = initHistory;
       runtimeState.contextMetadata = metadata;
-
-      let historyRows = history;
-      if (historyError) {
-        aiLog("error", "ai-chat", "history fetch failed", {
-          ...requestLogContext,
-          threadId: threadId!,
-        }, { error: historyError });
-        historyRows = [
-          {
-            role: "user",
-            content: messageSafety.promptSafeMessage,
-          },
-        ];
-      }
+      const historyRows = initHistory.historyRows;
 
       const draftSessionContextMessage = activeDraftSession
         ? buildDraftSessionContextMessage(activeDraftSession)
