@@ -42,7 +42,9 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/schemas/ai-assistant.ts` | Zod schemas for request validation and cache eligibility | `sendMessageSchema` (L25), `listThreadsSchema` (L34), `cacheEligibilitySchema` (L54) |
 | `src/app/api/ai/[orgId]/chat/route.ts` | Thin Next.js entrypoint — exports runtime config and `POST` handler | `POST` |
 | `src/app/api/ai/[orgId]/chat/handler.ts` | Chat pipeline orchestrator — auth, policy, retrieval, tools, SSE, persistence | `createChatPostHandler`, `ChatRouteDeps` |
-| `src/app/api/ai/[orgId]/chat/handler/sse-runtime.ts` | SSE runtime helpers — response builder, model-loop constants, turn audit/gating state, safety/RAG output gates | `buildSseResponse`, `createTurnRuntimeState`, `applySafetyGate`, `applyRagGrounding` |
+| `src/app/api/ai/[orgId]/chat/handler/sse-runtime.ts` | SSE runtime helpers — response builder, model-loop constants, turn audit/gating state (incl. `eagerStatusEmittedFor`, `timeToFirstEventMs`), safety/RAG output gates | `buildSseResponse`, `createTurnRuntimeState`, `applySafetyGate`, `applyRagGrounding` |
+| `src/app/api/ai/[orgId]/chat/handler/pass1-tools.ts` | Pass-1 tool resolution, forced-tool-choice allowlist, derived-args helper, plus bypass eligibility predicate | `getForcedPass1ToolChoice`, `deriveForcedPass1ToolArgs`, `isToolFirstEligible`, `BYPASS_ELIGIBLE_TOOLS`, `canBypassPass1` |
+| `src/app/api/ai/[orgId]/chat/handler/stages/run-pass1-bypass.ts` | Pass-1 bypass stage — synthesizes a `tool_call_requested` event for forced single-tool turns where args are derivable or zero, skips the model round-trip, marks `pass1_path` (`bypass_derived` \| `bypass_zero_arg`) | `runPass1Bypass` |
 | `src/app/api/ai/[orgId]/upload-schedule/route.ts` | Thin Next.js entrypoint for private schedule uploads and pending-upload cleanup | `POST`, `DELETE` |
 | `src/app/api/ai/[orgId]/upload-schedule/handler.ts` | Schedule upload handler — auth, rate limit, MIME/header validation, runtime bucket reconciliation, private storage write, and idempotent pending-upload deletion | `createAiScheduleUploadHandler`, `createAiScheduleUploadDeleteHandler`, `AiScheduleUploadRouteDeps` |
 | `src/app/api/ai/[orgId]/pending-actions/[actionId]/confirm/route.ts` | POST handler — confirms and executes a pending assistant action | `POST` |
@@ -159,6 +161,9 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ surface-gated read tools for follow_up / live_lookup, plus `prepare_announcement` / `prepare_job_posting` / `prepare_discussion_reply` / `prepare_discussion_thread` for create requests
   │       └─ enterprise capability gate applies after routing: enterprise tools only when enterprise context is present; billing-restricted enterprise asks may short-circuit to deterministic deny for non-billing roles
   ├─ 12. Stream LLM response via SSE (composeResponse async generator)
+  │       ├─ Forced single-tool turns emit an eager `tool_status: calling` SSE event before pass-1 runs, so the user sees a label within ~100ms of POST instead of after the pass-1 model round-trip; `eagerStatusEmittedFor` dedupes against the post-pass-1 emit in the tool-call loop
+  │       ├─ When `AI_PASS1_BYPASS=on` and `canBypassPass1(...)` is true (single forced tool in `BYPASS_ELIGIBLE_TOOLS`, `surface_read_tools` policy, no draft session, no pending revision/disambiguation/attachment), the pass-1 model call is skipped and `runPass1Bypass` synthesizes the tool call from `deriveForcedPass1ToolArgs` (or `{}`); pass-2 + grounding run unchanged on the resulting `toolResults`
+  │       ├─ `AI_PASS1_BYPASS=shadow` runs the model path but tags telemetry as `model_shadow_bypass_eligible` for parity validation; flag resolution is fail-closed (any read error or unknown value → `off`)
   │       ├─ Pass 1 runs with a 15s timeout budget
   │       ├─ Each requested tool runs with a 5s timeout budget
   │       ├─ Chat route calls pass an explicit `preverified_admin` authorization contract so duplicate membership lookups can be skipped safely
@@ -202,7 +207,9 @@ Client POST /api/ai/{orgId}/chat
   │       └─ ungrounded → discard buffered answer, emit/persist fallback, log ops telemetry
   ├─ 13.3 Persist stage timings
   │       ├─ per-stage duration/status for auth, policy, cache, RAG, prompt build, history, pass 1, tools, pass 2, grounding, finalize, cache write
-  │       └─ tool call timing includes `auth_mode` and error classification
+  │       ├─ tool call timing includes `auth_mode` and error classification
+  │       ├─ `request.pass1_path` discriminates `model` / `model_shadow_bypass_eligible` / `bypass_derived` / `bypass_zero_arg`; bypass turns mark `pass1_model` stage `skipped`
+  │       └─ `request.time_to_first_event_ms` captures the wall-clock from stream start to first enqueued SSE event (additive at `schema_version: 1`)
   │
   ├─ 13.4 Pending-action cleanup may be deferred out of the critical path
   └─ 13.5 CACHE WRITE (if miss + stream succeeded + finalize succeeded)
@@ -246,6 +253,7 @@ Timeouts are launch-time code constants, not env-configurable knobs.
 | `ZAI_API_KEY` | (required) | LLM provider key — if unset, returns config-error message |
 | `ZAI_MODEL` | `glm-5.1` | Model identifier |
 | `DISABLE_AI_CACHE` | `undefined` | Set `"true"` to disable cache (kill switch) |
+| `AI_PASS1_BYPASS` | `off` | `on` skips the pass-1 model round-trip for forced single-tool turns where args are derivable or zero; `shadow` runs the model path but tags telemetry as bypass-eligible for parity validation; any other value (or read error) resolves to `off` (fail-closed) |
 
 ### Context Builder: Surface-Gated Sections
 
