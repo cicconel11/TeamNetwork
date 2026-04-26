@@ -47,7 +47,6 @@ import {
 } from "@/lib/ai/draft-sessions";
 import {
   createStageTimings,
-  runTimedStage,
   skipStage,
   addToolCallTiming,
 } from "@/lib/ai/chat-telemetry";
@@ -82,12 +81,10 @@ import {
   EMPTY_ASSISTANT_RESPONSE_FALLBACK,
   MEMBER_LIST_PASS2_INSTRUCTION,
   MENTOR_PASS2_TEMPLATE,
-  ToolGroundingVerificationError,
   applyRagGrounding,
   applySafetyGate,
   buildSseResponse,
   createTurnRuntimeState,
-  getGroundingFallbackForTools,
   recordTurnUsage,
 } from "./handler/sse-runtime";
 
@@ -114,6 +111,7 @@ import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
 import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
 import { runPass1 } from "./handler/stages/run-pass1";
 import { runPass2 } from "./handler/stages/run-pass2";
+import { runGroundingCheck } from "./handler/stages/run-grounding-check";
 import { createToolCallHandler } from "./handler/stages/run-tool-calls";
 import { finalizeTurnAudit } from "./handler/stages/finalize-audit";
 
@@ -1016,56 +1014,20 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             }
           }
 
-          const groundedToolSummary =
-            executionPolicy.groundingPolicy === "verify_tool_summary" &&
-            runtimeState.toolCallSucceeded &&
-            successfulToolResults.length > 0 &&
-            pass2BufferedContent.length > 0;
-
-          if (groundedToolSummary) {
-            try {
-              await runTimedStage(stageTimings, "grounding", async () => {
-                const groundingResult = verifyToolBackedResponseFn({
-                  content: pass2BufferedContent,
-                  toolResults: successfulToolResults,
-                  orgContext: { hideDonorNames },
-                });
-
-                if (!groundingResult.grounded) {
-                  throw new ToolGroundingVerificationError(groundingResult.failures);
-                }
-              });
-            } catch (error) {
-              if (!(error instanceof ToolGroundingVerificationError)) {
-                throw error;
-              }
-
-              runtimeState.auditErrorMessage = "tool_grounding_failed";
-              aiLog("warn", "ai-grounding", "verification failed", {
-                ...requestLogContext,
-                threadId: threadId!,
-              }, {
-                messageId: assistantMessageId,
-                tools: successfulToolResults.map((result) => result.name),
-                failures: error.failures,
-              });
-              void trackOpsEventServerFn(
-                "api_error",
-                {
-                  endpoint_group: "ai-grounding",
-                  http_status: 200,
-                  error_code: "tool_grounding_failed",
-                  retryable: false,
-                },
-                ctx.orgId
-              );
-              pass2BufferedContent = getGroundingFallbackForTools(
-                successfulToolResults.map((result) => result.name)
-              );
-            }
-          } else {
-            skipStage(stageTimings, "grounding");
-          }
+          pass2BufferedContent = await runGroundingCheck({
+            pass2BufferedContent,
+            successfulToolResults,
+            executionPolicy,
+            hideDonorNames,
+            runtimeState,
+            stageTimings,
+            threadId: threadId!,
+            assistantMessageId,
+            orgId: ctx.orgId,
+            requestLogContext,
+            verifyToolBackedResponseFn,
+            trackOpsEventServerFn,
+          });
 
           if (pass2BufferedContent) {
             // Tool-backed pass-2: tool-grounding already ran. Still gate output
