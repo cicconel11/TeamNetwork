@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { ServiceSupabase } from "@/lib/supabase/types";
 import {
   formatSuggestMentorsResponse,
   formatDonationAnalyticsResponse,
@@ -173,7 +173,7 @@ export function formatDeterministicToolErrorResponse(
 }
 
 export async function resolveHideDonorNamesPreference(
-  serviceSupabase: { from: (table: string) => any },
+  serviceSupabase: ServiceSupabase,
   orgId: string,
 ): Promise<boolean> {
   try {
@@ -194,7 +194,7 @@ export async function resolveHideDonorNamesPreference(
 }
 
 export async function resolveOrgSlug(
-  serviceSupabase: { from: (table: string) => any },
+  serviceSupabase: ServiceSupabase,
   orgId: string,
 ): Promise<string | undefined> {
   try {

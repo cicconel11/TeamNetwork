@@ -1,4 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { ServerSupabase, ServiceSupabase } from "@/lib/supabase/types";
+import type { DraftSessionPayload, DraftSessionSupabase } from "@/lib/ai/draft-sessions";
 import type {
   ToolCallRequestedEvent,
   ToolResultMessage,
@@ -52,8 +53,8 @@ export interface CreateToolCallHandlerInput {
     userId: string;
     enterpriseId?: string;
     enterpriseRole?: EnterpriseRole;
-    supabase: any;
-    serviceSupabase: any;
+    supabase: ServerSupabase;
+    serviceSupabase: ServiceSupabase;
   };
   toolAuthorization: ToolExecutionAuthorization;
   toolAuthMode: AiToolAuthMode;
@@ -193,7 +194,7 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
 
       if (!discussionThreadId && explicitNamedThreadTitle) {
         const resolution = await resolveDiscussionReplyTarget(
-          input.ctx.serviceSupabase as any,
+          input.ctx.serviceSupabase,
           {
             organizationId: input.ctx.orgId,
             requestedThreadTitle: explicitNamedThreadTitle,
@@ -340,7 +341,7 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
                   ? "create_discussion_thread"
                   : "create_event";
               const next = await input.saveDraftSessionFn(
-                input.ctx.serviceSupabase,
+                input.ctx.serviceSupabase as unknown as DraftSessionSupabase,
                 {
                   organizationId: input.ctx.orgId,
                   userId: input.ctx.userId,
@@ -350,10 +351,11 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
                     toolData.state === "needs_confirmation"
                       ? "ready_for_confirmation"
                       : "collecting_fields",
+                  // Draft payload shape guaranteed by schemas in the four prepare_* paths (announcement, job_posting, discussion_thread, event).
                   draftPayload:
                     toolData.draft && typeof toolData.draft === "object"
-                      ? (toolData.draft as any)
-                      : (parsedArgs as any),
+                      ? (toolData.draft as DraftSessionPayload)
+                      : (parsedArgs as DraftSessionPayload),
                   missingFields,
                   pendingActionId,
                   expiresAt: pendingExpiresAt ?? undefined,

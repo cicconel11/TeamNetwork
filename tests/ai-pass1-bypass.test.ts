@@ -6,6 +6,7 @@ import {
 } from "../src/lib/ai/tools/definitions";
 import {
   BYPASS_ELIGIBLE_TOOLS,
+  FORCED_PASS1_TOOL_CHOICE_ELIGIBLE,
   canBypassPass1,
   getForcedPass1ToolChoice,
 } from "../src/app/api/ai/[orgId]/chat/handler/pass1-tools";
@@ -45,6 +46,15 @@ describe("BYPASS_ELIGIBLE_TOOLS ⊂ getForcedPass1ToolChoice allowlist", () => {
       }
     });
   }
+
+  it("BYPASS_ELIGIBLE_TOOLS ⊆ FORCED_PASS1_TOOL_CHOICE_ELIGIBLE (set membership)", () => {
+    for (const name of BYPASS_ELIGIBLE_TOOLS) {
+      assert.ok(
+        FORCED_PASS1_TOOL_CHOICE_ELIGIBLE.has(name),
+        `${name} missing from FORCED_PASS1_TOOL_CHOICE_ELIGIBLE`,
+      );
+    }
+  });
 });
 
 describe("canBypassPass1 — happy path per eligible tool", () => {

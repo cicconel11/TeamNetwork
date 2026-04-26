@@ -6,10 +6,12 @@ import {
   isAuthorizedAction,
   isPendingActionExpired,
   updatePendingActionStatus,
+  type PendingActionSupabase,
 } from "@/lib/ai/pending-actions";
 import {
   clearDraftSession,
   supportsDraftSessionsStore,
+  type DraftSessionSupabase,
 } from "@/lib/ai/draft-sessions";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
@@ -51,7 +53,7 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
     const canUseDraftSessions =
       supportsDraftSessionsStore(ctx.serviceSupabase) || Boolean(deps.clearDraftSession);
 
-    const action = await getPendingActionFn(ctx.serviceSupabase, actionId);
+    const action = await getPendingActionFn(ctx.serviceSupabase as unknown as PendingActionSupabase, actionId);
     if (!action || !isAuthorizedAction(ctx, action)) {
       return NextResponse.json({ error: "Pending action not found" }, { status: 404 });
     }
@@ -68,7 +70,7 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
     }
 
     const expired = isPendingActionExpired(action);
-    const { updated } = await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+    const { updated } = await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
       status: expired ? "expired" : "cancelled",
       expectedStatus: "pending",
     });
@@ -82,7 +84,7 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
 
     if (expired) {
       if (canUseDraftSessions) {
-        await clearDraftSessionFn(ctx.serviceSupabase, {
+        await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
           organizationId: ctx.orgId,
           userId: ctx.userId,
           threadId: action.thread_id,
@@ -93,7 +95,7 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
     }
 
     if (canUseDraftSessions) {
-      await clearDraftSessionFn(ctx.serviceSupabase, {
+      await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
         organizationId: ctx.orgId,
         userId: ctx.userId,
         threadId: action.thread_id,
@@ -103,6 +105,8 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
 
     await ctx.serviceSupabase.from("ai_messages").insert({
       thread_id: action.thread_id,
+      org_id: ctx.orgId,
+      user_id: ctx.userId,
       role: "assistant",
       content: "Cancelled the pending assistant action.",
       status: "complete",

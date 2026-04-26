@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getNonEmptyString } from "./formatters/index";
+import type { ServiceSupabase } from "@/lib/supabase/types";
 
 export interface PendingActionToolPayload {
   pending_action?: {
@@ -87,13 +87,7 @@ export function extractDiscussionThreadLookupRows(data: unknown): Array<{ id: st
 }
 
 export async function resolveDiscussionReplyTarget(
-  supabase: {
-    from(table: "discussion_threads"): {
-      select(columns: string): {
-        eq(column: string, value: unknown): any;
-      };
-    };
-  },
+  supabase: ServiceSupabase,
   input: {
     organizationId: string;
     requestedThreadTitle?: string | null;

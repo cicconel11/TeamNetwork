@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type OpenAI from "openai";
+import type { ServerSupabase, ServiceSupabase } from "@/lib/supabase/types";
 import type {
   composeResponse,
   ToolResultMessage,
@@ -64,8 +64,8 @@ export interface RunModelToolsLoopInput {
     userId: string;
     enterpriseId?: string;
     enterpriseRole?: EnterpriseRole;
-    supabase: any;
-    serviceSupabase: any;
+    supabase: ServerSupabase;
+    serviceSupabase: ServiceSupabase;
   };
   toolAuthorization: ToolExecutionAuthorization;
   toolAuthMode: AiToolAuthMode;
@@ -318,7 +318,7 @@ export async function runModelToolsLoop(
     );
     const hideDonorNames = needsDonorPrivacy
       ? await resolveHideDonorNamesPreference(
-          input.ctx.serviceSupabase as { from: (table: string) => any },
+          input.ctx.serviceSupabase,
           input.ctx.orgId,
         )
       : false;
@@ -327,7 +327,7 @@ export async function runModelToolsLoop(
       input.successfulToolResults[0]?.name === "list_chat_groups";
     const orgSlug = needsOrgSlug
       ? await resolveOrgSlug(
-          input.ctx.serviceSupabase as { from: (table: string) => any },
+          input.ctx.serviceSupabase,
           input.ctx.orgId,
         )
       : undefined;

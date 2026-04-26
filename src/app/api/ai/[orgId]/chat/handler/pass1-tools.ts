@@ -425,6 +425,35 @@ export function getPass1Tools(
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
 }
 
+export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<ToolName>([
+  "prepare_announcement",
+  "prepare_job_posting",
+  "prepare_chat_message",
+  "list_chat_groups",
+  "prepare_group_message",
+  "prepare_discussion_reply",
+  "prepare_discussion_thread",
+  "prepare_event",
+  "list_members",
+  "get_org_stats",
+  "get_donation_analytics",
+  "get_enterprise_stats",
+  "get_enterprise_quota",
+  "get_enterprise_org_capacity",
+  "list_events",
+  "list_alumni",
+  "list_enterprise_alumni",
+  "list_donations",
+  "list_managed_orgs",
+  "list_enterprise_audit_events",
+  "prepare_enterprise_invite",
+  "revoke_enterprise_invite",
+  "list_parents",
+  "list_philanthropy_events",
+  "scrape_schedule_website",
+  "extract_schedule_pdf",
+]);
+
 export function getForcedPass1ToolChoice(
   pass1Tools: ReturnType<typeof getPass1Tools>
 ): OpenAI.Chat.ChatCompletionToolChoiceOption | undefined {
@@ -433,34 +462,7 @@ export function getForcedPass1ToolChoice(
   }
 
   const forcedToolName = pass1Tools[0]?.function.name;
-  if (
-    forcedToolName !== "prepare_announcement" &&
-    forcedToolName !== "prepare_job_posting" &&
-    forcedToolName !== "prepare_chat_message" &&
-    forcedToolName !== "list_chat_groups" &&
-    forcedToolName !== "prepare_group_message" &&
-    forcedToolName !== "prepare_discussion_reply" &&
-    forcedToolName !== "prepare_discussion_thread" &&
-    forcedToolName !== "prepare_event" &&
-    forcedToolName !== "list_members" &&
-    forcedToolName !== "get_org_stats" &&
-    forcedToolName !== "get_donation_analytics" &&
-    forcedToolName !== "get_enterprise_stats" &&
-    forcedToolName !== "get_enterprise_quota" &&
-    forcedToolName !== "get_enterprise_org_capacity" &&
-    forcedToolName !== "list_events" &&
-    forcedToolName !== "list_alumni" &&
-    forcedToolName !== "list_enterprise_alumni" &&
-    forcedToolName !== "list_donations" &&
-    forcedToolName !== "list_managed_orgs" &&
-    forcedToolName !== "list_enterprise_audit_events" &&
-    forcedToolName !== "prepare_enterprise_invite" &&
-    forcedToolName !== "revoke_enterprise_invite" &&
-    forcedToolName !== "list_parents" &&
-    forcedToolName !== "list_philanthropy_events" &&
-    forcedToolName !== "scrape_schedule_website" &&
-    forcedToolName !== "extract_schedule_pdf"
-  ) {
+  if (!forcedToolName || !FORCED_PASS1_TOOL_CHOICE_ELIGIBLE.has(forcedToolName as ToolName)) {
     return undefined;
   }
 
@@ -527,6 +529,30 @@ export function canBypassPass1(input: CanBypassPass1Input): boolean {
   return (BYPASS_ELIGIBLE_TOOLS as ReadonlyArray<string>).includes(toolName);
 }
 
+export const TOOL_FIRST_ELIGIBLE: ReadonlySet<ToolName> = new Set<ToolName>([
+  "list_members",
+  "get_org_stats",
+  "get_donation_analytics",
+  "find_navigation_targets",
+  "list_announcements",
+  "list_chat_groups",
+  "list_events",
+  "list_discussions",
+  "list_job_postings",
+  "list_alumni",
+  "list_enterprise_alumni",
+  "list_donations",
+  "list_managed_orgs",
+  "list_enterprise_audit_events",
+  "list_parents",
+  "list_philanthropy_events",
+  "get_enterprise_stats",
+  "get_enterprise_quota",
+  "get_enterprise_org_capacity",
+  "suggest_connections",
+  "prepare_group_message",
+]);
+
 export function isToolFirstEligible(
   pass1Tools: ReturnType<typeof getPass1Tools>
 ): boolean {
@@ -535,27 +561,5 @@ export function isToolFirstEligible(
   }
 
   const toolName = pass1Tools[0]?.function.name;
-  return (
-    toolName === "list_members" ||
-    toolName === "get_org_stats" ||
-    toolName === "get_donation_analytics" ||
-    toolName === "find_navigation_targets" ||
-    toolName === "list_announcements" ||
-    toolName === "list_chat_groups" ||
-    toolName === "list_events" ||
-    toolName === "list_discussions" ||
-    toolName === "list_job_postings" ||
-    toolName === "list_alumni" ||
-    toolName === "list_enterprise_alumni" ||
-    toolName === "list_donations" ||
-    toolName === "list_managed_orgs" ||
-    toolName === "list_enterprise_audit_events" ||
-    toolName === "list_parents" ||
-    toolName === "list_philanthropy_events" ||
-    toolName === "get_enterprise_stats" ||
-    toolName === "get_enterprise_quota" ||
-    toolName === "get_enterprise_org_capacity" ||
-    toolName === "suggest_connections" ||
-    toolName === "prepare_group_message"
-  );
+  return Boolean(toolName) && TOOL_FIRST_ELIGIBLE.has(toolName as ToolName);
 }

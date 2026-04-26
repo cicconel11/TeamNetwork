@@ -15,10 +15,12 @@ import {
   type CreateJobPostingPendingPayload,
   type CreateEnterpriseInvitePendingPayload,
   type RevokeEnterpriseInvitePendingPayload,
+  type PendingActionSupabase,
 } from "@/lib/ai/pending-actions";
 import {
   clearDraftSession,
   supportsDraftSessionsStore,
+  type DraftSessionSupabase,
 } from "@/lib/ai/draft-sessions";
 import { createEvent } from "@/lib/events/create-event";
 import { createJobPosting } from "@/lib/jobs/create-job";
@@ -117,7 +119,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
     const canUseDraftSessions =
       supportsDraftSessionsStore(ctx.serviceSupabase) || Boolean(deps.clearDraftSession);
 
-    const action = await getPendingActionFn(ctx.serviceSupabase, actionId);
+    const action = await getPendingActionFn(ctx.serviceSupabase as unknown as PendingActionSupabase, actionId);
     if (!action || !isAuthorizedAction(ctx, action)) {
       return NextResponse.json({ error: "Pending action not found" }, { status: 404 });
     }
@@ -142,7 +144,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
     }
 
     if (isPendingActionExpired(action)) {
-      await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+      await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
         status: "expired",
         expectedStatus: "pending",
       });
@@ -150,14 +152,14 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
     }
 
     // CAS: atomically claim pending → confirmed
-    const casResult = await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+    const casResult = await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
       status: "confirmed",
       expectedStatus: "pending",
     });
 
     if (!casResult.updated) {
       // Re-read to provide appropriate response
-      const current = await getPendingActionFn(ctx.serviceSupabase, actionId);
+      const current = await getPendingActionFn(ctx.serviceSupabase as unknown as PendingActionSupabase, actionId);
       if (!current) {
         return NextResponse.json({ error: "Pending action not found" }, { status: 404 });
       }
@@ -194,7 +196,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
@@ -204,7 +206,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             );
           }
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -213,7 +215,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
               organizationId: ctx.orgId,
               userId: ctx.userId,
               threadId: action.thread_id,
@@ -293,7 +295,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
@@ -303,7 +305,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             );
           }
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -312,7 +314,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
               organizationId: ctx.orgId,
               userId: ctx.userId,
               threadId: action.thread_id,
@@ -363,14 +365,14 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
             return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
           }
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -388,7 +390,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             .eq("id", action.thread_id);
 
           if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
               organizationId: ctx.orgId,
               userId: ctx.userId,
               threadId: action.thread_id,
@@ -444,14 +446,14 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
             return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
           }
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -460,7 +462,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
               organizationId: ctx.orgId,
               userId: ctx.userId,
               threadId: action.thread_id,
@@ -520,7 +522,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
@@ -530,7 +532,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             );
           }
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -539,7 +541,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
               organizationId: ctx.orgId,
               userId: ctx.userId,
               threadId: action.thread_id,
@@ -591,7 +593,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
@@ -601,7 +603,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             );
           }
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -610,7 +612,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
               organizationId: ctx.orgId,
               userId: ctx.userId,
               threadId: action.thread_id,
@@ -666,7 +668,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (!result.ok) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
@@ -694,7 +696,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             );
           }
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -703,7 +705,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (canUseDraftSessions) {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
               organizationId: ctx.orgId,
               userId: ctx.userId,
               threadId: action.thread_id,
@@ -794,7 +796,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (rpcResult.error || !rpcResult.data || typeof rpcResult.data.id !== "string") {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
@@ -810,7 +812,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             role?: string;
           };
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -860,7 +862,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           const updatedRows = Array.isArray(updateResult.data) ? updateResult.data : [];
 
           if (updateResult.error || updatedRows.length === 0) {
-            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
               status: "pending",
               expectedStatus: "confirmed",
             });
@@ -870,7 +872,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             );
           }
 
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
             status: "executed",
             expectedStatus: "confirmed",
             executedAt: new Date().toISOString(),
@@ -907,7 +909,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
     } catch (err) {
       // Attempt rollback to pending so the user can retry
       try {
-        await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+        await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
           status: "pending",
           expectedStatus: "confirmed",
         });
