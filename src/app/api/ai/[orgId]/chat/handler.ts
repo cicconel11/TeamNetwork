@@ -21,9 +21,6 @@ import {
   type ToolExecutionAuthorization,
 } from "@/lib/ai/tools/executor";
 import { resolveOwnThread } from "@/lib/ai/thread-resolver";
-import {
-  type CacheSurface,
-} from "@/lib/ai/semantic-cache-utils";
 import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
 import {
   buildTurnExecutionPolicy,
@@ -48,9 +45,6 @@ import {
   sanitizeHistoryMessageForPrompt,
 } from "@/lib/ai/message-safety";
 import {
-  finalizeAssistantMessage,
-} from "@/lib/ai/assistant-message-display";
-import {
   clearDraftSession,
   getDraftSession,
   saveDraftSession,
@@ -61,11 +55,9 @@ import {
 } from "@/lib/ai/timeout";
 import {
   createStageTimings,
-  setStageStatus,
   runTimedStage,
   skipStage,
   addToolCallTiming,
-  finalizeStageTimings,
 } from "@/lib/ai/chat-telemetry";
 import { aiLog } from "@/lib/ai/logger";
 import {
@@ -102,7 +94,6 @@ import {
   getPendingActionFromToolData,
   SUPPORTED_EVENT_TYPE_LABELS,
 } from "./handler/pending-event-revision";
-import { writeCache } from "./handler/cache-rag";
 import {
   ACTIVE_DRAFT_CONTINUATION_INSTRUCTION,
   CONNECTION_PASS1_DISAMBIGUATION_INSTRUCTION,
@@ -140,14 +131,13 @@ import { serveTerminalRefusal } from "./handler/stages/serve-terminal-refusal";
 import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
 import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
 import { runModelStage } from "./handler/stages/run-model-stage";
+import { finalizeTurnAudit } from "./handler/stages/finalize-audit";
 
 const MESSAGE_SAFETY_FALLBACK =
   "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
 
 const SCOPE_REFUSAL_FALLBACK =
   "I can only help with TeamNetwork tasks for your organization — like members, events, announcements, discussions, jobs, donations, or finding the right page. That request is outside what I do.";
-
-const SCOPE_REFUSAL_CANONICAL_PREFIX = "I can only help with TeamNetwork tasks";
 
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const createClientFn = deps.createClient ?? createClient;
@@ -1468,126 +1458,30 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           enqueue({ type: "error", message: "An error occurred", retryable: true });
         }
       } finally {
-        const finalMessage = finalizeAssistantMessage({
-          fullContent,
-          streamCompletedSuccessfully: runtimeState.streamCompletedSuccessfully,
-          requestAborted: streamSignal.aborted,
-        });
-        const finalizeStartedAt = Date.now();
-        const { error: finalizeError } = await ctx.supabase
-          .from("ai_messages")
-          .update({
-            content: finalMessage.content,
-            status: finalMessage.status,
-          })
-          .eq("id", assistantMessageId);
-
-        setStageStatus(
-          stageTimings,
-          "assistant_finalize_write",
-          finalizeError ? "failed" : "completed",
-          Date.now() - finalizeStartedAt
-        );
-
-        if (finalizeError) {
-          aiLog("error", "ai-chat", "assistant finalize failed", {
-            ...requestLogContext,
-            threadId: threadId!,
-          }, { error: finalizeError, messageId: assistantMessageId });
-          runtimeState.auditErrorMessage ??= "assistant_finalize_failed";
-        }
-
-        if (runtimeState.toolCallMade && !cacheBypassReason && executionPolicy.cachePolicy === "lookup_exact") {
-          cacheBypassReason = "tool_call_made";
-        }
-
-        const canWriteCache =
-          runtimeState.streamCompletedSuccessfully &&
-          !finalizeError &&
-          executionPolicy.cachePolicy === "lookup_exact" &&
-          cacheStatus === "miss" &&
-          !runtimeState.toolCallMade;
-
-        if (canWriteCache) {
-          const cacheWriteResult = await writeCache({
-            message: messageSafety.promptSafeMessage,
-            orgId: ctx.orgId,
-            role: ctx.role,
-            surface: effectiveSurface,
-            responseContent: fullContent,
-            sourceMessageId: assistantMessageId,
-            supabase: ctx.serviceSupabase,
-            stageTimings,
-            logContext: {
-              ...requestLogContext,
-              threadId: threadId!,
-            },
-          });
-
-          if (cacheWriteResult.status === "inserted") {
-            cacheEntryId = cacheWriteResult.entryId;
-          } else if (!cacheBypassReason) {
-            cacheBypassReason = cacheWriteResult.bypassReason;
-          }
-        } else {
-          skipStage(stageTimings, "cache_write");
-        }
-
-        const requestOutcome = runtimeState.streamCompletedSuccessfully
-          ? runtimeState.auditErrorMessage === "tool_grounding_failed"
-            ? "tool_grounding_fallback"
-            : "completed"
-          : streamSignal.aborted
-            ? "aborted"
-            : runtimeState.auditErrorMessage?.includes("timeout")
-              ? "timed_out"
-              : "error";
-
-        const modelRefusalDetected =
-          fullContent.trim().startsWith(SCOPE_REFUSAL_CANONICAL_PREFIX);
-        const finalBypassReason = modelRefusalDetected
-          ? cacheBypassReason ?? "scope_refusal"
-          : cacheBypassReason;
-        const finalAuditError = modelRefusalDetected
-          ? runtimeState.auditErrorMessage ?? "scope_refusal:model_refusal_detected"
-          : runtimeState.auditErrorMessage;
-
-        await logAiRequestFn(ctx.serviceSupabase, {
+        await finalizeTurnAudit({
+          ctx,
           threadId: threadId!,
-          messageId: assistantMessageId,
-          userId: ctx.userId,
-          orgId: ctx.orgId,
-          intent: resolvedIntent,
-          intentType: resolvedIntentType,
-          toolCalls: auditToolCalls.length > 0 ? auditToolCalls : undefined,
-          latencyMs: Date.now() - startTime,
-          model: process.env.ZAI_API_KEY ? getZaiModelFn() : undefined,
-          inputTokens: runtimeState.usage?.inputTokens,
-          outputTokens: runtimeState.usage?.outputTokens,
-          error: finalAuditError,
+          assistantMessageId,
+          fullContent,
+          runtimeState,
+          streamSignal,
+          stageTimings,
+          executionPolicy,
           cacheStatus,
           cacheEntryId,
-          cacheBypassReason: finalBypassReason,
-          contextSurface: (runtimeState.contextMetadata?.surface ?? effectiveSurface) as CacheSurface,
-          contextTokenEstimate: runtimeState.contextMetadata?.estimatedTokens,
-          ragChunkCount: ragChunkCount > 0 ? ragChunkCount : undefined,
+          cacheBypassReason,
+          effectiveSurface,
+          promptSafeMessage: messageSafety.promptSafeMessage,
+          resolvedIntent,
+          resolvedIntentType,
+          auditToolCalls,
+          ragChunkCount,
           ragTopSimilarity,
           ragError,
-          safetyVerdict: runtimeState.safetyVerdict,
-          safetyCategories: runtimeState.safetyCategories,
-          safetyLatencyMs: runtimeState.safetyLatencyMs,
-          ragGrounded: runtimeState.ragGrounded,
-          ragGroundingFailures: runtimeState.ragGroundingFailures,
-          ragGroundingLatencyMs: runtimeState.ragGroundingLatencyMs,
-          ragGroundingMode: runtimeState.ragGroundingAudited,
-          stageTimings: finalizeStageTimings(
-            stageTimings,
-            requestOutcome,
-            Date.now() - startTime
-          ),
-        }, {
-          ...requestLogContext,
-          threadId: threadId!,
+          startTime,
+          requestLogContext,
+          logAiRequestFn,
+          getZaiModelFn,
         });
       }
     }, request.signal);
