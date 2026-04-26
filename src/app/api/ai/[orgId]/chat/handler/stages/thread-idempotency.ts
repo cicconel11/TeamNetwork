@@ -23,7 +23,10 @@ import { NextResponse } from "next/server";
 import type { AiOrgContext } from "@/lib/ai/context";
 import type { AiThreadMetadata } from "@/lib/ai/thread-resolver";
 import type { resolveOwnThread } from "@/lib/ai/thread-resolver";
-import type { loadRouteEntityContext } from "@/lib/ai/route-entity-loaders";
+import type {
+  loadRouteEntityContext,
+  RouteEntitySupabase,
+} from "@/lib/ai/route-entity-loaders";
 import {
   clearDraftSession as clearDraftSessionDefault,
   getDraftSession as getDraftSessionDefault,
@@ -150,7 +153,7 @@ export async function runThreadIdempotencyStage(
   if (routeEntityRef) {
     try {
       routeEntityContext = await loadRouteEntityContextFn({
-        supabase: ctx.supabase,
+        supabase: ctx.supabase as unknown as RouteEntitySupabase,
         organizationId: ctx.orgId,
         currentPath,
         routeEntity: routeEntityRef,
@@ -182,13 +185,15 @@ export async function runThreadIdempotencyStage(
   // Abandoned stream cleanup (5-min threshold). Fire-and-forget.
   if (existingThreadId) {
     skipStage(stageTimings, "abandoned_stream_cleanup");
-    void ctx.supabase
-      .from("ai_messages")
-      .update({ status: "error", content: INTERRUPTED_ASSISTANT_MESSAGE })
-      .eq("thread_id", existingThreadId)
-      .eq("role", "assistant")
-      .in("status", ["pending", "streaming"])
-      .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString())
+    void Promise.resolve(
+      ctx.supabase
+        .from("ai_messages")
+        .update({ status: "error", content: INTERRUPTED_ASSISTANT_MESSAGE })
+        .eq("thread_id", existingThreadId)
+        .eq("role", "assistant")
+        .in("status", ["pending", "streaming"])
+        .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString())
+    )
       .then(({ error: cleanupError }: { error: unknown }) => {
         if (cleanupError) {
           aiLog("error", "ai-chat", "abandoned stream cleanup failed", {

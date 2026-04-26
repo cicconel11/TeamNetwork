@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import type { RateLimitResult } from "@/lib/security/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
+import type { ServerSupabase, ServiceSupabase } from "@/lib/supabase/types";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import type { EnterpriseRole } from "@/types/enterprise";
 import type { OrgRole } from "@/lib/auth/role-utils";
@@ -20,16 +20,16 @@ export type AiOrgContext =
       role: AiOrgContextRole;
       enterpriseId?: string;
       enterpriseRole?: EnterpriseRole;
-      supabase: any; // auth-bound client (for threads/messages via RLS)
-      serviceSupabase: any; // service-role client (for tools/audit)
+      supabase: ServerSupabase; // auth-bound client (for threads/messages via RLS)
+      serviceSupabase: ServiceSupabase; // service-role client (for tools/audit)
     }
   | { ok: false; response: NextResponse };
 
 // ── Dependency injection for testability ──
 
 export interface AiOrgContextDeps {
-  serviceSupabase?: any;
-  supabase?: any;
+  serviceSupabase?: ServiceSupabase;
+  supabase: ServerSupabase;
   logContext?: AiLogContext;
 }
 
@@ -70,7 +70,7 @@ export async function getAiOrgContext(
   orgId: string,
   user: User | null,
   rateLimit: Pick<RateLimitResult, "headers">,
-  deps: AiOrgContextDeps = {},
+  deps: AiOrgContextDeps,
   options: AiOrgContextOptions = {},
 ): Promise<AiOrgContext> {
   const respond = (payload: unknown, status: number) =>
@@ -86,7 +86,7 @@ export async function getAiOrgContext(
   const allowedRoles = options.allowedRoles ?? DEFAULT_ALLOWED_ROLES;
 
   // 3. Check role — fail closed on DB error
-  const { data: membership, error } = await (serviceSupabase as any)
+  const { data: membership, error } = await serviceSupabase
     .from("user_organization_roles")
     .select("role, status")
     .eq("user_id", user.id)
@@ -143,7 +143,7 @@ export async function getAiOrgContext(
   let enterpriseId: string | undefined;
   let enterpriseRole: EnterpriseRole | undefined;
 
-  const { data: orgRow, error: orgError } = await (serviceSupabase as any)
+  const { data: orgRow, error: orgError } = await serviceSupabase
     .from("organizations")
     .select("enterprise_id")
     .eq("id", orgId)
@@ -159,7 +159,7 @@ export async function getAiOrgContext(
   }
 
   if (orgRow?.enterprise_id) {
-    const { data: enterpriseRoleRow, error: enterpriseRoleError } = await (serviceSupabase as any)
+    const { data: enterpriseRoleRow, error: enterpriseRoleError } = await serviceSupabase
       .from("user_enterprise_roles")
       .select("role")
       .eq("enterprise_id", orgRow.enterprise_id)
@@ -189,7 +189,7 @@ export async function getAiOrgContext(
     role: rawRole,
     enterpriseId,
     enterpriseRole,
-    supabase: deps.supabase ?? null, // routes pass their auth-bound client
+    supabase: deps.supabase, // routes pass their auth-bound client
     serviceSupabase,
   };
 }

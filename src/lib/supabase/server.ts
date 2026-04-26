@@ -1,12 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabaseBrowserEnv } from "./config";
+import type { ServerSupabase } from "./types";
 
-export async function createClient() {
+export async function createClient(): Promise<ServerSupabase> {
   const cookieStore = await cookies();
   const { supabaseUrl, supabaseAnonKey } = getSupabaseBrowserEnv();
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  const client = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookieOptions: {
       path: "/",
       sameSite: "lax",
@@ -48,4 +49,5 @@ export async function createClient() {
       },
     },
   });
+  return client as unknown as ServerSupabase;
 }

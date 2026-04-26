@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { ToolCallRequestedEvent } from "@/lib/ai/response-composer";
 import type { AiAuditStageTimings } from "@/lib/ai/chat-telemetry";
 import { skipStage } from "@/lib/ai/chat-telemetry";

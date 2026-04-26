@@ -20,6 +20,7 @@ import {
   getDraftSession as getDraftSessionDefault,
   isDraftSessionExpired,
   type DraftSessionRecord,
+  type DraftSessionSupabase,
 } from "@/lib/ai/draft-sessions";
 import { filterAllowedTools } from "@/lib/ai/access-policy";
 import { AI_TOOL_MAP, type ToolName } from "@/lib/ai/tools/definitions";
@@ -116,7 +117,7 @@ export async function resolveThreadState(
 
   if (canUseDraftSessions) {
     try {
-      activeDraftSession = await getDraftSessionFn(ctx.serviceSupabase, {
+      activeDraftSession = await getDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
         organizationId: ctx.orgId,
         userId: ctx.userId,
         threadId,
@@ -124,7 +125,7 @@ export async function resolveThreadState(
 
       if (activeDraftSession && isDraftSessionExpired(activeDraftSession)) {
         try {
-          await clearDraftSessionFn(ctx.serviceSupabase, {
+          await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
             organizationId: ctx.orgId,
             userId: ctx.userId,
             threadId,
@@ -156,7 +157,7 @@ export async function resolveThreadState(
           );
         } else {
           try {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
               organizationId: ctx.orgId,
               userId: ctx.userId,
               threadId,

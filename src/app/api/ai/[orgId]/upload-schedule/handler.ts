@@ -332,7 +332,7 @@ export function createAiScheduleUploadHandler(
         );
       }
 
-      const bucketError = await ensureScheduleUploadBucket(ctx.serviceSupabase.storage as StorageApi, {
+      const bucketError = await ensureScheduleUploadBucket(ctx.serviceSupabase.storage as unknown as StorageApi, {
         orgId,
         mimeType: file.type,
       });
@@ -343,7 +343,7 @@ export function createAiScheduleUploadHandler(
         );
       }
 
-      const { error: uploadError } = await (ctx.serviceSupabase.storage as StorageApi)
+      const { error: uploadError } = await (ctx.serviceSupabase.storage as unknown as StorageApi)
         .from(BUCKET)
         .upload(storagePath, buffer, {
           contentType: file.type,
@@ -446,7 +446,7 @@ export function createAiScheduleUploadDeleteHandler(
         );
       }
 
-      const { error: removeError } = await (ctx.serviceSupabase.storage as StorageApi)
+      const { error: removeError } = await (ctx.serviceSupabase.storage as unknown as StorageApi)
         .from(BUCKET)
         .remove([body.storagePath]);
 

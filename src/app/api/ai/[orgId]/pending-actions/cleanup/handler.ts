@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
-import { cleanupStrandedPendingActions } from "@/lib/ai/pending-actions";
+import { cleanupStrandedPendingActions, type PendingActionSupabase } from "@/lib/ai/pending-actions";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
 
@@ -51,7 +51,7 @@ export function createAiPendingActionsCleanupHandler(
     if (!ctx.ok) return ctx.response;
 
     try {
-      const result = await cleanupStrandedPendingActionsFn(ctx.serviceSupabase, {
+      const result = await cleanupStrandedPendingActionsFn(ctx.serviceSupabase as unknown as PendingActionSupabase, {
         organizationId: ctx.orgId,
         olderThanIso: new Date(Date.now() - STRANDED_CONFIRMATION_TTL_MS).toISOString(),
         failureMessage: "Execution timed out after confirmation",

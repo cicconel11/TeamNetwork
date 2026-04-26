@@ -66,7 +66,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   }
 
   const view = await loadMentorshipTabView({
-    supabase: service,
+    supabase: service as unknown as Awaited<ReturnType<typeof createClient>>,
     orgId: organizationId,
     orgSlug: organization.slug,
     role: membership.role,

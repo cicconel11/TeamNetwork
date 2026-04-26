@@ -113,30 +113,30 @@ export interface PendingActionSummary {
 }
 
 interface PendingActionUpdateChain {
-  eq(column: string, value: string | number): PendingActionUpdateChain & Promise<{ error: unknown }>;
-  select(columns: string): Promise<{ data: unknown[] | null; error: unknown }>;
+  eq(column: string, value: string | number): PendingActionUpdateChain & PromiseLike<{ error: unknown }>;
+  select(columns: string): PromiseLike<{ data: unknown[] | null; error: unknown }>;
 }
 
 interface PendingActionQueryBuilder {
   insert(payload: Record<string, unknown>): {
     select(columns: string): {
-      single(): Promise<{ data: unknown; error: unknown }>;
+      single(): PromiseLike<{ data: unknown; error: unknown }>;
     };
   };
   select(columns: string): {
     eq(column: string, value: string): {
       eq(nextColumn: string, nextValue: string): {
-        lt(targetColumn: string, targetValue: string): Promise<{ data: unknown; error: unknown }>;
+        lt(targetColumn: string, targetValue: string): PromiseLike<{ data: unknown; error: unknown }>;
       };
-      lt(targetColumn: string, targetValue: string): Promise<{ data: unknown; error: unknown }>;
-      maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+      lt(targetColumn: string, targetValue: string): PromiseLike<{ data: unknown; error: unknown }>;
+      maybeSingle(): PromiseLike<{ data: unknown; error: unknown }>;
       then?: unknown;
     };
   };
   update(payload: Record<string, unknown>): PendingActionUpdateChain;
 }
 
-interface PendingActionSupabase {
+export interface PendingActionSupabase {
   from(table: "ai_pending_actions"): PendingActionQueryBuilder;
 }
 

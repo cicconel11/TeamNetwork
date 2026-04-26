@@ -4,7 +4,7 @@ type QueryChain = {
   select(columns: string): QueryChain;
   eq(column: string, value: unknown): QueryChain;
   is?(column: string, value: unknown): QueryChain;
-  maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+  maybeSingle(): PromiseLike<{ data: unknown; error: unknown }>;
 };
 
 export interface RouteEntitySupabase {

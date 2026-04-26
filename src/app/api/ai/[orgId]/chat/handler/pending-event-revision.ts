@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { type PendingActionRecord } from "@/lib/ai/pending-actions";
+import type { ServiceSupabase } from "@/lib/supabase/types";
 import { getNonEmptyString } from "./formatters/index";
 import {
   extractStructuredFieldMap,
@@ -22,14 +22,14 @@ export type PendingEventRevisionAnalysis =
     };
 
 export async function listPendingEventActionsForThread(
-  supabase: unknown,
+  supabase: ServiceSupabase,
   input: {
     organizationId: string;
     userId: string;
     threadId: string;
   }
 ): Promise<PendingEventActionRecord[]> {
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("ai_pending_actions")
     .select("*")
     .eq("organization_id", input.organizationId)
@@ -46,15 +46,15 @@ export async function listPendingEventActionsForThread(
     return [];
   }
 
-  return data.filter(
+  return (data as unknown[]).filter(
     (row): row is PendingEventActionRecord =>
       row != null &&
       typeof row === "object" &&
-      typeof row.id === "string" &&
-      typeof row.thread_id === "string" &&
-      row.action_type === "create_event" &&
-      row.payload != null &&
-      typeof row.payload === "object"
+      typeof (row as { id?: unknown }).id === "string" &&
+      typeof (row as { thread_id?: unknown }).thread_id === "string" &&
+      (row as { action_type?: unknown }).action_type === "create_event" &&
+      (row as { payload?: unknown }).payload != null &&
+      typeof (row as { payload?: unknown }).payload === "object"
   );
 }
 

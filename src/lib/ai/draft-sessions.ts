@@ -41,22 +41,22 @@ export interface DraftSessionRecord<TDraftType extends DraftSessionType = DraftS
 
 interface DraftSessionSelectChain {
   eq(column: string, value: string): DraftSessionSelectChain;
-  maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+  maybeSingle(): PromiseLike<{ data: unknown; error: unknown }>;
 }
 
 interface DraftSessionUpdateChain {
   eq(column: string, value: string): DraftSessionUpdateChain;
-  select(columns: string): Promise<{ data: unknown[] | null; error: unknown }>;
+  select(columns: string): PromiseLike<{ data: unknown[] | null; error: unknown }>;
 }
 
 interface DraftSessionDeleteChain {
-  eq(column: string, value: string): DraftSessionDeleteChain & Promise<{ error: unknown }>;
+  eq(column: string, value: string): DraftSessionDeleteChain & PromiseLike<{ error: unknown }>;
 }
 
 interface DraftSessionQueryBuilder {
   insert(payload: Record<string, unknown>): {
     select(columns: string): {
-      single(): Promise<{ data: unknown; error: unknown }>;
+      single(): PromiseLike<{ data: unknown; error: unknown }>;
     };
   };
   select(columns: string): DraftSessionSelectChain;
@@ -64,7 +64,7 @@ interface DraftSessionQueryBuilder {
   delete(): DraftSessionDeleteChain;
 }
 
-interface DraftSessionSupabase {
+export interface DraftSessionSupabase {
   from(table: "ai_draft_sessions"): DraftSessionQueryBuilder;
 }
 

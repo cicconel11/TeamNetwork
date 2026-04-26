@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { ServerSupabase, ServiceSupabase } from "@/lib/supabase/types";
 import type { ToolName } from "@/lib/ai/tools/definitions";
 import type {
   executeToolCall,
@@ -33,8 +33,8 @@ export interface RunPendingEventRevisionInput {
     userId: string;
     enterpriseId?: string;
     enterpriseRole?: EnterpriseRole;
-    supabase: any;
-    serviceSupabase: any;
+    supabase: ServerSupabase;
+    serviceSupabase: ServiceSupabase;
   };
   toolAuthorization: ToolExecutionAuthorization;
   toolAuthMode: AiToolAuthMode;

@@ -79,7 +79,7 @@ import {
   serveCacheHit,
 } from "./handler/stages/cache-rag-stage";
 import { runInitChatRpcStage } from "./handler/stages/init-chat-rpc";
-import { runInitChatHistoryStage } from "./handler/stages/init-chat-history";
+import { runInitChatHistoryStage, type HistoryRow } from "./handler/stages/init-chat-history";
 import { serveTerminalRefusal } from "./handler/stages/serve-terminal-refusal";
 import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
 import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
@@ -574,8 +574,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         ? buildDraftSessionContextMessage(activeDraftSession)
         : null;
       const historyMessages = (historyRows ?? [])
-        .filter((m: any) => m.content)
-        .map((m: any) => ({
+        .filter((m: HistoryRow) => m.content)
+        .map((m: HistoryRow) => ({
           role: m.role as "user" | "assistant",
           content:
             m.role === "user"
