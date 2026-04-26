@@ -472,6 +472,61 @@ export function getForcedPass1ToolChoice(
   };
 }
 
+/**
+ * Tools whose forced single-tool Pass-1 turn can be safely bypassed: args are
+ * either zero (lister tools) or fully derivable from the user message via
+ * `deriveForcedPass1ToolArgs`. Must be a subset of `getForcedPass1ToolChoice`'s
+ * allowlist (test enforces).
+ */
+export const BYPASS_ELIGIBLE_TOOLS: ReadonlyArray<ToolName> = [
+  "get_org_stats",
+  "get_donation_analytics",
+  "list_members",
+  "list_events",
+  "list_alumni",
+  "list_parents",
+  "list_donations",
+  "list_philanthropy_events",
+  "list_chat_groups",
+];
+
+export interface CanBypassPass1Input {
+  pass1Tools: ReadonlyArray<OpenAI.Chat.ChatCompletionTool> | undefined;
+  pass1ToolChoice: OpenAI.Chat.ChatCompletionToolChoiceOption | undefined;
+  activeDraftSession: unknown | null;
+  pendingEventRevisionAnalysis: { kind: string } | null | undefined;
+  pendingConnectionDisambiguation: boolean;
+  attachment: ChatAttachment | null | undefined;
+  executionPolicy: { toolPolicy: TurnExecutionPolicy["toolPolicy"] };
+}
+
+/**
+ * Decide whether the forced single-tool Pass-1 round-trip can be replaced
+ * with an in-process synthetic tool call. Returns false on any suppressor.
+ */
+export function canBypassPass1(input: CanBypassPass1Input): boolean {
+  if (!input.pass1Tools || input.pass1Tools.length !== 1) return false;
+  if (input.pass1ToolChoice == null) return false;
+  if (input.executionPolicy.toolPolicy !== "surface_read_tools") return false;
+  if (input.activeDraftSession != null) return false;
+  // Pending-event revision branch handles its own SSE/tool flow; never bypass
+  // when an analysis other than "none" is in flight.
+  if (
+    input.pendingEventRevisionAnalysis != null &&
+    input.pendingEventRevisionAnalysis.kind !== "none"
+  ) {
+    return false;
+  }
+  if (input.pendingConnectionDisambiguation) return false;
+  if (input.attachment != null) return false;
+
+  const firstTool = input.pass1Tools[0];
+  if (!firstTool || !("function" in firstTool)) return false;
+  const toolName = firstTool.function.name;
+  if (!toolName) return false;
+  return (BYPASS_ELIGIBLE_TOOLS as ReadonlyArray<string>).includes(toolName);
+}
+
 export function isToolFirstEligible(
   pass1Tools: ReturnType<typeof getPass1Tools>
 ): boolean {
