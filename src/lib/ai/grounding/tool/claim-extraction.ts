@@ -40,6 +40,11 @@ export interface DonationAnalyticsVerifyPayload {
     successful_amount_cents?: unknown;
     average_successful_amount_cents?: unknown;
     largest_successful_amount_cents?: unknown;
+    status_counts?: {
+      succeeded?: unknown;
+      pending?: unknown;
+      failed?: unknown;
+    } | null;
   } | null;
   trend?: unknown;
   top_purposes?: unknown;

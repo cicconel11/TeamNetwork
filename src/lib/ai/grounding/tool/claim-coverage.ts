@@ -119,6 +119,30 @@ function parseFormatterStatsRow(
   };
 }
 
+type DonationStatus = "succeeded" | "pending" | "failed";
+
+function parseDonationStatusClaims(content: string): Map<DonationStatus, number> {
+  const claims = new Map<DonationStatus, number>();
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim().toLowerCase();
+    if (!/\b(?:status mix|succeeded|pending|failed)\b/.test(line)) {
+      continue;
+    }
+
+    for (const status of ["succeeded", "pending", "failed"] as const) {
+      const numberFirst = line.match(new RegExp(`\\b(\\d+)\\b\\s+${status}\\b`));
+      const labelFirst = line.match(
+        new RegExp(`\\b${status}\\b[^0-9]{0,10}\\b(\\d+)\\b`)
+      );
+      const match = numberFirst ?? labelFirst;
+      if (match) {
+        claims.set(status, Number(match[1]));
+      }
+    }
+  }
+  return claims;
+}
+
 const DONATION_ANALYTICS_CANONICAL_LABELS = [
   "donation analytics",
   "successful donations",
@@ -252,6 +276,26 @@ export function verifyDonationAnalytics(content: string, data: unknown): string[
         failures.push(
           `largest successful donation claim $${largestClaim} did not match $${Math.round(largestDollars)}`
         );
+      }
+    }
+  }
+
+  const statusClaims = parseDonationStatusClaims(content);
+  if (statusClaims.size > 0) {
+    const statusCounts =
+      totals?.status_counts && typeof totals.status_counts === "object"
+        ? totals.status_counts
+        : null;
+    if (!statusCounts) {
+      failures.push("status mix claim was not present in tool data");
+    } else {
+      for (const [status, claimed] of statusClaims) {
+        const expected = statusCounts[status];
+        if (typeof expected !== "number") {
+          failures.push(`${status} status claim was not present in tool data`);
+        } else if (claimed !== expected) {
+          failures.push(`${status} status claim ${claimed} did not match ${expected}`);
+        }
       }
     }
   }
