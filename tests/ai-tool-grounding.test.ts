@@ -822,6 +822,35 @@ test("verifyToolBackedResponse accepts currency k-suffix claim that matches cent
   assert.deepEqual(result.failures, []);
 });
 
+test("verifyToolBackedResponse rejects status mix claims without status_counts", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Donation analytics (90-day window)",
+      "- Successful donations: 8",
+      "- Raised: $450",
+      "- Status mix: 8 succeeded - 1 pending - 0 failed",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "get_donation_analytics",
+        data: {
+          totals: {
+            successful_donation_count: 8,
+            successful_amount_cents: 45000,
+            average_successful_amount_cents: 5625,
+            largest_successful_amount_cents: 12500,
+          },
+          trend: [],
+          top_purposes: [],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /status mix claim/i.test(f)));
+});
+
 test("verifyToolBackedResponse accepts grounded list_donations output", () => {
   const result = verifyToolBackedResponse({
     content: '- "Alumni Campaign" - $125 - jane@example.com',
