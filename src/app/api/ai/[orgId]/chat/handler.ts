@@ -6,7 +6,6 @@ import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { buildPromptContext } from "@/lib/ai/context-builder";
 import {
   composeResponse,
-  type ToolCallRequestedEvent,
   type ToolResultMessage,
 } from "@/lib/ai/response-composer";
 import { logAiRequest } from "@/lib/ai/audit";
@@ -25,9 +24,6 @@ import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
 import {
   buildTurnExecutionPolicy,
 } from "@/lib/ai/turn-execution-policy";
-import {
-  extractCurrentMemberRouteId,
-} from "@/lib/ai/route-entity";
 import { loadRouteEntityContext } from "@/lib/ai/route-entity-loaders";
 import {
   verifyToolBackedResponse,
@@ -50,7 +46,6 @@ import {
   saveDraftSession,
 } from "@/lib/ai/draft-sessions";
 import {
-  PASS1_MODEL_TIMEOUT_MS,
   PASS2_MODEL_TIMEOUT_MS,
 } from "@/lib/ai/timeout";
 import {
@@ -61,7 +56,6 @@ import {
 } from "@/lib/ai/chat-telemetry";
 import { aiLog } from "@/lib/ai/logger";
 import {
-  getNonEmptyString,
   hasPendingConnectionDisambiguation,
   looksLikeConnectionDisambiguationReply,
   collectPhoneNumberFields,
@@ -78,19 +72,10 @@ import {
 } from "./handler/pass1-tools";
 import {
   buildDraftSessionContextMessage,
-  getToolNameForDraftType,
   mergeDraftPayload,
 } from "./handler/draft-session";
 import {
-  buildDiscussionReplyClarificationPayload,
-  isChatRecipientDemonstrative,
-  isDiscussionThreadDemonstrative,
-  resolveDiscussionReplyTarget,
-  type PendingActionToolPayload,
-} from "./handler/discussion-reply";
-import {
   buildPrepareEventArgsFromPendingAction,
-  getBatchPendingActionsFromToolData,
   getPendingActionFromToolData,
   SUPPORTED_EVENT_TYPE_LABELS,
 } from "./handler/pending-event-revision";
@@ -131,6 +116,8 @@ import { serveTerminalRefusal } from "./handler/stages/serve-terminal-refusal";
 import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
 import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
 import { runModelStage } from "./handler/stages/run-model-stage";
+import { runPass1 } from "./handler/stages/run-pass1";
+import { createToolCallHandler } from "./handler/stages/run-tool-calls";
 import { finalizeTurnAudit } from "./handler/stages/finalize-audit";
 
 const MESSAGE_SAFETY_FALLBACK =
@@ -824,18 +811,39 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
       const toolResults: ToolResultMessage[] = [];
       const pass1ToolChoice = getForcedPass1ToolChoice(pass1Tools);
-        const pass1Outcome = await runModelStage({
-          stage: "pass1_model",
-          auditStage: "pass1_model",
-          timeoutMs: PASS1_MODEL_TIMEOUT_MS,
-          options: {
-            client,
-            systemPrompt: effectivePass1SystemPrompt,
-            messages: contextMessages,
-            tools: pass1Tools,
-            toolChoice: pass1ToolChoice,
-            onUsage: recordUsage,
-          },
+        const onToolCall = createToolCallHandler({
+          ctx,
+          toolAuthorization,
+          toolAuthMode,
+          threadId,
+          requestId,
+          attachment,
+          message,
+          currentPath,
+          routeEntityContext,
+          threadMetadata,
+          canUseDraftSessions,
+          requestLogContext,
+          auditToolCalls,
+          toolResults,
+          successfulToolResults,
+          runtimeState,
+          stageTimings,
+          enqueue,
+          getActiveDraftSession: () => activeDraftSession,
+          setActiveDraftSession: (next) => { activeDraftSession = next; },
+          isToolPassBreakerOpen: () => toolPassBreakerOpen,
+          setToolPassBreakerOpen: (open) => { toolPassBreakerOpen = open; },
+          setTerminateTurn: () => { terminateTurn = true; },
+          executeToolCallFn,
+          saveDraftSessionFn,
+        });
+        const pass1Outcome = await runPass1({
+          client,
+          systemPrompt: effectivePass1SystemPrompt,
+          messages: contextMessages,
+          tools: pass1Tools,
+          toolChoice: pass1ToolChoice,
           composeResponseFn,
           stageTimings,
           streamSignal,
@@ -843,362 +851,18 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           requestLogContext,
           runtimeState,
           emitTimeoutError,
-          onEvent: async (event) => {
-            if (event.type === "chunk") {
-              // Buffer pass-1 text until validators run. Freeform (no-tool)
-              // path used to stream token-by-token; now buffered so RAG
-              // grounding + safety gate can inspect before release.
-              pass1BufferedContent += event.content;
-              return "continue";
-            }
-
-            if (event.type === "error") {
-              runtimeState.auditErrorMessage = event.message;
-              enqueue(event);
-              return "stop";
-            }
-
-            const toolEvent = event as ToolCallRequestedEvent;
-            runtimeState.toolCallMade = true;
-
-            let parsedArgs: Record<string, unknown>;
-            try {
-              parsedArgs = JSON.parse(toolEvent.argsJson);
-            } catch {
-              enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
-              auditToolCalls.push({ name: toolEvent.name, args: {} });
-              addToolCallTiming(stageTimings, {
-                name: toolEvent.name,
-                status: "failed",
-                duration_ms: 0,
-                auth_mode: toolAuthMode,
-                error_kind: "tool_error",
-              });
-              toolResults.push({
-                toolCallId: toolEvent.id,
-                name: toolEvent.name,
-                args: {},
-                data: { error: "Malformed tool arguments" },
-              });
-              return "continue";
-            }
-
-            if (
-              activeDraftSession &&
-              toolEvent.name === getToolNameForDraftType(activeDraftSession.draft_type)
-            ) {
-              parsedArgs = mergeDraftPayload(
-                activeDraftSession.draft_payload as Record<string, unknown>,
-                parsedArgs
-              );
-            }
-
-            if (toolEvent.name === "prepare_chat_message") {
-              const currentMemberRouteId =
-                routeEntityContext?.kind === "member"
-                  ? routeEntityContext.id
-                  : extractCurrentMemberRouteId(currentPath);
-              if (currentMemberRouteId && isChatRecipientDemonstrative(message)) {
-                parsedArgs.recipient_member_id = currentMemberRouteId;
-                delete parsedArgs.person_query;
-              } else if (
-                currentMemberRouteId &&
-                getNonEmptyString(parsedArgs.recipient_member_id) == null &&
-                getNonEmptyString(parsedArgs.person_query) == null
-              ) {
-                parsedArgs.recipient_member_id = currentMemberRouteId;
-              } else if (
-                threadMetadata.last_chat_recipient_member_id &&
-                getNonEmptyString(parsedArgs.recipient_member_id) == null &&
-                getNonEmptyString(parsedArgs.person_query) == null
-              ) {
-                // Use the last chat recipient from thread metadata for follow-up messages
-                parsedArgs.recipient_member_id = threadMetadata.last_chat_recipient_member_id;
-              }
-            }
-
-            let syntheticToolResult:
-              | Awaited<ReturnType<typeof executeToolCallFn>>
-              | null = null;
-            if (toolEvent.name === "prepare_discussion_reply") {
-              const discussionThreadId = getNonEmptyString(parsedArgs.discussion_thread_id);
-              const requestedThreadTitle = getNonEmptyString(parsedArgs.thread_title);
-              const explicitNamedThreadTitle =
-                requestedThreadTitle && !isDiscussionThreadDemonstrative(requestedThreadTitle)
-                  ? requestedThreadTitle
-                  : null;
-
-              if (!discussionThreadId && explicitNamedThreadTitle) {
-                const resolution = await resolveDiscussionReplyTarget(ctx.serviceSupabase as any, {
-                  organizationId: ctx.orgId,
-                  requestedThreadTitle: explicitNamedThreadTitle,
-                });
-
-                if (resolution.kind === "resolved") {
-                  parsedArgs.discussion_thread_id = resolution.discussionThreadId;
-                  parsedArgs.thread_title = resolution.threadTitle ?? explicitNamedThreadTitle;
-                } else {
-                  if (resolution.kind === "lookup_error") {
-                    aiLog("warn", "ai-chat", "discussion thread title resolution failed", {
-                      ...requestLogContext,
-                      threadId: threadId ?? undefined,
-                    }, {
-                      requestedThreadTitle: explicitNamedThreadTitle,
-                    });
-                  }
-                  syntheticToolResult = {
-                    kind: "ok",
-                    data: buildDiscussionReplyClarificationPayload(parsedArgs, resolution),
-                  };
-                }
-              } else if (
-                routeEntityContext?.kind === "discussion_thread" &&
-                !discussionThreadId
-              ) {
-                parsedArgs.discussion_thread_id =
-                  routeEntityContext.id;
-                if (
-                  getNonEmptyString(parsedArgs.thread_title) == null &&
-                  routeEntityContext.displayName
-                ) {
-                  parsedArgs.thread_title = routeEntityContext.displayName;
-                }
-              } else if (!discussionThreadId && !syntheticToolResult) {
-                syntheticToolResult = {
-                  kind: "ok",
-                  data: buildDiscussionReplyClarificationPayload(parsedArgs, {
-                    kind: "thread_title_required",
-                  }),
-                };
-              }
-            }
-
-            auditToolCalls.push({ name: toolEvent.name, args: parsedArgs });
-
-            if (toolPassBreakerOpen) {
-              return "continue";
-            }
-
-            const toolStartedAt = Date.now();
-            let result: Awaited<ReturnType<typeof executeToolCallFn>>;
-            if (syntheticToolResult) {
-              result = syntheticToolResult;
-            } else {
-              enqueue({ type: "tool_status", toolName: toolEvent.name, status: "calling" });
-
-              const activePendingActionId =
-                toolEvent.name.startsWith("prepare_") &&
-                activeDraftSession?.pending_action_id
-                  ? activeDraftSession.pending_action_id
-                  : null;
-
-              result = await executeToolCallFn(
-                {
-                  orgId: ctx.orgId,
-                  userId: ctx.userId,
-                  enterpriseId: ctx.enterpriseId,
-                  enterpriseRole: ctx.enterpriseRole,
-                  supabase: ctx.supabase,
-                  serviceSupabase: ctx.serviceSupabase,
-                  authorization: toolAuthorization,
-                  threadId,
-                  requestId,
-                  attachment,
-                  activePendingActionId,
-                },
-                { name: toolEvent.name, args: parsedArgs }
-              );
-            }
-
-            switch (result.kind) {
-              case "ok":
-                if (
-                  canUseDraftSessions &&
-                  (toolEvent.name === "prepare_announcement" ||
-                    toolEvent.name === "prepare_job_posting" ||
-                    toolEvent.name === "prepare_chat_message" ||
-                    toolEvent.name === "prepare_group_message" ||
-                    toolEvent.name === "prepare_discussion_reply" ||
-                    toolEvent.name === "prepare_discussion_thread" ||
-                    toolEvent.name === "prepare_event") &&
-                  result.data &&
-                  typeof result.data === "object"
-                ) {
-                  const toolData = result.data as PendingActionToolPayload;
-                  if (
-                    toolData.state === "missing_fields" ||
-                    toolData.state === "needs_confirmation"
-                  ) {
-                    const missingFields = Array.isArray(toolData.missing_fields)
-                      ? toolData.missing_fields.filter(
-                          (field): field is string =>
-                            typeof field === "string" && field.length > 0
-                        )
-                      : [];
-                    const pendingActionId =
-                      toolData.pending_action &&
-                      typeof toolData.pending_action === "object" &&
-                      typeof toolData.pending_action.id === "string"
-                        ? toolData.pending_action.id
-                        : null;
-                    const pendingExpiresAt =
-                      toolData.pending_action &&
-                      typeof toolData.pending_action === "object" &&
-                      typeof toolData.pending_action.expires_at === "string"
-                        ? toolData.pending_action.expires_at
-                        : undefined;
-
-                    try {
-                      activeDraftSession = await saveDraftSessionFn(ctx.serviceSupabase, {
-                        organizationId: ctx.orgId,
-                        userId: ctx.userId,
-                        threadId: threadId!,
-                        draftType:
-                          toolEvent.name === "prepare_announcement"
-                            ? "create_announcement"
-                            : toolEvent.name === "prepare_job_posting"
-                            ? "create_job_posting"
-                            : toolEvent.name === "prepare_chat_message"
-                            ? "send_chat_message"
-                            : toolEvent.name === "prepare_group_message"
-                            ? "send_group_chat_message"
-                            : toolEvent.name === "prepare_discussion_reply"
-                              ? "create_discussion_reply"
-                            : toolEvent.name === "prepare_discussion_thread"
-                              ? "create_discussion_thread"
-                              : "create_event",
-                        status:
-                          toolData.state === "needs_confirmation"
-                            ? "ready_for_confirmation"
-                            : "collecting_fields",
-                        draftPayload:
-                          toolData.draft && typeof toolData.draft === "object"
-                            ? (toolData.draft as any)
-                            : (parsedArgs as any),
-                        missingFields,
-                        pendingActionId,
-                        expiresAt: pendingExpiresAt,
-                      });
-                    } catch (error) {
-                      activeDraftSession = null;
-                      aiLog("warn", "ai-chat", "failed to persist draft session; continuing without it", {
-                        ...requestLogContext,
-                        threadId: threadId!,
-                      }, { error, toolName: toolEvent.name });
-                    }
-                  }
-                }
-
-                addToolCallTiming(stageTimings, {
-                  name: toolEvent.name,
-                  status: "completed",
-                  duration_ms: Date.now() - toolStartedAt,
-                  auth_mode: toolAuthMode,
-                });
-                enqueue({ type: "tool_status", toolName: toolEvent.name, status: "done" });
-                runtimeState.toolCallSucceeded = true;
-                toolResults.push({
-                  toolCallId: toolEvent.id,
-                  name: toolEvent.name,
-                  args: parsedArgs,
-                  data: result.data,
-                });
-                const pendingAction = getPendingActionFromToolData(result.data);
-                if (pendingAction) {
-                  if (pendingAction.reviseCount !== null) {
-                    enqueue({
-                      type: "pending_action_updated",
-                      actionId: pendingAction.actionId,
-                      actionType: pendingAction.actionType,
-                      summary: pendingAction.summary,
-                      payload: pendingAction.payload,
-                      previousPayload: pendingAction.previousPayload,
-                      reviseCount: pendingAction.reviseCount,
-                      expiresAt: pendingAction.expiresAt,
-                    });
-                  } else {
-                    enqueue({
-                      type: "pending_action",
-                      actionId: pendingAction.actionId,
-                      actionType: pendingAction.actionType,
-                      summary: pendingAction.summary,
-                      payload: pendingAction.payload,
-                      expiresAt: pendingAction.expiresAt,
-                    });
-                  }
-                } else {
-                  const batchActions = getBatchPendingActionsFromToolData(result.data);
-                  if (batchActions) {
-                    enqueue({
-                      type: "pending_actions_batch",
-                      actions: batchActions,
-                    });
-                  }
-                }
-                successfulToolResults.push({
-                  name: toolEvent.name as ToolName,
-                  data: result.data,
-                });
-                return "continue";
-              case "tool_error":
-                addToolCallTiming(stageTimings, {
-                  name: toolEvent.name,
-                  status: "failed",
-                  duration_ms: Date.now() - toolStartedAt,
-                  auth_mode: toolAuthMode,
-                  error_kind: "tool_error",
-                });
-                enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
-                toolResults.push({
-                  toolCallId: toolEvent.id,
-                  name: toolEvent.name,
-                  args: parsedArgs,
-                  data: {
-                    error: result.error,
-                    error_code: result.code,
-                  },
-                });
-                return "continue";
-              case "timeout":
-                addToolCallTiming(stageTimings, {
-                  name: toolEvent.name,
-                  status: "timed_out",
-                  duration_ms: Date.now() - toolStartedAt,
-                  auth_mode: toolAuthMode,
-                  error_kind: "timeout",
-                });
-                enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
-                toolResults.push({
-                  toolCallId: toolEvent.id,
-                  name: toolEvent.name,
-                  args: parsedArgs,
-                  data: { error: result.error },
-                });
-                toolPassBreakerOpen = true;
-                return "continue";
-              case "forbidden":
-              case "auth_error":
-                addToolCallTiming(stageTimings, {
-                  name: toolEvent.name,
-                  status: "failed",
-                  duration_ms: Date.now() - toolStartedAt,
-                  auth_mode: toolAuthMode,
-                  error_kind: result.kind,
-                });
-                enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
-                runtimeState.auditErrorMessage = `tool_${toolEvent.name}:${result.kind}`;
-                terminateTurn = true;
-                enqueue({
-                  type: "error",
-                  message:
-                    result.kind === "forbidden"
-                      ? "Your access to AI tools for this organization has changed."
-                      : "Unable to verify access to AI tools right now.",
-                  retryable: false,
-                });
-                return "stop";
-            }
+          onUsage: recordUsage,
+          onChunk: (content) => {
+            // Buffer pass-1 text until validators run. Freeform (no-tool)
+            // path used to stream token-by-token; now buffered so RAG
+            // grounding + safety gate can inspect before release.
+            pass1BufferedContent += content;
           },
+          onError: (event) => {
+            runtimeState.auditErrorMessage = event.message;
+            enqueue(event);
+          },
+          onToolCall,
         });
 
         if (terminateTurn || pass1Outcome !== "completed") {
