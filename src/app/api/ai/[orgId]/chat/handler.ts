@@ -42,28 +42,15 @@ import {
   getDraftSession,
   saveDraftSession,
 } from "@/lib/ai/draft-sessions";
-import {
-  createStageTimings,
-  skipStage,
-  addToolCallTiming,
-} from "@/lib/ai/chat-telemetry";
+import { createStageTimings } from "@/lib/ai/chat-telemetry";
 import { aiLog } from "@/lib/ai/logger";
 import {
   hasPendingConnectionDisambiguation,
   looksLikeConnectionDisambiguationReply,
   collectPhoneNumberFields,
-  formatRevisedPendingEventResponse,
 } from "./handler/formatters/index";
 import { getForcedPass1ToolChoice } from "./handler/pass1-tools";
-import {
-  buildDraftSessionContextMessage,
-  mergeDraftPayload,
-} from "./handler/draft-session";
-import {
-  buildPrepareEventArgsFromPendingAction,
-  getPendingActionFromToolData,
-  SUPPORTED_EVENT_TYPE_LABELS,
-} from "./handler/pending-event-revision";
+import { buildDraftSessionContextMessage } from "./handler/draft-session";
 import {
   ACTIVE_DRAFT_CONTINUATION_INSTRUCTION,
   CONNECTION_PASS1_DISAMBIGUATION_INSTRUCTION,
@@ -97,6 +84,7 @@ import { serveTerminalRefusal } from "./handler/stages/serve-terminal-refusal";
 import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
 import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
 import { runModelToolsLoop } from "./handler/stages/run-model-tools-loop";
+import { runPendingEventRevision } from "./handler/stages/run-pending-event-revision";
 import { finalizeTurnAudit } from "./handler/stages/finalize-audit";
 
 const MESSAGE_SAFETY_FALLBACK =
@@ -513,198 +501,27 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         return;
       }
 
-      if (pendingEventRevisionAnalysis.kind === "clarify") {
-        skipStage(stageTimings, "history_load");
-        skipStage(stageTimings, "context_build");
-        skipStage(stageTimings, "pass1_model");
-        skipStage(stageTimings, "pass2");
-        skipStage(stageTimings, "grounding");
-
-        fullContent = pendingEventRevisionAnalysis.message;
-        enqueue({ type: "chunk", content: fullContent });
-        enqueue({
-          type: "done",
-          threadId: threadId!,
-          cache: {
-            status: cacheStatus,
-            ...(cacheEntryId ? { entryId: cacheEntryId } : {}),
-            ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
-          },
-        });
-        runtimeState.streamCompletedSuccessfully = true;
-        return;
-      }
-
-      if (pendingEventRevisionAnalysis.kind === "unsupported_event_type") {
-        skipStage(stageTimings, "history_load");
-        skipStage(stageTimings, "context_build");
-        skipStage(stageTimings, "pass1_model");
-        skipStage(stageTimings, "pass2");
-        skipStage(stageTimings, "grounding");
-
-        fullContent =
-          `I can revise the drafted schedule before confirmation, but "${pendingEventRevisionAnalysis.requestedType}" isn't a supported event type yet. ` +
-          `Use one of: ${SUPPORTED_EVENT_TYPE_LABELS.join(", ")}.`;
-        enqueue({ type: "chunk", content: fullContent });
-        enqueue({
-          type: "done",
-          threadId: threadId!,
-          cache: {
-            status: cacheStatus,
-            ...(cacheEntryId ? { entryId: cacheEntryId } : {}),
-            ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
-          },
-        });
-        runtimeState.streamCompletedSuccessfully = true;
-        return;
-      }
-
-      if (pendingEventRevisionAnalysis.kind === "apply" && activePendingEventActions.length > 0) {
-        skipStage(stageTimings, "history_load");
-        skipStage(stageTimings, "context_build");
-        skipStage(stageTimings, "pass1_model");
-        skipStage(stageTimings, "pass2");
-        skipStage(stageTimings, "grounding");
-
-        const revisedEvents = activePendingEventActions.map((action, index) =>
-          pendingEventRevisionAnalysis.targetIndexes.includes(index)
-            ? mergeDraftPayload(
-                buildPrepareEventArgsFromPendingAction(action),
-                pendingEventRevisionAnalysis.overrides
-              )
-            : buildPrepareEventArgsFromPendingAction(action)
-        );
-        const revisionToolName: ToolName =
-          revisedEvents.length > 1 ? "prepare_events_batch" : "prepare_event";
-        const revisionArgs =
-          revisedEvents.length > 1 ? { events: revisedEvents } : revisedEvents[0];
-
-        runtimeState.toolCallMade = true;
-        auditToolCalls.push({
-          name: revisionToolName,
-          args: revisionArgs,
-        });
-        enqueue({ type: "tool_status", toolName: revisionToolName, status: "calling" });
-
-        const toolStartedAt = Date.now();
-
-        // Batch revisions (>1 active event) cannot preserve the per-row revise
-        // cap because prepare_events_batch / buildPendingEventBatchFromDrafts
-        // mints fresh rows in a loop. Reject explicitly so the user confirms
-        // or cancels the existing batch instead of silently bypassing the cap.
-        if (activePendingEventActions.length > 1) {
-          addToolCallTiming(stageTimings, {
-            name: revisionToolName,
-            status: "failed",
-            duration_ms: Date.now() - toolStartedAt,
-            auth_mode: toolAuthMode,
-            error_kind: "tool_error",
-          });
-          enqueue({ type: "tool_status", toolName: revisionToolName, status: "error" });
-          enqueue({
-            type: "error",
-            message:
-              "I can't revise a multi-event draft in place. Please confirm or cancel the current pending events, then ask again with the changes you want.",
-            retryable: false,
-          });
-          return;
-        }
-
-        // Single-event revise: pass activePendingActionId so the executor's
-        // createOrRevisePendingAction revises the existing row under the
-        // 3-loop cap instead of minting a fresh one.
-        const revisionResult = await executeToolCallFn(
-          {
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            enterpriseId: ctx.enterpriseId,
-            enterpriseRole: ctx.enterpriseRole,
-            supabase: ctx.supabase,
-            serviceSupabase: ctx.serviceSupabase,
-            authorization: toolAuthorization,
-            threadId,
-            requestId,
-            attachment,
-            activePendingActionId: activePendingEventActions[0].id,
-          },
-          {
-            name: revisionToolName,
-            args: revisionArgs,
-          }
-        );
-
-        if (revisionResult.kind !== "ok") {
-          addToolCallTiming(stageTimings, {
-            name: revisionToolName,
-            status: revisionResult.kind === "timeout" ? "timed_out" : "failed",
-            duration_ms: Date.now() - toolStartedAt,
-            auth_mode: toolAuthMode,
-            error_kind: revisionResult.kind === "timeout" ? "timeout" : "tool_error",
-          });
-          enqueue({ type: "tool_status", toolName: revisionToolName, status: "error" });
-          enqueue({
-            type: "error",
-            message:
-              revisionResult.kind === "timeout"
-                ? "Updating the drafted schedule timed out. Please try again."
-                : revisionResult.error,
-            retryable: revisionResult.kind === "timeout",
-          });
-          return;
-        }
-
-        addToolCallTiming(stageTimings, {
-          name: revisionToolName,
-          status: "completed",
-          duration_ms: Date.now() - toolStartedAt,
-          auth_mode: toolAuthMode,
-        });
-        enqueue({ type: "tool_status", toolName: revisionToolName, status: "done" });
-        runtimeState.toolCallSucceeded = true;
-        successfulToolResults.push({
-          name: revisionToolName,
-          data: revisionResult.data,
-        });
-
-        const pendingAction = getPendingActionFromToolData(revisionResult.data);
-        if (pendingAction) {
-          if (pendingAction.reviseCount !== null) {
-            enqueue({
-              type: "pending_action_updated",
-              actionId: pendingAction.actionId,
-              actionType: pendingAction.actionType,
-              summary: pendingAction.summary,
-              payload: pendingAction.payload,
-              previousPayload: pendingAction.previousPayload,
-              reviseCount: pendingAction.reviseCount,
-              expiresAt: pendingAction.expiresAt,
-            });
-          } else {
-            enqueue({
-              type: "pending_action",
-              actionId: pendingAction.actionId,
-              actionType: pendingAction.actionType,
-              summary: pendingAction.summary,
-              payload: pendingAction.payload,
-              expiresAt: pendingAction.expiresAt,
-            });
-          }
-        }
-
-        fullContent =
-          formatRevisedPendingEventResponse(revisionResult.data, revisedEvents.length) ??
-          "I revised the drafted schedule. Review the updated details below and confirm when you're ready.";
-        enqueue({ type: "chunk", content: fullContent });
-        enqueue({
-          type: "done",
-          threadId: threadId!,
-          cache: {
-            status: cacheStatus,
-            ...(cacheEntryId ? { entryId: cacheEntryId } : {}),
-            ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
-          },
-        });
-        runtimeState.streamCompletedSuccessfully = true;
+      const revisionOutcome = await runPendingEventRevision({
+        pendingEventRevisionAnalysis,
+        activePendingEventActions,
+        ctx,
+        toolAuthorization,
+        toolAuthMode,
+        threadId: threadId!,
+        requestId,
+        attachment,
+        cacheStatus,
+        cacheEntryId,
+        cacheBypassReason,
+        runtimeState,
+        stageTimings,
+        auditToolCalls,
+        successfulToolResults,
+        enqueue,
+        executeToolCallFn,
+      });
+      if (revisionOutcome.status === "handled") {
+        fullContent = revisionOutcome.fullContent;
         return;
       }
 
