@@ -158,6 +158,7 @@ let POST = createChatPostHandler();
 
 interface BuildHandlerOpts {
   composeResponse?: any;
+  executeToolCall?: any;
   serviceSupabaseRpc?: (fn: string, params: any) => Promise<{ data: any; error: any }>;
   cacheLookupRow?: { id: string; response_content: string; created_at: string } | null;
 }
@@ -262,6 +263,7 @@ function rebuildHandler(opts: BuildHandlerOpts = {}): void {
     createZaiClient: () => ({ client: "fake" } as any),
     getZaiModel: () => "glm-5",
     composeResponse: opts.composeResponse ?? composeResponseDefault,
+    executeToolCall: opts.executeToolCall,
     logAiRequest: async (_s: unknown, entry: unknown) => {
       auditEntries.push(entry);
     },
@@ -368,6 +370,82 @@ test("snapshot: scope-refusal (out_of_scope_unrelated terminal)", async () => {
     () =>
       makeRequest({
         message: "What's the weather in Paris tomorrow?",
+        surface: "general",
+        idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      }),
+  );
+});
+
+// Pass1 yields N tool_call_requested events, no text. Pass2 (detected via
+// `toolResults` option) yields a single chunk so the model+tools loop runs
+// end-to-end. Locks the multi-tool branch (skips single-tool deterministic
+// formatter and exercises real pass2 streaming).
+function makeToolCallingComposer(opts: {
+  toolCalls: Array<{ id: string; name: string; argsJson: string }>;
+  pass2Content: string;
+}) {
+  return async function* composeResponseStub(options: {
+    toolResults?: unknown;
+    onUsage?: (u: { inputTokens: number; outputTokens: number }) => void;
+  }) {
+    if (options.toolResults && (options.toolResults as unknown[]).length > 0) {
+      options.onUsage?.({ inputTokens: 9, outputTokens: 4 });
+      yield { type: "chunk", content: opts.pass2Content };
+      return;
+    }
+    options.onUsage?.({ inputTokens: 12, outputTokens: 0 });
+    for (const call of opts.toolCalls) {
+      yield { type: "tool_call_requested", ...call };
+    }
+  };
+}
+
+test("snapshot: multi-tool-call (two tools, pass2 streamed)", async () => {
+  await runFixture(
+    "multi-tool-call",
+    () =>
+      rebuildHandler({
+        composeResponse: makeToolCallingComposer({
+          toolCalls: [
+            { id: "call-1", name: "list_events", argsJson: "{}" },
+            { id: "call-2", name: "list_announcements", argsJson: "{}" },
+          ],
+          pass2Content: "Two tools ran.",
+        }),
+        executeToolCall: async (_ctx: unknown, call: { name: string }) => ({
+          kind: "ok",
+          data: { name: call.name, items: [] },
+        }),
+      }),
+    () =>
+      makeRequest({
+        message: "List events and announcements",
+        surface: "general",
+        idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      }),
+  );
+});
+
+test("snapshot: tool-error (single tool errors, pass2 explains)", async () => {
+  await runFixture(
+    "tool-error",
+    () =>
+      rebuildHandler({
+        composeResponse: makeToolCallingComposer({
+          toolCalls: [
+            { id: "call-1", name: "list_events", argsJson: "{}" },
+          ],
+          pass2Content: "I couldn't fetch events right now.",
+        }),
+        executeToolCall: async () => ({
+          kind: "tool_error",
+          error: "boom",
+          code: "E_BOOM",
+        }),
+      }),
+    () =>
+      makeRequest({
+        message: "List upcoming events please",
         surface: "general",
         idempotencyKey: VALID_IDEMPOTENCY_KEY,
       }),
