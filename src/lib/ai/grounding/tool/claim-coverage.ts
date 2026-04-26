@@ -159,20 +159,28 @@ export function verifyOrgStats(content: string, data: unknown): string[] {
   }
 
   const stats = data as Partial<Record<string, unknown>>;
-  const activeMembers = Number(stats.active_members);
-  const alumni = Number(stats.alumni);
-  const parents = Number(stats.parents);
-  const total = activeMembers + alumni + parents;
   const failures: string[] = [];
 
-  const claimChecks: Array<[string, number]> = [
-    ["active members", activeMembers],
-    ["alumni", alumni],
-    ["parents", parents],
-    ["total", total],
+  const claimChecks: Array<[string, number | null]> = [
+    [
+      "active members",
+      typeof stats.active_members === "number" ? stats.active_members : null,
+    ],
+    ["alumni", typeof stats.alumni === "number" ? stats.alumni : null],
+    ["parents", typeof stats.parents === "number" ? stats.parents : null],
   ];
 
+  // Total only meaningful when all three components are present.
+  if (
+    typeof stats.active_members === "number" &&
+    typeof stats.alumni === "number" &&
+    typeof stats.parents === "number"
+  ) {
+    claimChecks.push(["total", stats.active_members + stats.alumni + stats.parents]);
+  }
+
   for (const [label, expected] of claimChecks) {
+    if (expected === null) continue;
     const claimed = parseStatClaim(content, label);
     if (claimed !== null && claimed !== expected) {
       failures.push(`${label} claim ${claimed} did not match ${expected}`);
@@ -188,20 +196,14 @@ export function verifyDonationAnalytics(content: string, data: unknown): string[
   }
 
   const payload = data as DonationAnalyticsVerifyPayload;
-
-  if (!payload.totals || typeof payload.totals !== "object") {
-    return ["get_donation_analytics returned missing totals"];
-  }
+  const totals =
+    payload.totals && typeof payload.totals === "object" ? payload.totals : null;
 
   if (contentIsGroundingFallback(content)) {
     return [];
   }
 
   const failures: string[] = [];
-  const successfulDonationCount = Number(payload.totals.successful_donation_count);
-  const raisedDollars = Number(payload.totals.successful_amount_cents) / 100;
-  const averageDollars = Number(payload.totals.average_successful_amount_cents) / 100;
-  const largestDollars = Number(payload.totals.largest_successful_amount_cents) / 100;
 
   const lowered = content.toLowerCase();
   const referencesCanonicalLabel = DONATION_ANALYTICS_CANONICAL_LABELS.some((label) =>
@@ -213,30 +215,45 @@ export function verifyDonationAnalytics(content: string, data: unknown): string[
     failures.push("donation analytics response did not reference formatter labels");
   }
 
-  const countClaim = parseStatClaim(content, "successful donations");
-  if (countClaim !== null && countClaim !== successfulDonationCount) {
-    failures.push(
-      `successful donations claim ${countClaim} did not match ${successfulDonationCount}`
-    );
-  }
+  if (totals) {
+    if (typeof totals.successful_donation_count === "number") {
+      const countClaim = parseStatClaim(content, "successful donations");
+      if (countClaim !== null && countClaim !== totals.successful_donation_count) {
+        failures.push(
+          `successful donations claim ${countClaim} did not match ${totals.successful_donation_count}`
+        );
+      }
+    }
 
-  const raisedClaim = parseCurrencyClaim(content, "raised");
-  if (raisedClaim !== null && raisedClaim !== Math.round(raisedDollars)) {
-    failures.push(`raised claim $${raisedClaim} did not match $${Math.round(raisedDollars)}`);
-  }
+    if (typeof totals.successful_amount_cents === "number") {
+      const raisedDollars = totals.successful_amount_cents / 100;
+      const raisedClaim = parseCurrencyClaim(content, "raised");
+      if (raisedClaim !== null && raisedClaim !== Math.round(raisedDollars)) {
+        failures.push(
+          `raised claim $${raisedClaim} did not match $${Math.round(raisedDollars)}`
+        );
+      }
+    }
 
-  const averageClaim = parseCurrencyClaim(content, "average successful donation");
-  if (averageClaim !== null && averageClaim !== Math.round(averageDollars)) {
-    failures.push(
-      `average successful donation claim $${averageClaim} did not match $${Math.round(averageDollars)}`
-    );
-  }
+    if (typeof totals.average_successful_amount_cents === "number") {
+      const averageDollars = totals.average_successful_amount_cents / 100;
+      const averageClaim = parseCurrencyClaim(content, "average successful donation");
+      if (averageClaim !== null && averageClaim !== Math.round(averageDollars)) {
+        failures.push(
+          `average successful donation claim $${averageClaim} did not match $${Math.round(averageDollars)}`
+        );
+      }
+    }
 
-  const largestClaim = parseCurrencyClaim(content, "largest successful donation");
-  if (largestClaim !== null && largestClaim !== Math.round(largestDollars)) {
-    failures.push(
-      `largest successful donation claim $${largestClaim} did not match $${Math.round(largestDollars)}`
-    );
+    if (typeof totals.largest_successful_amount_cents === "number") {
+      const largestDollars = totals.largest_successful_amount_cents / 100;
+      const largestClaim = parseCurrencyClaim(content, "largest successful donation");
+      if (largestClaim !== null && largestClaim !== Math.round(largestDollars)) {
+        failures.push(
+          `largest successful donation claim $${largestClaim} did not match $${Math.round(largestDollars)}`
+        );
+      }
+    }
   }
 
   const trendMap = collectStatRows(payload.trend, "bucket_label");

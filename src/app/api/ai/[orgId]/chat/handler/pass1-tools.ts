@@ -117,6 +117,84 @@ export const DISCUSSION_REPLY_FALLBACK_PATTERN =
 export const DIRECT_QUERY_START_PATTERN =
   /^(?:show|tell|list|what|who|when|where|why|how|give|summarize|explain|open|find)\b/i;
 
+export type OrgStatsScope =
+  | "members"
+  | "alumni"
+  | "parents"
+  | "events"
+  | "donations"
+  | "all";
+
+const ORG_STATS_DONATION_PATTERN = /\b(?:donor|donors|donation|donations|fundraising|donated|raised)\b/i;
+const ORG_STATS_ALUMNI_PATTERN = /\b(?:alumni|alumnus|alumna|alumnae|graduates?)\b/i;
+const ORG_STATS_PARENTS_PATTERN = /\b(?:parents?|guardians?)\b/i;
+const ORG_STATS_EVENTS_PATTERN = /\b(?:events?|calendar|meetings?|fundraisers?)\b/i;
+const ORG_STATS_MEMBERS_PATTERN = /\b(?:active\s+members?|members?)\b/i;
+
+/**
+ * Derive a scope hint for `get_org_stats` from the user's message. Returns
+ * "all" when the question is generic (no sub-keyword) so existing kitchen-sink
+ * behavior is preserved for "stats"/"snapshot"/"overview" prompts.
+ */
+export function deriveOrgStatsScope(message: string): OrgStatsScope {
+  if (ORG_STATS_DONATION_PATTERN.test(message)) return "donations";
+  if (ORG_STATS_ALUMNI_PATTERN.test(message)) return "alumni";
+  if (ORG_STATS_PARENTS_PATTERN.test(message)) return "parents";
+  if (ORG_STATS_EVENTS_PATTERN.test(message)) return "events";
+  if (ORG_STATS_MEMBERS_PATTERN.test(message)) return "members";
+  return "all";
+}
+
+export type DonationAnalyticsDimension =
+  | "trend"
+  | "totals"
+  | "top_purposes"
+  | "status_mix"
+  | "all";
+
+const DONATION_DIM_TREND_PATTERN =
+  /\b(?:trend|trends|monthly|weekly|daily|by\s+(?:month|week|day)|over\s+time|this\s+month|last\s+month)\b/i;
+const DONATION_DIM_PURPOSES_PATTERN =
+  /\b(?:purpose|purposes|cause|causes|fund|funds|category|categories)\b/i;
+const DONATION_DIM_STATUS_PATTERN =
+  /\b(?:status|succeeded|failed|pending|refund|refunded)\b/i;
+const DONATION_DIM_TOTALS_PATTERN =
+  /\b(?:total|totals|raised|sum|average|largest|biggest|smallest|highest|lowest)\b/i;
+
+/**
+ * Derive a dimension hint for `get_donation_analytics`. Returns "all" when no
+ * sub-keyword is detected so existing full-payload behavior is preserved.
+ */
+export function deriveDonationAnalyticsDimension(message: string): DonationAnalyticsDimension {
+  if (DONATION_DIM_TREND_PATTERN.test(message)) return "trend";
+  if (DONATION_DIM_PURPOSES_PATTERN.test(message)) return "top_purposes";
+  if (DONATION_DIM_STATUS_PATTERN.test(message)) return "status_mix";
+  if (DONATION_DIM_TOTALS_PATTERN.test(message)) return "totals";
+  return "all";
+}
+
+/**
+ * Pre-bind args for forced single-tool Pass-1 calls so the tool runs with the
+ * narrow scope the user actually asked for instead of the model's default
+ * empty-object args. Returns undefined when there's nothing to inject.
+ */
+export function deriveForcedPass1ToolArgs(
+  toolName: string,
+  message: string,
+): Record<string, unknown> | undefined {
+  if (toolName === "get_org_stats") {
+    const scope = deriveOrgStatsScope(message);
+    if (scope === "all") return undefined;
+    return { scope };
+  }
+  if (toolName === "get_donation_analytics") {
+    const dimension = deriveDonationAnalyticsDimension(message);
+    if (dimension === "all") return undefined;
+    return { dimension };
+  }
+  return undefined;
+}
+
 export function looksLikeStructuredJobDraft(message: string): boolean {
   const hasJobContext =
     /\b(job|job posting|opening|role|position|hiring|apply|application)\b/i.test(message);

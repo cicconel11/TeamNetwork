@@ -27,7 +27,9 @@ import {
 } from "@/lib/ai/route-entity";
 import { getNonEmptyString } from "../formatters/index";
 import {
+  extractAnnouncementRevisionOverrides,
   getToolNameForDraftType,
+  isAnnouncementRevisionMessage,
   mergeDraftPayload,
 } from "../draft-session";
 import {
@@ -41,6 +43,7 @@ import {
   getBatchPendingActionsFromToolData,
   getPendingActionFromToolData,
 } from "../pending-event-revision";
+import { deriveForcedPass1ToolArgs } from "../pass1-tools";
 import type { saveDraftSession } from "@/lib/ai/draft-sessions";
 
 export interface CreateToolCallHandlerInput {
@@ -126,11 +129,26 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
       return "continue";
     }
 
+    const forcedArgs = deriveForcedPass1ToolArgs(toolEvent.name, input.message);
+    if (forcedArgs) {
+      parsedArgs = { ...parsedArgs, ...forcedArgs };
+    }
+
     const activeDraftSession = input.getActiveDraftSession();
     if (
       activeDraftSession &&
       toolEvent.name === getToolNameForDraftType(activeDraftSession.draft_type)
     ) {
+      if (
+        activeDraftSession.draft_type === "create_announcement" &&
+        toolEvent.name === "prepare_announcement" &&
+        isAnnouncementRevisionMessage(input.message)
+      ) {
+        // Revision turn: replace model-supplied args with only the fields the
+        // user explicitly named. Untouched fields (e.g., body when only the
+        // title changed) fall through from the persisted draft payload.
+        parsedArgs = extractAnnouncementRevisionOverrides(input.message);
+      }
       parsedArgs = mergeDraftPayload(
         activeDraftSession.draft_payload as Record<string, unknown>,
         parsedArgs,

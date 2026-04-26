@@ -848,6 +848,7 @@ test("analytics reporting prompts attach get_donation_analytics", async () => {
   assert.deepEqual(executeToolCallCalls[0].call.args, {
     window_days: 90,
     bucket: "month",
+    dimension: "trend",
   });
 });
 

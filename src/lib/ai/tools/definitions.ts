@@ -82,11 +82,14 @@ export interface ScrapeScheduleWebsiteArgs {
 
 export type ExtractSchedulePdfArgs = Record<string, never>;
 
-export type GetOrgStatsArgs = Record<string, never>;
+export interface GetOrgStatsArgs {
+  scope?: "members" | "alumni" | "parents" | "events" | "donations" | "all";
+}
 export interface GetDonationAnalyticsArgs {
   window_days?: number;
   bucket?: "day" | "week" | "month";
   top_purposes_limit?: number;
+  dimension?: "trend" | "totals" | "top_purposes" | "status_mix" | "all";
 }
 export type GetEnterpriseStatsArgs = Record<string, never>;
 export type GetEnterpriseQuotaArgs = Record<string, never>;
@@ -597,10 +600,17 @@ const TOOL_BY_NAME = {
     function: {
       name: "get_org_stats" as const,
       description:
-        "Get organization statistics: active member count, alumni count, parent count, upcoming event count, and donation totals. Use for overview or dashboard style questions.",
+        "Get organization statistics: active member count, alumni count, parent count, upcoming event count, and donation totals. Use for overview or dashboard style questions. Pass an optional scope (\"members\", \"alumni\", \"parents\", \"events\", \"donations\") to return only that slice when the user asked about one dimension; omit or pass \"all\" for the full snapshot.",
       parameters: {
         type: "object" as const,
-        properties: {},
+        properties: {
+          scope: {
+            type: "string" as const,
+            enum: ["members", "alumni", "parents", "events", "donations", "all"] as const,
+            description:
+              "Restrict the response to a single dimension. Use when the user asked only one thing (e.g. \"how many active members\" → \"members\"). Omit or pass \"all\" for the full snapshot.",
+          },
+        },
         additionalProperties: false as const,
       },
     },
@@ -631,6 +641,12 @@ const TOOL_BY_NAME = {
             minimum: 1,
             maximum: 10,
             description: "How many top donation purposes to include (default 5).",
+          },
+          dimension: {
+            type: "string" as const,
+            enum: ["trend", "totals", "top_purposes", "status_mix", "all"],
+            description:
+              "Which slice the user asked for. 'trend' = bucketed time series only; 'totals' = aggregate counts and amounts only; 'top_purposes' = ranked purposes only; 'status_mix' = succeeded/pending/failed counts only; 'all' = full report. Choose the narrowest slice that answers the question; default 'all' only when the user clearly asked for the full report.",
           },
         },
         additionalProperties: false as const,
