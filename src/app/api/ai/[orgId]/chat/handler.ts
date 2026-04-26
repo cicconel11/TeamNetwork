@@ -10,7 +10,7 @@ import {
   type ToolResultMessage,
 } from "@/lib/ai/response-composer";
 import { logAiRequest } from "@/lib/ai/audit";
-import { createSSEStream, SSE_HEADERS, type SSEEvent } from "@/lib/ai/sse";
+import { createSSEStream, SSE_HEADERS } from "@/lib/ai/sse";
 import {
   AI_TOOL_MAP,
   type ToolName,
@@ -56,8 +56,6 @@ import {
   saveDraftSession,
 } from "@/lib/ai/draft-sessions";
 import {
-  createStageAbortSignal,
-  isStageTimeoutError,
   PASS1_MODEL_TIMEOUT_MS,
   PASS2_MODEL_TIMEOUT_MS,
 } from "@/lib/ai/timeout";
@@ -141,6 +139,7 @@ import { runInitChatHistoryStage } from "./handler/stages/init-chat-history";
 import { serveTerminalRefusal } from "./handler/stages/serve-terminal-refusal";
 import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
 import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
+import { runModelStage } from "./handler/stages/run-model-stage";
 
 const MESSAGE_SAFETY_FALLBACK =
   "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
@@ -514,61 +513,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           message: "The response timed out. Please try again.",
           retryable: true,
         });
-      const runModelStage = async (
-        stage: "pass1_model" | "pass2_model",
-        auditStage: "pass1_model" | "pass2",
-        timeoutMs: number,
-        options: Parameters<typeof composeResponseFn>[0],
-        onEvent: (event: SSEEvent | ToolCallRequestedEvent) => Promise<"continue" | "stop"> | "continue" | "stop"
-      ): Promise<"completed" | "stopped" | "timeout" | "aborted"> => {
-        const stageSignal = createStageAbortSignal({
-          stage,
-          timeoutMs,
-          parentSignal: streamSignal,
-        });
-        const stageStartedAt = Date.now();
-
-        try {
-          for await (const event of composeResponseFn({
-            ...options,
-            signal: stageSignal.signal,
-            logContext: {
-              ...requestLogContext,
-              threadId: threadId!,
-            },
-          })) {
-            const disposition = await onEvent(event as SSEEvent | ToolCallRequestedEvent);
-            if (disposition === "stop") {
-              setStageStatus(
-                stageTimings,
-                auditStage,
-                "completed",
-                Date.now() - stageStartedAt
-              );
-              return "stopped";
-            }
-          }
-          setStageStatus(stageTimings, auditStage, "completed", Date.now() - stageStartedAt);
-          return "completed";
-        } catch (err) {
-          const failureReason = stageSignal.signal.reason ?? err;
-          if (isStageTimeoutError(failureReason)) {
-            setStageStatus(stageTimings, auditStage, "timed_out", Date.now() - stageStartedAt);
-            runtimeState.auditErrorMessage = `${stage}:timeout`;
-            emitTimeoutError();
-            return "timeout";
-          }
-          if (streamSignal.aborted || stageSignal.signal.aborted) {
-            setStageStatus(stageTimings, auditStage, "aborted", Date.now() - stageStartedAt);
-            runtimeState.auditErrorMessage = `${stage}:request_aborted`;
-            return "aborted";
-          }
-          setStageStatus(stageTimings, auditStage, "failed", Date.now() - stageStartedAt);
-          throw err;
-        } finally {
-          stageSignal.cleanup();
-        }
-      };
 
     try {
       if (!process.env.ZAI_API_KEY) {
@@ -890,11 +834,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
       const toolResults: ToolResultMessage[] = [];
       const pass1ToolChoice = getForcedPass1ToolChoice(pass1Tools);
-        const pass1Outcome = await runModelStage(
-          "pass1_model",
-          "pass1_model",
-          PASS1_MODEL_TIMEOUT_MS,
-          {
+        const pass1Outcome = await runModelStage({
+          stage: "pass1_model",
+          auditStage: "pass1_model",
+          timeoutMs: PASS1_MODEL_TIMEOUT_MS,
+          options: {
             client,
             systemPrompt: effectivePass1SystemPrompt,
             messages: contextMessages,
@@ -902,7 +846,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             toolChoice: pass1ToolChoice,
             onUsage: recordUsage,
           },
-          async (event) => {
+          composeResponseFn,
+          stageTimings,
+          streamSignal,
+          threadId: threadId!,
+          requestLogContext,
+          runtimeState,
+          emitTimeoutError,
+          onEvent: async (event) => {
             if (event.type === "chunk") {
               // Buffer pass-1 text until validators run. Freeform (no-tool)
               // path used to stream token-by-token; now buffered so RAG
@@ -1257,8 +1208,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 });
                 return "stop";
             }
-          }
-        );
+          },
+        });
 
         if (terminateTurn || pass1Outcome !== "completed") {
           if (!runtimeState.toolCallMade) {
@@ -1387,18 +1338,25 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               ? `${systemPrompt}\n\n${pass2Instructions}${toolErrorInstruction}`
               : `${systemPrompt}${toolErrorInstruction}`;
 
-            const pass2Outcome = await runModelStage(
-              "pass2_model",
-              "pass2",
-              PASS2_MODEL_TIMEOUT_MS,
-              {
+            const pass2Outcome = await runModelStage({
+              stage: "pass2_model",
+              auditStage: "pass2",
+              timeoutMs: PASS2_MODEL_TIMEOUT_MS,
+              options: {
                 client,
                 systemPrompt: pass2SystemPrompt,
                 messages: contextMessages,
                 toolResults,
                 onUsage: recordUsage,
               },
-              (event) => {
+              composeResponseFn,
+              stageTimings,
+              streamSignal,
+              threadId: threadId!,
+              requestLogContext,
+              runtimeState,
+              emitTimeoutError,
+              onEvent: (event) => {
                 if (event.type === "chunk") {
                   pass2BufferedContent += event.content;
                   return "continue";
@@ -1411,8 +1369,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 }
 
                 return "continue";
-              }
-            );
+              },
+            });
 
             if (pass2Outcome !== "completed") {
               return;
