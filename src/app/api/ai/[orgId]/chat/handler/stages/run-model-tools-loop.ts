@@ -197,6 +197,19 @@ export async function runModelToolsLoop(
     input.runtimeState.eagerStatusEmittedFor.add(forcedSingleToolName);
   }
 
+  const clearUnclaimedEagerStatus = () => {
+    if (!forcedSingleToolName) return;
+    if (!input.runtimeState.eagerStatusEmittedFor.has(forcedSingleToolName)) return;
+    input.runtimeState.eagerStatusEmittedFor.delete(forcedSingleToolName);
+    if (!input.runtimeState.toolCallMade) {
+      input.enqueue({
+        type: "tool_status",
+        toolName: forcedSingleToolName,
+        status: "error",
+      });
+    }
+  };
+
   const bypassEligible =
     forcedSingleToolName != null &&
     canBypassPass1({
@@ -231,7 +244,7 @@ export async function runModelToolsLoop(
       if (!input.runtimeState.toolCallMade) {
         skipStage(input.stageTimings, "tools");
       }
-      input.runtimeState.eagerStatusEmittedFor.clear();
+      clearUnclaimedEagerStatus();
       return { fullContent, completed: false };
     }
   } else {
@@ -263,11 +276,12 @@ export async function runModelToolsLoop(
       if (!input.runtimeState.toolCallMade) {
         skipStage(input.stageTimings, "tools");
       }
-      input.runtimeState.eagerStatusEmittedFor.clear();
+      clearUnclaimedEagerStatus();
       return { fullContent, completed: false };
     }
   }
 
+  clearUnclaimedEagerStatus();
   // Clear eager-emit set so subsequent tool-loop iterations re-emit.
   input.runtimeState.eagerStatusEmittedFor.clear();
 

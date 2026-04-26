@@ -4,6 +4,8 @@ HEADER x-ai-thread-id: thread-1
 ---BODY---
 data: {"type":"tool_status","toolName":"list_donations","status":"calling"}
 
+data: {"type":"tool_status","toolName":"list_donations","status":"error"}
+
 data: {"type":"chunk","content":"Hello world"}
 
 data: {"type":"done","threadId":"thread-1","usage":{"inputTokens":12,"outputTokens":7},"cache":{"status":"disabled","bypassReason":"requires_live_org_context"}}

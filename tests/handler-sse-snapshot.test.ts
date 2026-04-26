@@ -337,6 +337,10 @@ test("snapshot: cache-miss-no-tools (happy pass1+pass2 stream)", async () => {
         idempotencyKey: VALID_IDEMPOTENCY_KEY,
       }),
   );
+  assert.equal(
+    typeof auditEntries[0]?.stageTimings?.request?.time_to_first_event_ms,
+    "number",
+  );
 });
 
 test("snapshot: cache-hit (preInit lookup short-circuit)", async () => {
