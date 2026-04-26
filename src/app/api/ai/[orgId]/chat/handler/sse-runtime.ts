@@ -87,6 +87,11 @@ export interface TurnRuntimeState {
   ragGroundingFailures: string[] | undefined;
   ragGroundingLatencyMs: number | undefined;
   ragGroundingAudited: RagGroundingMode | undefined;
+  /** Tool names already emitted as `tool_status: calling` ahead of pass-1.
+   *  Tool-call handler reads this to suppress duplicate emit per round. */
+  eagerStatusEmittedFor: Set<string>;
+  /** Wall-clock ms from request start to first SSE event enqueue. */
+  timeToFirstEventMs: number | undefined;
 }
 
 export function createTurnRuntimeState(): TurnRuntimeState {
@@ -104,6 +109,8 @@ export function createTurnRuntimeState(): TurnRuntimeState {
     ragGroundingFailures: undefined,
     ragGroundingLatencyMs: undefined,
     ragGroundingAudited: undefined,
+    eagerStatusEmittedFor: new Set<string>(),
+    timeToFirstEventMs: undefined,
   };
 }
 
