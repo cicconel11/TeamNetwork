@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
@@ -25,7 +25,6 @@ import {
   type CacheSurface,
 } from "@/lib/ai/semantic-cache-utils";
 import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
-import type { RagChunkInput } from "@/lib/ai/context-builder";
 import {
   buildTurnExecutionPolicy,
 } from "@/lib/ai/turn-execution-policy";
@@ -67,7 +66,6 @@ import {
   setStageStatus,
   runTimedStage,
   skipStage,
-  skipRemainingStages,
   addToolCallTiming,
   finalizeStageTimings,
 } from "@/lib/ai/chat-telemetry";
@@ -106,11 +104,7 @@ import {
   getPendingActionFromToolData,
   SUPPORTED_EVENT_TYPE_LABELS,
 } from "./handler/pending-event-revision";
-import {
-  retrieveRag,
-  skipRagStage,
-  writeCache,
-} from "./handler/cache-rag";
+import { writeCache } from "./handler/cache-rag";
 import {
   ACTIVE_DRAFT_CONTINUATION_INSTRUCTION,
   CONNECTION_PASS1_DISAMBIGUATION_INSTRUCTION,
@@ -144,6 +138,9 @@ import {
 } from "./handler/stages/cache-rag-stage";
 import { runInitChatRpcStage } from "./handler/stages/init-chat-rpc";
 import { runInitChatHistoryStage } from "./handler/stages/init-chat-history";
+import { serveTerminalRefusal } from "./handler/stages/serve-terminal-refusal";
+import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
+import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
 
 const MESSAGE_SAFETY_FALLBACK =
   "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
@@ -311,77 +308,29 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     if (messageSafety.riskLevel !== "none") {
       cacheStatus = "bypass";
       cacheBypassReason = `message_safety_${messageSafety.riskLevel}`;
-      stageTimings.retrieval = {
-        decision: "skip",
-        reason: "message_safety_blocked",
-      };
-      skipRemainingStages(stageTimings, "cache_lookup");
-
-      const { data: safetyAssistantMsg, error: safetyAssistantError } =
-        await insertAssistantMessage({
-          content: MESSAGE_SAFETY_FALLBACK,
-          status: "complete",
-        });
-
-      if (safetyAssistantError || !safetyAssistantMsg) {
-        aiLog("error", "ai-chat", "safety assistant message failed", {
-          ...requestLogContext,
-          threadId: threadId!,
-        }, { error: safetyAssistantError });
-        return NextResponse.json(
-          { error: "Failed to create response" },
-          { status: 500, headers: rateLimit.headers }
-        );
-      }
-
-      void trackOpsEventServerFn(
-        "api_error",
-        {
-          endpoint_group: "ai-safety",
-          http_status: 200,
-          error_code: `message_safety_${messageSafety.riskLevel}`,
-          retryable: false,
-        },
-        ctx.orgId
-      );
-
-      await logAiRequestFn(ctx.serviceSupabase, {
+      return serveTerminalRefusal({
+        kind: "message_safety",
+        ctx,
         threadId: threadId!,
-        messageId: safetyAssistantMsg.id,
-        userId: ctx.userId,
-        orgId: ctx.orgId,
-        intent: resolvedIntent,
-        intentType: resolvedIntentType,
-        latencyMs: Date.now() - startTime,
-        error: `message_safety_${messageSafety.riskLevel}:${messageSafety.reasons.join(",")}`,
+        fallbackContent: MESSAGE_SAFETY_FALLBACK,
+        auditErrorCode: `message_safety_${messageSafety.riskLevel}:${messageSafety.reasons.join(",")}`,
+        opsEndpointGroup: "ai-safety",
+        opsErrorCode: `message_safety_${messageSafety.riskLevel}`,
+        finalizeReason: "message_safety_blocked",
+        retrievalReason: "message_safety_blocked",
         cacheStatus,
         cacheBypassReason,
-        contextSurface: effectiveSurface,
-        stageTimings: finalizeStageTimings(
-          stageTimings,
-          "message_safety_blocked",
-          Date.now() - startTime
-        ),
-      }, {
-        ...requestLogContext,
-        threadId: threadId!,
+        effectiveSurface,
+        resolvedIntent,
+        resolvedIntentType,
+        startTime,
+        stageTimings,
+        rateLimit,
+        requestLogContext,
+        insertAssistantMessage,
+        logAiRequestFn,
+        trackOpsEventServerFn,
       });
-
-      return buildSseResponse(
-        createSSEStream(async (enqueue) => {
-          enqueue({ type: "chunk", content: MESSAGE_SAFETY_FALLBACK });
-          enqueue({
-            type: "done",
-            threadId: threadId!,
-            cache: {
-              status: cacheStatus,
-              ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
-            },
-          });
-        }),
-        { ...SSE_HEADERS, ...rateLimit.headers },
-        threadId!
-      );
     }
 
     if (executionPolicy.profile === "out_of_scope_unrelated") {
@@ -390,77 +339,29 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         "unrelated_pattern";
       cacheStatus = "bypass";
       cacheBypassReason = "scope_refusal";
-      stageTimings.retrieval = {
-        decision: "skip",
-        reason: "out_of_scope_request",
-      };
-      skipRemainingStages(stageTimings, "cache_lookup");
-
-      const { data: scopeAssistantMsg, error: scopeAssistantError } =
-        await insertAssistantMessage({
-          content: SCOPE_REFUSAL_FALLBACK,
-          status: "complete",
-        });
-
-      if (scopeAssistantError || !scopeAssistantMsg) {
-        aiLog("error", "ai-chat", "scope refusal assistant message failed", {
-          ...requestLogContext,
-          threadId: threadId!,
-        }, { error: scopeAssistantError });
-        return NextResponse.json(
-          { error: "Failed to create response" },
-          { status: 500, headers: rateLimit.headers }
-        );
-      }
-
-      void trackOpsEventServerFn(
-        "api_error",
-        {
-          endpoint_group: "ai-scope",
-          http_status: 200,
-          error_code: `scope_refusal_${refusalReason}`,
-          retryable: false,
-        },
-        ctx.orgId
-      );
-
-      await logAiRequestFn(ctx.serviceSupabase, {
+      return serveTerminalRefusal({
+        kind: "scope_refusal",
+        ctx,
         threadId: threadId!,
-        messageId: scopeAssistantMsg.id,
-        userId: ctx.userId,
-        orgId: ctx.orgId,
-        intent: resolvedIntent,
-        intentType: resolvedIntentType,
-        latencyMs: Date.now() - startTime,
-        error: `scope_refusal:${refusalReason}`,
+        fallbackContent: SCOPE_REFUSAL_FALLBACK,
+        auditErrorCode: `scope_refusal:${refusalReason}`,
+        opsEndpointGroup: "ai-scope",
+        opsErrorCode: `scope_refusal_${refusalReason}`,
+        finalizeReason: "out_of_scope_request",
+        retrievalReason: "out_of_scope_request",
         cacheStatus,
         cacheBypassReason,
-        contextSurface: effectiveSurface,
-        stageTimings: finalizeStageTimings(
-          stageTimings,
-          "out_of_scope_request",
-          Date.now() - startTime
-        ),
-      }, {
-        ...requestLogContext,
-        threadId: threadId!,
+        effectiveSurface,
+        resolvedIntent,
+        resolvedIntentType,
+        startTime,
+        stageTimings,
+        rateLimit,
+        requestLogContext,
+        insertAssistantMessage,
+        logAiRequestFn,
+        trackOpsEventServerFn,
       });
-
-      return buildSseResponse(
-        createSSEStream(async (enqueue) => {
-          enqueue({ type: "chunk", content: SCOPE_REFUSAL_FALLBACK });
-          enqueue({
-            type: "done",
-            threadId: threadId!,
-            cache: {
-              status: cacheStatus,
-              bypassReason: cacheBypassReason,
-            },
-          });
-        }),
-        { ...SSE_HEADERS, ...rateLimit.headers },
-        threadId!
-      );
     }
 
     if (preInitCacheHit) {
@@ -515,60 +416,31 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       if (postInit.cacheBypassReason) cacheBypassReason = postInit.cacheBypassReason;
     }
 
-    let ragChunks: RagChunkInput[] = [];
-    let ragChunkCount = 0;
-    let ragTopSimilarity: number | undefined;
-    let ragError: string | undefined;
-
-    const hasEmbeddingKey = !!process.env.EMBEDDING_API_KEY;
-    if (hasEmbeddingKey && !skipRagRetrieval) {
-      const ragResult = await retrieveRag({
-        retrieveRelevantChunksFn,
-        query: messageSafety.promptSafeMessage,
-        orgId: ctx.orgId,
-        serviceSupabase: ctx.serviceSupabase,
-        stageTimings,
-        logContext: {
-          ...requestLogContext,
-          threadId: threadId!,
-        },
-      });
-      ragChunks = ragResult.chunks;
-      ragChunkCount = ragResult.chunkCount;
-      ragTopSimilarity = ragResult.topSimilarity;
-      ragError = ragResult.error;
-    } else {
-      if (!hasEmbeddingKey && executionPolicy.retrieval.mode === "allow") {
-        stageTimings.retrieval = {
-          decision: "not_available",
-          reason: "embedding_key_missing",
-        };
-      }
-      skipRagStage(stageTimings);
-    }
-
-    const { data: assistantMsg, error: assistantError } = await runTimedStage(
+    const ragSlice = await runRagRetrievalStage({
+      ctx,
+      threadId: threadId!,
+      promptSafeMessage: messageSafety.promptSafeMessage,
+      skipRagRetrieval,
+      hasEmbeddingKey: !!process.env.EMBEDDING_API_KEY,
+      executionPolicy,
       stageTimings,
-      "assistant_placeholder_write",
-      async () =>
-        insertAssistantMessage({
-          content: null,
-          status: "pending",
-        })
-    );
+      requestLogContext,
+      retrieveRelevantChunksFn,
+    });
+    const ragChunks = ragSlice.ragChunks;
+    const ragChunkCount = ragSlice.ragChunkCount;
+    const ragTopSimilarity = ragSlice.ragTopSimilarity;
+    const ragError = ragSlice.ragError;
 
-    if (assistantError || !assistantMsg) {
-      aiLog("error", "ai-chat", "assistant placeholder failed", {
-        ...requestLogContext,
-        threadId: threadId!,
-      }, { error: assistantError });
-      return NextResponse.json(
-        { error: "Failed to create response" },
-        { status: 500, headers: rateLimit.headers }
-      );
-    }
-
-    const assistantMessageId = assistantMsg.id;
+    const placeholderOutcome = await runAssistantPlaceholderStage({
+      threadId: threadId!,
+      rateLimit,
+      stageTimings,
+      requestLogContext,
+      insertAssistantMessage,
+    });
+    if (!placeholderOutcome.ok) return placeholderOutcome.response;
+    const assistantMessageId = placeholderOutcome.value.assistantMessageId;
 
     // 10–12. Stream SSE response
     const stream = createSSEStream(async (enqueue, streamSignal) => {
