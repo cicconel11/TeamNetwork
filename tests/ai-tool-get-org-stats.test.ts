@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getOrgStatsModule } from "../src/lib/ai/tools/registry/get-org-stats.ts";
 import { verifyToolBackedResponse } from "../src/lib/ai/grounding/tool/verifier.ts";
+import { formatOrgStatsResponse } from "../src/app/api/ai/[orgId]/chat/handler/formatters/reads.ts";
 
 const ORG_ID = "org-1";
 const USER_ID = "user-1";
@@ -191,5 +192,27 @@ describe("get_org_stats — grounding tolerance", () => {
     });
     assert.equal(result.grounded, false);
     assert.match(result.failures.join("\n"), /active members claim 99 did not match 35/i);
+  });
+});
+
+describe("formatOrgStatsResponse — scoped answers", () => {
+  it("formats members-only payload as a single sentence", () => {
+    assert.equal(
+      formatOrgStatsResponse({ active_members: 35 }),
+      "There are 35 active members."
+    );
+  });
+
+  it("keeps snapshot formatting for full payloads", () => {
+    const formatted = formatOrgStatsResponse({
+      active_members: 35,
+      alumni: 12,
+      parents: 4,
+      upcoming_events: 3,
+      donations: DONATIONS_ROW,
+    });
+    assert.match(formatted ?? "", /Organization snapshot/);
+    assert.match(formatted ?? "", /Active members: 35/);
+    assert.match(formatted ?? "", /Alumni: 12/);
   });
 });

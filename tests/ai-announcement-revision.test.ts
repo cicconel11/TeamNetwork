@@ -51,6 +51,15 @@ describe("extractAnnouncementRevisionOverrides — title-only revision", () => {
   });
 });
 
+describe("extractAnnouncementRevisionOverrides — broad revision cues", () => {
+  it("does not invent overrides for broad 'actually make it about' phrasing", () => {
+    const overrides = extractAnnouncementRevisionOverrides(
+      "actually, make it about volunteer day"
+    );
+    assert.deepEqual(overrides, {});
+  });
+});
+
 describe("extractAnnouncementRevisionOverrides — body-only revision", () => {
   it("extracts body when user revises body explicitly", () => {
     const overrides = extractAnnouncementRevisionOverrides(

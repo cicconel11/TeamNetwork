@@ -144,10 +144,13 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
         toolEvent.name === "prepare_announcement" &&
         isAnnouncementRevisionMessage(input.message)
       ) {
-        // Revision turn: replace model-supplied args with only the fields the
-        // user explicitly named. Untouched fields (e.g., body when only the
-        // title changed) fall through from the persisted draft payload.
-        parsedArgs = extractAnnouncementRevisionOverrides(input.message);
+        const explicitOverrides = extractAnnouncementRevisionOverrides(input.message);
+        if (Object.keys(explicitOverrides).length > 0) {
+          // Revision turn: replace model-supplied args with only the fields the
+          // user explicitly named. Untouched fields (e.g., body when only the
+          // title changed) fall through from the persisted draft payload.
+          parsedArgs = explicitOverrides;
+        }
       }
       parsedArgs = mergeDraftPayload(
         activeDraftSession.draft_payload as Record<string, unknown>,
