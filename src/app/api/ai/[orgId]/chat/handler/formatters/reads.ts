@@ -592,6 +592,41 @@ export function formatOrgStatsResponse(data: unknown): string | null {
     } | null;
   };
 
+  const presentSlices = [
+    typeof payload.active_members === "number" ? "active_members" : null,
+    typeof payload.alumni === "number" ? "alumni" : null,
+    typeof payload.parents === "number" ? "parents" : null,
+    typeof payload.upcoming_events === "number" ? "upcoming_events" : null,
+    payload.donations && typeof payload.donations === "object" ? "donations" : null,
+  ].filter((slice): slice is string => Boolean(slice));
+
+  if (presentSlices.length === 1) {
+    if (typeof payload.active_members === "number") {
+      return `There are ${payload.active_members} active members.`;
+    }
+    if (typeof payload.alumni === "number") {
+      return `There are ${payload.alumni} alumni.`;
+    }
+    if (typeof payload.parents === "number") {
+      return `There are ${payload.parents} parents.`;
+    }
+    if (typeof payload.upcoming_events === "number") {
+      return `There are ${payload.upcoming_events} upcoming events.`;
+    }
+    if (payload.donations && typeof payload.donations === "object") {
+      const donationSummary: string[] = [];
+      if (typeof payload.donations.donation_count === "number") {
+        donationSummary.push(`${payload.donations.donation_count} donations`);
+      }
+      if (typeof payload.donations.total_amount_cents === "number") {
+        donationSummary.push(`$${(payload.donations.total_amount_cents / 100).toFixed(0)} raised`);
+      }
+      return donationSummary.length > 0
+        ? `Donation stats: ${donationSummary.join(", ")}.`
+        : null;
+    }
+  }
+
   const lines = ["Organization snapshot"];
 
   if (typeof payload.active_members === "number") {
