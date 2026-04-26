@@ -122,4 +122,31 @@ describe("executeToolCalls (parallel batch)", () => {
     assert.equal(results[0].kind, "ok");
     assert.equal(results[1].kind, "ok");
   });
+
+  it("invalid maxInflight values default to one worker", async () => {
+    const calls = [
+      { name: "a", args: {} },
+      { name: "b", args: {} },
+    ];
+
+    for (const maxInflight of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      let active = 0;
+      let peak = 0;
+      const results = await executeToolCalls(fakeCtx, calls, {
+        maxInflight,
+        executeFn: async (_ctx, call) => {
+          active++;
+          peak = Math.max(peak, active);
+          await delay(1);
+          active--;
+          return { kind: "ok", data: { name: call.name } };
+        },
+      });
+
+      assert.equal(results.length, 2);
+      assert.equal(results[0].kind, "ok");
+      assert.equal(results[1].kind, "ok");
+      assert.equal(peak, 1);
+    }
+  });
 });
