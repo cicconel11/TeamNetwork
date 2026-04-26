@@ -4,10 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { buildPromptContext } from "@/lib/ai/context-builder";
-import {
-  composeResponse,
-  type ToolResultMessage,
-} from "@/lib/ai/response-composer";
+import { composeResponse } from "@/lib/ai/response-composer";
 import { logAiRequest } from "@/lib/ai/audit";
 import { createSSEStream, SSE_HEADERS } from "@/lib/ai/sse";
 import {
@@ -55,17 +52,9 @@ import {
   hasPendingConnectionDisambiguation,
   looksLikeConnectionDisambiguationReply,
   collectPhoneNumberFields,
-  formatDeterministicToolResponse,
-  formatDeterministicToolErrorResponse,
   formatRevisedPendingEventResponse,
-  resolveHideDonorNamesPreference,
-  resolveOrgSlug,
-  CONNECTION_PASS2_TEMPLATE,
 } from "./handler/formatters/index";
-import {
-  MEMBER_ROSTER_PROMPT_PATTERN,
-  getForcedPass1ToolChoice,
-} from "./handler/pass1-tools";
+import { getForcedPass1ToolChoice } from "./handler/pass1-tools";
 import {
   buildDraftSessionContextMessage,
   mergeDraftPayload,
@@ -79,8 +68,6 @@ import {
   ACTIVE_DRAFT_CONTINUATION_INSTRUCTION,
   CONNECTION_PASS1_DISAMBIGUATION_INSTRUCTION,
   EMPTY_ASSISTANT_RESPONSE_FALLBACK,
-  MEMBER_LIST_PASS2_INSTRUCTION,
-  MENTOR_PASS2_TEMPLATE,
   applyRagGrounding,
   applySafetyGate,
   buildSseResponse,
@@ -109,10 +96,7 @@ import { runInitChatHistoryStage } from "./handler/stages/init-chat-history";
 import { serveTerminalRefusal } from "./handler/stages/serve-terminal-refusal";
 import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
 import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
-import { runPass1 } from "./handler/stages/run-pass1";
-import { runPass2 } from "./handler/stages/run-pass2";
-import { runGroundingCheck } from "./handler/stages/run-grounding-check";
-import { createToolCallHandler } from "./handler/stages/run-tool-calls";
+import { runModelToolsLoop } from "./handler/stages/run-model-tools-loop";
 import { finalizeTurnAudit } from "./handler/stages/finalize-audit";
 
 const MESSAGE_SAFETY_FALLBACK =
@@ -416,8 +400,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     // 10–12. Stream SSE response
     const stream = createSSEStream(async (enqueue, streamSignal) => {
       let fullContent = "";
-      let pass1BufferedContent = "";
-      let pass2BufferedContent = "";
       const runtimeState = createTurnRuntimeState();
       const safetyGateDisabled = process.env.DISABLE_SAFETY_GATE === "1";
       const safetyGateShadow = process.env.SAFETY_GATE_SHADOW === "1";
@@ -804,242 +786,57 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           ? [{ role: "user" as const, content: draftSessionContextMessage }, ...finalHistory]
           : finalHistory;
 
-      const toolResults: ToolResultMessage[] = [];
       const pass1ToolChoice = getForcedPass1ToolChoice(pass1Tools);
-        const onToolCall = createToolCallHandler({
+
+        const loopOutcome = await runModelToolsLoop({
+          client,
+          systemPrompt,
+          effectivePass1SystemPrompt,
+          contextMessages,
+          pass1Tools,
+          pass1ToolChoice,
           ctx,
           toolAuthorization,
           toolAuthMode,
-          threadId,
+          threadId: threadId!,
+          assistantMessageId,
           requestId,
           attachment,
           message,
+          promptSafeMessage: messageSafety.promptSafeMessage,
           currentPath,
           routeEntityContext,
           threadMetadata,
           canUseDraftSessions,
+          executionPolicy,
           requestLogContext,
           auditToolCalls,
-          toolResults,
           successfulToolResults,
           runtimeState,
           stageTimings,
+          streamSignal,
           enqueue,
+          recordUsage,
+          emitTimeoutError,
           getActiveDraftSession: () => activeDraftSession,
           setActiveDraftSession: (next) => { activeDraftSession = next; },
           isToolPassBreakerOpen: () => toolPassBreakerOpen,
           setToolPassBreakerOpen: (open) => { toolPassBreakerOpen = open; },
+          isTerminateTurn: () => terminateTurn,
           setTerminateTurn: () => { terminateTurn = true; },
+          applyTurnRagGrounding,
+          applyTurnSafetyGate,
+          composeResponseFn,
           executeToolCallFn,
           saveDraftSessionFn,
-        });
-        const pass1Outcome = await runPass1({
-          client,
-          systemPrompt: effectivePass1SystemPrompt,
-          messages: contextMessages,
-          tools: pass1Tools,
-          toolChoice: pass1ToolChoice,
-          composeResponseFn,
-          stageTimings,
-          streamSignal,
-          threadId: threadId!,
-          requestLogContext,
-          runtimeState,
-          emitTimeoutError,
-          onUsage: recordUsage,
-          onChunk: (content) => {
-            // Buffer pass-1 text until validators run. Freeform (no-tool)
-            // path used to stream token-by-token; now buffered so RAG
-            // grounding + safety gate can inspect before release.
-            pass1BufferedContent += content;
-          },
-          onError: (event) => {
-            runtimeState.auditErrorMessage = event.message;
-            enqueue(event);
-          },
-          onToolCall,
+          verifyToolBackedResponseFn,
+          trackOpsEventServerFn,
         });
 
-        if (terminateTurn || pass1Outcome !== "completed") {
-          if (!runtimeState.toolCallMade) {
-            skipStage(stageTimings, "tools");
-          }
+        if (!loopOutcome.completed) {
           return;
         }
-
-        if (!runtimeState.toolCallMade) {
-          skipStage(stageTimings, "tools");
-        }
-
-        if (!runtimeState.toolCallMade && pass1BufferedContent) {
-          pass1BufferedContent = await applyTurnRagGrounding(pass1BufferedContent);
-          pass1BufferedContent = await applyTurnSafetyGate(pass1BufferedContent);
-          fullContent += pass1BufferedContent;
-          enqueue({ type: "chunk", content: pass1BufferedContent });
-        }
-
-        if (runtimeState.toolCallMade && toolResults.length > 0) {
-          const willRenderNavigationDeterministically =
-            toolResults.length === 1 &&
-            successfulToolResults.length === 1 &&
-            successfulToolResults[0]?.name === "find_navigation_targets";
-          if (pass1BufferedContent && !willRenderNavigationDeterministically) {
-            pass1BufferedContent = await applyTurnSafetyGate(pass1BufferedContent);
-            fullContent += pass1BufferedContent;
-            enqueue({ type: "chunk", content: pass1BufferedContent });
-          }
-          if (willRenderNavigationDeterministically) {
-            pass1BufferedContent = "";
-          }
-          const canUseDeterministicMemberRoster =
-            successfulToolResults.length === 1 &&
-            successfulToolResults[0]?.name === "list_members" &&
-            MEMBER_ROSTER_PROMPT_PATTERN.test(messageSafety.promptSafeMessage);
-          const needsDonorPrivacy = successfulToolResults.some(
-            (result) => result.name === "list_donations",
-          );
-          const hideDonorNames = needsDonorPrivacy
-            ? await resolveHideDonorNamesPreference(
-                ctx.serviceSupabase as { from: (table: string) => any },
-                ctx.orgId,
-              )
-            : false;
-          const needsOrgSlug =
-            successfulToolResults.length === 1 &&
-            successfulToolResults[0]?.name === "list_chat_groups";
-          const orgSlug = needsOrgSlug
-            ? await resolveOrgSlug(
-                ctx.serviceSupabase as { from: (table: string) => any },
-                ctx.orgId,
-              )
-            : undefined;
-          const deterministicFormatterOptions =
-            successfulToolResults.length === 1 &&
-            successfulToolResults[0]?.name === "list_donations"
-              ? { hideDonorNames }
-              : successfulToolResults.length === 1 &&
-                successfulToolResults[0]?.name === "list_chat_groups"
-              ? { orgSlug }
-              : undefined;
-          const deterministicToolContent =
-            toolResults.length === 1 &&
-            successfulToolResults.length === 1 &&
-            toolResults[0].name === successfulToolResults[0].name &&
-            (successfulToolResults[0].name !== "list_members" || canUseDeterministicMemberRoster)
-              ? formatDeterministicToolResponse(
-                  successfulToolResults[0].name,
-                  successfulToolResults[0].data,
-                  deterministicFormatterOptions,
-                )
-              : null;
-          const singleToolError =
-            toolResults.length === 1 &&
-            successfulToolResults.length === 0 &&
-            toolResults[0].data &&
-            typeof toolResults[0].data === "object" &&
-            "error" in toolResults[0].data &&
-            typeof toolResults[0].data.error === "string"
-              ? toolResults[0].data.error
-              : null;
-          const singleToolErrorCode =
-            toolResults.length === 1 &&
-            successfulToolResults.length === 0 &&
-            toolResults[0].data &&
-            typeof toolResults[0].data === "object" &&
-            "error_code" in toolResults[0].data &&
-            typeof toolResults[0].data.error_code === "string"
-              ? toolResults[0].data.error_code
-              : null;
-          const deterministicToolErrorContent =
-            singleToolError
-              ? formatDeterministicToolErrorResponse(
-                  toolResults[0].name,
-                  singleToolError,
-                  singleToolErrorCode
-                )
-              : null;
-
-          if (deterministicToolContent || deterministicToolErrorContent) {
-            skipStage(stageTimings, "pass2");
-            pass2BufferedContent = deterministicToolContent ?? deterministicToolErrorContent ?? "";
-          } else {
-            const hasToolErrors = toolResults.length > successfulToolResults.length;
-            const connectionPass2 = successfulToolResults.some(
-              (result) => result.name === "suggest_connections"
-            );
-            const mentorPass2 = successfulToolResults.some(
-              (result) => result.name === "suggest_mentors"
-            );
-            const memberRosterPass2 = successfulToolResults.some(
-              (result) => result.name === "list_members"
-            );
-            const toolErrorInstruction = hasToolErrors
-              ? "\n\nSome tool calls failed. Only cite data from successful tool results. Acknowledge any failures honestly — do not fabricate data."
-              : "";
-            const pass2Instructions = [
-              connectionPass2 ? CONNECTION_PASS2_TEMPLATE : null,
-              mentorPass2 ? MENTOR_PASS2_TEMPLATE : null,
-              memberRosterPass2 ? MEMBER_LIST_PASS2_INSTRUCTION : null,
-            ]
-              .filter((value): value is string => Boolean(value))
-              .join("\n\n");
-            const pass2SystemPrompt = pass2Instructions.length > 0
-              ? `${systemPrompt}\n\n${pass2Instructions}${toolErrorInstruction}`
-              : `${systemPrompt}${toolErrorInstruction}`;
-
-            const pass2Outcome = await runPass2({
-              client,
-              systemPrompt: pass2SystemPrompt,
-              messages: contextMessages,
-              toolResults,
-              composeResponseFn,
-              stageTimings,
-              streamSignal,
-              threadId: threadId!,
-              requestLogContext,
-              runtimeState,
-              emitTimeoutError,
-              onUsage: recordUsage,
-              onChunk: (content) => {
-                pass2BufferedContent += content;
-              },
-              onError: (event) => {
-                runtimeState.auditErrorMessage = event.message;
-                enqueue(event);
-              },
-            });
-
-            if (pass2Outcome !== "completed") {
-              return;
-            }
-          }
-
-          pass2BufferedContent = await runGroundingCheck({
-            pass2BufferedContent,
-            successfulToolResults,
-            executionPolicy,
-            hideDonorNames,
-            runtimeState,
-            stageTimings,
-            threadId: threadId!,
-            assistantMessageId,
-            orgId: ctx.orgId,
-            requestLogContext,
-            verifyToolBackedResponseFn,
-            trackOpsEventServerFn,
-          });
-
-          if (pass2BufferedContent) {
-            // Tool-backed pass-2: tool-grounding already ran. Still gate output
-            // for safety (PII / toxicity) before release.
-            pass2BufferedContent = await applyTurnSafetyGate(pass2BufferedContent);
-            fullContent += pass2BufferedContent;
-            enqueue({ type: "chunk", content: pass2BufferedContent });
-          }
-        } else {
-          skipStage(stageTimings, "pass2");
-          skipStage(stageTimings, "grounding");
-        }
+        fullContent += loopOutcome.fullContent;
 
       if (fullContent.trim().length === 0) {
         fullContent = EMPTY_ASSISTANT_RESPONSE_FALLBACK;
