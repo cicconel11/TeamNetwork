@@ -46,9 +46,6 @@ import {
   saveDraftSession,
 } from "@/lib/ai/draft-sessions";
 import {
-  PASS2_MODEL_TIMEOUT_MS,
-} from "@/lib/ai/timeout";
-import {
   createStageTimings,
   runTimedStage,
   skipStage,
@@ -115,8 +112,8 @@ import { runInitChatHistoryStage } from "./handler/stages/init-chat-history";
 import { serveTerminalRefusal } from "./handler/stages/serve-terminal-refusal";
 import { runRagRetrievalStage } from "./handler/stages/rag-retrieval-stage";
 import { runAssistantPlaceholderStage } from "./handler/stages/assistant-placeholder";
-import { runModelStage } from "./handler/stages/run-model-stage";
 import { runPass1 } from "./handler/stages/run-pass1";
+import { runPass2 } from "./handler/stages/run-pass2";
 import { createToolCallHandler } from "./handler/stages/run-tool-calls";
 import { finalizeTurnAudit } from "./handler/stages/finalize-audit";
 
@@ -992,17 +989,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               ? `${systemPrompt}\n\n${pass2Instructions}${toolErrorInstruction}`
               : `${systemPrompt}${toolErrorInstruction}`;
 
-            const pass2Outcome = await runModelStage({
-              stage: "pass2_model",
-              auditStage: "pass2",
-              timeoutMs: PASS2_MODEL_TIMEOUT_MS,
-              options: {
-                client,
-                systemPrompt: pass2SystemPrompt,
-                messages: contextMessages,
-                toolResults,
-                onUsage: recordUsage,
-              },
+            const pass2Outcome = await runPass2({
+              client,
+              systemPrompt: pass2SystemPrompt,
+              messages: contextMessages,
+              toolResults,
               composeResponseFn,
               stageTimings,
               streamSignal,
@@ -1010,19 +1001,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               requestLogContext,
               runtimeState,
               emitTimeoutError,
-              onEvent: (event) => {
-                if (event.type === "chunk") {
-                  pass2BufferedContent += event.content;
-                  return "continue";
-                }
-
-                if (event.type === "error") {
-                  runtimeState.auditErrorMessage = event.message;
-                  enqueue(event);
-                  return "stop";
-                }
-
-                return "continue";
+              onUsage: recordUsage,
+              onChunk: (content) => {
+                pass2BufferedContent += content;
+              },
+              onError: (event) => {
+                runtimeState.auditErrorMessage = event.message;
+                enqueue(event);
               },
             });
 
