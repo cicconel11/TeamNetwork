@@ -5,8 +5,10 @@ import {
   getForcedPass1ToolChoice,
   isToolFirstEligible,
 } from "../../../src/app/api/ai/[orgId]/chat/handler/pass1-tools";
+import type { ChatAttachment } from "../../../src/app/api/ai/[orgId]/chat/handler/shared";
 import type { CacheSurface } from "../../../src/lib/ai/semantic-cache-utils";
 import type { TurnExecutionPolicy } from "../../../src/lib/ai/turn-execution-policy";
+import type { EnterpriseRole } from "../../../src/types/enterprise";
 
 type ToolPolicy = TurnExecutionPolicy["toolPolicy"];
 type IntentType = TurnExecutionPolicy["intentType"];
@@ -16,7 +18,10 @@ interface RoutingCase {
   message: string;
   surface: CacheSurface;
   intentType?: IntentType;
+  attachment?: ChatAttachment;
   currentPath?: string;
+  enterpriseEnabled?: boolean;
+  enterpriseRole?: EnterpriseRole;
   // Tool that MUST appear in pass-1 list (the model's correct pick).
   expectIncludes: string[];
   // Tools that must NOT appear (regression guards).
@@ -42,10 +47,10 @@ function runCase(c: RoutingCase) {
     c.surface,
     "surface_read_tools" satisfies ToolPolicy,
     (c.intentType ?? "knowledge_query") satisfies IntentType,
-    undefined,
+    c.attachment,
     c.currentPath,
-    false,
-    undefined,
+    c.enterpriseEnabled ?? false,
+    c.enterpriseRole,
   );
   const names = namesOf(tools);
 
@@ -290,6 +295,85 @@ const MENTOR_CONNECTION_CASES: RoutingCase[] = [
   },
 ];
 
+const ENTERPRISE_PORTAL_CASES: RoutingCase[] = [
+  {
+    name: "enterprise portal: billing path → get_enterprise_quota",
+    message: "show enterprise billing quota",
+    surface: "analytics",
+    currentPath: "/enterprise/acme-ent/billing",
+    enterpriseEnabled: true,
+    enterpriseRole: "owner",
+    expectIncludes: [],
+    expectForcedSingle: "get_enterprise_quota",
+  },
+  {
+    name: "enterprise portal: org capacity prompt → get_enterprise_org_capacity",
+    message: "how many free managed org slots remain",
+    surface: "analytics",
+    currentPath: "/enterprise/acme-ent",
+    enterpriseEnabled: true,
+    enterpriseRole: "org_admin",
+    expectIncludes: [],
+    expectForcedSingle: "get_enterprise_org_capacity",
+  },
+  {
+    name: "enterprise portal: organizations path → list_managed_orgs",
+    message: "show me organizations",
+    surface: "general",
+    currentPath: "/enterprise/acme-ent/organizations",
+    enterpriseEnabled: true,
+    enterpriseRole: "owner",
+    expectIncludes: [],
+    expectForcedSingle: "list_managed_orgs",
+  },
+];
+
+const ATTACHMENT_ROUTING_CASES: RoutingCase[] = [
+  {
+    name: "attachment: PDF schedule upload → extract_schedule_pdf",
+    message: "here is the schedule",
+    surface: "events",
+    intentType: "action_request",
+    attachment: {
+      storagePath: "orgs/org-1/uploads/schedule.pdf",
+      fileName: "schedule.pdf",
+      mimeType: "application/pdf",
+    },
+    expectIncludes: [],
+    expectForcedSingle: "extract_schedule_pdf",
+  },
+  {
+    name: "attachment: PNG schedule upload → extract_schedule_pdf",
+    message: "import this schedule",
+    surface: "events",
+    intentType: "action_request",
+    attachment: {
+      storagePath: "orgs/org-1/uploads/schedule.png",
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+    expectIncludes: [],
+    expectForcedSingle: "extract_schedule_pdf",
+  },
+];
+
+const MEMBER_DISAMBIGUATION_CASES: RoutingCase[] = [
+  {
+    name: "members surface: member count prompt → get_org_stats",
+    message: "how many active members do we have",
+    surface: "members",
+    expectIncludes: [],
+    expectForcedSingle: "get_org_stats",
+  },
+  {
+    name: "members surface: member roster prompt → list_members",
+    message: "who are the recent members",
+    surface: "members",
+    expectIncludes: [],
+    expectForcedSingle: "list_members",
+  },
+];
+
 describe("surface-routing battery — people search reaches every surface", () => {
   for (const c of PEOPLE_SEARCH_CASES) {
     it(c.name, () => runCase(c));
@@ -332,8 +416,26 @@ describe("surface-routing battery — mentor/connection routing on members surfa
   }
 });
 
+describe("surface-routing battery — enterprise portal routing", () => {
+  for (const c of ENTERPRISE_PORTAL_CASES) {
+    it(c.name, () => runCase(c));
+  }
+});
+
+describe("surface-routing battery — attachment-driven routing", () => {
+  for (const c of ATTACHMENT_ROUTING_CASES) {
+    it(c.name, () => runCase(c));
+  }
+});
+
+describe("surface-routing battery — member count vs roster disambiguation", () => {
+  for (const c of MEMBER_DISAMBIGUATION_CASES) {
+    it(c.name, () => runCase(c));
+  }
+});
+
 describe("surface-routing battery — tool-first eligibility for routed singletons", () => {
-  it("forced single-tool list_events is tool-first eligible (calendar fast-path)", () => {
+  it("merged events default skips the calendar fast-path", () => {
     const tools = getPass1Tools(
       "show me upcoming events",
       "events",
