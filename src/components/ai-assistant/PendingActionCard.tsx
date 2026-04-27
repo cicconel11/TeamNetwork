@@ -20,6 +20,10 @@ function getArrayLength(payload: Record<string, unknown>, key: string): number {
   return Array.isArray(value) ? value.length : 0;
 }
 
+function valueChanged(current: string | null, previous: string | null): boolean {
+  return (current ?? "") !== (previous ?? "");
+}
+
 export function PendingActionCard({
   action,
   busy = false,
@@ -43,6 +47,8 @@ export function PendingActionCard({
   const contactEmail = getValue(payload, "contact_email");
   const description = getValue(payload, "description");
   const body = getValue(payload, "body");
+  const previousTitle = getValue(payload, "previous_title");
+  const previousBody = getValue(payload, "previous_body");
   const threadTitle = getValue(payload, "thread_title");
   const recipientDisplayName = getValue(payload, "recipient_display_name");
   const existingChatGroupId = getValue(payload, "existing_chat_group_id");
@@ -126,6 +132,44 @@ export function PendingActionCard({
                   <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{body}</p>
                 </div>
               ) : null}
+            </>
+          ) : action.actionType === "update_announcement" ? (
+            <>
+              {valueChanged(title, previousTitle) ? (
+                <div>
+                  <p className="font-medium text-foreground">Title</p>
+                  {previousTitle ? (
+                    <p className="mt-1 text-muted-foreground">Before: {previousTitle}</p>
+                  ) : null}
+                  {title ? <p className="mt-1 text-foreground">After: {title}</p> : null}
+                </div>
+              ) : title ? (
+                <p><span className="font-medium">Title:</span> {title}</p>
+              ) : null}
+              {audience ? <p><span className="font-medium">Audience:</span> {audience}</p> : null}
+              {valueChanged(body, previousBody) ? (
+                <div>
+                  <p className="font-medium text-foreground">Body</p>
+                  {previousBody ? (
+                    <p className="mt-1 whitespace-pre-wrap text-muted-foreground">Before: {previousBody}</p>
+                  ) : null}
+                  {body ? (
+                    <p className="mt-1 whitespace-pre-wrap text-foreground">After: {body}</p>
+                  ) : (
+                    <p className="mt-1 text-foreground">After: No body</p>
+                  )}
+                </div>
+              ) : body ? (
+                <div>
+                  <p className="font-medium text-foreground">Body</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{body}</p>
+                </div>
+              ) : null}
+            </>
+          ) : action.actionType === "delete_announcement" ? (
+            <>
+              {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              <p className="text-red-600">This will remove the announcement from organization feeds.</p>
             </>
           ) : action.actionType === "create_event" ? (
             <>

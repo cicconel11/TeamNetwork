@@ -21,6 +21,7 @@ import {
   formatPhilanthropyEventsResponse,
   formatChatGroupsResponse,
   formatNavigationTargetsResponse,
+  formatSearchOrgContentResponse,
   type FormatterOptions,
 } from "./reads";
 import {
@@ -34,6 +35,8 @@ import {
   formatPrepareGroupMessageResponse,
   formatPrepareEventResponse,
   formatPrepareEventsBatchResponse,
+  formatPrepareUpdateAnnouncementResponse,
+  formatPrepareDeleteAnnouncementResponse,
 } from "./prepares";
 import { formatExtractScheduleFileResponse } from "./schedules";
 import { formatSuggestConnectionsResponse } from "./connections";
@@ -86,6 +89,7 @@ export {
   formatPhilanthropyEventsResponse,
   formatChatGroupsResponse,
   formatNavigationTargetsResponse,
+  formatSearchOrgContentResponse,
   type DonationResponseOptions,
   type FormatterOptions,
 } from "./reads";
@@ -100,6 +104,8 @@ export {
   formatPrepareGroupMessageResponse,
   formatPrepareEventResponse,
   formatPrepareEventsBatchResponse,
+  formatPrepareUpdateAnnouncementResponse,
+  formatPrepareDeleteAnnouncementResponse,
   formatRevisedPendingEventResponse,
 } from "./prepares";
 export { formatExtractScheduleFileResponse } from "./schedules";
@@ -239,6 +245,10 @@ export function formatDeterministicToolResponse(
       return formatJobPostingsResponse(data);
     case "prepare_announcement":
       return formatPrepareAnnouncementResponse(data);
+    case "prepare_update_announcement":
+      return formatPrepareUpdateAnnouncementResponse(data);
+    case "prepare_delete_announcement":
+      return formatPrepareDeleteAnnouncementResponse(data);
     case "prepare_job_posting":
       return formatPrepareJobPostingResponse(data);
     case "prepare_chat_message":
@@ -287,6 +297,8 @@ export function formatDeterministicToolResponse(
       return formatPhilanthropyEventsResponse(data);
     case "find_navigation_targets":
       return formatNavigationTargetsResponse(data);
+    case "search_org_content":
+      return formatSearchOrgContentResponse(data);
     default:
       return null;
   }

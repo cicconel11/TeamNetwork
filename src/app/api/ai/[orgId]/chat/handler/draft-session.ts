@@ -26,6 +26,10 @@ export function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
   switch (draftType) {
     case "create_announcement":
       return "prepare_announcement";
+    case "update_announcement":
+      return "prepare_update_announcement";
+    case "delete_announcement":
+      return "prepare_delete_announcement";
     case "create_job_posting":
       return "prepare_job_posting";
     case "send_chat_message":
@@ -600,6 +604,9 @@ export function inferDraftSessionFromHistory(input: {
     let missingFields: string[];
 
     switch (draftType) {
+      case "update_announcement":
+      case "delete_announcement":
+        continue;
       case "create_announcement":
         draftPayload = extractAnnouncementDraftFromHistory(relevantMessages);
         missingFields = (["title"] as const).filter(

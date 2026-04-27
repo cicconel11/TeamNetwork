@@ -292,6 +292,8 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
         if (
           input.canUseDraftSessions &&
           (toolEvent.name === "prepare_announcement" ||
+            toolEvent.name === "prepare_update_announcement" ||
+            toolEvent.name === "prepare_delete_announcement" ||
             toolEvent.name === "prepare_job_posting" ||
             toolEvent.name === "prepare_chat_message" ||
             toolEvent.name === "prepare_group_message" ||
@@ -329,6 +331,10 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
               const draftType: DraftSessionType =
                 toolEvent.name === "prepare_announcement"
                   ? "create_announcement"
+                  : toolEvent.name === "prepare_update_announcement"
+                  ? "update_announcement"
+                  : toolEvent.name === "prepare_delete_announcement"
+                  ? "delete_announcement"
                   : toolEvent.name === "prepare_job_posting"
                   ? "create_job_posting"
                   : toolEvent.name === "prepare_chat_message"
@@ -351,7 +357,7 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
                     toolData.state === "needs_confirmation"
                       ? "ready_for_confirmation"
                       : "collecting_fields",
-                  // Draft payload shape guaranteed by schemas in the four prepare_* paths (announcement, job_posting, discussion_thread, event).
+                  // Draft payload shape is guaranteed by schemas in the prepare_* paths.
                   draftPayload:
                     toolData.draft && typeof toolData.draft === "object"
                       ? (toolData.draft as DraftSessionPayload)
