@@ -246,7 +246,7 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
       surface: "general",
       toolPolicy: "surface_read_tools",
       intentType: "knowledge_query",
-      // falls into surface defaults for general
+      // falls into surface defaults for general (with globals merged in)
       expectedToolNames: [
         "list_members",
         "list_events",
@@ -261,6 +261,8 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
         "suggest_connections",
         "list_available_mentors",
         "suggest_mentors",
+        "search_org_content",
+        "find_navigation_targets",
       ],
     },
     {
@@ -627,7 +629,7 @@ describe("getPass1Tools — context-gated fallbacks", () => {
 });
 
 describe("getPass1Tools — surface defaults", () => {
-  it("general surface returns full read tool set", () => {
+  it("general surface returns full read tool set with global read tools appended", () => {
     const tools = getPass1Tools(
       "summarize the latest happenings",
       "general",
@@ -648,10 +650,12 @@ describe("getPass1Tools — surface defaults", () => {
       "suggest_connections",
       "list_available_mentors",
       "suggest_mentors",
+      "search_org_content",
+      "find_navigation_targets",
     ]);
   });
 
-  it("members surface (no other match) returns members read tool set", () => {
+  it("members surface (no other match) returns members read tool set with globals appended", () => {
     const tools = getPass1Tools(
       "what is going on around here",
       "members",
@@ -666,27 +670,131 @@ describe("getPass1Tools — surface defaults", () => {
       "suggest_connections",
       "list_available_mentors",
       "suggest_mentors",
+      "search_org_content",
+      "find_navigation_targets",
     ]);
   });
 
-  it("analytics surface returns get_org_stats only", () => {
+  it("analytics surface returns get_org_stats with globals so cross-domain queries resolve", () => {
     const tools = getPass1Tools(
       "what is the latest update",
       "analytics",
       "surface_read_tools",
       "knowledge_query",
     );
-    assert.deepEqual(namesOf(tools), ["get_org_stats"]);
+    assert.deepEqual(namesOf(tools), [
+      "get_org_stats",
+      "search_org_content",
+      "find_navigation_targets",
+      "list_members",
+      "list_alumni",
+      "list_parents",
+    ]);
   });
 
-  it("events surface returns list_events only", () => {
+  it("events surface returns list_events with globals so cross-domain queries resolve", () => {
     const tools = getPass1Tools(
       "what is happening",
       "events",
       "surface_read_tools",
       "knowledge_query",
     );
-    assert.deepEqual(namesOf(tools), ["list_events"]);
+    assert.deepEqual(namesOf(tools), [
+      "list_events",
+      "search_org_content",
+      "find_navigation_targets",
+      "list_members",
+      "list_alumni",
+      "list_parents",
+    ]);
+  });
+});
+
+describe("getPass1Tools — surface global read merge (regression for surface routing fix)", () => {
+  it("events surface still leads with list_events for ambiguous prompt", () => {
+    const tools = getPass1Tools(
+      "what's on the calendar this week",
+      "events",
+      "surface_read_tools",
+      "knowledge_query",
+    );
+    const names = namesOf(tools);
+    assert.equal(names[0], "list_events", "list_events must come first to preserve surface bias");
+    assert.ok(names.includes("search_org_content"));
+    assert.ok(names.includes("list_members"));
+  });
+
+  it("events surface exposes people/search tools so cross-domain queries route correctly", () => {
+    const tools = getPass1Tools(
+      "find anything about Louis Ciccone",
+      "events",
+      "surface_read_tools",
+      "live_lookup",
+    );
+    const names = namesOf(tools);
+    assert.ok(names.includes("list_members"));
+    assert.ok(names.includes("search_org_content"));
+    assert.ok(names.length > 1, "events surface must no longer be locked to a single tool");
+  });
+
+  it("analytics surface exposes search_org_content so content searches do not route to get_org_stats", () => {
+    const tools = getPass1Tools(
+      "find posts mentioning fundraising",
+      "analytics",
+      "surface_read_tools",
+      "live_lookup",
+    );
+    const names = namesOf(tools);
+    assert.ok(names.includes("search_org_content"));
+    assert.ok(names.length > 1, "analytics surface must no longer be locked to a single tool");
+  });
+
+  it("members surface dedupes — list_members appears exactly once", () => {
+    const tools = getPass1Tools(
+      "what is going on around here",
+      "members",
+      "surface_read_tools",
+      "knowledge_query",
+    );
+    const names = namesOf(tools);
+    const occurrences = names.filter((n) => n === "list_members").length;
+    assert.equal(occurrences, 1, "global merge must dedupe with surface-specific entries");
+  });
+
+  it("forced single-tool override still single-tool when CREATE_EVENT_PROMPT matches on events surface", () => {
+    const tools = getPass1Tools(
+      "schedule a meeting tomorrow at 3pm",
+      "events",
+      "surface_read_tools",
+      "action_request",
+    );
+    assert.deepEqual(namesOf(tools), ["prepare_event"]);
+  });
+
+  it("every surface contains all five global read tools", () => {
+    const surfaces: CacheSurface[] = ["general", "members", "analytics", "events"];
+    const required = [
+      "search_org_content",
+      "find_navigation_targets",
+      "list_members",
+      "list_alumni",
+      "list_parents",
+    ];
+    for (const surface of surfaces) {
+      const tools = getPass1Tools(
+        "tell me anything",
+        surface,
+        "surface_read_tools",
+        "knowledge_query",
+      );
+      const names = namesOf(tools);
+      for (const tool of required) {
+        assert.ok(
+          names.includes(tool),
+          `surface=${surface} must include ${tool} in its merged pass-1 tool list (got: ${names.join(", ")})`,
+        );
+      }
+    }
   });
 });
 

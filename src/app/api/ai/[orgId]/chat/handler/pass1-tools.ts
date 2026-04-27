@@ -16,7 +16,18 @@ import {
   type ChatAttachment,
 } from "./shared";
 
-export const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
+// Read-only, low-risk tools reachable from every surface so cross-domain
+// queries (people search, content search, navigation) resolve from any page.
+// Role gating downstream (filterAllowedTools) still applies.
+const GLOBAL_READ_TOOL_NAMES: ReadonlyArray<ToolName> = [
+  "search_org_content",
+  "find_navigation_targets",
+  "list_members",
+  "list_alumni",
+  "list_parents",
+];
+
+const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   general: [
     "list_members",
     "list_events",
@@ -44,6 +55,15 @@ export const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   analytics: ["get_org_stats"],
   events: ["list_events"],
 };
+
+// Surface-specific tools come first so per-surface biasing is preserved.
+// Globals appended and deduped via Set.
+export const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = Object.fromEntries(
+  Object.entries(RAW_PASS1_TOOL_NAMES).map(([surface, names]) => [
+    surface,
+    Array.from(new Set<ToolName>([...names, ...GLOBAL_READ_TOOL_NAMES])),
+  ]),
+) as Record<CacheSurface, ToolName[]>;
 
 export const CONNECTION_PROMPT_PATTERN =
   /(?<!\w)(?:connection|connections|connect|networking|introduc(?:e|tion))(?!\w)/i;
