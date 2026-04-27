@@ -469,6 +469,37 @@ describe("AI prompt context builder", () => {
     assert.deepEqual(queriedTables, ["organizations"]);
   });
 
+  it("tool_first context reuses trusted org info without querying organizations", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const queriedTables: string[] = [];
+    const baseMock = createMockServiceSupabase({
+      org: { name: "Test Org", slug: "test" },
+      userName: "Test User",
+      memberCount: 12,
+    });
+
+    const mock = {
+      from: (table: string) => {
+        queriedTables.push(table);
+        return baseMock.from(table);
+      },
+    };
+
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      orgName: "Trusted Org",
+      orgSlug: "trusted-org",
+      contextMode: "tool_first",
+      serviceSupabase: mock as any,
+    });
+
+    assert.equal(result.orgContextMessage?.includes("## Organization Overview"), true);
+    assert.match(result.systemPrompt, /Trusted Org \(trusted-org\)/);
+    assert.deepEqual(queriedTables, []);
+  });
+
   it("injects the provided current local date/time into the trusted system prompt in full and shared_static modes", async () => {
     const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
     const input = {
