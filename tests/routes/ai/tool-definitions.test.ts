@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 35 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 35);
+test("AI_TOOLS exports 37 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 37);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -57,6 +57,8 @@ test("TOOL_NAMES contains all tool names", () => {
     "suggest_mentors",
     "find_navigation_targets",
     "search_org_content",
+    "prepare_update_announcement",
+    "prepare_delete_announcement",
   ];
   assert.deepEqual([...TOOL_NAMES].sort(), [...expected].sort());
 });
@@ -181,4 +183,26 @@ test("search_org_content requires a query string and caps limit at 25", () => {
   assert.ok(props.limit);
   assert.equal(props.limit.maximum, 25);
   assert.deepEqual(params.required, ["query"]);
+});
+
+test("prepare_update_announcement requires announcement_id with optional fields", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "prepare_update_announcement")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.announcement_id);
+  assert.ok(props.title);
+  assert.ok(props.body);
+  assert.ok(props.is_pinned);
+  assert.ok(props.audience);
+  assert.deepEqual(params.required, ["announcement_id"]);
+});
+
+test("prepare_delete_announcement requires only announcement_id", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "prepare_delete_announcement")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.announcement_id);
+  assert.deepEqual(params.required, ["announcement_id"]);
 });

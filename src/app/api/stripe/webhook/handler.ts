@@ -15,7 +15,7 @@ import { calculateGracePeriodEnd } from "@/lib/subscription/grace-period";
 import { createTelemetryReporter, reportExternalServiceWarning } from "@/lib/telemetry/server";
 import { debugLog, maskPII } from "@/lib/debug";
 import { createOrgProvisioner } from "@/lib/stripe/org-provisioner";
-import { extractSubscriptionPeriodEndIso } from "@/lib/stripe/subscription-period";
+import { extractSubscriptionPeriodEndEpoch, extractSubscriptionPeriodEndIso } from "@/lib/stripe/subscription-period";
 import {
   buildRenewalReminderEmail,
   buildPaymentActionRequiredEmail,
@@ -173,16 +173,12 @@ export async function handleStripeWebhookPost(
     return NextResponse.json({ received: true });
   }
 
-  type SubscriptionWithPeriod = Stripe.Subscription & {
-    current_period_end?: number | null;
-    cancel_at_period_end?: boolean | null;
-  };
   type InvoiceWithSub = Stripe.Invoice & {
     subscription?: string | Stripe.Subscription | null;
     customer?: string | Stripe.Customer | Stripe.DeletedCustomer | string | null;
   };
   const normalizeSubscriptionStatus = (
-    subscription: Pick<SubscriptionWithPeriod, "status" | "cancel_at_period_end">,
+    subscription: Pick<Stripe.Subscription, "status" | "cancel_at_period_end">,
     eventType?: Stripe.Event.Type
   ) => {
     const status = subscription.status || "canceled";
@@ -211,7 +207,7 @@ export async function handleStripeWebhookPost(
    * Updates alumni_bucket_quantity and sub_org_quantity from subscription metadata.
    */
   const handleEnterpriseSubscriptionUpdate = async (
-    subscription: SubscriptionWithPeriod
+    subscription: Stripe.Subscription
   ): Promise<string | null> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error: lookupError } = await (supabase as any)
@@ -573,9 +569,9 @@ export async function handleStripeWebhookPost(
 
           if (subscriptionId) {
             try {
-              const subscription = (await stripeClient.subscriptions.retrieve(subscriptionId, {
+              const subscription = await stripeClient.subscriptions.retrieve(subscriptionId, {
                 expand: ["items.data"],
-              })) as SubscriptionWithPeriod;
+              });
               // Always use the actual subscription status from Stripe
               status = normalizeSubscriptionStatus(subscription);
               currentPeriodEnd = extractSubscriptionPeriodEndIso(subscription);
@@ -622,7 +618,7 @@ export async function handleStripeWebhookPost(
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        const subscription = event.data.object as SubscriptionWithPeriod;
+        const subscription = event.data.object as Stripe.Subscription;
         const customerId =
           typeof subscription.customer === "string"
             ? subscription.customer
@@ -688,10 +684,9 @@ export async function handleStripeWebhookPost(
         break;
       }
       case "customer.subscription.trial_will_end": {
-        const subscription = event.data.object as SubscriptionWithPeriod;
-        const trialEnd = subscription.current_period_end
-          ? formatStripeDateUtc(subscription.current_period_end)
-          : "soon";
+        const subscription = event.data.object as Stripe.Subscription;
+        const trialEndEpoch = extractSubscriptionPeriodEndEpoch(subscription);
+        const trialEnd = trialEndEpoch ? formatStripeDateUtc(trialEndEpoch) : "soon";
 
         await sendInvoiceEmailToAdmins(
           supabase,
@@ -707,7 +702,7 @@ export async function handleStripeWebhookPost(
         const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : null;
         const customerId = typeof invoice.customer === "string" ? invoice.customer : null;
         if (subscriptionId) {
-          const subscription = (await stripeClient.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
+          const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
 
           // Check if this is an enterprise subscription first
           const enterpriseSubId = await handleEnterpriseSubscriptionUpdate(subscription);

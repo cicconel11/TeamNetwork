@@ -2,13 +2,15 @@ import type { AssistantPreparedJob } from "@/lib/schemas/jobs";
 import type { AssistantPreparedDiscussion } from "@/lib/schemas/discussion";
 import type { AssistantPreparedDiscussionReply } from "@/lib/schemas/discussion";
 import type { AssistantPreparedEvent } from "@/lib/schemas/events-ai";
-import type { AssistantPreparedAnnouncement } from "@/lib/schemas/content";
+import type { AssistantPreparedAnnouncement, EditAnnouncementForm } from "@/lib/schemas/content";
 import type { AssistantPreparedChatMessage, AssistantPreparedGroupMessage } from "@/lib/schemas/chat-ai";
 
 export const AI_PENDING_ACTION_EXPIRY_MS = 15 * 60 * 1000;
 
 export type PendingActionType =
   | "create_announcement"
+  | "update_announcement"
+  | "delete_announcement"
   | "create_job_posting"
   | "send_chat_message"
   | "send_group_chat_message"
@@ -30,6 +32,20 @@ export interface CreateJobPostingPendingPayload extends AssistantPreparedJob {
 }
 
 export interface CreateAnnouncementPendingPayload extends AssistantPreparedAnnouncement {
+  orgSlug?: string | null;
+}
+
+export interface UpdateAnnouncementPendingPayload extends EditAnnouncementForm {
+  announcement_id: string;
+  orgSlug?: string | null;
+  /** Snapshot of the previous title/body so the confirmation card can show a before/after diff. */
+  previous_title?: string | null;
+  previous_body?: string | null;
+}
+
+export interface DeleteAnnouncementPendingPayload {
+  announcement_id: string;
+  title: string;
   orgSlug?: string | null;
 }
 
@@ -74,6 +90,8 @@ export interface RevokeEnterpriseInvitePendingPayload {
 
 export interface PendingActionPayloadByType {
   create_announcement: CreateAnnouncementPendingPayload;
+  update_announcement: UpdateAnnouncementPendingPayload;
+  delete_announcement: DeleteAnnouncementPendingPayload;
   create_job_posting: CreateJobPostingPendingPayload;
   send_chat_message: SendChatMessagePendingPayload;
   send_group_chat_message: SendGroupChatMessagePendingPayload;
@@ -467,6 +485,16 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       return {
         title: "Review announcement",
         description: "Confirm the drafted announcement before it is published.",
+      };
+    case "update_announcement":
+      return {
+        title: "Review announcement edits",
+        description: "Confirm the announcement edits before they replace the published version.",
+      };
+    case "delete_announcement":
+      return {
+        title: "Delete announcement",
+        description: "Confirm that this announcement should be deleted.",
       };
     case "create_job_posting":
       return {

@@ -4,11 +4,13 @@ import { getAiOrgContext } from "@/lib/ai/context";
 import {
   type CreateAnnouncementPendingPayload,
   type CreateDiscussionReplyPendingPayload,
+  type DeleteAnnouncementPendingPayload,
   getPendingAction,
   isAuthorizedAction,
   isPendingActionExpired,
   type SendChatMessagePendingPayload,
   type SendGroupChatMessagePendingPayload,
+  type UpdateAnnouncementPendingPayload,
   updatePendingActionStatus,
   type CreateDiscussionThreadPendingPayload,
   type CreateEventPendingPayload,
@@ -31,6 +33,10 @@ import {
   sendAnnouncementNotification,
 } from "@/lib/announcements/create-announcement";
 import {
+  deleteAnnouncement,
+  updateAnnouncement,
+} from "@/lib/announcements/update-announcement";
+import {
   sendAiAssistedDirectChatMessage,
   type DirectChatSupabase,
 } from "@/lib/chat/direct-chat";
@@ -50,6 +56,8 @@ export interface AiPendingActionConfirmRouteDeps {
   getPendingAction?: typeof getPendingAction;
   updatePendingActionStatus?: typeof updatePendingActionStatus;
   createAnnouncement?: typeof createAnnouncement;
+  updateAnnouncement?: typeof updateAnnouncement;
+  deleteAnnouncement?: typeof deleteAnnouncement;
   createJobPosting?: typeof createJobPosting;
   createDiscussionReply?: typeof createDiscussionReply;
   createDiscussionThread?: typeof createDiscussionThread;
@@ -74,6 +82,8 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const getPendingActionFn = deps.getPendingAction ?? getPendingAction;
   const updatePendingActionStatusFn = deps.updatePendingActionStatus ?? updatePendingActionStatus;
   const createAnnouncementFn = deps.createAnnouncement ?? createAnnouncement;
+  const updateAnnouncementFn = deps.updateAnnouncement ?? updateAnnouncement;
+  const deleteAnnouncementFn = deps.deleteAnnouncement ?? deleteAnnouncement;
   const createJobPostingFn = deps.createJobPosting ?? createJobPosting;
   const createDiscussionReplyFn = deps.createDiscussionReply ?? createDiscussionReply;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
@@ -283,6 +293,138 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           return NextResponse.json({ ok: true, announcement: result.announcement, actionId: action.id });
+        }
+        case "update_announcement": {
+          const payload = action.payload as UpdateAnnouncementPendingPayload;
+          const result = await updateAnnouncementFn({
+            supabase: ctx.serviceSupabase,
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            announcementId: payload.announcement_id,
+            input: {
+              title: payload.title,
+              body: payload.body,
+              is_pinned: payload.is_pinned,
+              audience: payload.audience,
+            },
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json(
+              result.details ? { error: result.error, details: result.details } : { error: result.error },
+              { status: result.status }
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "announcement",
+            resultEntityId: result.announcement.id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const orgSlug =
+            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+              ? payload.orgSlug
+              : null;
+          const announcementUrl = orgSlug ? `/${orgSlug}/announcements` : null;
+          const content = announcementUrl
+            ? `Updated announcement: [${result.announcement.title}](${announcementUrl})`
+            : `Updated announcement: ${result.announcement.title}`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            user_id: ctx.userId,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({ ok: true, announcement: result.announcement, actionId: action.id });
+        }
+        case "delete_announcement": {
+          const payload = action.payload as DeleteAnnouncementPendingPayload;
+          const result = await deleteAnnouncementFn({
+            supabase: ctx.serviceSupabase,
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            announcementId: payload.announcement_id,
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json({ error: result.error }, { status: result.status });
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "announcement",
+            resultEntityId: result.announcementId,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const content = `Deleted announcement: ${payload.title}`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            user_id: ctx.userId,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({ ok: true, announcementId: result.announcementId, actionId: action.id });
         }
         case "create_job_posting": {
           const payload = action.payload as CreateJobPostingPendingPayload;
