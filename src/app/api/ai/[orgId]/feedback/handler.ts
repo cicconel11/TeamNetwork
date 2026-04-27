@@ -204,15 +204,30 @@ export function createAiFeedbackGetHandler(deps: AiFeedbackRouteDeps = {}) {
         );
       }
 
-      for (const id of ids) {
-        const messageAccess = await resolveAccessibleMessageThread({
-          supabase: ctx.supabase,
-          messageId: id,
-          orgId,
-          userId: ctx.userId,
-          headers: rateLimit.headers,
-        });
-        if (!messageAccess.ok) return messageAccess.response;
+      // Single ownership query covering all ids — RLS on ai_feedback enforces
+      // user_id but NOT org_id, so the org boundary must be checked here.
+      const { data: ownedMessages, error: ownershipError } = await ctx.supabase
+        .from("ai_messages")
+        .select("id, ai_threads!inner(user_id, org_id, deleted_at)")
+        .in("id", ids)
+        .eq("ai_threads.user_id", ctx.userId)
+        .eq("ai_threads.org_id", orgId)
+        .is("ai_threads.deleted_at", null);
+
+      if (ownershipError) {
+        console.error("[ai-feedback] batch ownership error:", ownershipError);
+        return NextResponse.json(
+          { error: "Failed to get feedback" },
+          { status: 500, headers: rateLimit.headers }
+        );
+      }
+
+      const allowedIds = new Set((ownedMessages ?? []).map((row) => row.id));
+      if (allowedIds.size !== ids.length) {
+        return NextResponse.json(
+          { error: "Not authorized" },
+          { status: 403, headers: rateLimit.headers }
+        );
       }
 
       const { data: feedbackList, error } = await ctx.supabase
@@ -243,20 +258,27 @@ export function createAiFeedbackGetHandler(deps: AiFeedbackRouteDeps = {}) {
       );
     }
 
-    const messageAccess = await resolveAccessibleMessageThread({
-      supabase: ctx.supabase,
-      messageId,
-      orgId,
-      userId: ctx.userId,
-      headers: rateLimit.headers,
-    });
-    if (!messageAccess.ok) return messageAccess.response;
-
-    const { data: feedback, error } = await ctx.supabase
+    // Single round-trip: fetch feedback joined through ai_messages → ai_threads
+    // and apply org_id + soft-delete filters via the embed. RLS enforces
+    // user_id = auth.uid() on ai_feedback rows; the explicit org_id filter is
+    // defense-in-depth for any future swap to a service-role client.
+    //
+    // Behavior change: cross-user / cross-org / missing-message access denials
+    // now collapse to 200 { data: null } (same as no-feedback-yet) rather than
+    // 403/404. This closes an existence oracle on message ids.
+    const { data: feedbackRow, error } = await ctx.supabase
       .from("ai_feedback")
-      .select("id, message_id, rating, comment, created_at")
+      .select(`
+        id, message_id, rating, comment, created_at,
+        ai_messages!inner (
+          thread_id,
+          ai_threads!inner ( user_id, org_id, deleted_at )
+        )
+      `)
       .eq("message_id", messageId)
       .eq("user_id", ctx.userId)
+      .eq("ai_messages.ai_threads.org_id", orgId)
+      .is("ai_messages.ai_threads.deleted_at", null)
       .maybeSingle();
 
     if (error) {
@@ -266,6 +288,17 @@ export function createAiFeedbackGetHandler(deps: AiFeedbackRouteDeps = {}) {
         { status: 500, headers: rateLimit.headers }
       );
     }
+
+    // Strip embed before returning to preserve response contract.
+    const feedback = feedbackRow
+      ? {
+          id: feedbackRow.id,
+          message_id: feedbackRow.message_id,
+          rating: feedbackRow.rating,
+          comment: feedbackRow.comment,
+          created_at: feedbackRow.created_at,
+        }
+      : null;
 
     return NextResponse.json(
       { data: feedback },
