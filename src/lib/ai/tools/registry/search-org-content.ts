@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { safeToolQuery } from "@/lib/ai/tools/shared";
 import { normalizeRepeatedTitle } from "@/lib/search/normalize-title";
+import { sanitizeIlikeInput } from "@/lib/security/validation";
 import type { ToolModule } from "./types";
 
 const searchOrgContentSchema = z
@@ -23,6 +24,41 @@ interface SearchRpcRow {
 }
 
 const PER_TYPE_CAP = 5;
+
+function buildSearchVariants(query: string): string[] {
+  const trimmed = query.trim();
+  const stripped = trimmed
+    .replace(
+      /^(?:find|search|look\s+up|show|get|list)?\s*(?:posts?|content|announcements?|events?)?\s*(?:mentioning|about|for|on|regarding)?\s+/i,
+      ""
+    )
+    .trim();
+
+  return [...new Set([trimmed, stripped].filter((value) => value.length > 0))];
+}
+
+function buildIlikeOr(columns: string[], variants: string[]): string {
+  return variants
+    .flatMap((variant) => {
+      const safe = sanitizeIlikeInput(variant);
+      return columns.map((column) => `${column}.ilike.%${safe}%`);
+    })
+    .join(",");
+}
+
+interface DirectAnnouncementRow {
+  id: string;
+  title: string | null;
+  body: string | null;
+  created_at: string | null;
+}
+
+interface DirectEventRow {
+  id: string;
+  title: string | null;
+  description: string | null;
+  start_date: string | null;
+}
 
 export const searchOrgContentModule: ToolModule<Args> = {
   name: "search_org_content",
@@ -52,6 +88,50 @@ export const searchOrgContentModule: ToolModule<Args> = {
       }
 
       const rawRows = (Array.isArray(data) ? data : []) as SearchRpcRow[];
+      const variants = buildSearchVariants(args.query);
+      const [announcementFallback, eventFallback] = await Promise.all([
+        sb
+          .from("announcements")
+          .select("id, title, body, created_at")
+          .eq("organization_id", ctx.orgId)
+          .is("deleted_at", null)
+          .or(buildIlikeOr(["title", "body"], variants))
+          .order("created_at", { ascending: false })
+          .limit(limit),
+        sb
+          .from("events")
+          .select("id, title, description, start_date")
+          .eq("organization_id", ctx.orgId)
+          .is("deleted_at", null)
+          .or(buildIlikeOr(["title", "description", "location"], variants))
+          .order("start_date", { ascending: false })
+          .limit(limit),
+      ]);
+
+      const fallbackRows: SearchRpcRow[] = [
+        ...(Array.isArray(announcementFallback.data)
+          ? (announcementFallback.data as DirectAnnouncementRow[]).map((row) => ({
+              entity_type: "announcement",
+              entity_id: row.id,
+              title: row.title,
+              snippet: row.body,
+              url_path: `/${orgRow.slug}/announcements`,
+              rank: 0.5,
+              metadata: { announcement_id: row.id },
+            }))
+          : []),
+        ...(Array.isArray(eventFallback.data)
+          ? (eventFallback.data as DirectEventRow[]).map((row) => ({
+              entity_type: "event",
+              entity_id: row.id,
+              title: row.title,
+              snippet: row.description,
+              url_path: `/${orgRow.slug}/calendar/events/${row.id}`,
+              rank: 0.5,
+              metadata: {},
+            }))
+          : []),
+      ];
 
       const PERSON_TYPES = new Set(["member", "alumni"]);
       const seenTitleByType = new Map<string, Set<string>>();
@@ -66,7 +146,7 @@ export const searchOrgContentModule: ToolModule<Args> = {
         url_path: string | null;
       }> = [];
 
-      for (const row of rawRows) {
+      for (const row of [...rawRows, ...fallbackRows]) {
         const idKey = `${row.entity_type}:${row.entity_id}`;
         if (seenIds.has(idKey)) continue;
         const normalizedTitle = normalizeRepeatedTitle(row.title);
