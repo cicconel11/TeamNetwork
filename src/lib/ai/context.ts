@@ -85,22 +85,48 @@ export async function getAiOrgContext(
   const serviceSupabase = deps.serviceSupabase ?? createServiceClient();
   const allowedRoles = options.allowedRoles ?? DEFAULT_ALLOWED_ROLES;
 
-  // 3. Check role — fail closed on DB error
-  const { data: membership, error } = await serviceSupabase
-    .from("user_organization_roles")
-    .select("role, status")
-    .eq("user_id", user.id)
-    .eq("organization_id", orgId)
-    .maybeSingle();
+  // 3. Run role + org-row lookups in parallel — both keyed off (user.id, orgId).
+  // Tradeoff: rejected requests (wrong org / inactive / disallowed role) now
+  // also pay for the organizations lookup. Rate limiting bounds the abuse
+  // surface and both queries reuse the same connection.
+  const [membershipResult, orgRowResult] = await Promise.all([
+    serviceSupabase
+      .from("user_organization_roles")
+      .select("role, status")
+      .eq("user_id", user.id)
+      .eq("organization_id", orgId)
+      .maybeSingle(),
+    serviceSupabase
+      .from("organizations")
+      .select("enterprise_id")
+      .eq("id", orgId)
+      .maybeSingle(),
+  ]);
 
-  if (error) {
-    aiLog("error", "ai-context", "role query failed", deps.logContext ?? {
-      requestId: "unknown_request",
-      orgId,
-      userId: user.id,
-    }, { error });
+  const fallbackLogCtx = deps.logContext ?? {
+    requestId: "unknown_request",
+    orgId,
+    userId: user.id,
+  };
+
+  // Supabase queries resolve with {data, error} rather than throwing, so
+  // Promise.all does not short-circuit. Log each error independently.
+  if (membershipResult.error) {
+    aiLog("error", "ai-context", "role query failed", fallbackLogCtx, {
+      error: membershipResult.error,
+    });
+  }
+  if (orgRowResult.error) {
+    aiLog("error", "ai-context", "enterprise org lookup failed", fallbackLogCtx, {
+      error: orgRowResult.error,
+    });
+  }
+  if (membershipResult.error || orgRowResult.error) {
     return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
   }
+
+  const membership = membershipResult.data;
+  const orgRow = orgRowResult.data;
 
   if (!membership || membership.status !== "active") {
     return {
@@ -142,21 +168,6 @@ export async function getAiOrgContext(
 
   let enterpriseId: string | undefined;
   let enterpriseRole: EnterpriseRole | undefined;
-
-  const { data: orgRow, error: orgError } = await serviceSupabase
-    .from("organizations")
-    .select("enterprise_id")
-    .eq("id", orgId)
-    .maybeSingle();
-
-  if (orgError) {
-    aiLog("error", "ai-context", "enterprise org lookup failed", deps.logContext ?? {
-      requestId: "unknown_request",
-      orgId,
-      userId: user.id,
-    }, { error: orgError });
-    return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
-  }
 
   if (orgRow?.enterprise_id) {
     const { data: enterpriseRoleRow, error: enterpriseRoleError } = await serviceSupabase
