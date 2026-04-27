@@ -44,6 +44,9 @@ export type ToolExecutionAuthorization =
 export interface ToolExecutionContext {
   orgId: string;
   userId: string;
+  orgName?: string;
+  orgSlug?: string;
+  hideDonorNames?: boolean;
   enterpriseId?: string;
   enterpriseRole?: EnterpriseRole;
   supabase?: SupabaseClient | null;
