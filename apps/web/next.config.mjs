@@ -148,6 +148,10 @@ function validateBuildEnv() {
     console.log("ℹ️  ZAI_API_KEY not set — AI assistant features disabled");
   }
 
+  if (isVercelProduction && !process.env.AUTH_HANDOFF_ENCRYPTION_KEY) {
+    throw new Error("Missing required environment variable: AUTH_HANDOFF_ENCRYPTION_KEY");
+  }
+
   // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let parsedSiteUrl = null;

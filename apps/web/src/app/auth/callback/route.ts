@@ -8,6 +8,12 @@ import { debugLog, maskPII } from "@/lib/debug";
 import { createServiceClient } from "@/lib/supabase/service";
 import { runLinkedInOidcSyncSafe } from "@/lib/linkedin/oidc-sync";
 import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import {
+  buildMobileCallbackDeepLink,
+  buildMobileErrorDeepLink,
+  buildMobileHandoffInsert,
+  mobileErrorFromCallbackRedirect,
+} from "@/lib/auth/mobile-oauth";
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -20,6 +26,7 @@ export async function GET(request: NextRequest) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
+  const isMobileCallback = requestUrl.searchParams.get("mobile") === "1";
 
   debugLog("auth-callback", "Starting", {
     hasCode: !!code,
@@ -33,6 +40,9 @@ export async function GET(request: NextRequest) {
   // Handle OAuth errors — preserve redirect + mode so the error page can route back
   if (errorParam) {
     console.error("[auth/callback] OAuth error:", errorParam, errorDescription);
+    if (isMobileCallback) {
+      return NextResponse.redirect(buildMobileErrorDeepLink(errorParam, errorDescription));
+    }
     return NextResponse.redirect(
       buildErrorRedirect(siteUrl, errorDescription || errorParam, redirect, requestUrl.searchParams.get("mode"))
     );
@@ -71,6 +81,9 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("[auth/callback] Exchange error:", error.message);
+      if (isMobileCallback) {
+        return NextResponse.redirect(buildMobileErrorDeepLink("exchange_failed", error.message));
+      }
       return NextResponse.redirect(
         buildErrorRedirect(siteUrl, error.message, redirect, requestUrl.searchParams.get("mode"))
       );
@@ -195,6 +208,9 @@ export async function GET(request: NextRequest) {
 
       if (ageGateResult.kind === "redirect") {
         debugLog("auth-callback", "Age validation redirect:", ageGateResult.location);
+        if (isMobileCallback) {
+          return NextResponse.redirect(mobileErrorFromCallbackRedirect(ageGateResult.location));
+        }
         return NextResponse.redirect(ageGateResult.location);
       }
 
@@ -212,6 +228,29 @@ export async function GET(request: NextRequest) {
         path: c.path || "/",
         secure: c.secure,
       })));
+      if (isMobileCallback) {
+        try {
+          const serviceClient = createServiceClient();
+          const { code: handoffCode, row } = buildMobileHandoffInsert(data.session);
+          const { error: handoffError } = await (serviceClient as any)
+            .from("mobile_auth_handoffs")
+            .insert(row);
+
+          if (handoffError) {
+            console.error("[auth/callback] Failed to create mobile auth handoff:", handoffError.message);
+            return NextResponse.redirect(
+              buildMobileErrorDeepLink("handoff_failed", "Could not complete mobile sign in.")
+            );
+          }
+
+          return NextResponse.redirect(buildMobileCallbackDeepLink({ handoff_code: handoffCode }));
+        } catch (handoffError) {
+          console.error("[auth/callback] Mobile auth handoff failed:", handoffError);
+          return NextResponse.redirect(
+            buildMobileErrorDeepLink("handoff_failed", "Could not complete mobile sign in.")
+          );
+        }
+      }
       debugLog("auth-callback", "Redirecting to:", redirectUrl.toString());
       return response;
     }
@@ -219,5 +258,8 @@ export async function GET(request: NextRequest) {
     console.error("[auth/callback] No session returned");
   }
 
+  if (isMobileCallback) {
+    return NextResponse.redirect(buildMobileErrorDeepLink("missing_session", "Authentication did not return a session."));
+  }
   return NextResponse.redirect(`${siteUrl}/auth/error`);
 }

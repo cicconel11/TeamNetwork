@@ -137,6 +137,7 @@ jest.mock("@/lib/supabase", () => ({
         data: { session: { access_token: "mock-token" } },
         error: null,
       }),
+      setSession: jest.fn().mockResolvedValue({ data: { session: {} }, error: null }),
       onAuthStateChange: jest.fn().mockReturnValue({
         data: { subscription: { unsubscribe: jest.fn() } },
       }),

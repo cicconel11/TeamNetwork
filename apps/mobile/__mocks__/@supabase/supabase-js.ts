@@ -54,6 +54,7 @@ export const createClient = jest.fn(() => ({
       error: null,
     }),
     signOut: jest.fn().mockResolvedValue({ error: null }),
+    setSession: jest.fn().mockResolvedValue({ data: { session: {} }, error: null }),
     onAuthStateChange: jest.fn().mockReturnValue({
       data: { subscription: { unsubscribe: jest.fn() } },
     }),
