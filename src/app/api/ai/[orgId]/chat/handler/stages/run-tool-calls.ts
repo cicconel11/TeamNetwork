@@ -51,6 +51,9 @@ export interface CreateToolCallHandlerInput {
   ctx: {
     orgId: string;
     userId: string;
+    orgName?: string;
+    orgSlug?: string;
+    hideDonorNames?: boolean;
     enterpriseId?: string;
     enterpriseRole?: EnterpriseRole;
     supabase: ServerSupabase;
@@ -273,6 +276,9 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
         {
           orgId: input.ctx.orgId,
           userId: input.ctx.userId,
+          orgName: input.ctx.orgName,
+          orgSlug: input.ctx.orgSlug,
+          hideDonorNames: input.ctx.hideDonorNames,
           enterpriseId: input.ctx.enterpriseId,
           enterpriseRole: input.ctx.enterpriseRole,
           supabase: input.ctx.supabase,
