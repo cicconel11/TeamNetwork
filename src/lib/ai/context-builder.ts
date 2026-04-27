@@ -19,6 +19,9 @@ interface BuildPromptInput {
   orgId: string;
   userId: string;
   role: string;
+  orgName?: string;
+  orgSlug?: string;
+  hideDonorNames?: boolean;
   enterpriseId?: string;
   enterpriseRole?: EnterpriseRole;
   serviceSupabase: SupabaseClient;
@@ -338,6 +341,8 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
   const shouldLoad = (key: DataSourceKey) => activeSources.has(key) && contextMode === "full";
   const canManageEnterpriseBilling =
     enterpriseRole != null && getEnterprisePermissions(enterpriseRole).canManageBilling;
+  const hasTrustedOrgInfo =
+    typeof input.orgName === "string" || typeof input.orgSlug === "string";
 
   const [
     org,
@@ -350,13 +355,23 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
     recentAnnouncements,
     donationStats,
   ] = await Promise.all([
-    safeQuery<OrgInfo>("organization info", () =>
-      (serviceSupabase as any)
-        .from("organizations")
-        .select("name, slug, org_type, description")
-        .eq("id", orgId)
-        .maybeSingle()
-    , input.logContext),
+    hasTrustedOrgInfo
+      ? Promise.resolve({
+          ok: true as const,
+          data: {
+            name: input.orgName ?? "your organization",
+            slug: input.orgSlug ?? "",
+            org_type: null,
+            description: null,
+          },
+        })
+      : safeQuery<OrgInfo>("organization info", () =>
+          (serviceSupabase as any)
+            .from("organizations")
+            .select("name, slug, org_type, description")
+            .eq("id", orgId)
+            .maybeSingle()
+        , input.logContext),
     enterpriseId
       ? safeQuery<EnterpriseInfo>("enterprise info", async () => {
         const { data: enterpriseRow, error: enterpriseError } = await (serviceSupabase as any)
@@ -606,8 +621,14 @@ export async function buildPromptContext(
   input: BuildPromptInput
 ): Promise<{ systemPrompt: string; orgContextMessage: string | null; metadata: ContextMetadata }> {
   const context = await loadPromptContextData(input);
-  const orgName = context.org.ok ? context.org.data?.name ?? "your organization" : "your organization";
-  const orgSlug = context.org.ok ? context.org.data?.slug ?? "" : "";
+  const orgName =
+    context.org.ok
+      ? context.org.data?.name ?? input.orgName ?? "your organization"
+      : input.orgName ?? "your organization";
+  const orgSlug =
+    context.org.ok
+      ? context.org.data?.slug ?? input.orgSlug ?? ""
+      : input.orgSlug ?? "";
   const enterprise = context.enterprise.ok ? context.enterprise.data : null;
   const surface = input.surface ?? "general";
   const canManageEnterpriseBilling =
