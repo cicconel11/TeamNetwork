@@ -379,6 +379,7 @@ describe("checkCacheEligibility", () => {
     { name: "team roster", message: "Summarize the team roster" },
     { name: "donations this month", message: "Tell me about donations this month" },
     { name: "new announcement", message: "Was there a new announcement posted" },
+    { name: "typoed announcement", message: "Search for announcemnet called fire drill" },
     { name: "member counts", message: "How many members are active" },
     { name: "alumni listing", message: "Who are the alumni in our group" },
     { name: "event details", message: "Describe the event for our chapter" },

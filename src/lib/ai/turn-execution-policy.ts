@@ -99,7 +99,7 @@ const UNRELATED_PATTERNS = [
 const ORG_SCOPE_KEYWORDS = [
   "member", "members", "alumni", "alum", "parent", "parents", "admin", "admins",
   "event", "events", "calendar", "meeting", "meetings", "practice", "practices", "game", "games",
-  "announcement", "announcements", "announce",
+  "announcement", "announcements", "announce", "announcemnet", "announcment", "annoucement", "announcments",
   "discussion", "discussions", "forum", "thread", "threads", "reply", "replies", "post", "posts",
   "job", "jobs", "posting", "postings", "hiring", "career", "careers", "position", "positions",
   "donation", "donations", "donor", "donors", "fundrais", "philanthropy", "pledge", "pledges",

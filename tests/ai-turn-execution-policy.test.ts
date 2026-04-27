@@ -60,6 +60,16 @@ test("buildTurnExecutionPolicy keeps live org questions on the live_lookup path"
   assert.equal(policy.retrieval.reason, "tool_only_structured_query");
 });
 
+test("buildTurnExecutionPolicy treats typoed announcement searches as live org lookups", () => {
+  const policy = buildPolicy("Search for announcemnet called fire drill", "general");
+
+  assert.equal(policy.profile, "live_lookup");
+  assert.equal(policy.cachePolicy, "skip");
+  assert.equal(policy.toolPolicy, "surface_read_tools");
+  assert.equal(policy.retrieval.mode, "allow");
+  assert.equal(policy.retrieval.reason, "general_knowledge_query");
+});
+
 test("buildTurnExecutionPolicy keeps governance-doc requests narrowly out_of_scope", () => {
   const policy = buildPolicy("Explain the organization bylaws", "general");
 
