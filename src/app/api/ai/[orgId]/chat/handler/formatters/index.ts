@@ -1,4 +1,3 @@
-import type { ServiceSupabase } from "@/lib/supabase/types";
 import type { ToolResultMessage } from "@/lib/ai/response-composer";
 import {
   formatSuggestMentorsResponse,
@@ -334,49 +333,6 @@ export function formatGlobalLookupToolResponse(
   }
 
   return lines.join("\n");
-}
-
-export async function resolveHideDonorNamesPreference(
-  serviceSupabase: ServiceSupabase,
-  orgId: string,
-): Promise<boolean> {
-  try {
-    const { data, error } = await serviceSupabase
-      .from("organizations")
-      .select("hide_donor_names")
-      .eq("id", orgId)
-      .maybeSingle();
-
-    if (error) {
-      return true;
-    }
-
-    return Boolean((data as { hide_donor_names?: unknown } | null)?.hide_donor_names);
-  } catch {
-    return true;
-  }
-}
-
-export async function resolveOrgSlug(
-  serviceSupabase: ServiceSupabase,
-  orgId: string,
-): Promise<string | undefined> {
-  try {
-    const { data, error } = await serviceSupabase
-      .from("organizations")
-      .select("slug")
-      .eq("id", orgId)
-      .maybeSingle();
-
-    if (error) {
-      return undefined;
-    }
-
-    const slug = (data as { slug?: unknown } | null)?.slug;
-    return typeof slug === "string" && slug.trim().length > 0 ? slug : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 export function formatDeterministicToolResponse(
