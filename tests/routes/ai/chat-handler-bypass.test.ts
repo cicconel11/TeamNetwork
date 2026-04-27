@@ -74,6 +74,32 @@ describe("runPass1Bypass — synthetic tool call", () => {
     });
   });
 
+  it("find_navigation_targets strips navigation phrasing", async () => {
+    const capture = { events: [] as ToolCallRequestedEvent[] };
+    const input = buildInput(
+      "find_navigation_targets",
+      "open announcements",
+      capture,
+    );
+    await runPass1Bypass(input);
+    assert.deepEqual(JSON.parse(capture.events[0].argsJson), {
+      query: "announcements",
+    });
+  });
+
+  it("search_org_content strips content-search phrasing", async () => {
+    const capture = { events: [] as ToolCallRequestedEvent[] };
+    const input = buildInput(
+      "search_org_content",
+      "search announcements about fundraising",
+      capture,
+    );
+    await runPass1Bypass(input);
+    assert.deepEqual(JSON.parse(capture.events[0].argsJson), {
+      query: "fundraising",
+    });
+  });
+
   it("synthetic id round-trips on the emitted event", async () => {
     const capture = { events: [] as ToolCallRequestedEvent[] };
     const input = buildInput("list_alumni", "who are our alumni?", capture);

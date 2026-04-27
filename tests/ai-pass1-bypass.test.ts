@@ -8,6 +8,7 @@ import {
   BYPASS_ELIGIBLE_TOOLS,
   FORCED_PASS1_TOOL_CHOICE_ELIGIBLE,
   canBypassPass1,
+  deriveForcedPass1ToolArgs,
   getForcedPass1ToolChoice,
 } from "../src/app/api/ai/[orgId]/chat/handler/pass1-tools";
 import type { TurnExecutionPolicy } from "../src/lib/ai/turn-execution-policy";
@@ -159,6 +160,20 @@ describe("canBypassPass1 — suppressors", () => {
         executionPolicy: SURFACE_READ_POLICY,
       }),
       false,
+    );
+  });
+
+  it("derives local args for bypassed navigation prompts", () => {
+    assert.deepEqual(
+      deriveForcedPass1ToolArgs("find_navigation_targets", "open announcements"),
+      { query: "announcements" },
+    );
+  });
+
+  it("derives local args for bypassed content search prompts", () => {
+    assert.deepEqual(
+      deriveForcedPass1ToolArgs("search_org_content", "search announcements about spring gala"),
+      { query: "spring gala" },
     );
   });
 });

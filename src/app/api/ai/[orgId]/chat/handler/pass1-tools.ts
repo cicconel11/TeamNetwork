@@ -73,6 +73,8 @@ export const MENTOR_AVAILABILITY_PROMPT_PATTERN =
   /\b(?:available|availability|accepting(?:\s+new)?|open(?:\s+spots?)?|capacity|room\s+for\s+more)\b/i;
 export const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
+export const CONTENT_SEARCH_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:find|search|look\s+up)(?!\w)[\s\S]{0,140}\b(?:announcements?|events?|discussions?|threads?|jobs?|posts?|content)\b|(?<!\w)(?:announcements?|events?|discussions?|threads?|jobs?|posts?|content)(?!\w)[\s\S]{0,140}\b(?:mentioning|about|regarding)\b)/i;
 export const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|send|draft|write|compose)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|send|draft|write|compose)(?!\w))/i;
 export const CREATE_JOB_PROMPT_PATTERN =
@@ -180,6 +182,10 @@ const DONATION_DIM_STATUS_PATTERN =
   /\b(?:status|succeeded|failed|pending|refund|refunded)\b/i;
 const DONATION_DIM_TOTALS_PATTERN =
   /\b(?:total|totals|raised|sum|average|largest|biggest|smallest|highest|lowest)\b/i;
+const SEARCH_QUERY_PREFIX_PATTERN =
+  /^(?:find|search|look\s+up|show|get|list)?\s*(?:posts?|content|announcements?|events?|discussions?|jobs?)?\s*(?:mentioning|about|for|on|regarding)?\s+/i;
+const NAVIGATION_QUERY_PREFIX_PATTERN =
+  /^(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page(?:\s+for)?|link\s+to|show\s+me)\s+/i;
 
 /**
  * Derive a dimension hint for `get_donation_analytics`. Returns "all" when no
@@ -191,6 +197,21 @@ export function deriveDonationAnalyticsDimension(message: string): DonationAnaly
   if (DONATION_DIM_STATUS_PATTERN.test(message)) return "status_mix";
   if (DONATION_DIM_TOTALS_PATTERN.test(message)) return "totals";
   return "all";
+}
+
+function stripQueryPrefix(message: string, prefixPattern: RegExp): string | undefined {
+  const trimmed = message.trim().replace(/[?.!]+$/g, "");
+  const stripped = trimmed.replace(prefixPattern, "").trim();
+  const query = stripped || trimmed;
+  return query.length > 0 ? query : undefined;
+}
+
+export function deriveSearchOrgContentQuery(message: string): string | undefined {
+  return stripQueryPrefix(message, SEARCH_QUERY_PREFIX_PATTERN);
+}
+
+export function deriveNavigationQuery(message: string): string | undefined {
+  return stripQueryPrefix(message, NAVIGATION_QUERY_PREFIX_PATTERN);
 }
 
 /**
@@ -211,6 +232,14 @@ export function deriveForcedPass1ToolArgs(
     const dimension = deriveDonationAnalyticsDimension(message);
     if (dimension === "all") return undefined;
     return { dimension };
+  }
+  if (toolName === "search_org_content") {
+    const query = deriveSearchOrgContentQuery(message);
+    return query ? { query } : undefined;
+  }
+  if (toolName === "find_navigation_targets") {
+    const query = deriveNavigationQuery(message);
+    return query ? { query } : undefined;
   }
   return undefined;
 }
@@ -303,6 +332,10 @@ export function getPass1Tools(
 
   if (intentType === "navigation" && DIRECT_NAVIGATION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.find_navigation_targets];
+  }
+
+  if (CONTENT_SEARCH_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.search_org_content];
   }
 
   const currentFeatureSegment = getCurrentPathFeatureSegment(currentPath);
@@ -470,6 +503,8 @@ export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<
   "revoke_enterprise_invite",
   "list_parents",
   "list_philanthropy_events",
+  "find_navigation_targets",
+  "search_org_content",
   "scrape_schedule_website",
   "extract_schedule_pdf",
 ]);
@@ -510,6 +545,8 @@ export const BYPASS_ELIGIBLE_TOOLS: ReadonlyArray<ToolName> = [
   "list_donations",
   "list_philanthropy_events",
   "list_chat_groups",
+  "find_navigation_targets",
+  "search_org_content",
 ];
 
 export interface CanBypassPass1Input {
@@ -554,6 +591,7 @@ export const TOOL_FIRST_ELIGIBLE: ReadonlySet<ToolName> = new Set<ToolName>([
   "get_org_stats",
   "get_donation_analytics",
   "find_navigation_targets",
+  "search_org_content",
   "list_announcements",
   "list_chat_groups",
   "list_events",

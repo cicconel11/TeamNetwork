@@ -5,6 +5,7 @@ import {
   MENTOR_PROMPT_PATTERN,
   MENTOR_AVAILABILITY_PROMPT_PATTERN,
   DIRECT_NAVIGATION_PROMPT_PATTERN,
+  CONTENT_SEARCH_PROMPT_PATTERN,
   CREATE_ANNOUNCEMENT_PROMPT_PATTERN,
   CREATE_JOB_PROMPT_PATTERN,
   SEND_CHAT_MESSAGE_PROMPT_PATTERN,
@@ -43,6 +44,8 @@ import {
   isToolFirstEligible,
   deriveOrgStatsScope,
   deriveDonationAnalyticsDimension,
+  deriveSearchOrgContentQuery,
+  deriveNavigationQuery,
   deriveForcedPass1ToolArgs,
 } from "../src/app/api/ai/[orgId]/chat/handler/pass1-tools";
 import type { CacheSurface } from "../src/lib/ai/semantic-cache-utils";
@@ -237,8 +240,16 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
       toolPolicy: "surface_read_tools",
       intentType: "navigation",
       expectedToolNames: ["find_navigation_targets"],
-      // find_navigation_targets is not in the forced-choice allowlist
-      expectedForcedTool: undefined,
+      expectedForcedTool: "find_navigation_targets",
+    },
+    {
+      name: "CONTENT_SEARCH prompt → search_org_content",
+      message: "search announcements about fundraising",
+      surface: "general",
+      toolPolicy: "surface_read_tools",
+      intentType: "knowledge_query",
+      expectedToolNames: ["search_org_content"],
+      expectedForcedTool: "search_org_content",
     },
     {
       name: "DIRECT_NAVIGATION without navigation intent falls through",
@@ -745,8 +756,7 @@ describe("getPass1Tools — surface global read merge (regression for surface ro
       "live_lookup",
     );
     const names = namesOf(tools);
-    assert.ok(names.includes("search_org_content"));
-    assert.ok(names.length > 1, "analytics surface must no longer be locked to a single tool");
+    assert.deepEqual(names, ["search_org_content"]);
   });
 
   it("members surface dedupes — list_members appears exactly once", () => {
@@ -913,6 +923,17 @@ describe("isToolFirstEligible", () => {
     assert.equal(isToolFirstEligible(tools), true);
   });
 
+  it("returns true for search_org_content", () => {
+    const tools = getPass1Tools(
+      "search announcements about gala",
+      "general",
+      "surface_read_tools",
+      "knowledge_query",
+    );
+    assert.deepEqual(namesOf(tools), ["search_org_content"]);
+    assert.equal(isToolFirstEligible(tools), true);
+  });
+
   it("returns false for prepare_announcement (action draft, not a read)", () => {
     const tools = getPass1Tools(
       "create an announcement",
@@ -1040,6 +1061,20 @@ describe("deriveForcedPass1ToolArgs", () => {
     );
   });
 
+  it("returns query for search_org_content", () => {
+    assert.deepEqual(
+      deriveForcedPass1ToolArgs("search_org_content", "search announcements about team dinner"),
+      { query: "team dinner" },
+    );
+  });
+
+  it("returns query for find_navigation_targets", () => {
+    assert.deepEqual(
+      deriveForcedPass1ToolArgs("find_navigation_targets", "open announcements"),
+      { query: "announcements" },
+    );
+  });
+
   it("returns undefined for get_donation_analytics when dimension is generic", () => {
     assert.equal(
       deriveForcedPass1ToolArgs("get_donation_analytics", "donation analytics"),
@@ -1055,6 +1090,26 @@ describe("deriveForcedPass1ToolArgs", () => {
     assert.equal(
       deriveForcedPass1ToolArgs("prepare_event", "create an event for Friday"),
       undefined,
+    );
+  });
+});
+
+describe("search and navigation derivation helpers", () => {
+  it("detects content search phrasing", () => {
+    assert.match("search announcements about gala", CONTENT_SEARCH_PROMPT_PATTERN);
+  });
+
+  it("derives stripped content search queries", () => {
+    assert.equal(
+      deriveSearchOrgContentQuery("search announcements about team dinner"),
+      "team dinner",
+    );
+  });
+
+  it("derives stripped navigation queries", () => {
+    assert.equal(
+      deriveNavigationQuery("where is navigation settings?"),
+      "navigation settings",
     );
   });
 });
