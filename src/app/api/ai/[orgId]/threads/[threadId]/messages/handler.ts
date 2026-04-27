@@ -55,12 +55,18 @@ export function createAiThreadMessagesGetHandler(
     );
   }
 
-  // Query messages via auth-bound client (RLS enforces thread ownership)
-  const { data: messages, error } = await ctx.supabase
+  // Hard cap on transcript fetch to bound worst-case latency on long threads.
+  // Loads the most recent MESSAGES_LIMIT messages, then re-sorts ASC for the
+  // chat UI. Existing single-thread schema has (thread_id, status, created_at)
+  // index — DESC scan + LIMIT is index-backed.
+  const MESSAGES_LIMIT = 200;
+  const { data: latestMessages, error } = await ctx.supabase
     .from("ai_messages")
     .select("id, role, content, intent, context_surface, status, created_at")
     .eq("thread_id", threadId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(MESSAGES_LIMIT);
+  const messages = (latestMessages ?? []).slice().reverse();
 
   if (error) {
     console.error("[ai-messages] list error:", error);
@@ -68,7 +74,7 @@ export function createAiThreadMessagesGetHandler(
   }
 
     return NextResponse.json({
-      messages: (messages ?? []).map(
+      messages: messages.map(
         (
           message: Parameters<typeof normalizeAssistantMessageForDisplay>[0]
         ) => normalizeAssistantMessageForDisplay(message)
