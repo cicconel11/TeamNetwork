@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import type Stripe from "stripe";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import {
@@ -21,11 +20,6 @@ export const runtime = "nodejs";
 interface RouteParams {
   params: Promise<{ organizationId: string }>;
 }
-
-type SubscriptionWithPeriod = Stripe.Subscription & {
-  current_period_end?: number | null;
-  cancel_at_period_end?: boolean | null;
-};
 
 const normalizeSubscriptionStatus = (subscription: { status?: string | null; cancel_at_period_end?: boolean | null }) => {
   const status = subscription.status || "canceled";
@@ -122,9 +116,9 @@ export async function POST(req: Request, { params }: RouteParams) {
   // If we have Stripe IDs but invalid status, fetch directly from Stripe to reconcile
   if (subscriptionRow.stripe_subscription_id) {
     try {
-      const subscription = (await stripe.subscriptions.retrieve(subscriptionRow.stripe_subscription_id, {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionRow.stripe_subscription_id, {
         expand: ["items.data"],
-      })) as SubscriptionWithPeriod;
+      });
       const customerId = typeof subscription.customer === "string"
         ? subscription.customer
         : (subscription.customer as { id?: string })?.id || subscriptionRow.stripe_customer_id;
@@ -193,16 +187,12 @@ export async function POST(req: Request, { params }: RouteParams) {
   ]);
 
   const lookup = resolveRecoverableAttemptLookup({
-    byOrgId: {
-      data: byOrgId.data as RecoverableAttempt[] | null,
-      error: byOrgId.error ? { code: byOrgId.error.code, message: byOrgId.error.message } : null,
-    },
-    byPendingOrgId: {
-      data: byPendingOrgId.data as RecoverableAttempt[] | null,
-      error: byPendingOrgId.error
-        ? { code: byPendingOrgId.error.code, message: byPendingOrgId.error.message }
-        : null,
-    },
+    byOrgId: byOrgId.error
+      ? { ok: false, error: { code: byOrgId.error.code, message: byOrgId.error.message } }
+      : { ok: true, data: (byOrgId.data ?? []) as RecoverableAttempt[] },
+    byPendingOrgId: byPendingOrgId.error
+      ? { ok: false, error: { code: byPendingOrgId.error.code, message: byPendingOrgId.error.message } }
+      : { ok: true, data: (byPendingOrgId.data ?? []) as RecoverableAttempt[] },
   });
 
   if (lookup.error) {
@@ -237,9 +227,9 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: "Checkout session missing subscription or customer details." }, 400);
     }
 
-    const subscription = (await stripe.subscriptions.retrieve(subscriptionId, {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ["items.data"],
-    })) as SubscriptionWithPeriod;
+    });
     const currentPeriodEnd = extractSubscriptionPeriodEndIso(subscription);
     const status = normalizeSubscriptionStatus({
       status: subscription.status,
