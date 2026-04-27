@@ -36,4 +36,15 @@ describe("global search migrations (contract)", () => {
     assert.match(sql, /WHEN 'search_result_click' THEN ARRAY\['query_length','mode','clicked_entity_type','result_position'\]/);
     assert.match(sql, /v_key <> 'query_length'/);
   });
+
+  it("defines a hardened compact org stats snapshot RPC", () => {
+    const sql = read("20261027000000_ai_org_stats_snapshot.sql");
+    assert.match(sql, /CREATE OR REPLACE FUNCTION public\.get_org_stats_snapshot/i);
+    assert.match(sql, /SECURITY DEFINER/);
+    assert.match(sql, /SET search_path = ''/);
+    assert.match(sql, /user_organization_roles/);
+    assert.match(sql, /organization_donation_stats/);
+    assert.match(sql, /REVOKE ALL ON FUNCTION public\.get_org_stats_snapshot/);
+    assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.get_org_stats_snapshot[^;]+TO authenticated/);
+  });
 });
