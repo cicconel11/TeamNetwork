@@ -89,3 +89,7 @@ docs/.obsidian/
 .agents/
 skills-lock.json
 .compound-engineering/*.local.yaml
+
+# ai-eval generated reports (keep .gitkeep)
+/tests/ai-eval/reports/*
+!/tests/ai-eval/reports/.gitkeep

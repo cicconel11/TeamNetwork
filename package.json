@@ -27,6 +27,9 @@
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:ui": "playwright test --project=e2e --ui",
     "test:e2e:debug": "playwright test --project=e2e --debug",
+    "eval:ai": "node --import ./tests/register-ts-loader.mjs tests/ai-eval/runner.ts",
+    "eval:ai:fast": "EVAL_CATEGORY=tool_use node --import ./tests/register-ts-loader.mjs tests/ai-eval/runner.ts",
+    "eval:ai:self-test": "node --import ./tests/register-ts-loader.mjs tests/ai-eval/trust-boundary-self-test.ts",
     "analyze": "ANALYZE=true npm run build",
     "gen:types": "npx supabase gen types --lang=typescript --project-id rytsziwekhtjdqzzpdso > src/types/database.ts && node scripts/append-database-compat.js"
   },
