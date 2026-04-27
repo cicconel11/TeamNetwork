@@ -22,6 +22,31 @@ const getOrgStatsSchema = z
 
 type Args = z.infer<typeof getOrgStatsSchema>;
 
+interface OrgStatsSnapshotRow {
+  active_members: number | null;
+  alumni: number | null;
+  parents: number | null;
+  upcoming_events: number | null;
+  donations: {
+    total_amount_cents?: number | null;
+    donation_count?: number | null;
+    last_donation_at?: string | null;
+  } | null;
+}
+
+function getSnapshotRow(data: unknown): OrgStatsSnapshotRow | null {
+  if (Array.isArray(data)) {
+    const firstRow = data[0];
+    return firstRow && typeof firstRow === "object"
+      ? (firstRow as OrgStatsSnapshotRow)
+      : null;
+  }
+
+  return data && typeof data === "object"
+    ? (data as OrgStatsSnapshotRow)
+    : null;
+}
+
 function wantSlice(scope: OrgStatsScope | undefined, slice: Exclude<OrgStatsScope, "all">): boolean {
   if (!scope || scope === "all") return true;
   return scope === slice;
@@ -32,6 +57,35 @@ export const getOrgStatsModule: ToolModule<Args> = {
   argsSchema: getOrgStatsSchema,
   async execute(args, { ctx, sb, logContext }) {
     const scope = args.scope;
+
+    if (!scope || scope === "all") {
+      const snapshotSb = ctx.supabase ?? sb;
+      const snapshot = await safeToolQuery(logContext, () =>
+        snapshotSb.rpc("get_org_stats_snapshot", {
+          p_org_id: ctx.orgId,
+        })
+      );
+
+      if (snapshot.kind !== "ok") {
+        return toolError("Query failed");
+      }
+
+      const row = getSnapshotRow(snapshot.data);
+      if (!row) {
+        return toolError("Query failed");
+      }
+
+      return {
+        kind: "ok",
+        data: {
+          active_members: row.active_members ?? 0,
+          alumni: row.alumni ?? 0,
+          parents: row.parents ?? 0,
+          upcoming_events: row.upcoming_events ?? 0,
+          donations: row.donations ?? null,
+        },
+      };
+    }
 
     const membersPromise = wantSlice(scope, "members")
       ? safeToolCount(logContext, () =>
