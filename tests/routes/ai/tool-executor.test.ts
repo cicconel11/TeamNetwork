@@ -910,6 +910,7 @@ test("list_donations maps rows including anonymous donor masking", async () => {
     status: "succeeded",
     created_at: "2026-01-01T00:00:00.000Z",
     anonymous: false,
+    hide_donor_names: false,
   });
   assert.deepEqual(rows[1], {
     id: "d2",
@@ -920,6 +921,7 @@ test("list_donations maps rows including anonymous donor masking", async () => {
     status: "succeeded",
     created_at: "2026-01-02T00:00:00.000Z",
     anonymous: true,
+    hide_donor_names: false,
   });
 
   const q = stub.queries.find((x) => x.table === "organization_donations");
@@ -979,12 +981,20 @@ test("list_donations applies status and purpose filters", async () => {
 });
 test("get_org_stats returns counts object", async () => {
   stub = createToolSupabaseStub({
-    members: { select: { data: [], error: null, count: 42 } },
-    alumni: { select: { data: [], error: null, count: 10 } },
-    parents: { select: { data: [], error: null, count: 5 } },
-    events: { select: { data: [], error: null, count: 3 } },
-    organization_donation_stats: {
-      maybeSingle: { data: { total_amount_cents: 50000, donation_count: 12 }, error: null },
+    rpc: {
+      get_org_stats_snapshot: [
+        {
+          active_members: 42,
+          alumni: 10,
+          parents: 5,
+          upcoming_events: 3,
+          donations: {
+            total_amount_cents: 50000,
+            donation_count: 12,
+            last_donation_at: "2026-02-06T00:00:00.000Z",
+          },
+        },
+      ],
     },
   });
   ctx = makeCtx(stub as any);
@@ -995,6 +1005,46 @@ test("get_org_stats returns counts object", async () => {
   assert.equal(stats.alumni, 10);
   assert.equal(stats.parents, 5);
   assert.equal(stats.upcoming_events, 3);
+});
+
+test("get_org_stats snapshot uses auth-bound client when available", async () => {
+  const authBoundStub = createToolSupabaseStub({
+    rpc: {
+      get_org_stats_snapshot: [
+        {
+          active_members: 34,
+          alumni: 33,
+          parents: 4,
+          upcoming_events: 1,
+          donations: {
+            total_amount_cents: 1509000,
+            donation_count: 10,
+            last_donation_at: "2026-02-06T00:00:00.000Z",
+          },
+        },
+      ],
+    },
+  });
+  const serviceStub = createToolSupabaseStub();
+  ctx = {
+    ...makeCtx(serviceStub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    supabase: authBoundStub as any,
+  };
+
+  const result = expectOk(await executeToolCall(ctx, { name: "get_org_stats", args: {} }));
+  const stats = result.data as any;
+  assert.equal(stats.active_members, 34);
+  assert.equal(stats.alumni, 33);
+  assert.equal(stats.parents, 4);
+  assert.equal(stats.upcoming_events, 1);
+  assert.deepEqual(stats.donations, {
+    total_amount_cents: 1509000,
+    donation_count: 10,
+    last_donation_at: "2026-02-06T00:00:00.000Z",
+  });
 });
 
 test("get_donation_analytics forwards args to the RPC and returns its payload", async () => {
@@ -3193,6 +3243,7 @@ test("list_chat_groups scope: all returns every org group with member_count and 
     member_count: 2,
     is_member: true,
     role: "admin",
+    org_slug: null,
   });
   assert.deepEqual(marketing, {
     id: otherGroupId,
@@ -3202,6 +3253,7 @@ test("list_chat_groups scope: all returns every org group with member_count and 
     member_count: 1,
     is_member: false,
     role: null,
+    org_slug: null,
   });
 });
 

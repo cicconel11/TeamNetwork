@@ -85,6 +85,7 @@ export const listChatGroupsModule: ToolModule<Args> = {
         description: group.description,
         role: group.role,
         updated_at: group.updated_at,
+        org_slug: ctx.orgSlug ?? null,
       })),
     };
   },
