@@ -60,25 +60,34 @@ interface DirectEventRow {
   start_date: string | null;
 }
 
+type FallbackEntityType = "announcement" | "event";
+
+function inferRequestedFallbackTypes(query: string): Set<FallbackEntityType> {
+  const normalized = query.toLowerCase();
+  const types = new Set<FallbackEntityType>();
+  if (/\bannouncement|announcements|news|bulletin|update\b/.test(normalized)) {
+    types.add("announcement");
+  }
+  if (/\bevent|events|calendar|meeting|meetings|fundraiser|fundraisers\b/.test(normalized)) {
+    types.add("event");
+  }
+  return types;
+}
+
 export const searchOrgContentModule: ToolModule<Args> = {
   name: "search_org_content",
   argsSchema: searchOrgContentSchema,
   async execute(args, { ctx, sb, logContext }) {
     const limit = Math.min(args.limit ?? 10, 25);
     return safeToolQuery(logContext, async () => {
-      const { data: orgRow, error: orgError } = await sb
-        .from("organizations")
-        .select("id, slug")
-        .eq("id", ctx.orgId)
-        .maybeSingle();
-
-      if (orgError || !orgRow?.slug) {
-        return { data: null, error: orgError ?? new Error("Organization not found") };
+      const orgSlug = ctx.orgSlug;
+      if (!orgSlug) {
+        return { data: null, error: new Error("Organization not found") };
       }
 
       const { data, error } = await sb.rpc("search_org_content", {
         p_org_id: ctx.orgId,
-        p_org_slug: orgRow.slug,
+        p_org_slug: orgSlug,
         p_query: args.query,
         p_limit: limit,
       });
@@ -88,6 +97,18 @@ export const searchOrgContentModule: ToolModule<Args> = {
       }
 
       const rawRows = (Array.isArray(data) ? data : []) as SearchRpcRow[];
+      const countsByType = new Map<string, number>();
+      for (const row of rawRows) {
+        countsByType.set(row.entity_type, (countsByType.get(row.entity_type) ?? 0) + 1);
+      }
+
+      const requestedFallbackTypes = inferRequestedFallbackTypes(args.query);
+      const shouldRunFallback =
+        rawRows.length < limit ||
+        [...requestedFallbackTypes].some((type) => (countsByType.get(type) ?? 0) === 0);
+
+      const fallbackRows: SearchRpcRow[] = [];
+      if (shouldRunFallback) {
       const variants = buildSearchVariants(args.query);
       const [announcementFallback, eventFallback] = await Promise.all([
         sb
@@ -108,30 +129,31 @@ export const searchOrgContentModule: ToolModule<Args> = {
           .limit(limit),
       ]);
 
-      const fallbackRows: SearchRpcRow[] = [
-        ...(Array.isArray(announcementFallback.data)
-          ? (announcementFallback.data as DirectAnnouncementRow[]).map((row) => ({
-              entity_type: "announcement",
-              entity_id: row.id,
-              title: row.title,
-              snippet: row.body,
-              url_path: `/${orgRow.slug}/announcements`,
-              rank: 0.5,
-              metadata: { announcement_id: row.id },
-            }))
-          : []),
-        ...(Array.isArray(eventFallback.data)
-          ? (eventFallback.data as DirectEventRow[]).map((row) => ({
-              entity_type: "event",
-              entity_id: row.id,
-              title: row.title,
-              snippet: row.description,
-              url_path: `/${orgRow.slug}/calendar/events/${row.id}`,
-              rank: 0.5,
-              metadata: {},
-            }))
-          : []),
-      ];
+        fallbackRows.push(
+          ...(Array.isArray(announcementFallback.data)
+            ? (announcementFallback.data as DirectAnnouncementRow[]).map((row) => ({
+                entity_type: "announcement",
+                entity_id: row.id,
+                title: row.title,
+                snippet: row.body,
+                url_path: `/${orgSlug}/announcements`,
+                rank: 0.5,
+                metadata: { announcement_id: row.id },
+              }))
+            : []),
+          ...(Array.isArray(eventFallback.data)
+            ? (eventFallback.data as DirectEventRow[]).map((row) => ({
+                entity_type: "event",
+                entity_id: row.id,
+                title: row.title,
+                snippet: row.description,
+                url_path: `/${orgSlug}/calendar/events/${row.id}`,
+                rank: 0.5,
+                metadata: {},
+              }))
+            : []),
+        );
+      }
 
       const PERSON_TYPES = new Set(["member", "alumni"]);
       const seenTitleByType = new Map<string, Set<string>>();
