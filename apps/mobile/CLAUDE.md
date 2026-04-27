@@ -9,24 +9,23 @@ All commands run from `apps/mobile/`.
 ### Development
 
 ```bash
-bun run start                # Expo dev server (web at localhost:8081)
-bun run start:dev-client     # Expo dev server for custom dev client builds
-bun run ios                  # Start + open iOS Simulator (dev client)
-bun run android              # Start + open Android Emulator (dev client, auto-detects SDK)
-bun run web                  # Start Expo web mode
+bun run start:dev-client     # Expo dev server for custom dev client builds (primary)
+bun run ios                  # Open iOS Simulator (dev client)
+bun run android              # Open Android Emulator (dev client, auto-detects SDK)
 ```
 
 ### Building
 
 ```bash
-bun run prebuild             # Generate native projects (android/, ios/)
-bun run prebuild:clean       # Regenerate native projects from scratch
-bun run run:ios              # Build and run on iOS device/simulator
-bun run run:android          # Build and run on Android device/emulator
-eas build --platform ios     # Cloud build for iOS (EAS)
-eas build --platform android # Cloud build for Android (EAS)
-eas submit --platform ios    # Submit to App Store
-eas submit --platform android # Submit to Play Store
+bun run prebuild:clean       # Regenerate native projects from scratch (when native config changes)
+
+# EAS cloud builds — profiles defined in eas.json
+eas build --platform ios --profile preview        # Internal dogfood build (no store)
+eas build --platform ios --profile production     # Store-ready, autoIncrement build #
+eas build --platform android --profile production # Android store-ready
+
+eas submit --platform ios --latest                # Upload latest iOS build to App Store Connect
+eas submit --platform android --latest            # Upload latest Android build to Play Console
 ```
 
 ### Quality
@@ -34,18 +33,63 @@ eas submit --platform android # Submit to Play Store
 ```bash
 bun run typecheck            # tsc --noEmit
 bun test                     # All Jest tests
-bun test -- --watch          # Watch mode
-bun test -- --coverage       # Coverage report
-bun test -- --ci             # CI runner with coverage
+bun run test:watch           # Watch mode
+bun run test:coverage        # Coverage report
 ```
 
 ### Diagnostics
 
 ```bash
-bun run config               # Print resolved Expo config (public)
-bun run config:introspect    # Print full introspected Expo config
-bun run android:doctor       # Verify Android SDK, Java, and adb setup
+bun run config               # Print resolved Expo config
+bun run android:doctor       # Verify Android SDK, Java, adb setup
 ```
+
+## Apple Developer / App Store Connect
+
+**Account:** Teamra LLC (developer.apple.com). Bundle ID `com.myteamnetwork.teammeet`. EAS owner `teamnetwork`.
+
+### One-time setup (per teammate)
+
+1. **Apple Developer Program member access:** developer.apple.com → People → invite teammate's Apple ID email. Roles: Admin (cert/profile mgmt), App Manager (apps/builds, no certs), Developer (cert create only).
+2. **App Store Connect access:** appstoreconnect.apple.com → Users and Access → People tab → **+** → invite same email, assign role + apps.
+3. **EAS access:** expo.dev → `teamnetwork` org → Members → invite. Lets teammate run builds without Apple credentials.
+
+### One-time setup (per project)
+
+1. **Create app record in ASC:** Apps → **+** → bundle ID `com.myteamnetwork.teammeet`, name "TeamMeet", primary language, SKU. Required before first `eas submit`.
+2. **App Store Connect API key (for `eas submit`):** ASC → Users and Access → Integrations → Keys → **+** → role App Manager → download `.p8` (one-time). Save Issuer ID + Key ID. Register with `eas credentials`.
+3. **APNs push key:** developer.apple.com → Keys → **+** → enable Apple Push Notifications service → download `.p8`. Save Key ID + Team ID for Expo push setup.
+
+### Release flow (TestFlight, no review)
+
+```bash
+cd apps/mobile
+# Bump version in app.json if shipping new marketing version (buildNumber auto-increments)
+eas build --platform ios --profile production
+eas submit --platform ios --latest
+```
+
+Then in ASC:
+1. App → **TestFlight** tab → wait for processing (~10–30 min)
+2. Answer export compliance once (`ITSAppUsesNonExemptEncryption: false` already set in `app.json` → auto-passes)
+3. Internal Testing group → add build → add testers (must be ASC users, up to 100, no review)
+4. External Testing group → up to 10k testers via email/public link, requires Beta App Review (~24h)
+5. Testers install **TestFlight** app from App Store, accept invite, run build
+
+### Production submission
+
+1. ASC → App → **App Store** tab → fill metadata, screenshots (6.7", 6.5", 5.5" iPhone + 12.9" iPad), privacy nutrition labels, age rating
+2. Privacy policy URL: `https://www.myteamnetwork.com/privacy`
+3. Select build from TestFlight → **Add for Review** → **Submit**
+4. Apple review typically 24–48h
+
+### Common gotchas
+
+- Bundle ID immutable after first ASC submission
+- Sign in with Apple required if any other social sign-in present (Google/LinkedIn/Microsoft all enabled — already implemented)
+- Push key (`.p8`) shared across all team apps; never revoke without rotating in Expo
+- Each `eas build --profile production` consumes paid build minutes; use `preview` profile for internal dogfood
+- Version in `app.json` (`expo.version`) = marketing version shown in store; `expo.ios.buildNumber` auto-increments via EAS
 
 ## Architecture
 
