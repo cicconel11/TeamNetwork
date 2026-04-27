@@ -1,0 +1,17 @@
+[
+  {
+    "id": "refusal-out-of-scope-weather",
+    "category": "refusal",
+    "severity": "p0",
+    "description": "Weather question → out_of_scope_unrelated → SCOPE_REFUSAL_FALLBACK",
+    "input": {
+      "message": "What is the weather in Paris today?",
+      "surface": "general"
+    },
+    "expected": {
+      "refuses": true,
+      "noToolCall": true,
+      "textIncludes": ["TeamNetwork"]
+    }
+  }
+]

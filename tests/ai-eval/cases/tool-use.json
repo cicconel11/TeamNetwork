@@ -1,0 +1,73 @@
+[
+  {
+    "id": "tool-use-list-members-default",
+    "category": "tool_use",
+    "severity": "p0",
+    "description": "List members request → list_members with default limit",
+    "input": {
+      "message": "List our members",
+      "surface": "general",
+      "llmStub": {
+        "pass1ToolName": "list_members",
+        "pass1ArgsJson": "{\"limit\":5}",
+        "finalText": "Here are 5 members of your org."
+      },
+      "toolResult": {
+        "kind": "ok",
+        "data": [{ "id": "m1", "name": "Member One", "email": "m1@example.com", "role": "active_member" }]
+      }
+    },
+    "expected": {
+      "toolName": "list_members",
+      "toolArgs": { "limit": 5 },
+      "textIncludes": ["members"]
+    }
+  },
+  {
+    "id": "tool-use-find-navigation",
+    "category": "tool_use",
+    "severity": "p0",
+    "description": "Open announcements → find_navigation_targets",
+    "input": {
+      "message": "Take me to announcements",
+      "surface": "general",
+      "llmStub": {
+        "pass1ToolName": "find_navigation_targets",
+        "pass1ArgsJson": "{\"query\":\"announcements\"}",
+        "finalText": "Open the announcements page: /acme/announcements"
+      },
+      "toolResult": {
+        "kind": "ok",
+        "data": {
+          "state": "resolved",
+          "matches": [{ "label": "Announcements", "href": "/acme/announcements", "kind": "page" }]
+        }
+      }
+    },
+    "expected": {
+      "toolName": "find_navigation_targets",
+      "toolArgs": { "query": "announcements" },
+      "textIncludes": ["announcements"]
+    }
+  },
+  {
+    "id": "tool-use-get-org-stats",
+    "category": "tool_use",
+    "severity": "p0",
+    "description": "How many members → get_org_stats with members scope",
+    "input": {
+      "message": "How many active members do we have?",
+      "surface": "general",
+      "llmStub": {
+        "pass1ToolName": "get_org_stats",
+        "pass1ArgsJson": "{\"scope\":\"members\"}",
+        "finalText": "You have 42 active members."
+      },
+      "toolResult": { "kind": "ok", "data": { "members": { "active": 42 } } }
+    },
+    "expected": {
+      "toolName": "get_org_stats",
+      "toolArgs": { "scope": "members" }
+    }
+  }
+]

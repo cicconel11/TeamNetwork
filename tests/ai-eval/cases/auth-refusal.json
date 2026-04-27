@@ -1,0 +1,77 @@
+[
+  {
+    "id": "auth-refusal-revoked-user",
+    "category": "auth_refusal",
+    "severity": "p0",
+    "description": "Revoked user → 403 before any tool call",
+    "input": {
+      "message": "List our members",
+      "surface": "general",
+      "authContext": { "ok": false, "reason": "revoked", "status": 403 }
+    },
+    "expected": {
+      "httpStatus": 403,
+      "noToolCall": true
+    }
+  },
+  {
+    "id": "auth-refusal-not-member",
+    "category": "auth_refusal",
+    "severity": "p0",
+    "description": "User not a member of target org → 403",
+    "input": {
+      "message": "Show org stats",
+      "surface": "general",
+      "authContext": { "ok": false, "reason": "not_member", "status": 403 }
+    },
+    "expected": {
+      "httpStatus": 403,
+      "noToolCall": true
+    }
+  },
+  {
+    "id": "auth-refusal-wrong-org",
+    "category": "auth_refusal",
+    "severity": "p0",
+    "description": "URL orgId mismatch with auth context → 403",
+    "input": {
+      "message": "List members",
+      "surface": "general",
+      "authContext": { "ok": false, "reason": "wrong_org", "status": 403 }
+    },
+    "expected": {
+      "httpStatus": 403,
+      "noToolCall": true
+    }
+  },
+  {
+    "id": "auth-refusal-auth-error",
+    "category": "auth_refusal",
+    "severity": "p0",
+    "description": "Service unavailable → 503, no tool call",
+    "input": {
+      "message": "List members",
+      "surface": "general",
+      "authContext": { "ok": false, "reason": "auth_error", "status": 503 }
+    },
+    "expected": {
+      "httpStatus": 503,
+      "noToolCall": true
+    }
+  },
+  {
+    "id": "auth-refusal-parent-role",
+    "category": "auth_refusal",
+    "severity": "p0",
+    "description": "Parent role currently blocked at context layer → 403",
+    "input": {
+      "message": "List members",
+      "surface": "general",
+      "authContext": { "ok": false, "reason": "not_member", "status": 403 }
+    },
+    "expected": {
+      "httpStatus": 403,
+      "noToolCall": true
+    }
+  }
+]

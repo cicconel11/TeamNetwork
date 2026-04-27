@@ -1,0 +1,49 @@
+[
+  {
+    "id": "guardrail-safety-unsafe-blocks",
+    "category": "guardrail_propagation",
+    "severity": "p0",
+    "description": "Safety verdict=unsafe → final text equals SAFETY_FALLBACK_TEXT, no leaked draft",
+    "input": {
+      "message": "List our members",
+      "surface": "general",
+      "llmStub": {
+        "pass1ToolName": "list_members",
+        "pass1ArgsJson": "{\"limit\":5}",
+        "finalText": "SECRET DRAFT CONTENT THAT MUST BE BLOCKED"
+      },
+      "toolResult": {
+        "kind": "ok",
+        "data": [{ "id": "m1", "name": "Member One" }]
+      },
+      "guardrails": { "safety": { "verdict": "unsafe", "categories": ["leak"] } }
+    },
+    "expected": {
+      "textExcludes": ["SECRET DRAFT CONTENT THAT MUST BE BLOCKED"],
+      "auditIncludes": { "safetyVerdict": "unsafe" }
+    }
+  },
+  {
+    "id": "guardrail-tool-grounding-failure-blocks",
+    "category": "guardrail_propagation",
+    "severity": "p0",
+    "description": "Tool grounding failure → handler swaps in tool grounding fallback",
+    "input": {
+      "message": "How many members?",
+      "surface": "general",
+      "llmStub": {
+        "pass1ToolName": "list_members",
+        "pass1ArgsJson": "{\"limit\":5}",
+        "finalText": "We have 999 members and a fabricated stat that cannot be verified."
+      },
+      "toolResult": {
+        "kind": "ok",
+        "data": [{ "id": "m1", "name": "Member One" }]
+      },
+      "guardrails": { "tool": { "grounded": false, "failures": ["fabricated count"] } }
+    },
+    "expected": {
+      "textExcludes": ["999 members"]
+    }
+  }
+]
