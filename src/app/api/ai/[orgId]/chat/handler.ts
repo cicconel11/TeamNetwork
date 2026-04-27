@@ -87,10 +87,10 @@ import { runModelToolsLoop } from "./handler/stages/run-model-tools-loop";
 import { runPendingEventRevision } from "./handler/stages/run-pending-event-revision";
 import { finalizeTurnAudit } from "./handler/stages/finalize-audit";
 
-const MESSAGE_SAFETY_FALLBACK =
+export const MESSAGE_SAFETY_FALLBACK =
   "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
 
-const SCOPE_REFUSAL_FALLBACK =
+export const SCOPE_REFUSAL_FALLBACK =
   "I can only help with TeamNetwork tasks for your organization — like members, events, announcements, discussions, jobs, donations, or finding the right page. That request is outside what I do.";
 
 /**

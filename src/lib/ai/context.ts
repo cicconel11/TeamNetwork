@@ -43,6 +43,12 @@ export interface AiOrgContextOptions {
 
 const DEFAULT_ALLOWED_ROLES: readonly AiOrgContextRole[] = ["admin"];
 
+export const AI_CONTEXT_ERRORS = {
+  noMembership: "AI assistant requires an active org membership",
+  roleNotAllowed: "AI assistant is not available for your role",
+  serviceUnavailable: "Service unavailable",
+} as const;
+
 function isAiOrgContextRole(value: unknown): value is AiOrgContextRole {
   return (
     value === "admin" ||
@@ -122,7 +128,7 @@ export async function getAiOrgContext(
     });
   }
   if (membershipResult.error || orgRowResult.error) {
-    return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
+    return { ok: false, response: respond({ error: AI_CONTEXT_ERRORS.serviceUnavailable }, 503) };
   }
 
   const membership = membershipResult.data;
@@ -131,7 +137,7 @@ export async function getAiOrgContext(
   if (!membership || membership.status !== "active") {
     return {
       ok: false,
-      response: respond({ error: "AI assistant requires an active org membership" }, 403),
+      response: respond({ error: AI_CONTEXT_ERRORS.noMembership }, 403),
     };
   }
 
@@ -139,14 +145,14 @@ export async function getAiOrgContext(
   if (!isAiOrgContextRole(rawRole)) {
     return {
       ok: false,
-      response: respond({ error: "AI assistant requires an active org membership" }, 403),
+      response: respond({ error: AI_CONTEXT_ERRORS.noMembership }, 403),
     };
   }
 
   if (!allowedRoles.includes(rawRole)) {
     return {
       ok: false,
-      response: respond({ error: "AI assistant is not available for your role" }, 403),
+      response: respond({ error: AI_CONTEXT_ERRORS.roleNotAllowed }, 403),
     };
   }
 
@@ -155,13 +161,13 @@ export async function getAiOrgContext(
     if (isMemberAccessKilled()) {
       return {
         ok: false,
-        response: respond({ error: "AI assistant is not available for your role" }, 403),
+        response: respond({ error: AI_CONTEXT_ERRORS.roleNotAllowed }, 403),
       };
     }
     if (rawRole === "parent") {
       return {
         ok: false,
-        response: respond({ error: "AI assistant is not available for your role" }, 403),
+        response: respond({ error: AI_CONTEXT_ERRORS.roleNotAllowed }, 403),
       };
     }
   }
@@ -183,7 +189,7 @@ export async function getAiOrgContext(
         orgId,
         userId: user.id,
       }, { error: enterpriseRoleError, enterpriseId: orgRow.enterprise_id });
-      return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
+      return { ok: false, response: respond({ error: AI_CONTEXT_ERRORS.serviceUnavailable }, 503) };
     }
 
     if (enterpriseRoleRow?.role) {
