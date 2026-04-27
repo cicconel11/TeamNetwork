@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import type { Database } from "@/types/database";
+import { extractSubscriptionPeriodEndEpoch } from "@/lib/stripe/subscription-period";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -91,13 +92,7 @@ export async function POST(_req: Request, { params }: RouteParams) {
         cancel_at_period_end: true,
       });
       
-      // API versions may expose period end either on subscription or item(s).
-      const subscriptionLevelPeriodEnd = (updatedSub as unknown as { current_period_end?: number | null }).current_period_end ?? null;
-      const itemPeriodEnd = updatedSub.items?.data
-        ?.map((item) => item.current_period_end)
-        .filter((value): value is number => typeof value === "number")
-        .sort((a, b) => a - b)?.[0] ?? null;
-      const periodEnd = subscriptionLevelPeriodEnd ?? itemPeriodEnd;
+      const periodEnd = extractSubscriptionPeriodEndEpoch(updatedSub);
       if (periodEnd) {
         currentPeriodEnd = new Date(periodEnd * 1000).toISOString();
       }

@@ -143,6 +143,18 @@ export interface SearchOrgContentArgs {
   limit?: number;
 }
 
+export interface PrepareUpdateAnnouncementArgs {
+  announcement_id: string;
+  title?: string;
+  body?: string;
+  is_pinned?: boolean;
+  audience?: "all" | "members" | "active_members" | "alumni" | "individuals";
+}
+
+export interface PrepareDeleteAnnouncementArgs {
+  announcement_id: string;
+}
+
 export interface ListEnterpriseAlumniArgs {
   org?: string;
   graduation_year?: number;
@@ -1004,6 +1016,51 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_update_announcement: {
+    type: "function" as const,
+    function: {
+      name: "prepare_update_announcement" as const,
+      description:
+        "Prepare edits to an existing organization announcement. Use when the user wants to edit, update, fix, or change an announcement they already published. Validates the new fields, identifies missing required fields, and creates a pending confirmation action. Requires the announcement_id of the row to update — call list_announcements or search_org_content first if you need to resolve it from a title.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          announcement_id: {
+            type: "string" as const,
+            description: "UUID of the announcement to edit.",
+          },
+          title: { type: "string" as const, maxLength: 200 },
+          body: { type: "string" as const, maxLength: 5000 },
+          is_pinned: { type: "boolean" as const },
+          audience: {
+            type: "string" as const,
+            enum: ["all", "members", "active_members", "alumni", "individuals"],
+          },
+        },
+        required: ["announcement_id"] as const,
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_delete_announcement: {
+    type: "function" as const,
+    function: {
+      name: "prepare_delete_announcement" as const,
+      description:
+        "Prepare deletion of an existing organization announcement. Use when the user wants to delete, remove, retract, or take down an announcement. Creates a pending confirmation action — execution only happens after the user confirms.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          announcement_id: {
+            type: "string" as const,
+            description: "UUID of the announcement to delete.",
+          },
+        },
+        required: ["announcement_id"] as const,
+        additionalProperties: false as const,
+      },
+    },
+  },
   find_navigation_targets: {
     type: "function" as const,
     function: {
@@ -1150,6 +1207,8 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_available_mentors,
   TOOL_BY_NAME.find_navigation_targets,
   TOOL_BY_NAME.search_org_content,
+  TOOL_BY_NAME.prepare_update_announcement,
+  TOOL_BY_NAME.prepare_delete_announcement,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];
 
 // Derived from AI_TOOLS — no manual union to maintain

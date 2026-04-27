@@ -6,18 +6,21 @@ import {
 import { requireEnv } from "@/lib/env";
 import { getBillableOrgCount, getSubOrgPricing } from "@/lib/enterprise/pricing";
 import { stripe } from "@/lib/stripe";
+import { extractSubscriptionPeriodEndEpoch } from "@/lib/stripe/subscription-period";
+import type { Tables } from "@/types/database";
+import type { BillingInterval } from "@/types/enterprise";
 
-export interface EnterpriseSubscriptionRow {
-  id: string;
-  enterprise_id: string;
-  stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
-  billing_interval: "month" | "year";
-  alumni_bucket_quantity: number;
-  sub_org_quantity: number | null;
-  status: string;
-  current_period_end: string | null;
-}
+export type EnterpriseSubscriptionRow = Pick<
+  Tables<"enterprise_subscriptions">,
+  | "id"
+  | "enterprise_id"
+  | "stripe_customer_id"
+  | "stripe_subscription_id"
+  | "alumni_bucket_quantity"
+  | "sub_org_quantity"
+  | "status"
+  | "current_period_end"
+> & { billing_interval: BillingInterval };
 
 interface EnterpriseManagedCountRow {
   enterprise_managed_org_count: number;
@@ -344,13 +347,7 @@ export async function adjustEnterpriseSubOrgQuantity(
       );
 
       updatedStatus = updated.status;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const subLevelEnd = (updated as any).current_period_end ? Number((updated as any).current_period_end) : null;
-      const itemLevelEnd = updated.items?.data
-        ?.map((item) => item.current_period_end)
-        .filter((value): value is number => typeof value === "number")
-        .sort((a, b) => a - b)?.[0] ?? null;
-      const resolvedEnd = subLevelEnd ?? itemLevelEnd;
+      const resolvedEnd = extractSubscriptionPeriodEndEpoch(updated);
       periodEnd = resolvedEnd ? new Date(resolvedEnd * 1000).toISOString() : null;
     } else if (oldBillable > 0 && newBillable === 0) {
       if (reconciledSubscription.stripe_subscription_id) {
@@ -375,13 +372,7 @@ export async function adjustEnterpriseSubOrgQuantity(
           { expand: ["items.data"] }
         );
         updatedStatus = updated.status;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const subLevelEnd = (updated as any).current_period_end ? Number((updated as any).current_period_end) : null;
-        const itemLevelEnd = updated.items?.data
-          ?.map((item) => item.current_period_end)
-          .filter((value): value is number => typeof value === "number")
-          .sort((a, b) => a - b)?.[0] ?? null;
-        const resolvedEnd = subLevelEnd ?? itemLevelEnd;
+        const resolvedEnd = extractSubscriptionPeriodEndEpoch(updated);
         periodEnd = resolvedEnd ? new Date(resolvedEnd * 1000).toISOString() : null;
       }
     } else if (
@@ -419,13 +410,7 @@ export async function adjustEnterpriseSubOrgQuantity(
       );
 
       updatedStatus = updated.status;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const subLevelEnd = (updated as any).current_period_end ? Number((updated as any).current_period_end) : null;
-      const itemLevelEnd = updated.items?.data
-        ?.map((item) => item.current_period_end)
-        .filter((value): value is number => typeof value === "number")
-        .sort((a, b) => a - b)?.[0] ?? null;
-      const resolvedEnd = subLevelEnd ?? itemLevelEnd;
+      const resolvedEnd = extractSubscriptionPeriodEndEpoch(updated);
       periodEnd = resolvedEnd ? new Date(resolvedEnd * 1000).toISOString() : null;
     }
 

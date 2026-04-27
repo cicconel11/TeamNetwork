@@ -94,3 +94,21 @@ export const prepareEventsBatchSchema = z
     events: z.array(prepareEventSchema).min(1).max(10),
   })
   .strict();
+
+export const prepareUpdateAnnouncementSchema = z
+  .object({
+    announcement_id: z.string().uuid(),
+    title: z.string().trim().min(1).max(200).optional(),
+    body: z.string().trim().max(5000).optional(),
+    is_pinned: z.boolean().optional(),
+    audience: z
+      .enum(["all", "members", "active_members", "alumni", "individuals"])
+      .optional(),
+  })
+  .strict();
+
+export const prepareDeleteAnnouncementSchema = z
+  .object({
+    announcement_id: z.string().uuid(),
+  })
+  .strict();

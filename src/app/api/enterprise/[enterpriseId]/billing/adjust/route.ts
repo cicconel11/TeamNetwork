@@ -7,6 +7,7 @@ import { validateJson, ValidationError, validationErrorResponse } from "@/lib/se
 import { getEnterpriseApiContext, ENTERPRISE_BILLING_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, logEnterpriseAuditActionAwaited, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { adjustEnterpriseSubOrgQuantity, type EnterpriseSubscriptionRow } from "@/lib/enterprise/adjust-sub-org-quantity";
+import { extractSubscriptionPeriodEndIso } from "@/lib/stripe/subscription-period";
 import { getBillableOrgCount } from "@/lib/enterprise/pricing";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 import { requireEnv } from "@/lib/env";
@@ -349,17 +350,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       });
 
       updatedStatus = updated.status;
-      // Handle Clover API: current_period_end moved from Subscription to SubscriptionItem
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const subLevelEnd5 = (updated as any).current_period_end ? Number((updated as any).current_period_end) : null;
-      const itemLevelEnd5 = updated.items?.data
-        ?.map((item) => item.current_period_end)
-        .filter((v): v is number => typeof v === "number")
-        .sort((a, b) => a - b)?.[0] ?? null;
-      const resolvedEnd5 = subLevelEnd5 ?? itemLevelEnd5;
-      periodEnd = resolvedEnd5
-        ? new Date(resolvedEnd5 * 1000).toISOString()
-        : null;
+      periodEnd = extractSubscriptionPeriodEndIso(updated);
 
       // Update database (with single retry for transient failures)
       const dbUpdates: Record<string, unknown> = {
