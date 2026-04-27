@@ -21,7 +21,15 @@ describe("getAiOrgContext", () => {
             return {
               maybeSingle: async () => {
                 if (table === "organizations") {
-                  return { data: { enterprise_id: null }, error: null };
+                  return {
+                    data: {
+                      enterprise_id: null,
+                      name: "Acme Org",
+                      slug: "acme",
+                      hide_donor_names: true,
+                    },
+                    error: null,
+                  };
                 }
                 return { data: null, error: null };
               },
@@ -107,6 +115,9 @@ describe("getAiOrgContext", () => {
       assert.equal(result.orgId, "org-id");
       assert.equal(result.userId, "user-id");
       assert.equal(result.role, "admin");
+      assert.equal(result.orgName, "Acme Org");
+      assert.equal(result.orgSlug, "acme");
+      assert.equal(result.hideDonorNames, true);
       assert.ok(result.serviceSupabase);
     }
   });
@@ -140,7 +151,12 @@ describe("getAiOrgContext", () => {
             maybeSingle: async () => {
               if (table === "organizations") {
                 return {
-                  data: { enterprise_id: null },
+                  data: {
+                    enterprise_id: null,
+                    name: "Acme Org",
+                    slug: "acme",
+                    hide_donor_names: false,
+                  },
                   error: null,
                 };
               }

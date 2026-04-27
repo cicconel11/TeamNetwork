@@ -18,6 +18,9 @@ export type AiOrgContext =
       orgId: string;
       userId: string;
       role: AiOrgContextRole;
+      orgName?: string;
+      orgSlug?: string;
+      hideDonorNames?: boolean;
       enterpriseId?: string;
       enterpriseRole?: EnterpriseRole;
       supabase: ServerSupabase; // auth-bound client (for threads/messages via RLS)
@@ -98,7 +101,7 @@ export async function getAiOrgContext(
       .maybeSingle(),
     serviceSupabase
       .from("organizations")
-      .select("enterprise_id")
+      .select("enterprise_id, name, slug, hide_donor_names")
       .eq("id", orgId)
       .maybeSingle(),
   ]);
@@ -198,6 +201,9 @@ export async function getAiOrgContext(
     orgId,
     userId: user.id,
     role: rawRole,
+    orgName: typeof orgRow?.name === "string" ? orgRow.name : undefined,
+    orgSlug: typeof orgRow?.slug === "string" ? orgRow.slug : undefined,
+    hideDonorNames: orgRow?.hide_donor_names === true,
     enterpriseId,
     enterpriseRole,
     supabase: deps.supabase, // routes pass their auth-bound client
