@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import type { Tables } from "@/types/database";
 import {
   buildQuotaInfo,
   checkAlumniCapacity,
@@ -21,10 +22,7 @@ export type {
   AdoptionQuotaResult,
 } from "./quota-logic";
 
-// Type for enterprise subscription row (until types regenerated)
-interface EnterpriseSubscriptionRow {
-  alumni_bucket_quantity: number;
-}
+type EnterpriseSubscriptionRow = Pick<Tables<"enterprise_subscriptions">, "alumni_bucket_quantity">;
 
 // Type for enterprise counts from RPC
 interface EnterpriseCountsResult {

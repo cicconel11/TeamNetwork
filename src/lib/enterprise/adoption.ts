@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import type { Tables } from "@/types/database";
 import { checkAdoptionQuota, canEnterpriseAddSubOrg } from "./quota";
 
 const ADOPTION_EXPIRY_DAYS = 7;
@@ -57,12 +58,7 @@ interface AdoptionRequestRow {
   enterprise?: unknown;
 }
 
-// Type for org subscription row
-interface OrgSubscriptionRow {
-  id: string;
-  status: string;
-  stripe_subscription_id: string | null;
-}
+type OrgSubscriptionRow = Pick<Tables<"organization_subscriptions">, "id" | "status" | "stripe_subscription_id">;
 
 export interface CreateAdoptionRequestResult {
   success: boolean;
