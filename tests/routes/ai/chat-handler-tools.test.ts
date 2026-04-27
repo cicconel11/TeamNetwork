@@ -177,7 +177,10 @@ function createSupabaseStub() {
       }
 
       if (table === "organizations" && query.op === "select") {
-        return { data: { slug: "acme" }, error: null };
+        return {
+          data: { name: "Acme Org", slug: "acme", hide_donor_names: false, enterprise_id: null },
+          error: null,
+        };
       }
 
       if (table === "discussion_threads" && query.op === "select") {
@@ -246,6 +249,9 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       orgId: ORG_ID,
       userId: ADMIN_USER.id,
       role: "admin",
+      orgName: "Acme Org",
+      orgSlug: "acme",
+      hideDonorNames: false,
       supabase: supabaseStub,
       serviceSupabase: {
         from: supabaseStub.from,
@@ -695,6 +701,8 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
     "suggest_connections",
     "list_available_mentors",
     "suggest_mentors",
+    "search_org_content",
+    "find_navigation_targets",
   ]);
   assert.equal(
     composeResponseCalls[1].tools,
@@ -726,7 +734,14 @@ test("hybrid greeting with events question uses routed events tool set", async (
     })
   ).text();
 
-  assert.deepEqual(toolNamesForCall(0), ["list_events"]);
+  assert.deepEqual(toolNamesForCall(0), [
+    "list_events",
+    "search_org_content",
+    "find_navigation_targets",
+    "list_members",
+    "list_alumni",
+    "list_parents",
+  ]);
   assert.equal(executeToolCallCalls.length, 1);
   assert.equal(executeToolCallCalls[0].call.name, "list_events");
 });
@@ -823,6 +838,8 @@ test("ambiguous queries keep fallback surface tool set", async () => {
     "suggest_connections",
     "list_available_mentors",
     "suggest_mentors",
+    "search_org_content",
+    "find_navigation_targets",
   ]);
 });
 
@@ -869,7 +886,14 @@ test("analytics overview prompts still attach get_org_stats", async () => {
     })
   ).text();
 
-  assert.deepEqual(toolNamesForCall(0), ["get_org_stats"]);
+  assert.deepEqual(toolNamesForCall(0), [
+    "get_org_stats",
+    "search_org_content",
+    "find_navigation_targets",
+    "list_members",
+    "list_alumni",
+    "list_parents",
+  ]);
   assert.equal(executeToolCallCalls[0].call.name, "get_org_stats");
   assert.deepEqual(executeToolCallCalls[0].call.args, {});
 });
@@ -1296,15 +1320,173 @@ test("simple event requests use list_events tool_first and skip pass 2", async (
     })
   ).text();
 
-  assert.deepEqual(toolNamesForCall(0), ["list_events"]);
-  assert.deepEqual(toolChoiceForCall(0), {
-    type: "function",
-    function: { name: "list_events" },
-  });
-  assert.deepEqual(contextModes, ["tool_first"]);
+  assert.deepEqual(toolNamesForCall(0), [
+    "list_events",
+    "search_org_content",
+    "find_navigation_targets",
+    "list_members",
+    "list_alumni",
+    "list_parents",
+  ]);
+  assert.equal(toolChoiceForCall(0), undefined);
+  assert.deepEqual(contextModes, ["full"]);
   assert.equal(composeResponseCalls.length, 1);
   assert.match(body, /Matching events/);
   assert.match(body, /Spring Fundraiser/);
+});
+
+test("content search prompts use search_org_content tool_first and skip pass 2", async () => {
+  const contextModes: Array<string | undefined> = [];
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      buildPromptContext: async (input: any) => {
+        contextModes.push(input.contextMode);
+        return {
+          systemPrompt: "System prompt",
+          orgContextMessage: null,
+          metadata: { surface: input.surface, estimatedTokens: 100 },
+        };
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "search_org_content",
+            argsJson: '{"query":"fundraising"}',
+          };
+          return;
+        }
+
+        throw new Error("search_org_content fast path should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            entity_type: "announcement",
+            entity_id: "ann-1",
+            title: "Fundraising kickoff",
+            snippet: "Volunteer signup opens this week.",
+            url_path: "/acme/announcements",
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("search announcements about fundraising") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["search_org_content"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "search_org_content" },
+  });
+  assert.deepEqual(contextModes, ["tool_first"]);
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Search results/);
+  assert.match(body, /\[Fundraising kickoff\]\(\/acme\/announcements\)/);
+});
+
+test("deterministic donation and chat-group turns do not need post-tool organization lookups", async () => {
+  const originalGetAiOrgContext = buildDefaultDeps().getAiOrgContext;
+  const blockingServiceSupabase = {
+    from(table: string) {
+      if (table === "organizations") {
+        throw new Error("unexpected organization lookup during deterministic formatting");
+      }
+      return supabaseStub.from(table);
+    },
+    rpc: async (_fn: string, params: any) => ({
+      data: {
+        thread_id:
+          params.p_thread_id ??
+          buildThreadId(++supabaseStub.state.threadCount),
+        user_msg_id: "user-1",
+      },
+      error: null,
+    }),
+  };
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getAiOrgContext: async (...args: any[]) => {
+        const result = await originalGetAiOrgContext(...args);
+        if (!result.ok) return result;
+        return {
+          ...result,
+          orgName: "Acme Org",
+          orgSlug: "acme",
+          hideDonorNames: true,
+          serviceSupabase: blockingServiceSupabase,
+        };
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          const firstToolName = options.tools[0]?.function?.name;
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: firstToolName,
+            argsJson: firstToolName === "list_chat_groups" ? '{"limit":5}' : '{"limit":5}',
+          };
+          return;
+        }
+
+        throw new Error("deterministic formatting should skip pass 2");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        if (call.name === "list_donations") {
+          return okToolResult([
+            {
+              donor_name: "Visible Name",
+              amount_dollars: 25,
+              status: "succeeded",
+              created_at: "2026-04-01T00:00:00.000Z",
+              hide_donor_names: true,
+            },
+          ]);
+        }
+        if (call.name === "list_chat_groups") {
+          return okToolResult([
+            {
+              id: "group-1",
+              name: "Captain Circle",
+              role: "admin",
+              updated_at: "2026-04-01T00:00:00.000Z",
+              org_slug: "acme",
+            },
+          ]);
+        }
+        return okToolResult([]);
+      },
+    })
+  );
+
+  const donationsBody = await (
+    await POST(makeRequest("list the donors") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+  assert.match(donationsBody, /Anonymous donor/);
+
+  composeResponseCalls = [];
+  executeToolCallCalls = [];
+
+  const groupsBody = await (
+    await POST(makeRequest("what chat groups am I in") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+  assert.match(groupsBody, /\[Captain Circle\]\(\/acme\/messages\/chat\/group-1\)/);
 });
 
 test("navigation requests only attach find_navigation_targets on pass 1", async () => {
@@ -1337,6 +1519,8 @@ test("action requests do not get forced into find_navigation_targets", async () 
     "suggest_connections",
     "list_available_mentors",
     "suggest_mentors",
+    "search_org_content",
+    "find_navigation_targets",
   ]);
   assert.equal(executeToolCallCalls[0].call.name, "list_members");
 });
@@ -3618,6 +3802,9 @@ test("list_donations deterministic responses redact donor names when hide_donor_
         orgId: ORG_ID,
         userId: ADMIN_USER.id,
         role: "admin",
+        hideDonorNames: true,
+        orgSlug: "acme",
+        orgName: "Acme Org",
         supabase: supabaseStub,
         serviceSupabase: {
           from(table: string) {
@@ -3673,6 +3860,7 @@ test("list_donations deterministic responses redact donor names when hide_donor_
             created_at: "2026-03-20T12:00:00Z",
             purpose: "Alumni Campaign",
             anonymous: false,
+            hide_donor_names: true,
           },
         ]);
       },
@@ -3693,7 +3881,7 @@ test("list_donations deterministic responses redact donor names when hide_donor_
   assert.doesNotMatch(body, /john@example\.com/);
 });
 
-test("list_donations deterministic responses fail closed on donor-privacy lookup errors", async () => {
+test("list_donations deterministic responses redact from tool payloads without org lookups", async () => {
   POST = createChatPostHandler(
     buildDefaultDeps({
       getAiOrgContext: async () => ({
@@ -3701,23 +3889,15 @@ test("list_donations deterministic responses fail closed on donor-privacy lookup
         orgId: ORG_ID,
         userId: ADMIN_USER.id,
         role: "admin",
+        orgSlug: "acme",
+        orgName: "Acme Org",
         supabase: supabaseStub,
         serviceSupabase: {
           from(table: string) {
             if (table !== "organizations") {
               return supabaseStub.from(table);
             }
-            return {
-              select() {
-                return this;
-              },
-              eq() {
-                return this;
-              },
-              maybeSingle: async () => {
-                throw new Error("organizations lookup failed");
-              },
-            };
+            throw new Error("unexpected organization lookup");
           },
           rpc: async (_fn: string, params: any) => ({
             data: {
@@ -3755,6 +3935,7 @@ test("list_donations deterministic responses fail closed on donor-privacy lookup
             created_at: "2026-03-20T12:00:00Z",
             purpose: "Alumni Campaign",
             anonymous: false,
+            hide_donor_names: true,
           },
         ]);
       },
