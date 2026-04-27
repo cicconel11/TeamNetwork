@@ -212,7 +212,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_events" as const,
       description:
-        "List organization events. Returns title, date, location, and description. Use for questions about upcoming or past events.",
+        "List organization events chronologically (no keyword filter). Returns title, date, location, and description. Use for inventory questions like 'what events are coming up', 'show recent events', 'any events this week'. For keyword/topic search ('search events about networking', 'find the picnic event'), use search_org_content instead.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -237,7 +237,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_announcements" as const,
       description:
-        "List recent organization announcements. Returns title, publish date, audience, pinned status, and a short body preview. Use for questions about recent news, updates, reminders, or announcements.",
+        "List recent organization announcements chronologically (no keyword filter). Returns title, publish date, audience, pinned status, and a short body preview. Use for inventory questions like 'what announcements are there', 'show the latest news', 'any pinned announcements'. For keyword/topic search ('search announcements for team meeting', 'find announcements about the fundraiser'), use search_org_content instead.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -261,7 +261,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_discussions" as const,
       description:
-        "List recent organization discussion threads. Returns title, author, post date, comment count, and a short body preview. Use for questions about community discussions, forum posts, or conversation threads.",
+        "List recent organization discussion threads chronologically (no keyword filter). Returns title, author, post date, comment count, and a short body preview. Use for inventory questions like 'what's being discussed', 'recent threads', 'show forum posts'. For keyword/topic search ('search discussions about X', 'find threads mentioning Y'), use search_org_content instead.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -281,7 +281,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_job_postings" as const,
       description:
-        "List active organization job postings. Returns title, company, location, type, and a short description preview. Use for questions about job opportunities, career openings, or hiring within the network.",
+        "List active organization job postings chronologically (no keyword filter). Returns title, company, location, type, and a short description preview. Use for inventory questions like 'what jobs are open', 'show recent postings', 'any new hires posted'. For keyword/topic search ('search jobs in marketing', 'find postings mentioning remote'), use search_org_content instead.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -1127,7 +1127,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "search_org_content" as const,
       description:
-        "Full-text search across organization content (announcements, events, discussions, job postings, members, alumni, etc.). Returns up to 5 results per entity type with title, snippet, and deep-link path. Use when the user wants to 'find', 'search', or 'look up' something by keyword across the org.",
+        "Keyword/topic search across organization CONTENT (announcements, events, discussions, job postings) for a specific phrase or subject. Returns up to 5 results per entity type with title, snippet, and deep-link path. REQUIRED for any request that filters content by keyword, topic, or phrase — the list_* tools cannot filter by keyword. Examples: 'search announcements for team meeting', 'find posts mentioning fundraising', 'look up events about networking', 'any announcements about the picnic?'. DO NOT use this for finding a specific person by name — use list_members, list_alumni, or list_parents for people lookups.",
       parameters: {
         type: "object" as const,
         properties: {
