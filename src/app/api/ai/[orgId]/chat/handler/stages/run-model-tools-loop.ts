@@ -33,8 +33,6 @@ import {
   formatDeterministicToolResponse,
   formatDeterministicToolErrorResponse,
   formatGlobalLookupToolResponse,
-  resolveHideDonorNamesPreference,
-  resolveOrgSlug,
 } from "../formatters/index";
 import { MEMBER_ROSTER_PROMPT_PATTERN, canBypassPass1 } from "../pass1-tools";
 import { runPass1Bypass } from "./run-pass1-bypass";
@@ -63,6 +61,9 @@ export interface RunModelToolsLoopInput {
   ctx: {
     orgId: string;
     userId: string;
+    orgName?: string;
+    orgSlug?: string;
+    hideDonorNames?: boolean;
     enterpriseId?: string;
     enterpriseRole?: EnterpriseRole;
     supabase: ServerSupabase;
@@ -314,24 +315,8 @@ export async function runModelToolsLoop(
       input.successfulToolResults.length === 1 &&
       input.successfulToolResults[0]?.name === "list_members" &&
       MEMBER_ROSTER_PROMPT_PATTERN.test(input.promptSafeMessage);
-    const needsDonorPrivacy = input.successfulToolResults.some(
-      (result) => result.name === "list_donations",
-    );
-    const hideDonorNames = needsDonorPrivacy
-      ? await resolveHideDonorNamesPreference(
-          input.ctx.serviceSupabase,
-          input.ctx.orgId,
-        )
-      : false;
-    const needsOrgSlug =
-      input.successfulToolResults.length === 1 &&
-      input.successfulToolResults[0]?.name === "list_chat_groups";
-    const orgSlug = needsOrgSlug
-      ? await resolveOrgSlug(
-          input.ctx.serviceSupabase,
-          input.ctx.orgId,
-        )
-      : undefined;
+    const hideDonorNames = input.ctx.hideDonorNames === true;
+    const orgSlug = input.ctx.orgSlug;
     const deterministicFormatterOptions =
       input.successfulToolResults.length === 1 &&
       input.successfulToolResults[0]?.name === "list_donations"
