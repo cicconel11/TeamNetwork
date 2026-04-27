@@ -13,6 +13,11 @@ interface CallRecord {
   head: boolean;
 }
 
+interface RpcCallRecord {
+  fn: string;
+  args: Record<string, unknown>;
+}
+
 const COUNTS: Record<string, number> = {
   members: 35,
   alumni: 12,
@@ -28,6 +33,7 @@ const DONATIONS_ROW = {
 
 function makeStubSb() {
   const calls: CallRecord[] = [];
+  const rpcCalls: RpcCallRecord[] = [];
 
   function builder(table: string) {
     const record: CallRecord = { table, filters: {}, head: false };
@@ -62,8 +68,26 @@ function makeStubSb() {
   }
 
   return {
-    sb: { from: builder },
+    sb: {
+      from: builder,
+      rpc(fn: string, args: Record<string, unknown>) {
+        rpcCalls.push({ fn, args });
+        return Promise.resolve({
+          data: [
+            {
+              active_members: 35,
+              alumni: 12,
+              parents: 4,
+              upcoming_events: 3,
+              donations: DONATIONS_ROW,
+            },
+          ],
+          error: null,
+        });
+      },
+    },
     calls,
+    rpcCalls,
   };
 }
 
@@ -84,12 +108,12 @@ async function execute(args: { scope?: string }) {
     sb: stub.sb,
     logContext,
   });
-  return { result, calls: stub.calls };
+  return { result, calls: stub.calls, rpcCalls: stub.rpcCalls };
 }
 
 describe("get_org_stats — scope arg", () => {
   it("returns full payload when scope omitted", async () => {
-    const { result, calls } = await execute({});
+    const { result, calls, rpcCalls } = await execute({});
     assert.equal(result.kind, "ok");
     assert.deepEqual(result.kind === "ok" ? result.data : null, {
       active_members: 35,
@@ -98,11 +122,14 @@ describe("get_org_stats — scope arg", () => {
       upcoming_events: 3,
       donations: DONATIONS_ROW,
     });
-    assert.equal(calls.length, 4); // 4 count queries; donation uses maybeSingle (no record)
+    assert.equal(calls.length, 0);
+    assert.deepEqual(rpcCalls, [
+      { fn: "get_org_stats_snapshot", args: { p_org_id: ORG_ID } },
+    ]);
   });
 
   it("scope=all is equivalent to omitted", async () => {
-    const { result } = await execute({ scope: "all" });
+    const { result, calls, rpcCalls } = await execute({ scope: "all" });
     assert.equal(result.kind, "ok");
     if (result.kind !== "ok") return;
     const data = result.data as Record<string, unknown>;
@@ -111,6 +138,21 @@ describe("get_org_stats — scope arg", () => {
     assert.equal(data.parents, 4);
     assert.equal(data.upcoming_events, 3);
     assert.deepEqual(data.donations, DONATIONS_ROW);
+    assert.equal(calls.length, 0);
+    assert.equal(rpcCalls.length, 1);
+  });
+
+  it("treats table-valued RPC output as the first row", async () => {
+    const { result } = await execute({});
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    assert.deepEqual(result.data, {
+      active_members: 35,
+      alumni: 12,
+      parents: 4,
+      upcoming_events: 3,
+      donations: DONATIONS_ROW,
+    });
   });
 
   it("scope=members returns only active_members", async () => {
