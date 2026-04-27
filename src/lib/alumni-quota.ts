@@ -1,4 +1,4 @@
-import type { AlumniBucket } from "@/types/database";
+import type { AlumniBucket, Tables } from "@/types/database";
 import { createServiceClient } from "@/lib/supabase/service";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 
@@ -27,15 +27,9 @@ interface OrgWithEnterprise {
   enterprise_id: string | null;
 }
 
-interface OrgSubscriptionRow {
-  alumni_bucket: string | null;
-  status: string | null;
-}
+type OrgSubscriptionRow = Pick<Tables<"organization_subscriptions">, "alumni_bucket" | "status">;
 
-// Type for enterprise subscription (until types are regenerated)
-interface EnterpriseSubscriptionRow {
-  alumni_bucket_quantity: number;
-}
+type EnterpriseSubscriptionRow = Pick<Tables<"enterprise_subscriptions">, "alumni_bucket_quantity">;
 
 export function shouldUseEnterpriseAlumniQuota(
   enterpriseId: string | null | undefined,

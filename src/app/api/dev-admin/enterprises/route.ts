@@ -11,6 +11,7 @@ import type {
   EnterpriseSubscription,
   EnterpriseRole,
 } from "@/types/enterprise";
+import type { Tables } from "@/types/database";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -37,10 +38,7 @@ interface SubOrgRow {
   enterprise_relationship_type: string | null;
 }
 
-interface OrgSubscriptionRow {
-  organization_id: string;
-  status: string;
-}
+type OrgSubscriptionRow = Pick<Tables<"organization_subscriptions">, "organization_id" | "status">;
 
 interface EnterpriseAdminInfo {
   user_id: string;
