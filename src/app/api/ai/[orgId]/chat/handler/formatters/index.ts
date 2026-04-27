@@ -1,4 +1,5 @@
 import type { ServiceSupabase } from "@/lib/supabase/types";
+import type { ToolResultMessage } from "@/lib/ai/response-composer";
 import {
   formatSuggestMentorsResponse,
   formatDonationAnalyticsResponse,
@@ -176,6 +177,163 @@ export function formatDeterministicToolErrorResponse(
   }
 
   return null;
+}
+
+const GLOBAL_LOOKUP_TOOL_NAMES = new Set([
+  "list_members",
+  "list_alumni",
+  "list_parents",
+  "search_org_content",
+]);
+
+function inferLookupQuery(message: string): string | null {
+  const trimmed = message.trim().replace(/[?!.\s]+$/g, "");
+  const match =
+    /\b(?:about|for|on|regarding)\s+["']?([^"']{2,80})["']?$/i.exec(trimmed) ??
+    /\b(?:find|search|look\s+up)\s+["']?([^"']{2,80})["']?$/i.exec(trimmed);
+  return match?.[1]?.trim() ?? null;
+}
+
+function normalizeForLookup(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9@.]+/g, " ").trim();
+}
+
+function rowMatchesLookup(row: Record<string, unknown>, query: string): boolean {
+  const haystack = normalizeForLookup(
+    [
+      row.name,
+      row.email,
+      row.title,
+      row.snippet,
+      row.relationship,
+      row.student_name,
+      row.current_company,
+      row.current_city,
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .join(" "),
+  );
+  const tokens = normalizeForLookup(query).split(/\s+/).filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => haystack.includes(token));
+}
+
+function rowsForTool(result: ToolResultMessage, query: string): Array<Record<string, unknown>> {
+  if (!Array.isArray(result.data)) {
+    return [];
+  }
+  const rows = result.data.filter(
+    (row): row is Record<string, unknown> => row != null && typeof row === "object",
+  );
+  if (result.name === "search_org_content") {
+    return rows;
+  }
+  return rows.filter((row) => rowMatchesLookup(row, query));
+}
+
+function formatLookupPersonRow(row: Record<string, unknown>, fallbackRole: string): string | null {
+  const name = getNonEmptyString(row.name) ?? getNonEmptyString(row.title);
+  if (!name) {
+    return null;
+  }
+  const email = getNonEmptyString(row.email);
+  const role = formatMemberRoleForLookup(row.role) ?? fallbackRole;
+  const joinedAt = formatIsoDate(row.created_at);
+  const metadata = [
+    role,
+    email,
+    joinedAt ? `joined ${joinedAt}` : null,
+  ].filter((value): value is string => Boolean(value));
+  return `- **${name}**${metadata.length > 0 ? ` - ${metadata.join(", ")}` : ""}`;
+}
+
+function formatMemberRoleForLookup(value: unknown): string | null {
+  const role = getNonEmptyString(value);
+  if (!role) return null;
+  if (role === "active_member") return "active member";
+  return role.replace(/_/g, " ");
+}
+
+function formatLookupContentRow(row: Record<string, unknown>): string | null {
+  const title = getNonEmptyString(row.title);
+  if (!title) return null;
+  const entityType = getNonEmptyString(row.entity_type)?.replace(/_/g, " ") ?? "content";
+  const urlPath = getNonEmptyString(row.url_path);
+  const label = urlPath ? `[${title}](${urlPath})` : title;
+  const snippet = getNonEmptyString(row.snippet);
+  return `- ${label} (${entityType})${snippet ? `\n  ${snippet}` : ""}`;
+}
+
+export function formatGlobalLookupToolResponse(
+  toolResults: ToolResultMessage[],
+  message: string,
+): string | null {
+  if (toolResults.length < 2 || toolResults.some((result) => !GLOBAL_LOOKUP_TOOL_NAMES.has(result.name))) {
+    return null;
+  }
+
+  const query = inferLookupQuery(message);
+  if (!query) {
+    return null;
+  }
+
+  const byName = new Map(toolResults.map((result) => [result.name, result]));
+  const members = byName.get("list_members") ? rowsForTool(byName.get("list_members")!, query) : [];
+  const alumni = byName.get("list_alumni") ? rowsForTool(byName.get("list_alumni")!, query) : [];
+  const parents = byName.get("list_parents") ? rowsForTool(byName.get("list_parents")!, query) : [];
+  const content = byName.get("search_org_content")
+    ? rowsForTool(byName.get("search_org_content")!, query)
+    : [];
+
+  const lines = [`Here's what I found for ${query}:`];
+  let matched = false;
+
+  const memberLines = members
+    .map((row) => formatLookupPersonRow(row, "active member"))
+    .filter((line): line is string => Boolean(line));
+  if (memberLines.length > 0) {
+    matched = true;
+    lines.push("", "**Active Members:**", ...memberLines);
+  }
+
+  const alumniLines = alumni
+    .map((row) => formatLookupPersonRow(row, "alumni"))
+    .filter((line): line is string => Boolean(line));
+  if (alumniLines.length > 0) {
+    matched = true;
+    lines.push("", "**Alumni:**", ...alumniLines);
+  }
+
+  const parentLines = parents
+    .map((row) => formatLookupPersonRow(row, "parent"))
+    .filter((line): line is string => Boolean(line));
+  if (parentLines.length > 0) {
+    matched = true;
+    lines.push("", "**Parents:**", ...parentLines);
+  }
+
+  const contentLines = content
+    .map(formatLookupContentRow)
+    .filter((line): line is string => Boolean(line));
+  if (contentLines.length > 0) {
+    matched = true;
+    lines.push("", "**Organization Content:**", ...contentLines);
+  }
+
+  if (!matched) {
+    lines.push("", "No matches found in active members, alumni, parents, or organization content.");
+  } else {
+    const missing = [
+      memberLines.length === 0 ? "active members" : null,
+      alumniLines.length === 0 ? "alumni" : null,
+      parentLines.length === 0 ? "parents" : null,
+      contentLines.length === 0 ? "organization content" : null,
+    ].filter((value): value is string => Boolean(value));
+    if (missing.length > 0) {
+      lines.push("", `No matches found in ${missing.join(", ")}.`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 export async function resolveHideDonorNamesPreference(

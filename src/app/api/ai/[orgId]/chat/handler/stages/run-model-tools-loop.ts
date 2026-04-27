@@ -32,6 +32,7 @@ import {
   CONNECTION_PASS2_TEMPLATE,
   formatDeterministicToolResponse,
   formatDeterministicToolErrorResponse,
+  formatGlobalLookupToolResponse,
   resolveHideDonorNamesPreference,
   resolveOrgSlug,
 } from "../formatters/index";
@@ -350,6 +351,10 @@ export async function runModelToolsLoop(
             deterministicFormatterOptions,
           )
         : null;
+    const deterministicGlobalLookupContent =
+      deterministicToolContent == null
+        ? formatGlobalLookupToolResponse(toolResults, input.promptSafeMessage)
+        : null;
     const singleToolError =
       toolResults.length === 1 &&
       input.successfulToolResults.length === 0 &&
@@ -376,10 +381,10 @@ export async function runModelToolsLoop(
         )
       : null;
 
-    if (deterministicToolContent || deterministicToolErrorContent) {
+    if (deterministicToolContent || deterministicGlobalLookupContent || deterministicToolErrorContent) {
       skipStage(input.stageTimings, "pass2");
       pass2BufferedContent =
-        deterministicToolContent ?? deterministicToolErrorContent ?? "";
+        deterministicToolContent ?? deterministicGlobalLookupContent ?? deterministicToolErrorContent ?? "";
     } else {
       const hasToolErrors =
         toolResults.length > input.successfulToolResults.length;
