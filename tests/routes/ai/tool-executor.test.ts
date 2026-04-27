@@ -910,7 +910,6 @@ test("list_donations maps rows including anonymous donor masking", async () => {
     status: "succeeded",
     created_at: "2026-01-01T00:00:00.000Z",
     anonymous: false,
-    hide_donor_names: false,
   });
   assert.deepEqual(rows[1], {
     id: "d2",
@@ -921,7 +920,6 @@ test("list_donations maps rows including anonymous donor masking", async () => {
     status: "succeeded",
     created_at: "2026-01-02T00:00:00.000Z",
     anonymous: true,
-    hide_donor_names: false,
   });
 
   const q = stub.queries.find((x) => x.table === "organization_donations");
@@ -3243,7 +3241,6 @@ test("list_chat_groups scope: all returns every org group with member_count and 
     member_count: 2,
     is_member: true,
     role: "admin",
-    org_slug: null,
   });
   assert.deepEqual(marketing, {
     id: otherGroupId,
@@ -3253,7 +3250,6 @@ test("list_chat_groups scope: all returns every org group with member_count and 
     member_count: 1,
     is_member: false,
     role: null,
-    org_slug: null,
   });
 });
 
