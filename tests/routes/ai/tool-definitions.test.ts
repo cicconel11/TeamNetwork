@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 34 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 34);
+test("AI_TOOLS exports 35 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 35);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -56,6 +56,7 @@ test("TOOL_NAMES contains all tool names", () => {
     "list_available_mentors",
     "suggest_mentors",
     "find_navigation_targets",
+    "search_org_content",
   ];
   assert.deepEqual([...TOOL_NAMES].sort(), [...expected].sort());
 });
@@ -167,5 +168,17 @@ test("find_navigation_targets requires a query string", () => {
   assert.ok(props.query);
   assert.equal(props.query.type, "string");
   assert.equal(props.limit.maximum, 10);
+  assert.deepEqual(params.required, ["query"]);
+});
+
+test("search_org_content requires a query string and caps limit at 25", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "search_org_content")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.query);
+  assert.equal(props.query.type, "string");
+  assert.ok(props.limit);
+  assert.equal(props.limit.maximum, 25);
   assert.deepEqual(params.required, ["query"]);
 });

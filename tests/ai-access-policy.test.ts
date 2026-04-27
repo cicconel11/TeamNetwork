@@ -103,6 +103,7 @@ describe("ai access policy — active_member", () => {
       "list_chat_groups",
       "list_philanthropy_events",
       "find_navigation_targets",
+      "search_org_content",
     ]));
   });
 
@@ -157,6 +158,7 @@ describe("ai access policy — alumni", () => {
       "list_announcements",
       "list_events",
       "find_navigation_targets",
+      "search_org_content",
     ]));
   });
 
