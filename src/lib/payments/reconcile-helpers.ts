@@ -18,10 +18,9 @@ interface SupabaseQueryError {
   message: string;
 }
 
-interface AttemptLookupResult {
-  data: RecoverableAttempt[] | null;
-  error: SupabaseQueryError | null;
-}
+export type AttemptLookupResult =
+  | { ok: true; data: RecoverableAttempt[] }
+  | { ok: false; error: SupabaseQueryError };
 
 export function pickMostRecentRecoverableAttempt(input: {
   byOrgId: RecoverableAttempt[] | null;
@@ -64,7 +63,7 @@ export function resolveRecoverableAttemptLookup(input: {
   byOrgId: AttemptLookupResult;
   byPendingOrgId: AttemptLookupResult;
 }): { attempt: RecoverableAttempt | null; error: string | null } {
-  if (input.byOrgId.error || input.byPendingOrgId.error) {
+  if (!input.byOrgId.ok || !input.byPendingOrgId.ok) {
     return {
       attempt: null,
       error: "Failed to query payment attempts for reconciliation.",
