@@ -14,10 +14,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter, useNavigation } from "expo-router";
 import { ChevronLeft, Eye, EyeOff } from "lucide-react-native";
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
 import { borderRadius, spacing, fontSize } from "@/lib/theme";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
+import {
+  buildMobileEmailSignupCallbackUrl,
+  buildMobileOAuthUrl,
+  parseMobileAuthCallbackUrl,
+  type MobileOAuthProvider,
+} from "@/lib/auth-redirects";
+import { consumeMobileAuthHandoff, validateSignupAge } from "@/lib/mobile-auth";
+import { getWebAppUrl } from "@/lib/web-api";
 
 // Check if running in web browser (Expo web mode)
 const isWeb = Platform.OS === "web";
@@ -61,6 +71,13 @@ const isEmailValid = (email: string) => {
   return trimmed.length >= 5 && trimmed.includes("@") && trimmed.includes(".");
 };
 
+type SignupStep = "age_gate" | "registration";
+type AgeGateData = {
+  ageBracket: "13_17" | "18_plus";
+  isMinor: boolean;
+  token: string;
+};
+
 export default function SignupScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -93,6 +110,9 @@ export default function SignupScreen() {
 
   // Loading state
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<MobileOAuthProvider | null>(null);
+  const [step, setStep] = useState<SignupStep>("age_gate");
+  const [ageGate, setAgeGate] = useState<AgeGateData | null>(null);
 
   // Captcha
   const turnstileRef = useRef<TurnstileRef>(null);
@@ -103,6 +123,20 @@ export default function SignupScreen() {
     password.length >= 6 &&
     confirmPassword.length > 0 &&
     password === confirmPassword;
+
+  const handleAgeGateSelect = async (ageBracket: "under_13" | "13_17" | "18_plus") => {
+    setApiError("");
+    setLoading(true);
+    try {
+      const result = await validateSignupAge(ageBracket);
+      setAgeGate(result);
+      setStep("registration");
+    } catch (error) {
+      setApiError((error as Error).message || "Unable to verify age. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Clear errors on input change
   const handleEmailChange = (text: string) => {
@@ -165,6 +199,11 @@ export default function SignupScreen() {
       setConfirmPasswordError("Passwords do not match");
       return;
     }
+    if (!ageGate) {
+      setApiError("Please verify your age before creating an account.");
+      setStep("age_gate");
+      return;
+    }
 
     pendingCredsRef.current = { email: trimmedEmail.toLowerCase(), password };
     setLoading(true);
@@ -178,13 +217,24 @@ export default function SignupScreen() {
       setLoading(false);
       return;
     }
+    if (!ageGate) {
+      setLoading(false);
+      setApiError("Please verify your age before creating an account.");
+      setStep("age_gate");
+      return;
+    }
 
     try {
       const { error } = await supabase.auth.signUp({
         email: creds.email,
         password: creds.password,
         options: {
-          emailRedirectTo: "teammeet://callback",
+          data: {
+            age_bracket: ageGate.ageBracket,
+            is_minor: ageGate.isMinor,
+            age_validation_token: ageGate.token,
+          },
+          emailRedirectTo: buildMobileEmailSignupCallbackUrl(getWebAppUrl()),
           captchaToken,
         },
       });
@@ -224,6 +274,45 @@ export default function SignupScreen() {
     pendingCredsRef.current = null;
     setLoading(false);
     setApiError("Verification failed. Please try again.");
+  };
+
+  const handleSocialSignup = async (provider: MobileOAuthProvider) => {
+    setApiError("");
+
+    if (!ageGate) {
+      setApiError("Please verify your age before continuing with a social account.");
+      setStep("age_gate");
+      return;
+    }
+
+    setSocialLoading(provider);
+    try {
+      const redirectUri = makeRedirectUri({
+        scheme: "teammeet",
+        path: "callback",
+      });
+      const authUrl = buildMobileOAuthUrl(provider, getWebAppUrl(), {
+        mode: "signup",
+        ageBracket: ageGate.ageBracket,
+        isMinor: ageGate.isMinor,
+        ageToken: ageGate.token,
+      });
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+
+      if (result.type === "success" && result.url) {
+        const callback = parseMobileAuthCallbackUrl(result.url);
+        if (callback.type === "handoff") {
+          await consumeMobileAuthHandoff(callback.code);
+          track("user_signed_up", { method: provider });
+        } else if (callback.type === "error") {
+          throw new Error(callback.message);
+        }
+      }
+    } catch (error) {
+      setApiError((error as Error).message || "Could not complete signup.");
+    } finally {
+      setSocialLoading(null);
+    }
   };
 
   const getInputStyle = (focused: boolean, hasError: boolean) => {
@@ -274,7 +363,49 @@ export default function SignupScreen() {
             Sign up to get started with TeamMeet.
           </Text>
 
-          {/* Form */}
+          {step === "age_gate" ? (
+            <View style={styles.form}>
+              <View style={styles.ageGateBox}>
+                <Text style={styles.ageGateTitle}>Confirm your age</Text>
+                <Text style={styles.ageGateText}>
+                  Choose the option that applies before creating an account.
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [styles.ageButton, pressed && { opacity: 0.8 }]}
+                  onPress={() => handleAgeGateSelect("18_plus")}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="I am 18 or older"
+                >
+                  <Text style={styles.ageButtonText}>18 or older</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.ageButton, pressed && { opacity: 0.8 }]}
+                  onPress={() => handleAgeGateSelect("13_17")}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="I am 13 to 17"
+                >
+                  <Text style={styles.ageButtonText}>13 to 17</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.ageButtonSecondary, pressed && { opacity: 0.8 }]}
+                  onPress={() => handleAgeGateSelect("under_13")}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="I am under 13"
+                >
+                  <Text style={styles.ageButtonSecondaryText}>Under 13</Text>
+                </Pressable>
+                {loading && <ActivityIndicator color={colors.primaryButton} style={styles.ageLoading} />}
+              </View>
+              {apiError && (
+                <View style={styles.apiErrorBox}>
+                  <Text style={styles.apiErrorText}>{apiError}</Text>
+                </View>
+              )}
+            </View>
+          ) : (
           <View style={styles.form}>
             {/* Email Input */}
             <View style={styles.inputWrapper}>
@@ -387,11 +518,11 @@ export default function SignupScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.primaryButton,
-                (!isFormValid || loading || isWeb) && styles.primaryButtonDisabled,
+                (!isFormValid || loading || socialLoading !== null || isWeb) && styles.primaryButtonDisabled,
                 pressed && { opacity: 0.7 },
               ]}
               onPress={handleSignup}
-              disabled={!isFormValid || loading || isWeb}
+              disabled={!isFormValid || loading || socialLoading !== null || isWeb}
               accessibilityLabel="Create account"
               accessibilityRole="button"
             >
@@ -403,7 +534,67 @@ export default function SignupScreen() {
                 </Text>
               )}
             </Pressable>
+
+            <Pressable
+              onPress={() => handleSocialSignup("google")}
+              disabled={loading || socialLoading !== null || isWeb}
+              style={({ pressed }) => [
+                styles.socialButton,
+                (loading || socialLoading !== null || isWeb) && styles.socialButtonDisabled,
+                pressed && { opacity: 0.75 },
+              ]}
+              accessibilityLabel="Continue with Google"
+              accessibilityRole="button"
+            >
+              <View style={styles.socialChip}>
+                <Text style={[styles.socialChipText, styles.socialChipTextGoogle]}>G</Text>
+              </View>
+              <Text style={styles.socialText}>
+                {socialLoading === "google" ? "Connecting..." : "Continue with Google"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => handleSocialSignup("linkedin")}
+              disabled={loading || socialLoading !== null || isWeb}
+              style={({ pressed }) => [
+                styles.socialButton,
+                styles.socialButtonStacked,
+                (loading || socialLoading !== null || isWeb) && styles.socialButtonDisabled,
+                pressed && { opacity: 0.75 },
+              ]}
+              accessibilityLabel="Continue with LinkedIn"
+              accessibilityRole="button"
+            >
+              <View style={[styles.socialChip, styles.socialChipLinkedIn]}>
+                <Text style={[styles.socialChipText, styles.socialChipTextOnDark]}>in</Text>
+              </View>
+              <Text style={styles.socialText}>
+                {socialLoading === "linkedin" ? "Connecting..." : "Continue with LinkedIn"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => handleSocialSignup("microsoft")}
+              disabled={loading || socialLoading !== null || isWeb}
+              style={({ pressed }) => [
+                styles.socialButton,
+                styles.socialButtonStacked,
+                (loading || socialLoading !== null || isWeb) && styles.socialButtonDisabled,
+                pressed && { opacity: 0.75 },
+              ]}
+              accessibilityLabel="Continue with Microsoft"
+              accessibilityRole="button"
+            >
+              <View style={styles.socialChip}>
+                <Text style={[styles.socialChipText, styles.socialChipTextMicrosoft]}>M</Text>
+              </View>
+              <Text style={styles.socialText}>
+                {socialLoading === "microsoft" ? "Connecting..." : "Continue with Microsoft"}
+              </Text>
+            </Pressable>
           </View>
+          )}
 
           {/* Sign In Link */}
           <View style={styles.signinContainer}>
@@ -493,6 +684,56 @@ const styles = StyleSheet.create({
   form: {
     width: "100%",
   },
+  ageGateBox: {
+    backgroundColor: colors.inputBackground,
+    borderColor: colors.inputBorder,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  ageGateTitle: {
+    color: colors.title,
+    fontSize: fontSize.lg,
+    fontWeight: "700",
+    marginBottom: spacing.xs,
+  },
+  ageGateText: {
+    color: colors.subtitle,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  ageButton: {
+    backgroundColor: colors.primaryButton,
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  ageButtonText: {
+    color: "#ffffff",
+    fontSize: fontSize.base,
+    fontWeight: "600",
+  },
+  ageButtonSecondary: {
+    backgroundColor: "#ffffff",
+    borderColor: colors.inputBorder,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    alignItems: "center",
+  },
+  ageButtonSecondaryText: {
+    color: colors.title,
+    fontSize: fontSize.base,
+    fontWeight: "600",
+  },
+  ageLoading: {
+    marginTop: spacing.md,
+  },
   inputWrapper: {
     marginBottom: spacing.md,
   },
@@ -568,6 +809,57 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: colors.primaryButtonText,
+    fontSize: fontSize.base,
+    fontWeight: "600",
+  },
+  socialButton: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderColor: colors.inputBorder,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+  },
+  socialButtonStacked: {
+    marginTop: spacing.sm,
+  },
+  socialButtonDisabled: {
+    opacity: 0.6,
+  },
+  socialChip: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: colors.inputBorder,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 24,
+    justifyContent: "center",
+    marginRight: spacing.sm,
+    width: 24,
+  },
+  socialChipLinkedIn: {
+    backgroundColor: "#0a66c2",
+    borderColor: "#0a66c2",
+  },
+  socialChipText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  socialChipTextGoogle: {
+    color: "#4285F4",
+  },
+  socialChipTextOnDark: {
+    color: "#ffffff",
+  },
+  socialChipTextMicrosoft: {
+    color: "#f25022",
+  },
+  socialText: {
+    color: colors.title,
     fontSize: fontSize.base,
     fontWeight: "600",
   },

@@ -28,6 +28,13 @@ import { makeRedirectUri } from "expo-auth-session";
 import { Image } from "expo-image";
 import { baseSchemas } from "@teammeet/validation";
 import { supabase } from "@/lib/supabase";
+import {
+  buildMobileOAuthUrl,
+  parseMobileAuthCallbackUrl,
+  type MobileOAuthProvider,
+} from "@/lib/auth-redirects";
+import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
+import { getWebAppUrl } from "@/lib/web-api";
 import { captureException, track } from "@/lib/analytics";
 import { showToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
@@ -76,8 +83,8 @@ export default function LoginScreen() {
 
   // Loading state
   const [emailLoading, setEmailLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const isLoading = emailLoading || googleLoading;
+  const [socialLoading, setSocialLoading] = useState<MobileOAuthProvider | null>(null);
+  const isLoading = emailLoading || socialLoading !== null;
 
   // Captcha
   const turnstileRef = useRef<TurnstileRef>(null);
@@ -251,10 +258,11 @@ export default function LoginScreen() {
     captureException(new Error(`Turnstile: ${message}`), { screen: "Login", method: "email" });
   };
 
-  // Google OAuth sign in (web-based — native flow has nonce issues with Supabase)
-  const signInWithGoogle = async () => {
+  // Web-based OAuth sign in. All providers go through the web handoff route —
+  // native social SDKs have nonce/PKCE conflicts with Supabase.
+  const signInWithProvider = async (provider: MobileOAuthProvider) => {
     setApiError("");
-    setGoogleLoading(true);
+    setSocialLoading(provider);
 
     try {
       const redirectUri = makeRedirectUri({
@@ -262,57 +270,28 @@ export default function LoginScreen() {
         path: "callback",
       });
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: true,
-        },
-      });
+      const authUrl = buildMobileOAuthUrl(provider, getWebAppUrl(), { mode: "login" });
 
-      if (error) throw error;
-      if (!data.url) throw new Error("No OAuth URL returned");
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
 
       if (result.type === "success" && result.url) {
-        const url = new URL(result.url);
-        const hashParams = new URLSearchParams(url.hash.substring(1));
-        const queryParams = new URLSearchParams(url.search);
-        const code = queryParams.get("code");
-
-        const accessToken = hashParams.get("access_token") || queryParams.get("access_token");
-        const refreshToken = hashParams.get("refresh_token") || queryParams.get("refresh_token");
-
-        if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) throw exchangeError;
-          track("user_logged_in_with_google", { method: "google" });
-        } else if (accessToken && refreshToken) {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (sessionError) throw sessionError;
-          track("user_logged_in_with_google", { method: "google" });
-        } else {
-          const errorMsg =
-            hashParams.get("error_description") || queryParams.get("error_description");
-          if (errorMsg) {
-            throw new Error(decodeURIComponent(errorMsg));
-          }
-          throw new Error("Authentication failed - no tokens received");
+        const callback = parseMobileAuthCallbackUrl(result.url);
+        if (callback.type === "handoff") {
+          await consumeMobileAuthHandoff(callback.code);
+          track("user_logged_in", { method: provider });
+        } else if (callback.type === "error") {
+          throw new Error(callback.message);
         }
       }
       // result.type === "cancel" — silent no-op
     } catch (error: unknown) {
       const err = error as { message?: string };
-      captureException(error as Error, { screen: "Login", provider: "google" });
+      captureException(error as Error, { screen: "Login", provider });
       const message = err.message || "An unexpected error occurred";
       setApiError(message);
       showToast(message, "error");
     } finally {
-      setGoogleLoading(false);
+      setSocialLoading(null);
     }
   };
 
@@ -511,21 +490,63 @@ export default function LoginScreen() {
 
             {/* Google */}
             <Pressable
-              onPress={signInWithGoogle}
+              onPress={() => signInWithProvider("google")}
               disabled={isLoading}
               style={({ pressed }) => [
-                styles.googleButton,
-                isLoading && styles.googleButtonDisabled,
-                pressed && styles.googleButtonPressed,
+                styles.socialButton,
+                isLoading && styles.socialButtonDisabled,
+                pressed && styles.socialButtonPressed,
               ]}
               accessibilityLabel="Continue with Google"
               accessibilityRole="button"
             >
-              <View style={styles.googleChip}>
-                <Text style={styles.googleChipText}>G</Text>
+              <View style={styles.socialChip}>
+                <Text style={[styles.socialChipText, styles.socialChipTextGoogle]}>G</Text>
               </View>
-              <Text style={styles.googleText}>
-                {googleLoading ? "Connecting…" : "Continue with Google"}
+              <Text style={styles.socialText}>
+                {socialLoading === "google" ? "Connecting…" : "Continue with Google"}
+              </Text>
+            </Pressable>
+
+            {/* LinkedIn */}
+            <Pressable
+              onPress={() => signInWithProvider("linkedin")}
+              disabled={isLoading}
+              style={({ pressed }) => [
+                styles.socialButton,
+                styles.socialButtonStacked,
+                isLoading && styles.socialButtonDisabled,
+                pressed && styles.socialButtonPressed,
+              ]}
+              accessibilityLabel="Continue with LinkedIn"
+              accessibilityRole="button"
+            >
+              <View style={[styles.socialChip, styles.socialChipLinkedIn]}>
+                <Text style={[styles.socialChipText, styles.socialChipTextOnDark]}>in</Text>
+              </View>
+              <Text style={styles.socialText}>
+                {socialLoading === "linkedin" ? "Connecting…" : "Continue with LinkedIn"}
+              </Text>
+            </Pressable>
+
+            {/* Microsoft */}
+            <Pressable
+              onPress={() => signInWithProvider("microsoft")}
+              disabled={isLoading}
+              style={({ pressed }) => [
+                styles.socialButton,
+                styles.socialButtonStacked,
+                isLoading && styles.socialButtonDisabled,
+                pressed && styles.socialButtonPressed,
+              ]}
+              accessibilityLabel="Continue with Microsoft"
+              accessibilityRole="button"
+            >
+              <View style={styles.socialChip}>
+                <Text style={[styles.socialChipText, styles.socialChipTextMicrosoft]}>M</Text>
+              </View>
+              <Text style={styles.socialText}>
+                {socialLoading === "microsoft" ? "Connecting…" : "Continue with Microsoft"}
               </Text>
             </Pressable>
 
@@ -759,8 +780,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // Google
-  googleButton: {
+  // Social sign-in buttons
+  socialButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -773,13 +794,16 @@ const styles = StyleSheet.create({
     borderColor: NEUTRAL.border,
     ...SHADOWS.sm,
   },
-  googleButtonDisabled: {
+  socialButtonStacked: {
+    marginTop: SPACING.sm,
+  },
+  socialButtonDisabled: {
     opacity: 0.6,
   },
-  googleButtonPressed: {
+  socialButtonPressed: {
     opacity: 0.85,
   },
-  googleChip: {
+  socialChip: {
     width: 24,
     height: 24,
     borderRadius: 12,
@@ -789,12 +813,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  googleChipText: {
+  socialChipLinkedIn: {
+    backgroundColor: "#0a66c2",
+    borderColor: "#0a66c2",
+  },
+  socialChipText: {
     fontSize: 14,
     fontWeight: "700",
+  },
+  socialChipTextGoogle: {
     color: "#4285F4",
   },
-  googleText: {
+  socialChipTextOnDark: {
+    color: "#ffffff",
+  },
+  socialChipTextMicrosoft: {
+    color: "#f25022",
+  },
+  socialText: {
     ...TYPOGRAPHY.labelLarge,
     fontSize: 16,
     color: NEUTRAL.foreground,

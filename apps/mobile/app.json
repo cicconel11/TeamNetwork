@@ -32,11 +32,6 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.156976073490-1iejhf7pnad636bdih1gh3tnbu26hvkn"
-            ]
-          },
-          {
-            "CFBundleURLSchemes": [
               "teammeet"
             ]
           }
@@ -75,7 +70,6 @@
         }
       ],
       "expo-secure-store",
-      "@react-native-google-signin/google-signin",
       [
         "expo-notifications",
         {

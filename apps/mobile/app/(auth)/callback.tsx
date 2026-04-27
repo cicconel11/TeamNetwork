@@ -38,9 +38,11 @@ export default function AuthCallbackScreen() {
     }
 
     const timeout = setTimeout(() => {
-      setError("Sign-in could not be completed.");
+      setError(
+        "This sign-in link may have expired or already been used. Please try signing in again."
+      );
       router.replace("/(auth)/login");
-    }, 8000);
+    }, 5000);
 
     return () => clearTimeout(timeout);
   }, [session, error, router]);
