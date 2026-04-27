@@ -379,6 +379,22 @@ type ToolExecutionResult =
 - **Behavior:** validates the assistant announcement draft, applies safe defaults for audience / pin / notification flags, and creates a pending confirmation record when the draft is complete
 - **Write safety:** never writes an announcement directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before `announcements` is mutated
 
+### `prepare_update_announcement`
+
+- **Inputs:** `announcement_id` plus optional replacement fields (`title`, `body`, `audience`, `is_pinned`)
+- **Outputs:** `{ state, missing_fields?, pending_action?, draft }`
+- `state`: `missing_fields`, `needs_confirmation`, or `forbidden`
+- **Behavior:** loads the existing org-scoped announcement, merges supplied edits with existing values, validates the resulting edit form, and creates a pending confirmation record when complete
+- **Write safety:** never updates an announcement directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before the published announcement is changed
+
+### `prepare_delete_announcement`
+
+- **Inputs:** `announcement_id`
+- **Outputs:** `{ state, missing_fields?, pending_action?, draft }`
+- `state`: `missing_fields`, `needs_confirmation`, or `forbidden`
+- **Behavior:** loads the existing org-scoped announcement and creates a pending confirmation record for soft deletion
+- **Write safety:** never deletes an announcement directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before `deleted_at` is set
+
 ### `prepare_job_posting`
 
 - **Inputs:** partial job draft fields plus optional `application_url`, `contact_email`, `expires_at`, and `mediaIds`
@@ -415,8 +431,9 @@ type ToolExecutionResult =
 
 ### Write Actions Today
 
-- The shipped write paths are `prepare_announcement`, `prepare_job_posting`, `prepare_discussion_reply`, `prepare_discussion_thread`, and `prepare_event`, all backed by the same pending-action confirm/cancel routes.
-- Broader write tools like forms, role changes, destructive edits, and other admin mutations are still deferred.
+- The shipped write paths are `prepare_announcement`, `prepare_update_announcement`, `prepare_delete_announcement`, `prepare_job_posting`, `prepare_chat_message`, `prepare_group_message`, `prepare_discussion_reply`, `prepare_discussion_thread`, and `prepare_event`, all backed by the same pending-action confirm/cancel routes.
+- Announcement update/delete now has registry modules and confirmation-time mutation handlers, but needs broader route-simulation coverage for natural-language edit/delete prompts and trusted current-announcement binding.
+- Broader write tools like forms, role changes, settings changes, exports, billing mutations, and other admin operations are still deferred.
 - The confirmation UI depends on `pending_action` SSE handling in the assistant panel rather than parsing free-form "yes" replies in chat.
 
 ### Pending Actions
