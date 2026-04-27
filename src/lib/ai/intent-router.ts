@@ -159,6 +159,10 @@ const ACTION_KEYWORDS: readonly string[] = [
 const GENERAL_CONTENT_KEYWORDS: readonly string[] = [
   "announcement",
   "announcements",
+  "announcemnet",
+  "announcment",
+  "annoucement",
+  "announcments",
   "discussion",
   "discussions",
   "forum",

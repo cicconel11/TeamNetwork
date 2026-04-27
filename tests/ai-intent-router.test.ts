@@ -241,6 +241,13 @@ describe("resolveSurfaceRouting — content-type keyword routing", () => {
     assert.equal(result.inferredSurface, "general");
   });
 
+  it("routes common announcement misspellings to general content", () => {
+    const result = resolveSurfaceRouting("search for announcemnet called fire drill", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+    assert.equal(result.inferredSurface, "general");
+  });
+
   it("routes discussion query to general with high confidence", () => {
     const result = resolveSurfaceRouting("what discussions are happening?", "general");
     assert.equal(result.effectiveSurface, "general");
