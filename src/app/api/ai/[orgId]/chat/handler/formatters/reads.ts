@@ -1164,7 +1164,10 @@ export function formatDonationsResponse(
         return null;
       }
 
-      const donorName = options?.hideDonorNames
+      const hideDonorNames =
+        options?.hideDonorNames === true ||
+        (row as { hide_donor_names?: unknown }).hide_donor_names === true;
+      const donorName = hideDonorNames
         ? "Anonymous donor"
         : (getNonEmptyString((row as { donor_name?: unknown }).donor_name) ?? "Unknown");
       const amountDollars = typeof (row as { amount_dollars?: unknown }).amount_dollars === "number"
@@ -1313,8 +1316,6 @@ export function formatChatGroupsResponse(
     return null;
   }
 
-  const orgSlug = getNonEmptyString(options?.orgSlug);
-
   type NormalizedRow = {
     id: string | null;
     name: string;
@@ -1322,6 +1323,7 @@ export function formatChatGroupsResponse(
     updatedAt: string | null;
     memberCount: number | null;
     isMember: boolean | null;
+    orgSlug: string | null;
   };
 
   const rows: NormalizedRow[] = [];
@@ -1352,6 +1354,7 @@ export function formatChatGroupsResponse(
       updatedAt: getNonEmptyString(obj.updated_at),
       memberCount,
       isMember,
+      orgSlug: getNonEmptyString(obj.org_slug) ?? getNonEmptyString(options?.orgSlug),
     });
   }
 
@@ -1371,6 +1374,7 @@ export function formatChatGroupsResponse(
 
   for (const row of limited) {
     const isMember = row.isMember ?? true;
+    const orgSlug = row.orgSlug;
     const canLink = Boolean(orgSlug && row.id) && isMember;
     const namePart = canLink
       ? `[${escapeMarkdownLinkLabel(row.name)}](/${orgSlug}/messages/chat/${row.id})`
