@@ -1,5 +1,9 @@
 import type { AssistantAnnouncementDraft } from "@/lib/schemas/content";
 import type {
+  DeleteAnnouncementPendingPayload,
+  UpdateAnnouncementPendingPayload,
+} from "@/lib/ai/pending-actions";
+import type {
   AssistantDiscussionDraft,
   AssistantDiscussionReplyDraft,
 } from "@/lib/schemas/discussion";
@@ -12,6 +16,8 @@ export type DraftSessionStatus = "collecting_fields" | "ready_for_confirmation";
 
 export interface DraftSessionPayloadByType {
   create_announcement: AssistantAnnouncementDraft;
+  update_announcement: UpdateAnnouncementPendingPayload;
+  delete_announcement: DeleteAnnouncementPendingPayload;
   create_job_posting: AssistantJobDraft;
   send_chat_message: AssistantChatMessageDraft;
   send_group_chat_message: AssistantGroupMessageDraft;

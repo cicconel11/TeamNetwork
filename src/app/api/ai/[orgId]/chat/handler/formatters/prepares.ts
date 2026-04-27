@@ -92,6 +92,46 @@ export function formatPrepareAnnouncementResponse(data: unknown): string | null 
   return null;
 }
 
+export function formatPrepareUpdateAnnouncementResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+
+    return missingFields.length > 0
+      ? `I couldn't find enough information to edit that announcement. I still need: ${missingFields.join(", ")}.`
+      : "I couldn't find the announcement to edit. Please identify it by title or share a more specific reference.";
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I prepared the announcement edits. Review the changes below and confirm when you're ready to update it.";
+  }
+
+  return null;
+}
+
+export function formatPrepareDeleteAnnouncementResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    return "I couldn't find the announcement to delete. Please identify it by title or share a more specific reference.";
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I found the announcement. Confirm below to delete it.";
+  }
+
+  return null;
+}
+
 export function formatPrepareEnterpriseInviteResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;

@@ -24,6 +24,13 @@ interface NavigationDisplayPayload {
   matches?: unknown;
 }
 
+interface SearchOrgContentDisplayRow {
+  entity_type?: unknown;
+  title?: unknown;
+  snippet?: unknown;
+  url_path?: unknown;
+}
+
 interface SuggestMentorsDisplayPayload {
   state?: unknown;
   mentee?: { name?: unknown } | null;
@@ -1487,4 +1494,56 @@ export function formatNavigationTargetsResponse(data: unknown): string | null {
   }
 
   return blocks.join("\n\n");
+}
+
+export function formatSearchOrgContentResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const result = row as SearchOrgContentDisplayRow;
+      const title = getNonEmptyString(result.title);
+      const entityType = getNonEmptyString(result.entity_type);
+      if (!title || !entityType) {
+        return null;
+      }
+
+      return {
+        title,
+        entityType: entityType.replace(/_/g, " "),
+        snippet: getNonEmptyString(result.snippet),
+        urlPath: getNonEmptyString(result.url_path),
+      };
+    })
+    .filter(
+      (
+        row
+      ): row is {
+        title: string;
+        entityType: string;
+        snippet: string | null;
+        urlPath: string | null;
+      } => Boolean(row)
+    );
+
+  if (rows.length === 0) {
+    return "I couldn't find matching organization content for that search.";
+  }
+
+  const lines = ["Search results"];
+  for (const row of rows.slice(0, 10)) {
+    const title = row.urlPath ? `[${row.title}](${row.urlPath})` : row.title;
+    lines.push(`- ${title} (${row.entityType})`);
+    if (row.snippet) {
+      lines.push(`  ${row.snippet}`);
+    }
+  }
+
+  return lines.join("\n");
 }
