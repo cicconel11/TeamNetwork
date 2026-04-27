@@ -138,6 +138,11 @@ export interface FindNavigationTargetsArgs {
   limit?: number;
 }
 
+export interface SearchOrgContentArgs {
+  query: string;
+  limit?: number;
+}
+
 export interface ListEnterpriseAlumniArgs {
   org?: string;
   graduation_year?: number;
@@ -1060,6 +1065,33 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  search_org_content: {
+    type: "function" as const,
+    function: {
+      name: "search_org_content" as const,
+      description:
+        "Full-text search across organization content (announcements, events, discussions, job postings, members, alumni, etc.). Returns up to 5 results per entity type with title, snippet, and deep-link path. Use when the user wants to 'find', 'search', or 'look up' something by keyword across the org.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          query: {
+            type: "string" as const,
+            minLength: 1,
+            maxLength: 200,
+            description: "Search keywords or phrase.",
+          },
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max results to return across all entity types (default 10).",
+          },
+        },
+        required: ["query"] as const,
+        additionalProperties: false as const,
+      },
+    },
+  },
   list_available_mentors: {
     type: "function" as const,
     function: {
@@ -1117,6 +1149,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.suggest_mentors,
   TOOL_BY_NAME.list_available_mentors,
   TOOL_BY_NAME.find_navigation_targets,
+  TOOL_BY_NAME.search_org_content,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];
 
 // Derived from AI_TOOLS — no manual union to maintain

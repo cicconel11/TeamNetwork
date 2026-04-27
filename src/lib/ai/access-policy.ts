@@ -35,12 +35,14 @@ const ACTIVE_MEMBER_ALLOWED_TOOLS: readonly ToolName[] = Object.freeze([
   "list_chat_groups",
   "list_philanthropy_events",
   "find_navigation_targets",
+  "search_org_content",
 ]);
 
 const ALUMNI_ALLOWED_TOOLS: readonly ToolName[] = Object.freeze([
   "list_announcements",
   "list_events",
   "find_navigation_targets",
+  "search_org_content",
 ]);
 
 const PARENT_ALLOWED_TOOLS: readonly ToolName[] = Object.freeze([]);

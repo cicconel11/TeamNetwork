@@ -67,6 +67,7 @@ const NON_ADMIN_RLS_READ_TOOL_NAMES: ReadonlySet<ToolName> = new Set<ToolName>([
   "list_chat_groups",
   "list_philanthropy_events",
   "find_navigation_targets",
+  "search_org_content",
 ]);
 
 const ENTERPRISE_TOOL_NAMES = new Set<ToolName>([

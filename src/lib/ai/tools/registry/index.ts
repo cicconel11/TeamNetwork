@@ -35,6 +35,7 @@ import { prepareEnterpriseInviteModule } from "./prepare-enterprise-invite";
 import { revokeEnterpriseInviteModule } from "./revoke-enterprise-invite";
 import { scrapeScheduleWebsiteModule } from "./scrape-schedule-website";
 import { extractSchedulePdfModule } from "./extract-schedule-pdf";
+import { searchOrgContentModule } from "./search-org-content";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MODULES: ReadonlyArray<ToolModule<any>> = [
@@ -72,6 +73,7 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   revokeEnterpriseInviteModule,
   scrapeScheduleWebsiteModule,
   extractSchedulePdfModule,
+  searchOrgContentModule,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
