@@ -3,7 +3,8 @@ import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from "rea
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List } from "lucide-react-native";
+import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List, Share2 } from "lucide-react-native";
+import { shareEvent } from "@/lib/share";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
@@ -282,10 +283,22 @@ export default function EventDetailScreen() {
   }, [orgSlug, eventId]);
 
   // Admin menu items
+  const handleShareEvent = useCallback(() => {
+    if (!event) return;
+    void shareEvent({ id: event.id, title: event.title, orgSlug });
+  }, [event, orgSlug]);
+
   const adminMenuItems: OverflowMenuItem[] = useMemo(() => {
-    if (!permissions.canUseAdminActions) return [];
+    const shareItem: OverflowMenuItem = {
+      id: "share",
+      label: "Share Event",
+      icon: <Share2 size={20} color={neutral.foreground} />,
+      onPress: handleShareEvent,
+    };
+    if (!permissions.canUseAdminActions) return [shareItem];
 
     return [
+      shareItem,
       {
         id: "edit",
         label: "Edit Event",
@@ -312,7 +325,7 @@ export default function EventDetailScreen() {
         destructive: true,
       },
     ];
-  }, [permissions.canUseAdminActions, handleEditEvent, handleViewRsvps, handleOpenInWeb, handleCancelEvent, neutral, semantic]);
+  }, [permissions.canUseAdminActions, handleEditEvent, handleViewRsvps, handleOpenInWeb, handleCancelEvent, handleShareEvent, neutral, semantic]);
 
   // RSVP counts
   const rsvpCounts = useMemo(() => {

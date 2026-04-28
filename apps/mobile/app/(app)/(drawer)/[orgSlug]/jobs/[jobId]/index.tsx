@@ -18,7 +18,9 @@ import {
   Mail,
   MapPin,
   MoreHorizontal,
+  Share2,
 } from "lucide-react-native";
+import { shareJob } from "@/lib/share";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useJobs } from "@/hooks/useJobs";
@@ -273,9 +275,23 @@ export default function JobDetailScreen() {
     );
   }, [jobId, deleteJob, router]);
 
+  const handleShare = useCallback(() => {
+    if (!job) return;
+    void shareJob({ id: job.id, title: job.title, orgSlug });
+  }, [job, orgSlug]);
+
   const overflowItems: OverflowMenuItem[] = useMemo(() => {
-    if (!canManage) return [];
+    const items: OverflowMenuItem[] = [
+      {
+        id: "share",
+        label: "Share Job",
+        icon: <Share2 size={20} color={neutral.foreground} />,
+        onPress: handleShare,
+      },
+    ];
+    if (!canManage) return items;
     return [
+      ...items,
       {
         id: "edit",
         label: "Edit Job",
@@ -290,7 +306,7 @@ export default function JobDetailScreen() {
         destructive: true,
       },
     ];
-  }, [canManage, handleEdit, handleDelete]);
+  }, [canManage, handleEdit, handleDelete, handleShare, neutral.foreground, semantic.error]);
 
   const canApply =
     job != null && (job.application_url != null || job.contact_email != null);

@@ -14,7 +14,8 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Send, Edit2, Trash2, ExternalLink } from "lucide-react-native";
+import { ArrowLeft, Send, Edit2, Trash2, ExternalLink, Share2 } from "lucide-react-native";
+import { sharePost } from "@/lib/share";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { usePost } from "@/hooks/usePost";
@@ -317,6 +318,17 @@ export default function PostDetailScreen() {
   // Overflow menu items
   const menuItems: OverflowMenuItem[] = useMemo(() => {
     const items: OverflowMenuItem[] = [];
+
+    items.push({
+      id: "share",
+      label: "Share Post",
+      icon: <Share2 size={20} color={neutral.foreground} />,
+      onPress: () => {
+        if (!postId) return;
+        const excerpt = (post?.body ?? "").trim().slice(0, 140);
+        void sharePost({ id: postId, excerpt, orgSlug });
+      },
+    });
 
     if (canEdit && post?.author_id === userId) {
       items.push({
