@@ -67,7 +67,7 @@ export function FeedPoll({ postId, meta, userVote: initialVote, voteCounts: init
   }, [isVoting, hasVoted, meta.allow_change, userVote, voteCounts, totalVotes, postId]);
 
   return (
-    <div className="mt-3 space-y-2">
+    <div className="mt-4 space-y-2">
       {meta.question && <p className="text-sm font-semibold text-foreground">{meta.question}</p>}
 
       <div className="space-y-1.5">
@@ -84,7 +84,7 @@ export function FeedPoll({ postId, meta, userVote: initialVote, voteCounts: init
                 type="button"
                 onClick={() => castVote(i)}
                 disabled={isVoting}
-                className="w-full text-left px-4 py-2.5 rounded-xl border border-border/50 text-sm font-medium text-foreground hover:border-org-primary/50 hover:bg-org-primary/5 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                className="w-full rounded-lg border border-border/50 bg-background/25 px-4 py-2.5 text-left text-sm font-medium text-foreground transition-all duration-200 hover:border-org-primary/50 hover:bg-org-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               >
                 {opt.label}
               </button>
@@ -99,7 +99,7 @@ export function FeedPoll({ postId, meta, userVote: initialVote, voteCounts: init
               role={meta.allow_change ? "button" : undefined}
               tabIndex={meta.allow_change ? 0 : undefined}
               onKeyDown={meta.allow_change ? (e) => { if (e.key === "Enter" || e.key === " ") castVote(i); } : undefined}
-              className={`relative h-10 rounded-xl overflow-hidden ${meta.allow_change ? "cursor-pointer hover:opacity-90" : ""} ${isSelected ? "border-l-[3px] border-org-primary" : ""}`}
+              className={`relative h-10 overflow-hidden rounded-lg border border-border/30 bg-background/25 ${meta.allow_change ? "cursor-pointer hover:border-border" : ""} ${isSelected ? "border-l-[3px] border-l-org-primary" : ""}`}
             >
               {/* Background fill */}
               <div
