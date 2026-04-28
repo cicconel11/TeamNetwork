@@ -26,7 +26,7 @@ export function FeedList({ posts, orgSlug, currentUserId, isAdmin, basePath, pag
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {posts.map((post) => (
         <FeedPost
           key={post.id}

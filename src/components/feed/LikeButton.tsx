@@ -60,10 +60,10 @@ export function LikeButton({ postId, likeCount: initialCount, likedByUser: initi
     <button
       onClick={toggle}
       disabled={isLoading}
-      className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98] ${
+      className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-all duration-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98] ${
         liked
-          ? "text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-          : "text-muted-foreground hover:bg-muted/50"
+          ? "text-rose-500 hover:bg-rose-500/10"
+          : "text-muted-foreground hover:bg-muted/35 hover:text-foreground"
       }`}
       type="button"
       aria-label={liked ? "Unlike post" : "Like post"}
