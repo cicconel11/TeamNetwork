@@ -15,6 +15,7 @@ describe("middleware routing decisions", () => {
     it("bypasses stripe webhook", () => assert.strictEqual(shouldBypassAuth("/api/stripe/webhook"), true));
     it("bypasses stripe webhook-connect", () => assert.strictEqual(shouldBypassAuth("/api/stripe/webhook-connect"), true));
     it("bypasses age validation", () => assert.strictEqual(shouldBypassAuth("/api/auth/validate-age"), true));
+    it("bypasses resend confirmation", () => assert.strictEqual(shouldBypassAuth("/api/auth/resend-confirmation"), true));
     it("bypasses telemetry error", () => assert.strictEqual(shouldBypassAuth("/api/telemetry/error"), true));
     it("bypasses feedback submit", () => assert.strictEqual(shouldBypassAuth("/api/feedback/submit"), true));
     it("bypasses feedback screenshot", () => assert.strictEqual(shouldBypassAuth("/api/feedback/screenshot"), true));
