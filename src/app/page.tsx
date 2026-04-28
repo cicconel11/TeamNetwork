@@ -113,9 +113,9 @@ export default async function LandingPage() {
         <StadiumLightBeams />
 
         <div className="relative z-10 mx-auto max-w-6xl">
-          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
+          <div className="grid min-w-0 grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-20">
             {/* Left - Copy (centered on mobile/tablet, left-aligned on desktop) */}
-            <div className="text-center lg:text-left">
+            <div className="w-full min-w-0 max-w-full text-center lg:text-left">
               <div className="hero-animate mb-4 flex justify-center lg:justify-start">
                 <div className="inline-flex max-w-full items-center justify-center gap-2 rounded-full border border-landing-green/30 bg-landing-green/10 px-3 py-2 shadow-[0_0_40px_rgba(34,197,94,0.12)] sm:px-4">
                   <span className="h-2 w-2 shrink-0 rounded-full bg-landing-green gold-shimmer" />
@@ -149,11 +149,11 @@ export default async function LandingPage() {
                 <span className="font-medium text-landing-cream">clubs</span>, and organizations of all kinds.
               </p>
 
-              <div className="hero-animate flex flex-col items-stretch gap-4 sm:flex-row sm:justify-center lg:justify-start">
-                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="landing-primary-cta cta-glow w-full justify-center bg-landing-green-dark px-6 py-4 text-base font-semibold text-white hover:bg-[#15803d] sm:w-auto sm:px-8 sm:py-5">
+              <div className="hero-animate mx-0 flex w-full max-w-full flex-col items-stretch gap-4 sm:mx-auto sm:flex-row sm:justify-center lg:mx-0 lg:justify-start">
+                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="landing-primary-cta cta-glow w-full min-w-0 max-w-full whitespace-normal bg-landing-green-dark px-5 py-4 text-center text-base font-semibold leading-tight text-white hover:bg-[#15803d] sm:w-auto sm:px-8 sm:py-5">
                   Create Your Organization
                 </ButtonLink>
-                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="landing-secondary-cta w-full justify-center border border-landing-cream/20 bg-landing-cream/10 px-6 py-4 text-base text-landing-cream hover:bg-landing-cream/20 sm:w-auto sm:px-8 sm:py-5">
+                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="landing-secondary-cta w-full min-w-0 max-w-full whitespace-normal border border-landing-cream/20 bg-landing-cream/10 px-5 py-4 text-center text-base leading-tight text-landing-cream hover:bg-landing-cream/20 sm:w-auto sm:px-8 sm:py-5">
                   Join an Organization
                 </ButtonLink>
               </div>
