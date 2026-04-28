@@ -418,7 +418,8 @@
       "noPendingAlumni": "No hay solicitudes de egresados pendientes",
       "allCaughtUp": "Todo al dia! No hay aprobaciones pendientes.",
       "backToSettings": "Volver a ajustes",
-      "confirmReject": "Estas seguro de que quieres rechazar esta solicitud? Esto eliminara al usuario."
+      "confirmReject": "Estas seguro de que quieres rechazar esta solicitud? Esto eliminara al usuario.",
+      "unknownUser": "Usuario desconocido"
     },
     "adoptionRequest": {
       "title": "Solicitud de adopcion",

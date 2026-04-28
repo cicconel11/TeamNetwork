@@ -410,7 +410,8 @@
       "noPendingAlumni": "没有待处理的校友申请",
       "allCaughtUp": "全部处理完毕！没有待审批项。",
       "backToSettings": "返回设置",
-      "confirmReject": "您确定要拒绝此申请吗？这将移除该用户。"
+      "confirmReject": "您确定要拒绝此申请吗？这将移除该用户。",
+      "unknownUser": "未知用户"
     },
     "adoptionRequest": {
       "title": "接管请求",

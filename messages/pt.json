@@ -410,7 +410,8 @@
       "noPendingAlumni": "Nenhuma solicitacao de ex-aluno pendente",
       "allCaughtUp": "Tudo em dia! Nenhuma aprovacao pendente.",
       "backToSettings": "Voltar para configuracoes",
-      "confirmReject": "Tem certeza de que deseja rejeitar esta solicitacao? Isso removera o usuario."
+      "confirmReject": "Tem certeza de que deseja rejeitar esta solicitacao? Isso removera o usuario.",
+      "unknownUser": "Usuario desconhecido"
     },
     "adoptionRequest": {
       "title": "Solicitacao de adocao",

@@ -418,7 +418,8 @@
       "noPendingAlumni": "No pending alumni requests",
       "allCaughtUp": "All caught up! No pending approvals.",
       "backToSettings": "Back to Settings",
-      "confirmReject": "Are you sure you want to reject this request? This will remove the user."
+      "confirmReject": "Are you sure you want to reject this request? This will remove the user.",
+      "unknownUser": "Unknown User"
     },
     "adoptionRequest": {
       "title": "Adoption Request",
