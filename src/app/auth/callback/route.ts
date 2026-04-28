@@ -75,8 +75,23 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("[auth/callback] Exchange error:", error.message);
+      const mode = requestUrl.searchParams.get("mode");
+      const lower = error.message.toLowerCase();
+      const isExpiredOrInvalid =
+        mode === "signup" &&
+        (lower.includes("expired") ||
+          lower.includes("invalid") ||
+          lower.includes("not found") ||
+          lower.includes("otp"));
+      if (isExpiredOrInvalid) {
+        const linkExpiredUrl = new URL("/auth/link-expired", siteUrl);
+        if (redirect !== "/app") {
+          linkExpiredUrl.searchParams.set("redirect", redirect);
+        }
+        return NextResponse.redirect(linkExpiredUrl);
+      }
       return NextResponse.redirect(
-        buildErrorRedirect(siteUrl, error.message, redirect, requestUrl.searchParams.get("mode"))
+        buildErrorRedirect(siteUrl, error.message, redirect, mode)
       );
     }
 
