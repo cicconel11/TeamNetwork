@@ -197,7 +197,7 @@ export default function BlogPage() {
                 Pricing
               </Link>
               <a
-                href="mailto:support@myteamnetwork.com"
+                href="mailto:mleonard@myteamnetwork.com"
                 className="hover:text-landing-cream transition-colors"
               >
                 Contact

@@ -139,7 +139,7 @@ export default function DemosPage() {
               <Link href="/terms" className="hover:text-landing-cream transition-colors">Terms</Link>
               <Link href="/privacy" className="hover:text-landing-cream transition-colors">Privacy</Link>
               <Link href="/#pricing" className="hover:text-landing-cream transition-colors">Pricing</Link>
-              <a href="mailto:support@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
+              <a href="mailto:mleonard@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
             </div>
 
             <p className="text-sm text-landing-cream/30">

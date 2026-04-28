@@ -211,7 +211,7 @@ For questions about this policy:
 
 - **Privacy Inquiries:** privacy@myteamnetwork.com
 - **Security Concerns:** security@myteamnetwork.com
-- **General Support:** support@myteamnetwork.com
+- **General Support:** mleonard@myteamnetwork.com
 
 ---
 

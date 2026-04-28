@@ -107,6 +107,13 @@ export function LinkExpiredClient({ captchaSiteKey, redirectTo, prefilledEmail }
         </Button>
 
         <div className="text-center text-sm text-white/50">
+          {t("supportContactPrefix")}{" "}
+          <a href="mailto:mleonard@myteamnetwork.com" className="text-white hover:underline">
+            mleonard@myteamnetwork.com
+          </a>
+        </div>
+
+        <div className="text-center text-sm text-white/50">
           <Link href="/auth/login" className="text-white font-medium hover:underline">
             {t("backToSignIn")}
           </Link>

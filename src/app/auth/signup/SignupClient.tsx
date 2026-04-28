@@ -400,6 +400,12 @@ export function SignupClient({
               {resendMessage}
             </p>
           )}
+          <p className="mt-3 text-center text-xs text-white/50">
+            {t("supportContactPrefix")}{" "}
+            <a href="mailto:mleonard@myteamnetwork.com" className="text-white hover:underline">
+              mleonard@myteamnetwork.com
+            </a>
+          </p>
         </div>
       )}
 
