@@ -66,6 +66,9 @@ export function SignupClient({
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
   const [message, setMessage] = useState<string | null>(null);
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
   const isSocialLoading = isGoogleLoading || isLinkedInLoading || isMicrosoftLoading;
 
@@ -241,8 +244,43 @@ export function SignupClient({
 
     clearAgeGateData();
     setMessage(t("checkEmailConfirm"));
+    setSubmittedEmail(data.email);
+    setResendMessage(null);
     setIsLoading(false);
     captchaRef.current?.reset();
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!submittedEmail) return;
+    if (!isVerified || !captchaToken) {
+      setResendMessage(t("completeCaptcha"));
+      return;
+    }
+
+    setIsResending(true);
+    setResendMessage(null);
+    try {
+      const response = await fetch("/api/auth/resend-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: submittedEmail,
+          captchaToken,
+          redirect: redirectTo,
+        }),
+      });
+
+      if (response.ok) {
+        setResendMessage(t("resendConfirmationSent"));
+      } else {
+        setResendMessage(t("resendConfirmationFailed"));
+      }
+    } catch {
+      setResendMessage(t("resendConfirmationFailed"));
+    } finally {
+      setIsResending(false);
+      captchaRef.current?.reset();
+    }
   };
 
   // Render age gate step
@@ -341,6 +379,28 @@ export function SignupClient({
         <InlineBanner variant="success" data-testid="signup-success" className="mb-4">
           {message}
         </InlineBanner>
+      )}
+
+      {submittedEmail && (
+        <div className="mb-6 rounded-md border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+          <p className="mb-3">{t("didntReceiveEmail")}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={handleResendConfirmation}
+            isLoading={isResending}
+            disabled={!isVerified || isResending}
+            data-testid="signup-resend"
+          >
+            {isResending ? t("resendingConfirmation") : t("resendConfirmation")}
+          </Button>
+          {resendMessage && (
+            <p className="mt-3 text-center text-white/80" data-testid="signup-resend-message">
+              {resendMessage}
+            </p>
+          )}
+        </div>
       )}
 
       <form data-testid="signup-form" onSubmit={handleSubmit(onSubmit)}>
