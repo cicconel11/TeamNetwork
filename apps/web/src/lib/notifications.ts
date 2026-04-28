@@ -17,6 +17,7 @@ export type NotificationCategory =
   | "announcement"
   | "discussion"
   | "event"
+  | "event_reminder"
   | "workout"
   | "competition"
   | "mentorship";
@@ -169,6 +170,8 @@ const CATEGORY_PREF_COLUMN: Record<NotificationCategory, keyof PreferenceRow> = 
   announcement: "announcement_emails_enabled",
   discussion: "discussion_emails_enabled",
   event: "event_emails_enabled",
+  // Event reminders share the email opt-out with events (no separate email column).
+  event_reminder: "event_emails_enabled",
   workout: "workout_emails_enabled",
   competition: "competition_emails_enabled",
   mentorship: "mentorship_emails_enabled" as keyof PreferenceRow,

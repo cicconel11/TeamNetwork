@@ -1,0 +1,13 @@
+[
+  {
+    "_comment": "Android App Links for Universal-Link-equivalent deep linking. Replace the SHA256 placeholder(s) with your actual signing-cert fingerprints. Obtain via: `eas credentials --platform android` (production), or `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey` (debug builds). Supports multiple entries — list both debug and release fingerprints if you want App Links verified across build variants.",
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.myteamnetwork.teammeet",
+      "sha256_cert_fingerprints": [
+        "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+      ]
+    }
+  }
+]

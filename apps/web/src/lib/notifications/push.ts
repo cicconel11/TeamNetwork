@@ -69,6 +69,7 @@ const CATEGORY_PUSH_COLUMN: Record<NotificationCategory, string> = {
   announcement: "announcement_push_enabled",
   discussion: "discussion_push_enabled",
   event: "event_push_enabled",
+  event_reminder: "event_reminder_push_enabled",
   workout: "workout_push_enabled",
   competition: "competition_push_enabled",
   mentorship: "mentorship_push_enabled",
@@ -201,6 +202,7 @@ function defaultPushEnabled(category?: NotificationCategory): boolean {
   // Mirrors the migration defaults for `*_push_enabled`.
   switch (category) {
     case "announcement":
+    case "event_reminder":
       return true;
     case "event":
     case "workout":
@@ -209,9 +211,8 @@ function defaultPushEnabled(category?: NotificationCategory): boolean {
     case "mentorship":
       return false;
     default:
-      // Untyped pushes (e.g., chat, event_reminder, donation) — be conservative
-      // and let the application-level callers decide; default true so first-
-      // run users still see chat/reminders.
+      // Untyped pushes (e.g., chat, donation) — default true so first-run
+      // users still see chat/reminders.
       return true;
   }
 }
