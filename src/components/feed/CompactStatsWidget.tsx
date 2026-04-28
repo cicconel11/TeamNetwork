@@ -12,13 +12,13 @@ interface CompactStatsWidgetProps {
 export async function CompactStatsWidget({ stats }: CompactStatsWidgetProps) {
   const t = await getTranslations("pages.dashboard");
   return (
-    <Card className="overflow-hidden">
-      <div className="border-b border-border px-4 py-3">
-        <h3 className="font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+    <Card className="overflow-hidden rounded-xl border-border/70 bg-card/75 p-0 shadow-none backdrop-blur-sm">
+      <div className="px-4 pb-2 pt-4">
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
           {t("overview")}
         </h3>
       </div>
-      <div className="divide-y divide-border/50">
+      <div className="px-2 pb-2">
         {stats.map((stat) => (
           <StatRowLink key={stat.label} href={stat.href} label={stat.label} value={stat.value} icon={stat.icon} />
         ))}
