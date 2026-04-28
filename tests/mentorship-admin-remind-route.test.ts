@@ -32,6 +32,26 @@ test("route enforces 24h rate-limit window", () => {
   assert.match(routeSource, /mentorship_reminders/);
 });
 
+test("route rate-limits before auth and service work", () => {
+  assert.match(routeSource, /checkRateLimit\(req/);
+  assert.match(routeSource, /buildRateLimitResponse\(ipRateLimit\)/);
+  assert.match(routeSource, /feature: "mentorship proposal reminders"/);
+  assert.ok(
+    routeSource.indexOf("checkRateLimit(req") < routeSource.indexOf("createClient()"),
+    "IP rate limit should run before auth client creation"
+  );
+  assert.ok(
+    routeSource.indexOf("userRateLimit") < routeSource.indexOf("createServiceClient()"),
+    "user rate limit should run before service client work"
+  );
+});
+
+test("route includes rate-limit headers on handled responses", () => {
+  assert.match(routeSource, /headers: ipRateLimit\.headers/);
+  assert.match(routeSource, /headers: userRateLimit\.headers/);
+  assert.match(routeSource, /NextResponse\.json\(\{ sent, skipped \}, \{ headers: userRateLimit\.headers \}\)/);
+});
+
 test("route validates body with Zod", () => {
   assert.match(routeSource, /BodySchema\.parse/);
   assert.match(routeSource, /mentor_user_id: baseSchemas\.uuid\.optional/);
