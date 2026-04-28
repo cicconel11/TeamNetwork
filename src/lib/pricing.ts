@@ -36,11 +36,11 @@ export function formatPrice(amount: number, interval: SubscriptionInterval): str
 }
 
 export const FEATURES = [
-  { title: "Member Management", description: "Maintain a living directory of current members, leaders, supporters, and alumni." },
-  { title: "Organization Events", description: "Coordinate meetings, ceremonies, fundraisers, service days, and reunions with RSVP tracking." },
-  { title: "Fundraising", description: "Accept donations for programs, events, equipment, travel, or community initiatives directly to your Stripe account." },
+  { title: "Network Directory", description: "Build a living network of members, alumni, supporters, mentors, and community connections." },
+  { title: "Team Events", description: "Coordinate game days, banquets, alumni games, fundraisers, reunions, and community events with RSVP tracking." },
+  { title: "LinkedIn Integration", description: "Enrich profiles with LinkedIn details so members can discover career paths and expand their professional network." },
   { title: "Shared History", description: "Preserve your organization's milestones, records, media, awards, and institutional knowledge." },
-  { title: "Communication", description: "Send updates to members, families, volunteers, and alumni without managing messy email lists." },
+  { title: "Communication", description: "Send updates to members, families, volunteers, and alumni so your community stays connected." },
   { title: "Digital Forms", description: "Collect waivers, registrations, applications, and other documents securely online." },
 ];
 

@@ -279,12 +279,12 @@ export default async function LandingPage() {
               Features
             </div>
             <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold mb-6">
-              Everything Your
+              Build Your
               <br />
-              <span className="text-landing-cream">Organization Needs</span>
+              <span className="text-landing-cream">Community Network</span>
             </h2>
             <p className="scroll-reveal text-landing-cream/60 max-w-xl mx-auto text-lg">
-              From daily operations to alumni engagement, we&apos;ve got you covered.
+              Expand your network, coordinate team events, and keep every member, alumni, and supporter connected.
             </p>
           </div>
 
