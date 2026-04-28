@@ -123,9 +123,15 @@ export function parseTeammeetUrl(url: string): Intent {
   }
 
   // 3. Trusted web host with auth payload (PKCE / implicit).
+  // HTTPS is mandatory — an http:// payload from a trusted host is almost
+  // always a captive-portal redirect or MITM and must not feed into
+  // exchangeCodeForSession (session-fixation defense).
   if (!parsed) return { kind: "unknown" };
 
-  if (getTrustedHosts().includes(parsed.hostname)) {
+  if (
+    parsed.protocol === "https:" &&
+    getTrustedHosts().includes(parsed.hostname)
+  ) {
     const looksLikeAuth =
       parsed.searchParams.has("code") ||
       parsed.searchParams.has("access_token") ||

@@ -108,6 +108,13 @@ describe("parseTeammeetUrl", () => {
       );
       expect(intent.kind).toBe("unknown");
     });
+
+    it("rejects http:// trusted-host auth payloads (MITM defense)", () => {
+      const intent = parseTeammeetUrl(
+        "http://www.myteamnetwork.com/auth/callback?code=mitm_code"
+      );
+      expect(intent.kind).toBe("unknown");
+    });
   });
 
   describe("app routes (native scheme)", () => {
