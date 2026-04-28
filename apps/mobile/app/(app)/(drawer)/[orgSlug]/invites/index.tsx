@@ -9,7 +9,6 @@ import {
   RefreshControl,
   TextInput,
   Modal,
-  Clipboard,
 } from "react-native";
 import { Image } from "expo-image";
 import { useRouter, useNavigation } from "expo-router";
@@ -20,7 +19,7 @@ import { SafeQRCode } from "@/components/SafeQRCode";
 import {
   Link as LinkIcon,
   Plus,
-  Copy,
+  Share2,
   Check,
   X,
   QrCode,
@@ -50,6 +49,7 @@ import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { formatMonthDayYearSafe } from "@/lib/date-format";
 import { getWebAppUrl } from "@/lib/web-api";
+import { shareInvite } from "@/lib/share";
 
 export default function InvitesScreen() {
   const router = useRouter();
@@ -466,16 +466,16 @@ export default function InvitesScreen() {
     }
   }, [createInvite, inviteRole, inviteUses, orgId]);
 
-  const handleCopyLink = useCallback((invite: Invite) => {
+  const handleShareLink = useCallback(async (invite: Invite) => {
     try {
-      const link = getInviteLink(invite, getWebAppUrl());
-      Clipboard.setString(link);
-      setCopiedInviteId(invite.id);
-      showToast("Link copied to clipboard", "success");
-      setTimeout(() => setCopiedInviteId(null), 2000);
+      const result = await shareInvite(invite);
+      if (result.shared) {
+        setCopiedInviteId(invite.id);
+        setTimeout(() => setCopiedInviteId(null), 2000);
+      }
     } catch (e) {
-      captureException(e as Error, { screen: "Invites", context: "copyLink", orgId });
-      showToast("Failed to copy link", "error");
+      captureException(e as Error, { screen: "Invites", context: "shareLink", orgId });
+      showToast("Failed to share invite", "error");
     }
   }, [orgId]);
 
@@ -603,15 +603,15 @@ export default function InvitesScreen() {
         <View style={styles.inviteActions}>
           <Pressable
             style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-            onPress={() => handleCopyLink(invite)}
+            onPress={() => handleShareLink(invite)}
           >
             {copiedInviteId === invite.id ? (
               <Check size={16} color={semantic.success} />
             ) : (
-              <Copy size={16} color={semantic.success} />
+              <Share2 size={16} color={semantic.success} />
             )}
             <Text style={styles.actionButtonText}>
-              {copiedInviteId === invite.id ? "Copied" : "Copy Link"}
+              {copiedInviteId === invite.id ? "Shared" : "Share"}
             </Text>
           </Pressable>
 
@@ -655,7 +655,7 @@ export default function InvitesScreen() {
         )}
       </View>
     );
-  }, [styles, copiedInviteId, showQRCode, handleCopyLink, handleRevoke, handleDelete]);
+  }, [styles, copiedInviteId, showQRCode, handleShareLink, handleRevoke, handleDelete]);
 
   // Access denied for non-admins
   if (!roleLoading && !isAdmin) {

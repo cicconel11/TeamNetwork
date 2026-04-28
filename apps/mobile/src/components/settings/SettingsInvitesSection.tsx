@@ -7,18 +7,18 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-import * as ExpoClipboard from "expo-clipboard";
 import {
   Link as LinkIcon,
   ChevronDown,
   Plus,
   X,
-  Copy,
+  Share2,
   Check,
   QrCode,
   Trash2,
 } from "lucide-react-native";
-import QRCode from "react-native-qrcode-svg";
+import { SafeQRCode } from "@/components/SafeQRCode";
+import { shareInvite } from "@/lib/share";
 import {
   useInvites,
   getInviteLink,
@@ -286,11 +286,12 @@ export function SettingsInvitesSection({ orgId, isAdmin, subscription }: Props) 
     setInviteCreating(false);
   };
 
-  const copyInviteLink = async (invite: Invite) => {
-    const link = getInviteLink(invite, getWebAppUrl());
-    await ExpoClipboard.setStringAsync(link);
-    setCopiedInviteId(invite.id);
-    setTimeout(() => setCopiedInviteId(null), 2000);
+  const handleShareInvite = async (invite: Invite) => {
+    const result = await shareInvite(invite);
+    if (result.shared) {
+      setCopiedInviteId(invite.id);
+      setTimeout(() => setCopiedInviteId(null), 2000);
+    }
   };
 
   return (
@@ -466,14 +467,14 @@ export function SettingsInvitesSection({ orgId, isAdmin, subscription }: Props) 
                     </Text>
 
                     <View style={styles.inviteActions}>
-                      <Pressable style={styles.inviteAction} onPress={() => copyInviteLink(invite)}>
+                      <Pressable style={styles.inviteAction} onPress={() => handleShareInvite(invite)}>
                         {copiedInviteId === invite.id ? (
                           <Check size={16} color={colors.success} />
                         ) : (
-                          <Copy size={16} color={colors.primary} />
+                          <Share2 size={16} color={colors.primary} />
                         )}
                         <Text style={styles.inviteActionText}>
-                          {copiedInviteId === invite.id ? "Copied!" : "Copy Link"}
+                          {copiedInviteId === invite.id ? "Shared!" : "Share"}
                         </Text>
                       </Pressable>
 
@@ -515,11 +516,12 @@ export function SettingsInvitesSection({ orgId, isAdmin, subscription }: Props) 
 
                     {showQRCode === invite.id && (
                       <View style={styles.qrContainer}>
-                        <QRCode
+                        <SafeQRCode
                           value={getInviteLink(invite, getWebAppUrl())}
                           size={180}
                           backgroundColor={colors.card}
                           color={colors.foreground}
+                          fallbackTextColor={colors.muted}
                         />
                       </View>
                     )}
