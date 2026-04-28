@@ -8,6 +8,9 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo, u
 import { supabase } from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
 import { signOutCleanup } from "@/lib/lifecycle";
+import { listSyncedOrgIds, removeAllOrgCalendars } from "@/lib/native-calendar";
+import { setOrgCalendarSyncEnabled } from "@/lib/native-calendar-prefs";
+import { Alert } from "react-native";
 import type { Session, User, AuthChangeEvent } from "@supabase/supabase-js";
 
 export interface AuthContextValue {
@@ -68,6 +71,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Offer to remove device calendars created for this user. Default Yes —
+    // the next signed-in user shouldn't inherit the previous user's events.
+    const syncedOrgIds = await listSyncedOrgIds().catch(() => [] as string[]);
+    if (syncedOrgIds.length > 0) {
+      const removeCalendars = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          "Remove TeamMeet calendars?",
+          `You have ${syncedOrgIds.length} TeamMeet calendar${
+            syncedOrgIds.length === 1 ? "" : "s"
+          } on this device. Remove them when signing out?`,
+          [
+            { text: "Keep", style: "cancel", onPress: () => resolve(false) },
+            { text: "Remove", style: "destructive", onPress: () => resolve(true) },
+          ],
+          { cancelable: false }
+        );
+      });
+      if (removeCalendars) {
+        try {
+          await removeAllOrgCalendars();
+          await Promise.all(
+            syncedOrgIds.map((orgId) => setOrgCalendarSyncEnabled(orgId, false))
+          );
+        } catch {
+          // Best-effort; sign-out continues even if removal fails.
+        }
+      }
+    }
+
     // Run cleanup BEFORE signOut so RLS-gated deletes (push tokens) succeed.
     const userId = sessionRef.current?.user?.id;
     if (userId) {

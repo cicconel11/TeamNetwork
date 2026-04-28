@@ -170,3 +170,40 @@ export async function isEventSynced(orgId: string, eventId: string): Promise<boo
   const value = await AsyncStorage.getItem(key);
   return value != null;
 }
+
+const CALENDAR_KEY_PREFIX = `${STORAGE_KEY_PREFIX}.calendar.`;
+const EVENT_KEY_PREFIX = `${STORAGE_KEY_PREFIX}.event.`;
+
+/** Org IDs the user has at least one TeamMeet calendar for on this device. */
+export async function listSyncedOrgIds(): Promise<string[]> {
+  const allKeys = await AsyncStorage.getAllKeys();
+  return allKeys
+    .filter((k) => k.startsWith(CALENDAR_KEY_PREFIX))
+    .map((k) => k.slice(CALENDAR_KEY_PREFIX.length));
+}
+
+/**
+ * Delete every TeamMeet device calendar this user has on this device, plus all
+ * local event-id mappings. Used at sign-out so the next user who signs in
+ * doesn't see the previous user's events leaking into their device calendar.
+ */
+export async function removeAllOrgCalendars(): Promise<void> {
+  const allKeys = await AsyncStorage.getAllKeys();
+  const calendarKeys = allKeys.filter((k) => k.startsWith(CALENDAR_KEY_PREFIX));
+
+  await Promise.all(
+    calendarKeys.map(async (key) => {
+      const id = await AsyncStorage.getItem(key);
+      if (id) {
+        try {
+          await Calendar.deleteCalendarAsync(id);
+        } catch {
+          /* already gone */
+        }
+      }
+    })
+  );
+
+  const eventKeys = allKeys.filter((k) => k.startsWith(EVENT_KEY_PREFIX));
+  await AsyncStorage.multiRemove([...calendarKeys, ...eventKeys]);
+}
