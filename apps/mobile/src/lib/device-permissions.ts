@@ -110,6 +110,14 @@ export function useDevicePermission(kind: PermissionKind): DevicePermissionState
       setCanAskAgain(ask);
       return;
     }
+    if (kind === "calendar") {
+      const Calendar = await import("expo-calendar");
+      const { status: current, canAskAgain: ask } =
+        await Calendar.getCalendarPermissionsAsync();
+      setStatus(mapNativeStatus(current));
+      setCanAskAgain(ask);
+      return;
+    }
     if (kind === "biometric") {
       const { getBiometricCapabilities } = await import("@/lib/biometric");
       const { hasHardware, isEnrolled } = await getBiometricCapabilities();
@@ -142,6 +150,15 @@ export function useDevicePermission(kind: PermissionKind): DevicePermissionState
       const { Camera } = await import("expo-camera");
       const { status: current, canAskAgain: ask } =
         await Camera.requestCameraPermissionsAsync();
+      const next = mapNativeStatus(current);
+      setStatus(next);
+      setCanAskAgain(ask);
+      return next;
+    }
+    if (kind === "calendar") {
+      const Calendar = await import("expo-calendar");
+      const { status: current, canAskAgain: ask } =
+        await Calendar.requestCalendarPermissionsAsync();
       const next = mapNativeStatus(current);
       setStatus(next);
       setCanAskAgain(ask);

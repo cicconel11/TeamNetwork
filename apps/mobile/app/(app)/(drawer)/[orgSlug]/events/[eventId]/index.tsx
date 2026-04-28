@@ -3,8 +3,10 @@ import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from "rea
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List, Share2 } from "lucide-react-native";
+import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List, Share2, CalendarPlus } from "lucide-react-native";
 import { shareEvent } from "@/lib/share";
+import { syncEventToDevice } from "@/lib/native-calendar";
+import { useDevicePermission } from "@/lib/device-permissions";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
@@ -37,7 +39,8 @@ interface RSVP {
 
 export default function EventDetailScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const { orgId, orgSlug } = useOrg();
+  const { orgId, orgSlug, orgName } = useOrg();
+  const calendarPermission = useDevicePermission("calendar");
   const router = useRouter();
   const { permissions } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
@@ -288,6 +291,36 @@ export default function EventDetailScreen() {
     void shareEvent({ id: event.id, title: event.title, orgSlug });
   }, [event, orgSlug]);
 
+  const handleAddToCalendar = useCallback(async () => {
+    if (!event || !orgId) return;
+    if (calendarPermission.status !== "granted") {
+      const next = await calendarPermission.request();
+      if (next !== "granted") {
+        if (calendarPermission.status === "denied" && !calendarPermission.canAskAgain) {
+          Alert.alert(
+            "Calendar access needed",
+            "Open Settings to allow TeamMeet to add events to your calendar.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open Settings", onPress: () => void calendarPermission.openSettings() },
+            ]
+          );
+        }
+        return;
+      }
+    }
+    try {
+      await syncEventToDevice({
+        orgId,
+        orgName: orgName ?? "TeamMeet",
+        event,
+      });
+      Alert.alert("Added to calendar", `${event.title} is now in your device calendar.`);
+    } catch (err) {
+      Alert.alert("Couldn't add", err instanceof Error ? err.message : "Failed to add event.");
+    }
+  }, [event, orgId, orgName, calendarPermission]);
+
   const adminMenuItems: OverflowMenuItem[] = useMemo(() => {
     const shareItem: OverflowMenuItem = {
       id: "share",
@@ -295,10 +328,17 @@ export default function EventDetailScreen() {
       icon: <Share2 size={20} color={neutral.foreground} />,
       onPress: handleShareEvent,
     };
-    if (!permissions.canUseAdminActions) return [shareItem];
+    const calendarItem: OverflowMenuItem = {
+      id: "add-to-calendar",
+      label: "Add to Calendar",
+      icon: <CalendarPlus size={20} color={neutral.foreground} />,
+      onPress: handleAddToCalendar,
+    };
+    if (!permissions.canUseAdminActions) return [shareItem, calendarItem];
 
     return [
       shareItem,
+      calendarItem,
       {
         id: "edit",
         label: "Edit Event",
@@ -325,7 +365,7 @@ export default function EventDetailScreen() {
         destructive: true,
       },
     ];
-  }, [permissions.canUseAdminActions, handleEditEvent, handleViewRsvps, handleOpenInWeb, handleCancelEvent, handleShareEvent, neutral, semantic]);
+  }, [permissions.canUseAdminActions, handleEditEvent, handleViewRsvps, handleOpenInWeb, handleCancelEvent, handleShareEvent, handleAddToCalendar, neutral, semantic]);
 
   // RSVP counts
   const rsvpCounts = useMemo(() => {

@@ -42,6 +42,7 @@
     "expo": "^54.0.31",
     "expo-application": "~7.0.8",
     "expo-auth-session": "~7.0.10",
+    "expo-calendar": "^55.0.14",
     "expo-camera": "^55.0.16",
     "expo-clipboard": "^55.0.8",
     "expo-constants": "~18.0.13",

@@ -34,6 +34,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Scan a TeamMeet QR code to join your organization or check members in at events.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
+        "NSCalendarsUsageDescription": "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -58,7 +60,9 @@
         "android.permission.INTERNET",
         "android.permission.VIBRATE",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
@@ -115,6 +119,12 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Use Face ID to quickly and securely sign in to TeamMeet."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Add TeamMeet events to your device calendar so you see them alongside your other commitments."
         }
       ],
       "./plugins/withOptionalHardwareFeatures",
