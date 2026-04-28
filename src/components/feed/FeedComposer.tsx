@@ -236,14 +236,14 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
 
   if (!isExpanded) {
     return (
-      <Card className="px-4 py-3">
+      <Card className="rounded-xl border-border/70 bg-card/75 px-4 py-3 shadow-none backdrop-blur-sm">
         <button
           type="button"
           onClick={() => setIsExpanded(true)}
-          className="flex items-center gap-3 w-full text-left"
+          className="group flex w-full items-center gap-3 text-left"
         >
           <Avatar name={userName || "You"} size="sm" className="shrink-0" />
-          <div className="flex-1 px-4 py-2.5 rounded-full bg-muted/60 hover:bg-muted transition-colors text-sm text-muted-foreground">
+          <div className="flex-1 rounded-lg border border-border/50 bg-background/45 px-4 py-2.5 text-sm text-muted-foreground transition-colors group-hover:border-border group-hover:bg-muted/45">
             What&apos;s on your mind?
           </div>
         </button>
@@ -254,7 +254,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
   const canAddMoreImages = !isPollMode && imageFiles.length < MAX_IMAGES;
 
   return (
-    <Card className="px-4 pt-4 pb-3">
+    <Card className="rounded-xl border-border/70 bg-card/75 px-4 pb-3 pt-4 shadow-none backdrop-blur-sm">
       <form onSubmit={handleSubmit}>
         {error && (
           <div className="p-3 mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-800 dark:text-red-300 text-sm" role="alert">
@@ -333,7 +333,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
         )}
 
         {/* Action bar */}
-        <div className="flex items-center justify-between border-t border-border/60 pt-2.5 mt-3">
+        <div className="mt-3 flex items-center justify-between border-t border-border/30 pt-2.5">
           <div className="flex items-center gap-1">
             <input
               ref={fileInputRef}
