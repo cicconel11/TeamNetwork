@@ -1,5 +1,5 @@
 ---
-status: pending
+status: resolved
 priority: p2
 issue_id: "002"
 tags: [lint, quality-gates]
@@ -14,6 +14,8 @@ dependencies: []
 
 ## Findings
 
+- Current local run on 2026-04-28 shows `npm run lint` passing.
+- `eslint.config.js` already ignores both `**/.worktrees/**` and `**/.claude/worktrees/**`, so the worktree-scope portion of this issue is resolved.
 - The lint run during this session failed with a large pre-existing error set.
 - A significant portion of the failures came from `.worktrees/blackbaud/...`, which should not block lint signal for the active workspace.
 - Additional failures exist in main workspace Blackbaud files and older test files with `any` / unused variable issues.
@@ -54,7 +56,7 @@ dependencies: []
 
 ## Recommended Action
 
-To be filled during triage.
+Keep the existing `.worktrees/**` ignore in place and treat future lint failures as active-source debt rather than a worktree-scope problem.
 
 ## Technical Details
 
@@ -75,11 +77,22 @@ Observed hotspots:
 
 ## Acceptance Criteria
 
-- [ ] `npm run lint` passes for the active workspace
-- [ ] `.worktrees/` files are either excluded intentionally or brought to compliance
-- [ ] Remaining active-source lint errors are fixed or documented as deferred
+- [x] `npm run lint` passes for the active workspace
+- [x] `.worktrees/` files are either excluded intentionally or brought to compliance
+- [x] Remaining active-source lint errors are fixed or documented as deferred
 
 ## Work Log
+
+### 2026-04-28 - Resolved Worktree Scope
+
+**By:** Codex
+
+**Actions:**
+- Confirmed `eslint.config.js` ignores `**/.worktrees/**`.
+- Ran `npm run lint`; it passed locally.
+
+**Learnings:**
+- The documented `.worktrees/blackbaud/**` lint blocker is stale. Any future lint failure should be investigated as a new active-workspace issue.
 
 ### 2026-03-23 - Initial Discovery
 

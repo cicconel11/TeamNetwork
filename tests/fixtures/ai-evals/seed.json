@@ -1,0 +1,38 @@
+[
+  {
+    "id": "seed-tool-routing-member-roster",
+    "prompt": "Who is on the member roster?",
+    "requestedSurface": "general",
+    "expected": {
+      "surface": "members",
+      "intentType": "knowledge_query",
+      "profile": "live_lookup",
+      "toolCalls": ["list_members"],
+      "answerShape": "tool_response"
+    }
+  },
+  {
+    "id": "seed-refusal-unrelated-creative-writing",
+    "prompt": "Write me a poem about the ocean",
+    "requestedSurface": "general",
+    "expected": {
+      "surface": "general",
+      "intentType": "action_request",
+      "profile": "out_of_scope_unrelated",
+      "toolCalls": [],
+      "answerShape": "refusal"
+    }
+  },
+  {
+    "id": "seed-pending-action-announcement",
+    "prompt": "Create an announcement about Friday practice",
+    "requestedSurface": "general",
+    "expected": {
+      "surface": "general",
+      "intentType": "action_request",
+      "profile": "live_lookup",
+      "toolCalls": ["prepare_announcement"],
+      "answerShape": "pending_action"
+    }
+  }
+]

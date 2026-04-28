@@ -112,6 +112,12 @@ Ten migrations create all AI-related schema (plus two cross-cutting performance 
 | `ai_pending_actions` | Server-owned pending confirmations for assistant write actions | User + org scoped; admins can only access their own actions |
 | `ai_draft_sessions` | Active per-thread draft state for assistant job/discussion continuation | Service-role only (no user policies) |
 
+## Quality Gates and Evals
+
+Agent-facing work should keep the core gates clean: `npm run typecheck`, `npm run lint`, `npm run test:unit`, and the focused deterministic AI gate `npm run test:ai`. CI has explicit jobs for lint, typecheck, unit tests, fast tests, and AI tests, with `all-checks` depending on each job.
+
+Negative AI feedback can now be exported into reviewable eval candidates with `npm run evals:ai:feedback` when `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set. The exporter reads existing `ai_feedback`, `ai_messages`, `ai_threads`, and `ai_audit_log` rows only; it does not require a schema migration. Promoted fixtures live under `tests/fixtures/ai-evals/` and are exercised by `tests/ai-eval-fixtures.test.ts` without live model calls.
+
 ## Environment Variables
 
 | Variable | Required | Purpose |
