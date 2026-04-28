@@ -124,16 +124,26 @@ export function HeroOrgCard() {
   const features = FEATURE_SETS[featureIndex];
 
   return (
-    <div className="hero-animate relative">
-      <div className="bg-landing-navy-light/80 rounded-2xl border border-landing-cream/10 overflow-hidden">
+    <div className="hero-animate landing-demo-wrap relative">
+      <div className="landing-demo-card overflow-hidden rounded-2xl">
+        <div className="flex items-center justify-between border-b border-landing-cream/10 bg-landing-cream/[0.03] px-5 py-3">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-landing-cream/45">
+            <span className="h-2 w-2 rounded-full bg-landing-green shadow-[0_0_16px_rgba(34,197,94,0.75)]" />
+            Live Workspace
+          </div>
+          <div className="rounded-full border border-landing-green/25 bg-landing-green/10 px-3 py-1 text-xs font-semibold text-landing-green">
+            Active
+          </div>
+        </div>
+
         {/* Org header */}
-        <div className="bg-landing-cream/5 border-b border-landing-cream/10 p-6">
+        <div className="border-b border-landing-cream/10 bg-landing-cream/5 p-6">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-landing-cream/20 flex items-center justify-center border border-landing-cream/20">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-landing-green/30 bg-landing-green/15 shadow-[0_0_28px_rgba(34,197,94,0.16)]">
               <span className="font-display font-bold text-landing-cream text-lg">SR</span>
             </div>
-            <div>
-              <h3 className="font-display font-bold text-xl text-landing-cream">
+            <div className="min-w-0">
+              <h3 className="truncate font-display text-xl font-bold text-landing-cream">
                 South Rock Ridge High School
               </h3>
               <p className="text-sm text-landing-cream/50">Central Pennsylvania</p>
@@ -142,7 +152,7 @@ export function HeroOrgCard() {
         </div>
 
         {/* Quick stats - count-up with breathing glow */}
-        <div className="grid grid-cols-3 divide-x divide-landing-cream/10 border-b border-landing-cream/10 bg-[#0a0a0a]">
+        <div className="grid grid-cols-3 divide-x divide-landing-cream/10 border-b border-landing-cream/10 bg-[#0a0a0a]/80">
           {STATS.map((stat) => (
             <div key={stat.label} className="p-4 text-center">
               <CountUpStat stat={stat} />
@@ -154,15 +164,15 @@ export function HeroOrgCard() {
         </div>
 
         {/* Feature preview — rotating sets */}
-        <div className="p-5 space-y-3">
+        <div className="space-y-3 p-5">
           {features.map((item) => (
             <div
               key={`${featureIndex}-${item.label}`}
-              className={`flex items-center gap-3 p-3 rounded-lg bg-landing-navy/50 transition-opacity duration-300 ${
+              className={`flex items-center gap-3 rounded-lg border border-landing-cream/5 bg-landing-navy/55 p-3 transition-opacity duration-300 ${
                 fadeState === "in" ? "opacity-100" : "opacity-0"
               }`}
             >
-              <div className="w-8 h-8 rounded-lg bg-landing-cream/10 flex items-center justify-center">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-landing-cream/10">
                 <FeatureCardIcon type={item.icon} />
               </div>
               <div className="flex-1 min-w-0">
@@ -171,6 +181,16 @@ export function HeroOrgCard() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="border-t border-landing-cream/10 bg-landing-cream/[0.03] px-5 py-4">
+          <div className="flex items-center justify-between text-xs text-landing-cream/45">
+            <span>Invite code ready</span>
+            <span>82% complete</span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-landing-cream/10">
+            <div className="h-full w-[82%] rounded-full bg-gradient-to-r from-landing-green-dark to-landing-green" />
+          </div>
         </div>
       </div>
     </div>

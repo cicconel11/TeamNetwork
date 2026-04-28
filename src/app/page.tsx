@@ -77,7 +77,11 @@ const FeaturesGrid = dynamic(
   { ssr: false }
 );
 
-
+const HERO_PROOF_POINTS = [
+  { value: "10 min", label: "to launch an organization" },
+  { value: "1 code", label: "for member onboarding" },
+  { value: "24/7", label: "community history online" },
+] as const;
 
 export default async function LandingPage() {
   const supabase = await createClient();
@@ -101,7 +105,7 @@ export default async function LandingPage() {
       <LandingHeader />
 
       {/* Hero - "The Emergence" */}
-      <section className="relative z-10 overflow-hidden px-6 pb-20 pt-12 sm:px-8 lg:px-6 lg:pb-16 lg:pt-10">
+      <section className="landing-hero-stage relative z-10 overflow-hidden px-6 pb-20 pt-12 sm:px-8 lg:px-6 lg:pb-16 lg:pt-10">
         {/* Animated paths — atmospheric background */}
         <BackgroundPaths />
 
@@ -113,7 +117,7 @@ export default async function LandingPage() {
             {/* Left - Copy (centered on mobile/tablet, left-aligned on desktop) */}
             <div className="text-center lg:text-left">
               <div className="hero-animate mb-4 flex justify-center lg:justify-start">
-                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-landing-cream/20 bg-landing-cream/10 px-4 py-2">
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-landing-green/30 bg-landing-green/10 px-4 py-2 shadow-[0_0_40px_rgba(34,197,94,0.12)]">
                   <span className="h-2 w-2 shrink-0 rounded-full bg-landing-green gold-shimmer" />
                   <span className="text-balance text-center text-sm font-medium text-landing-cream/80">
                     Built for organizations that go the distance
@@ -134,11 +138,11 @@ export default async function LandingPage() {
                 />
               </h1>
 
-              <p className="hero-animate mb-3 text-center text-2xl font-semibold tracking-tight text-landing-cream sm:text-3xl lg:text-left lg:text-3xl">
+              <p className="hero-animate mb-3 text-center text-2xl font-semibold tracking-tight text-landing-cream sm:text-3xl lg:text-left lg:text-4xl">
                 One platform. Every member,<br className="hidden sm:block" /> past and present.
               </p>
 
-              <p className="hero-animate mx-auto mb-8 max-w-lg text-base leading-relaxed text-landing-cream/80 sm:text-lg lg:mx-0 lg:mb-6">
+              <p className="hero-animate mx-auto mb-8 max-w-xl text-base leading-relaxed text-landing-cream/80 sm:text-lg lg:mx-0 lg:mb-6">
                 Directories, events, donations, philanthropy, and records — all in one place. Built for{" "}
                 <span className="font-medium text-landing-cream">sports teams</span>,{" "}
                 <span className="font-medium text-landing-cream">Greek life</span>,{" "}
@@ -146,10 +150,10 @@ export default async function LandingPage() {
               </p>
 
               <div className="hero-animate flex flex-col items-stretch gap-4 sm:flex-row sm:justify-center lg:justify-start">
-                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="cta-glow bg-landing-green-dark px-6 py-4 text-base font-semibold text-white hover:bg-[#15803d] sm:px-8 sm:py-5">
+                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="landing-primary-cta cta-glow bg-landing-green-dark px-6 py-4 text-base font-semibold text-white hover:bg-[#15803d] sm:px-8 sm:py-5">
                   Create Your Organization
                 </ButtonLink>
-                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="border border-landing-cream/20 bg-landing-cream/10 px-6 py-4 text-base text-landing-cream hover:bg-landing-cream/20 sm:px-8 sm:py-5">
+                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="landing-secondary-cta border border-landing-cream/20 bg-landing-cream/10 px-6 py-4 text-base text-landing-cream hover:bg-landing-cream/20 sm:px-8 sm:py-5">
                   Join an Organization
                 </ButtonLink>
               </div>
@@ -159,6 +163,19 @@ export default async function LandingPage() {
                 <Link href="/auth/login" className="text-sm text-landing-cream/50 transition-colors hover:text-landing-cream/70">
                   Already a member? <span className="underline underline-offset-2">Sign in</span>
                 </Link>
+              </div>
+
+              <div className="hero-animate mx-auto mt-8 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-3 lg:mx-0">
+                {HERO_PROOF_POINTS.map((point) => (
+                  <div key={point.value} className="landing-proof-tile rounded-xl border border-landing-cream/10 bg-landing-cream/[0.04] p-4 text-left">
+                    <p className="font-display text-2xl font-bold leading-none text-landing-green">
+                      {point.value}
+                    </p>
+                    <p className="mt-2 text-xs leading-relaxed text-landing-cream/55">
+                      {point.label}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
 
