@@ -26,26 +26,26 @@ function getDateParts(dateString: string) {
 export function UpcomingEventsWidget({ events, orgSlug }: UpcomingEventsWidgetProps) {
   if (events.length === 0) {
     return (
-      <Card interactive padding="md">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upcoming Events</h3>
+      <Card className="rounded-xl border-border/70 bg-card/75 p-4 shadow-none backdrop-blur-sm">
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Upcoming Events</h3>
         <p className="text-sm text-muted-foreground/60 mt-3">No upcoming events</p>
       </Card>
     );
   }
 
   return (
-    <Card interactive padding="md">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upcoming Events</h3>
-      <ul className="space-y-2.5 mt-3 stagger-children">
+    <Card className="rounded-xl border-border/70 bg-card/75 p-4 shadow-none backdrop-blur-sm">
+      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Upcoming Events</h3>
+      <ul className="mt-3 space-y-2.5 stagger-children">
         {events.map((event) => {
           const { month, day } = getDateParts(event.start_date);
           return (
             <li key={event.id}>
               <Link
                 href={calendarEventDetailPath(orgSlug, event.id)}
-                className="flex items-center gap-3 p-1.5 -m-1.5 rounded-xl hover:bg-muted transition-all duration-200"
+                className="-m-1.5 flex items-center gap-3 rounded-lg p-1.5 transition-all duration-200 hover:bg-muted/35"
               >
-                <div className="flex-shrink-0 w-11 h-11 bg-muted rounded-lg flex flex-col items-center justify-center">
+                <div className="flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-lg border border-border/50 bg-background/35">
                   <span className="text-[10px] font-semibold text-muted-foreground leading-none">{month}</span>
                   <span className="text-sm font-mono font-bold text-foreground leading-tight">{day}</span>
                 </div>
@@ -57,7 +57,7 @@ export function UpcomingEventsWidget({ events, orgSlug }: UpcomingEventsWidgetPr
       </ul>
       <Link
         href={calendarEventsPath(orgSlug)}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-org-secondary mt-3 pt-3 border-t border-border transition-colors duration-200"
+        className="mt-3 flex items-center gap-1 border-t border-border/40 pt-3 text-xs text-muted-foreground transition-colors duration-200 hover:text-foreground"
       >
         See all events <span aria-hidden="true">→</span>
       </Link>
