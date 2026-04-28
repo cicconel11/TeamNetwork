@@ -6,6 +6,7 @@ import {
   saveLinkedInUrlForUser,
 } from "@/lib/linkedin/settings";
 import { runBrightDataEnrichment } from "@/lib/linkedin/oauth";
+import { buildRateLimitResponse, checkRateLimit } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,13 @@ export const dynamic = "force-dynamic";
  */
 export async function PATCH(request: Request) {
   try {
+    const ipRateLimit = checkRateLimit(request, {
+      feature: "linkedin url",
+      limitPerIp: 20,
+      limitPerUser: 0,
+    });
+    if (!ipRateLimit.ok) return buildRateLimitResponse(ipRateLimit);
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -24,15 +32,23 @@ export async function PATCH(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: ipRateLimit.headers });
     }
+
+    const userRateLimit = checkRateLimit(request, {
+      feature: "linkedin url",
+      limitPerIp: 0,
+      limitPerUser: 10,
+      userId: user.id,
+    });
+    if (!userRateLimit.ok) return buildRateLimitResponse(userRateLimit);
 
     const body = await request.json();
     const parsedBody = parseLinkedInUrlPatchBody(body);
     if (!parsedBody.success) {
       return NextResponse.json(
         { error: parsedBody.error },
-        { status: 400 }
+        { status: 400, headers: userRateLimit.headers }
       );
     }
 
@@ -46,7 +62,7 @@ export async function PATCH(request: Request) {
     if (!saveResult.success) {
       return NextResponse.json(
         { error: saveResult.error },
-        { status: saveResult.reason === "not_found" ? 404 : 500 }
+        { status: saveResult.reason === "not_found" ? 404 : 500, headers: userRateLimit.headers }
       );
     }
 
@@ -55,7 +71,7 @@ export async function PATCH(request: Request) {
       await runBrightDataEnrichment(serviceClient, user.id, parsedBody.linkedinUrl);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: userRateLimit.headers });
   } catch (error) {
     console.error("[linkedin-url] Error saving URL:", error);
     return NextResponse.json(
