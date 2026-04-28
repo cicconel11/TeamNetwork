@@ -113,7 +113,7 @@ Per K-12 Data Sharing Agreement (Section 9) and NY Education Law 2-d:
 | Legal Counsel | [TBD] | | |
 | District IT Contact | [Per agreement] | | |
 | NYSED Contact | | privacy@nysed.gov | |
-| Support Email | | support@myteamnetwork.com | |
+| Support Email | | mleonard@myteamnetwork.com | |
 
 ---
 

@@ -149,6 +149,7 @@
     "resendConfirmationFailed": "No se pudo reenviar el correo. Intenta de nuevo en unos minutos.",
     "linkExpiredTitle": "Este enlace de confirmacion ha expirado",
     "linkExpiredBody": "Los enlaces de confirmacion tienen tiempo limitado. Ingresa tu correo para recibir uno nuevo.",
+    "supportContactPrefix": "¿Sigues con problemas? Escribe a",
     "completeCaptcha": "Por favor completa la verificacion captcha",
     "completeDobFirst": "Por favor completa el paso de fecha de nacimiento primero",
     "resetPassword": "Restablecer tu contrasena",

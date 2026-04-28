@@ -446,8 +446,8 @@ export default async function LandingPage() {
             {/* Right — Contact */}
             <div className="md:text-right">
               <p className="text-xs uppercase tracking-[0.15em] text-landing-cream/30 font-medium mb-3">Contact</p>
-              <a href="mailto:support@myteamnetwork.com" className="text-sm text-landing-cream/50 hover:text-landing-cream transition-colors">
-                support@myteamnetwork.com
+              <a href="mailto:mleonard@myteamnetwork.com" className="text-sm text-landing-cream/50 hover:text-landing-cream transition-colors">
+                mleonard@myteamnetwork.com
               </a>
               <p className="mt-6 text-sm text-landing-cream/30 italic">
                 Built for teams that go the distance.

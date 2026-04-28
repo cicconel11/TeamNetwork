@@ -126,7 +126,7 @@ const privacySections: PrivacySection[] = [
       "Deletion: Request deletion of your personal information, subject to certain exceptions.",
       "Data Portability: Request a copy of your data in a portable format.",
       "Opt-Out: Unsubscribe from marketing communications at any time.",
-      "To exercise these rights, please contact us at support@myteamnetwork.com.",
+      "To exercise these rights, please contact us at mleonard@myteamnetwork.com.",
     ],
   },
   {
@@ -166,7 +166,7 @@ const privacySections: PrivacySection[] = [
     title: "Children's Privacy",
     paragraphs: [
       "The Service is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. Users who disclose they are under 13 during signup are blocked at our age gate before any personal information is collected or any account is created.",
-      "If we learn that we have collected personal information from a child under 13, we will take steps to delete that information promptly. If you believe we have collected information from a child under 13, please contact us at support@myteamnetwork.com.",
+      "If we learn that we have collected personal information from a child under 13, we will take steps to delete that information promptly. If you believe we have collected information from a child under 13, please contact us at mleonard@myteamnetwork.com.",
     ],
   },
   {
@@ -193,7 +193,7 @@ const privacySections: PrivacySection[] = [
     title: "Contact Us",
     paragraphs: [
       "If you have any questions about this Privacy Policy or our data practices, please contact us:",
-      "Email: support@myteamnetwork.com",
+      "Email: mleonard@myteamnetwork.com",
     ],
   },
 ];
@@ -331,7 +331,7 @@ export default function PrivacyPage() {
               <Link href="/" className="hover:text-landing-cream transition-colors">Home</Link>
               <Link href="/#pricing" className="hover:text-landing-cream transition-colors">Pricing</Link>
               <Link href="/terms" className="hover:text-landing-cream transition-colors">Terms</Link>
-              <a href="mailto:support@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
+              <a href="mailto:mleonard@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
             </div>
             
             <p className="text-sm text-landing-cream/30">

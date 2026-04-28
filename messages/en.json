@@ -149,6 +149,7 @@
     "resendConfirmationFailed": "Couldn't resend the email. Please try again in a few minutes.",
     "linkExpiredTitle": "This confirmation link has expired",
     "linkExpiredBody": "Confirmation links are time-limited. Enter your email to get a fresh link.",
+    "supportContactPrefix": "Still stuck? Email",
     "completeCaptcha": "Please complete the captcha verification",
     "completeDobFirst": "Please complete the date of birth step first",
     "resetPassword": "Reset your password",

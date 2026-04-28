@@ -167,7 +167,7 @@ const termsSections: TermsSection[] = [
     number: "15",
     title: "Contact Information",
     paragraphs: [
-      "Email: support@myteamnetwork.com",
+      "Email: mleonard@myteamnetwork.com",
     ],
   },
 ];
@@ -305,7 +305,7 @@ export default function TermsPage() {
               <Link href="/" className="hover:text-landing-cream transition-colors">Home</Link>
               <Link href="/#pricing" className="hover:text-landing-cream transition-colors">Pricing</Link>
               <Link href="/privacy" className="hover:text-landing-cream transition-colors">Privacy</Link>
-              <a href="mailto:support@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
+              <a href="mailto:mleonard@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
             </div>
             
             <p className="text-sm text-landing-cream/30">
