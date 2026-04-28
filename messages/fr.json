@@ -410,7 +410,8 @@
       "noPendingAlumni": "Aucune demande d'ancien en attente",
       "allCaughtUp": "Tout est a jour ! Aucune approbation en attente.",
       "backToSettings": "Retour aux parametres",
-      "confirmReject": "Etes-vous sur de vouloir rejeter cette demande ? L'utilisateur sera supprime."
+      "confirmReject": "Etes-vous sur de vouloir rejeter cette demande ? L'utilisateur sera supprime.",
+      "unknownUser": "Utilisateur inconnu"
     },
     "adoptionRequest": {
       "title": "Demande d'adoption",

@@ -410,7 +410,8 @@
       "noPendingAlumni": "Nessuna richiesta di ex studenti in attesa",
       "allCaughtUp": "Tutto in ordine! Nessuna approvazione in attesa.",
       "backToSettings": "Torna alle impostazioni",
-      "confirmReject": "Sei sicuro di voler rifiutare questa richiesta? L'utente verrà rimosso."
+      "confirmReject": "Sei sicuro di voler rifiutare questa richiesta? L'utente verrà rimosso.",
+      "unknownUser": "Utente sconosciuto"
     },
     "adoptionRequest": {
       "title": "Richiesta di adozione",
