@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { buildRateLimitResponse, checkRateLimit } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import { sendNotificationBlast } from "@/lib/notifications";
 import { proposalReminderTemplate } from "@/lib/notifications/templates/mentorship/proposal_reminder";
@@ -28,14 +29,34 @@ type SentEntry = { mentor_user_id: string; pending_count: number };
 type SkippedEntry = { mentor_user_id: string; reason: "rate_limited" | "no_pending" };
 
 export async function POST(req: Request, { params }: RouteParams) {
+  const ipRateLimit = checkRateLimit(req, {
+    feature: "mentorship proposal reminders",
+    limitPerIp: 20,
+    limitPerUser: 0,
+  });
+  if (!ipRateLimit.ok) return buildRateLimitResponse(ipRateLimit);
+
   const { organizationId } = await params;
   if (!baseSchemas.uuid.safeParse(organizationId).success) {
-    return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid organization id" },
+      { status: 400, headers: ipRateLimit.headers }
+    );
   }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: ipRateLimit.headers });
+  }
+
+  const userRateLimit = checkRateLimit(req, {
+    feature: "mentorship proposal reminders",
+    limitPerIp: 0,
+    limitPerUser: 10,
+    userId: user.id,
+  });
+  if (!userRateLimit.ok) return buildRateLimitResponse(userRateLimit);
 
   const service = createServiceClient();
   const { data: role } = await service
@@ -46,7 +67,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     .maybeSingle();
 
   if (role?.role !== "admin" || role?.status !== "active") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: userRateLimit.headers });
   }
 
   let body: z.infer<typeof BodySchema>;
@@ -57,7 +78,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       err instanceof z.ZodError
         ? (err.issues[0]?.message ?? "Invalid body")
         : "Invalid body";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: 400, headers: userRateLimit.headers });
   }
 
   // `mentorship_reminders` is added in a migration not yet reflected in generated types.
@@ -87,7 +108,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   if (pairsErr) {
     console.error("[mentorship remind] load pairs failed", pairsErr);
-    return NextResponse.json({ error: "Failed to load proposals" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load proposals" },
+      { status: 500, headers: userRateLimit.headers }
+    );
   }
 
   const pendingByMentor = new Map<string, number>();
@@ -103,7 +127,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         .map(([mentorId]) => mentorId);
 
   if (candidateMentors.length === 0) {
-    return NextResponse.json({ sent: [], skipped: [] });
+    return NextResponse.json({ sent: [], skipped: [] }, { headers: userRateLimit.headers });
   }
 
   // Rate-limit lookup — last reminder per candidate mentor in this org.
@@ -179,5 +203,5 @@ export async function POST(req: Request, { params }: RouteParams) {
     sent.push({ mentor_user_id: mentorUserId, pending_count: pendingCount });
   }
 
-  return NextResponse.json({ sent, skipped });
+  return NextResponse.json({ sent, skipped }, { headers: userRateLimit.headers });
 }
