@@ -1,5 +1,6 @@
 /* Landing Page - Athletic Heritage Theme */
 .landing-page {
+  overflow-x: clip;
   --landing-navy: #0a0a0a;
   --landing-navy-light: #1a1a1a;
   --landing-cream: #ffffff;
@@ -750,6 +751,20 @@ noscript~.scroll-reveal {
 }
 
 @media (max-width: 639px) {
+  .landing-page {
+    overflow-x: hidden;
+  }
+
+  .landing-demo-wrap,
+  .landing-demo-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .landing-demo-wrap::before {
+    inset: 12% 0 -6% 0;
+  }
+
   .bento-grid {
     grid-template-columns: 1fr;
   }
