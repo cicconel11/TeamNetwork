@@ -12,11 +12,11 @@ import "./landing-styles.css";
 export const metadata: Metadata = {
   title: "TeamNetwork — The Platform for Connected Organizations",
   description:
-    "Member directories, events, donations, philanthropy, and records — all in one place. Built for sports teams, Greek life, clubs, volunteer groups, and organizations of all kinds.",
+    "Build your network with member directories, events, donations, philanthropy, and records — all in one place for clubs, organizations, sports teams, and more.",
   openGraph: {
     title: "TeamNetwork — The Platform for Connected Organizations",
     description:
-      "Member directories, events, donations, philanthropy, and records — all in one place for organizations of all kinds.",
+      "Build your network with member directories, events, donations, philanthropy, and records — all in one place for clubs, organizations, sports teams, and more.",
     url: "https://myteamnetwork.com",
     siteName: "TeamNetwork",
     images: [{ url: "https://myteamnetwork.com/og-image.png", width: 1200, height: 630 }],
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "TeamNetwork — The Platform for Connected Organizations",
     description:
-      "Member directories, events, donations, philanthropy, and records — all in one place for organizations of all kinds.",
+      "Build your network with member directories, events, donations, philanthropy, and records — all in one place for clubs, organizations, sports teams, and more.",
     images: ["https://myteamnetwork.com/og-image.png"],
   },
 };
@@ -120,7 +120,7 @@ export default async function LandingPage() {
                 <div className="inline-flex max-w-full items-center justify-center gap-2 rounded-full border border-landing-green/30 bg-landing-green/10 px-3 py-2 shadow-[0_0_40px_rgba(34,197,94,0.12)] sm:px-4">
                   <span className="h-2 w-2 shrink-0 rounded-full bg-landing-green gold-shimmer" />
                   <span className="min-w-0 text-balance text-center text-sm font-medium leading-snug text-landing-cream/80">
-                    Built for organizations that go the distance
+                    Build your network, wherever your community starts
                   </span>
                 </div>
               </div>
@@ -139,14 +139,14 @@ export default async function LandingPage() {
               </h1>
 
               <p className="hero-animate mx-auto mb-3 max-w-[12ch] text-center text-2xl font-semibold tracking-tight text-landing-cream sm:max-w-none sm:text-3xl lg:mx-0 lg:text-left lg:text-4xl">
-                One platform. Every member,<br className="hidden sm:block" /> past and present.
+                Build your network.<br className="hidden sm:block" /> Keep it connected.
               </p>
 
               <p className="hero-animate mx-auto mb-8 max-w-[32ch] text-base leading-relaxed text-landing-cream/80 sm:max-w-xl sm:text-lg lg:mx-0 lg:mb-6">
-                Directories, events, donations, philanthropy, and records — all in one place. Built for{" "}
-                <span className="font-medium text-landing-cream">sports teams</span>,{" "}
-                <span className="font-medium text-landing-cream">Greek life</span>,{" "}
-                <span className="font-medium text-landing-cream">clubs</span>, and organizations of all kinds.
+                Bring together current members, alumni, supporters, and families in one place. Built for{" "}
+                <span className="font-medium text-landing-cream">clubs</span>,{" "}
+                <span className="font-medium text-landing-cream">organizations</span>,{" "}
+                <span className="font-medium text-landing-cream">sports teams</span>, and communities of all kinds.
               </p>
 
               <div className="hero-animate mx-0 flex w-full max-w-full flex-col items-stretch gap-4 sm:mx-auto sm:flex-row sm:justify-center lg:mx-0 lg:justify-start">
