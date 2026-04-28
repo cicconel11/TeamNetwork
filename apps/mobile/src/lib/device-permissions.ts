@@ -110,6 +110,18 @@ export function useDevicePermission(kind: PermissionKind): DevicePermissionState
       setCanAskAgain(ask);
       return;
     }
+    if (kind === "biometric") {
+      const { getBiometricCapabilities } = await import("@/lib/biometric");
+      const { hasHardware, isEnrolled } = await getBiometricCapabilities();
+      if (!hasHardware) {
+        setStatus("unsupported");
+        setCanAskAgain(false);
+        return;
+      }
+      setStatus(isEnrolled ? "granted" : "undetermined");
+      setCanAskAgain(true);
+      return;
+    }
     setStatus("unsupported");
     setCanAskAgain(false);
   }, [kind]);

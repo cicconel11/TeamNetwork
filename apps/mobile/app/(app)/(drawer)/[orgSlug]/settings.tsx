@@ -29,6 +29,7 @@ import {
   SettingsAccessSection,
   SettingsBillingSection,
   SettingsDangerSection,
+  SettingsSecuritySection,
   buildSettingsColors,
 } from "@/components/settings";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
@@ -151,6 +152,8 @@ export default function SettingsScreen() {
               <SettingsNotificationsSection
                 orgId={orgId}
               />
+
+              <SettingsSecuritySection />
 
               <SettingsInvitesSection
                 orgId={orgId}

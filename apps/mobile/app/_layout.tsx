@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ColorSchemeProvider } from "@/contexts/ColorSchemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NetworkProvider } from "@/contexts/NetworkContext";
+import { BiometricLockProvider } from "@/contexts/BiometricLockContext";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { setGlobalShowToast } from "@/components/ui/Toast";
 import AuthLoadingScreen from "@/components/AuthLoadingScreen";
@@ -98,7 +99,9 @@ export default function RootLayout() {
     <ColorSchemeProvider>
       <AuthProvider>
         <NetworkProvider>
-          <RootLayoutInner />
+          <BiometricLockProvider>
+            <RootLayoutInner />
+          </BiometricLockProvider>
         </NetworkProvider>
       </AuthProvider>
     </ColorSchemeProvider>

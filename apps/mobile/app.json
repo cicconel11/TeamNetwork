@@ -111,6 +111,12 @@
           "recordAudioAndroid": false
         }
       ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to quickly and securely sign in to TeamMeet."
+        }
+      ],
       "./plugins/withOptionalHardwareFeatures",
       "expo-font"
     ],
