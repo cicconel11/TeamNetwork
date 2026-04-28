@@ -36,12 +36,12 @@ export function formatPrice(amount: number, interval: SubscriptionInterval): str
 }
 
 export const FEATURES = [
-  { title: "Roster Management", description: "Maintain a living history of every athlete, coach, and alumni who's ever worn the jersey." },
-  { title: "Team Events", description: "Coordinate game days, banquets, alumni games, and fundraisers with RSVP tracking." },
-  { title: "Fundraising", description: "Accept donations for new equipment or travel expenses directly to your team's Stripe account." },
-  { title: "Record Books", description: "Preserve your team's history with digital trophy cases, record boards, and hall of fame." },
-  { title: "Communication", description: "Blast updates to parents, current players, and alumni without managing messy email lists." },
-  { title: "Digital Forms", description: "Collect liability waivers, medical forms, and registration docs securely online." },
+  { title: "Member Management", description: "Maintain a living directory of current members, leaders, supporters, and alumni." },
+  { title: "Organization Events", description: "Coordinate meetings, ceremonies, fundraisers, service days, and reunions with RSVP tracking." },
+  { title: "Fundraising", description: "Accept donations for programs, events, equipment, travel, or community initiatives directly to your Stripe account." },
+  { title: "Shared History", description: "Preserve your organization's milestones, records, media, awards, and institutional knowledge." },
+  { title: "Communication", description: "Send updates to members, families, volunteers, and alumni without managing messy email lists." },
+  { title: "Digital Forms", description: "Collect waivers, registrations, applications, and other documents securely online." },
 ];
 
 export const FAQ_ITEMS = [

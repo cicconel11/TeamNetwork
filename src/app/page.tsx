@@ -10,13 +10,13 @@ import { PricingSection } from "@/components/marketing/PricingSection";
 import "./landing-styles.css";
 
 export const metadata: Metadata = {
-  title: "TeamNetwork — The Platform for Athletic Organizations",
+  title: "TeamNetwork — The Platform for Connected Organizations",
   description:
-    "Member directories, events, donations, philanthropy, and records — all in one place. Built for sports teams, clubs, and organizations of all kinds.",
+    "Member directories, events, donations, philanthropy, and records — all in one place. Built for sports teams, Greek life, clubs, volunteer groups, and organizations of all kinds.",
   openGraph: {
-    title: "TeamNetwork — The Platform for Athletic Organizations",
+    title: "TeamNetwork — The Platform for Connected Organizations",
     description:
-      "Member directories, events, donations, philanthropy, and records — all in one place.",
+      "Member directories, events, donations, philanthropy, and records — all in one place for organizations of all kinds.",
     url: "https://myteamnetwork.com",
     siteName: "TeamNetwork",
     images: [{ url: "https://myteamnetwork.com/og-image.png", width: 1200, height: 630 }],
@@ -24,9 +24,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "TeamNetwork — The Platform for Athletic Organizations",
+    title: "TeamNetwork — The Platform for Connected Organizations",
     description:
-      "Member directories, events, donations, philanthropy, and records — all in one place.",
+      "Member directories, events, donations, philanthropy, and records — all in one place for organizations of all kinds.",
     images: ["https://myteamnetwork.com/og-image.png"],
   },
 };
