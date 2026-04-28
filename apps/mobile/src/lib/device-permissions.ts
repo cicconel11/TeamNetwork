@@ -91,21 +91,27 @@ export function useDevicePermission(kind: PermissionKind): DevicePermissionState
   const [canAskAgain, setCanAskAgain] = useState<boolean>(true);
 
   const refresh = useCallback(async () => {
-    if (kind !== "notifications") {
-      setStatus("unsupported");
-      setCanAskAgain(false);
-      return;
-    }
     if (Platform.OS === "web") {
       setStatus("unsupported");
       setCanAskAgain(false);
       return;
     }
-    // Lazy import so web bundles don't pull native-only code paths.
-    const Notifications = await import("expo-notifications");
-    const { status: current, canAskAgain: ask } = await Notifications.getPermissionsAsync();
-    setStatus(mapNativeStatus(current));
-    setCanAskAgain(ask);
+    if (kind === "notifications") {
+      const Notifications = await import("expo-notifications");
+      const { status: current, canAskAgain: ask } = await Notifications.getPermissionsAsync();
+      setStatus(mapNativeStatus(current));
+      setCanAskAgain(ask);
+      return;
+    }
+    if (kind === "camera") {
+      const { Camera } = await import("expo-camera");
+      const { status: current, canAskAgain: ask } = await Camera.getCameraPermissionsAsync();
+      setStatus(mapNativeStatus(current));
+      setCanAskAgain(ask);
+      return;
+    }
+    setStatus("unsupported");
+    setCanAskAgain(false);
   }, [kind]);
 
   useEffect(() => {
@@ -113,14 +119,23 @@ export function useDevicePermission(kind: PermissionKind): DevicePermissionState
   }, [refresh]);
 
   const request = useCallback(async (): Promise<PermissionStatus> => {
-    if (kind !== "notifications") {
-      return "unsupported";
+    if (kind === "notifications") {
+      const granted = await requestNotificationPermissions();
+      const next: PermissionStatus = granted ? "granted" : "denied";
+      setStatus(next);
+      if (!granted) setCanAskAgain(false);
+      return next;
     }
-    const granted = await requestNotificationPermissions();
-    const next: PermissionStatus = granted ? "granted" : "denied";
-    setStatus(next);
-    if (!granted) setCanAskAgain(false);
-    return next;
+    if (kind === "camera") {
+      const { Camera } = await import("expo-camera");
+      const { status: current, canAskAgain: ask } =
+        await Camera.requestCameraPermissionsAsync();
+      const next = mapNativeStatus(current);
+      setStatus(next);
+      setCanAskAgain(ask);
+      return next;
+    }
+    return "unsupported";
   }, [kind]);
 
   const openSettings = useCallback(async () => {

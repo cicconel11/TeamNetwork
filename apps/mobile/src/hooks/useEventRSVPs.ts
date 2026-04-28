@@ -39,6 +39,7 @@ interface UseEventRSVPsReturn {
   refetch: () => Promise<void>;
   checkInAttendee: (rsvpId: string) => Promise<{ success: boolean; error?: string }>;
   undoCheckIn: (rsvpId: string) => Promise<{ success: boolean; error?: string }>;
+  findRsvpByUserId: (userId: string) => EventRSVP | undefined;
   attendingCount: number;
   checkedInCount: number;
 }
@@ -239,6 +240,11 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
     []
   );
 
+  const findRsvpByUserId = useCallback(
+    (userId: string) => rsvps.find((r) => r.user_id === userId),
+    [rsvps]
+  );
+
   // Computed values
   const attendingCount = rsvps.filter((r) => r.status === "attending").length;
   const checkedInCount = rsvps.filter((r) => r.checked_in_at !== null).length;
@@ -250,6 +256,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
     refetch: fetchRSVPs,
     checkInAttendee,
     undoCheckIn,
+    findRsvpByUserId,
     attendingCount,
     checkedInCount,
   };

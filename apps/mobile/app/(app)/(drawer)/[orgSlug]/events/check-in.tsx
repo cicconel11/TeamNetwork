@@ -23,6 +23,7 @@ import {
   Users,
   Check,
   X,
+  QrCode,
 } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
@@ -181,6 +182,21 @@ export default function CheckInScreen() {
       ...TYPOGRAPHY.bodyMedium,
       color: n.foreground,
       paddingVertical: 0,
+    },
+    scanButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: SPACING.sm,
+      marginHorizontal: SPACING.md,
+      marginTop: SPACING.sm,
+      paddingVertical: SPACING.md,
+      borderRadius: RADIUS.md,
+      backgroundColor: s.success,
+    },
+    scanButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
     },
     filterContainer: {
       flexDirection: "row" as const,
@@ -624,6 +640,17 @@ export default function CheckInScreen() {
             </Pressable>
           )}
         </View>
+
+        {/* Scan QR action */}
+        {eventId && (
+          <Pressable
+            onPress={() => router.push(`/(app)/${orgSlug}/events/${eventId}/scan` as never)}
+            style={({ pressed }) => [styles.scanButton, pressed && { opacity: 0.85 }]}
+          >
+            <QrCode size={18} color="#fff" />
+            <Text style={styles.scanButtonText}>Scan QR to Check In</Text>
+          </Pressable>
+        )}
 
         {/* Filter Tabs */}
         <View style={styles.filterContainer}>
