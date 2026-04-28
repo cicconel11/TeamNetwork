@@ -23,7 +23,8 @@ import React, {
   useState,
   type PropsWithChildren,
 } from "react";
-import { AppState, type AppStateStatus, View } from "react-native";
+import { AppState, type AppStateStatus, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import {
   authenticate,
   BIOMETRIC_LOCK_TIMEOUT_MS,
@@ -57,6 +58,7 @@ export function BiometricLockProvider({ children }: PropsWithChildren) {
   const [enabled, setEnabled] = useState(false);
   const [isResolving, setIsResolving] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
   const lastBackgroundedAtRef = useRef<number | null>(null);
 
   // Cold-start: read enabled flag and lock if needed.
@@ -74,10 +76,13 @@ export function BiometricLockProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  // AppState: lock when foregrounding after timeout.
+  // AppState: lock when foregrounding after timeout, and track current state
+  // so we can render a privacy overlay during inactive/background (the
+  // moments iOS captures the app-switcher snapshot).
   useEffect(() => {
-    if (!enabled) return;
     const handler = (next: AppStateStatus) => {
+      setAppState(next);
+      if (!enabled) return;
       if (next === "background" || next === "inactive") {
         lastBackgroundedAtRef.current = Date.now();
         return;
@@ -93,6 +98,8 @@ export function BiometricLockProvider({ children }: PropsWithChildren) {
     const sub = AppState.addEventListener("change", handler);
     return () => sub.remove();
   }, [enabled]);
+
+  const showPrivacyOverlay = enabled && appState !== "active";
 
   const lock = useCallback(() => setIsLocked(true), []);
 
@@ -116,7 +123,40 @@ export function BiometricLockProvider({ children }: PropsWithChildren) {
       {/* While we don't yet know the enabled flag, render nothing — avoids a
           flash of unlocked content when biometric IS enabled. */}
       {isResolving ? <View style={{ flex: 1, backgroundColor: "#0f172a" }} /> : children}
+      {showPrivacyOverlay && !isLocked && <PrivacyOverlay />}
       {isLocked && !isResolving && <LockScreen onUnlock={unlock} />}
     </BiometricLockContext.Provider>
   );
 }
+
+/**
+ * Opaque overlay shown while the app is inactive/backgrounded so the iOS
+ * app-switcher snapshot doesn't leak personal content. Only renders when
+ * biometric is enabled — users who haven't opted in keep the default snapshot
+ * behavior.
+ */
+function PrivacyOverlay() {
+  return (
+    <View style={privacyStyles.overlay} pointerEvents="none">
+      <Image
+        source={require("../../assets/brand-logo.png")}
+        style={privacyStyles.logo}
+        contentFit="contain"
+        transition={0}
+        cachePolicy="memory"
+      />
+    </View>
+  );
+}
+
+const privacyStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0f172a",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9998,
+    elevation: 9998,
+  },
+  logo: { width: 200, height: 60 },
+});
