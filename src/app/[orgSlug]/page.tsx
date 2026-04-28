@@ -203,9 +203,9 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
 
   return (
     <div className="animate-fade-in">
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         {/* Main feed column */}
-        <div>
+        <div className="mx-auto w-full max-w-3xl xl:max-w-none">
           {canPost && (
             <div className="mb-5">
               <FeedComposer orgId={org.id} userName={userName?.name || undefined} />
@@ -216,12 +216,12 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
             <FeedSidebarWidgets orgSlug={orgSlug} data={feedSidebarData} />
           </OrgHomeMobileOverview>
 
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-px flex-1 bg-border/50" />
-            <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/50">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border/35" />
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">
               {tDash("recent")}
             </span>
-            <div className="h-px flex-1 bg-border/50" />
+            <div className="h-px flex-1 bg-border/35" />
           </div>
           <FeedList
             posts={augmentedPosts}
