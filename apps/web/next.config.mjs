@@ -1,5 +1,8 @@
 import bundleAnalyzer from "@next/bundle-analyzer";
 import createNextIntlPlugin from "next-intl/plugin";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
@@ -150,6 +153,38 @@ function validateBuildEnv() {
 
   if (isVercelProduction && !process.env.AUTH_HANDOFF_ENCRYPTION_KEY) {
     throw new Error("Missing required environment variable: AUTH_HANDOFF_ENCRYPTION_KEY");
+  }
+
+  // Reject placeholder Android App Links fingerprint on Vercel production —
+  // shipping the all-zero SHA256 means App Links won't verify and any later
+  // additions could go unnoticed. Real fingerprint comes from
+  // `eas credentials --platform android`.
+  if (isVercelProduction) {
+    try {
+      const here = dirname(fileURLToPath(import.meta.url));
+      const assetlinks = JSON.parse(
+        readFileSync(join(here, "public/.well-known/assetlinks.json"), "utf8")
+      );
+      const placeholder = "00:".repeat(31) + "00";
+      const fingerprints = assetlinks
+        .flatMap((entry) => entry?.target?.sha256_cert_fingerprints ?? [])
+        .filter((fp) => typeof fp === "string");
+      if (fingerprints.length === 0) {
+        throw new Error("assetlinks.json has no SHA256 fingerprints");
+      }
+      const placeholders = fingerprints.filter((fp) => fp === placeholder);
+      if (placeholders.length > 0) {
+        throw new Error(
+          `assetlinks.json contains placeholder SHA256 fingerprint(s) — replace before production deploy. Run: eas credentials --platform android`
+        );
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("assetlinks.json")) {
+        throw err;
+      }
+      // File missing or malformed — fail loud rather than ship silently.
+      throw new Error(`assetlinks.json validation failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
