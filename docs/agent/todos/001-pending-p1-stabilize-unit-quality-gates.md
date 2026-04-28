@@ -14,6 +14,8 @@ dependencies: []
 
 ## Findings
 
+- Current local run on 2026-04-28 is much narrower than the original finding: `npm run test:unit` fails only in `tests/media-albums-cache-wiring.test.ts` because its source-shape assertions still expected `AlbumGrid` to own album fetching after that state was lifted into `MediaGallery`.
+- `npm run lint` and `npm run typecheck` pass locally as of 2026-04-28.
 - The unit run failed during this session after the new AI safety and handler tests passed.
 - One failure path was historically network-dependent captcha verification against provider APIs, which is not reliable in the current sandboxed environment.
 - Additional unrelated failures came from pre-existing suites such as dashboard source assertions, form admin rework assertions, Google OAuth property tests, parent invite migration regressions, parent CRUD validation, and schedule sync tests.
@@ -54,7 +56,7 @@ dependencies: []
 
 ## Recommended Action
 
-To be filled during triage.
+Align the media album cache wiring regression tests with the current lifted state architecture, then keep `npm run test:unit` as an explicit CI gate alongside lint, typecheck, and the focused AI gate.
 
 ## Technical Details
 
@@ -62,6 +64,9 @@ Affected commands:
 - `npm run test:unit`
 
 Observed failing areas:
+- Current 2026-04-28 blocker:
+  - `tests/media-albums-cache-wiring.test.ts`
+- Historical 2026-03-23 blockers:
 - `tests/captcha.test.ts`
 - `tests/dashboard-counts.test.ts`
 - `tests/form-admin-rework.test.ts`
@@ -82,6 +87,18 @@ Observed failing areas:
 - [ ] Remaining failing suites are triaged and either fixed or intentionally deferred with documented rationale
 
 ## Work Log
+
+### 2026-04-28 - Current-State Retriage
+
+**By:** Codex
+
+**Actions:**
+- Ran `npm run lint`, `npm run typecheck`, and `npm run test:unit`.
+- Confirmed lint and typecheck pass locally.
+- Confirmed the unit gate has narrowed to two stale media album cache wiring assertions.
+
+**Learnings:**
+- The original broad unit-failure list is stale; the current fix should target the media album cache regression test shape, not captcha or older unrelated suites.
 
 ### 2026-03-23 - Initial Discovery
 

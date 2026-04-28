@@ -180,11 +180,17 @@ function createSupabaseStub() {
         }
         if (query.orderBy) {
           rows.sort((a, b) => {
-            const aValue = String(a[query.orderBy!.column] ?? "");
-            const bValue = String(b[query.orderBy!.column] ?? "");
-            return query.orderBy!.ascending
-              ? aValue.localeCompare(bValue)
-              : bValue.localeCompare(aValue);
+            for (const order of query.orderBy) {
+              const aValue = String(a[order.column] ?? "");
+              const bValue = String(b[order.column] ?? "");
+              const comparison = order.ascending
+                ? aValue.localeCompare(bValue)
+                : bValue.localeCompare(aValue);
+              if (comparison !== 0) {
+                return comparison;
+              }
+            }
+            return 0;
           });
         }
         return { data: rows, error: null };

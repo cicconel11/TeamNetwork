@@ -32,11 +32,13 @@ function createSupabaseStub() {
         id: THREAD_A_ID,
         user_id: ADMIN_USER.id,
         org_id: ORG_A_ID,
+        deleted_at: null,
       },
       {
         id: THREAD_B_ID,
         user_id: ADMIN_USER.id,
         org_id: ORG_B_ID,
+        deleted_at: null,
       },
     ],
     messages: [
@@ -66,17 +68,37 @@ function createSupabaseStub() {
     query: {
       eqFilters: Array<{ column: string; value: unknown }>;
       inFilters: Array<{ column: string; values: unknown[] }>;
+      isFilters: Array<{ column: string; value: unknown }>;
     }
   ) {
     return rows.filter((row) => {
       for (const filter of query.eqFilters) {
-        if (row[filter.column] !== filter.value) return false;
+        if (resolveColumnValue(row, filter.column) !== filter.value) return false;
       }
       for (const filter of query.inFilters) {
-        if (!filter.values.includes(row[filter.column])) return false;
+        if (!filter.values.includes(resolveColumnValue(row, filter.column))) return false;
+      }
+      for (const filter of query.isFilters) {
+        if (resolveColumnValue(row, filter.column) !== filter.value) return false;
       }
       return true;
     });
+  }
+
+  function resolveColumnValue(row: Record<string, unknown>, column: string) {
+    if (column === "ai_messages.ai_threads.org_id") {
+      const message = state.messages.find((msg) => msg.id === row.message_id);
+      const thread = state.threads.find((item) => item.id === message?.thread_id);
+      return thread?.org_id;
+    }
+
+    if (column === "ai_messages.ai_threads.deleted_at") {
+      const message = state.messages.find((msg) => msg.id === row.message_id);
+      const thread = state.threads.find((item) => item.id === message?.thread_id);
+      return thread?.deleted_at ?? null;
+    }
+
+    return row[column];
   }
 
   function from(table: string) {
@@ -84,6 +106,7 @@ function createSupabaseStub() {
       mode: "select" as "select" | "delete",
       eqFilters: [] as Array<{ column: string; value: unknown }>,
       inFilters: [] as Array<{ column: string; values: unknown[] }>,
+      isFilters: [] as Array<{ column: string; value: unknown }>,
     };
 
     const builder: Record<string, any> = {
@@ -101,6 +124,10 @@ function createSupabaseStub() {
       },
       in(column: string, values: unknown[]) {
         query.inFilters.push({ column, values });
+        return builder;
+      },
+      is(column: string, value: unknown) {
+        query.isFilters.push({ column, value });
         return builder;
       },
       single() {
@@ -189,7 +216,7 @@ test("GET /api/ai/[orgId]/feedback returns the saved rating for an owned message
   assert.equal(body.data?.rating, "positive");
 });
 
-test("GET /api/ai/[orgId]/feedback rejects messages from a different org even for the same user", async () => {
+test("GET /api/ai/[orgId]/feedback hides feedback for messages from a different org", async () => {
   const handler = createAiFeedbackGetHandler({
     createClient: async () => supabaseStub as any,
     getAiOrgContext: async () => buildAiContext(ORG_A_ID) as any,
@@ -202,10 +229,10 @@ test("GET /api/ai/[orgId]/feedback rejects messages from a different org even fo
     { params: Promise.resolve({ orgId: ORG_A_ID }) }
   );
 
-  assert.equal(response.status, 403);
+  assert.equal(response.status, 200);
   const body = await response.json();
   assert.deepEqual(body, {
-    error: "Thread does not belong to this organization",
+    data: null,
   });
 });
 

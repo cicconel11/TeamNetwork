@@ -456,5 +456,7 @@ type ToolExecutionResult =
 | `tests/ai-stream-consumer.test.ts` | 2 | `consumeSSEStream` — chunk/done parsing |
 | `tests/ai-stream-failures.test.ts` | 2 | `parseAIChatFailure` — 409 handling, error fallback |
 | `tests/ai-middleware-noise.test.ts` | 1 | Middleware suppresses AI route console noise |
+| `tests/ai-feedback-evals.test.ts` | 6 | Negative feedback normalization into reviewable eval candidates |
+| `tests/ai-eval-fixtures.test.ts` | 3 | Promoted deterministic AI eval fixtures for routing, refusal, and pending-action behavior |
 | `tests/routes/ai/chat-handler.test.ts` | 21 | Route simulation: auth, validation, idempotency, cache flows, history fallback, grounding, safety |
 | `tests/routes/ai/chat-handler-tools.test.ts` | 43 | Tool routing, deterministic fast paths, pending-action flows, pass-2 fallbacks, timeout/error handling |

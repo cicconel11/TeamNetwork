@@ -50,29 +50,29 @@ test("GET /api/media/albums/[albumId] responses use list-cache headers, not long
   );
 });
 
-test("AlbumGrid fetches with cache: 'no-store' and reacts to refreshToken", () => {
-  const source = read("src/components/media/AlbumGrid.tsx");
-  // The component must (a) call /api/media/albums and (b) pass cache: "no-store"
-  // somewhere in the fetchAlbums callback.
+test("MediaGallery fetches albums with cache: 'no-store' and reacts to albumRefreshToken", () => {
+  const source = read("src/components/media/MediaGallery.tsx");
+  // Album fetching is intentionally lifted into MediaGallery so URL-driven
+  // album selections and the grid share one source of truth.
   assert.ok(
     /\/api\/media\/albums\?orgId=/.test(source),
-    "AlbumGrid must call /api/media/albums",
+    "MediaGallery must call /api/media/albums",
   );
-  const fetchAlbumsMatch = source.match(/fetchAlbums\s*=\s*useCallback\([\s\S]*?\),\s*\[/);
-  assert.ok(fetchAlbumsMatch, "AlbumGrid must define fetchAlbums via useCallback");
+  const fetchAlbumsMatch = source.match(/fetchAlbums\s*=\s*useCallback\([\s\S]*?\}\s*,\s*\[[^\]]*\]\s*\)/);
+  assert.ok(fetchAlbumsMatch, "MediaGallery must define fetchAlbums via useCallback");
   assert.ok(
     /cache:\s*"no-store"/.test(fetchAlbumsMatch![0]),
     "fetchAlbums must pass cache: 'no-store' to bust the browser cache",
   );
   assert.ok(
-    source.includes("refreshToken"),
-    "AlbumGrid must accept a refreshToken prop",
+    source.includes("albumRefreshToken"),
+    "MediaGallery must own an albumRefreshToken state",
   );
   assert.ok(
-    /useEffect\(\s*\(\)\s*=>\s*\{\s*fetchAlbums\(\);?\s*\}\s*,\s*\[fetchAlbums,\s*refreshToken\]\)/.test(
+    /useEffect\(\s*\(\)\s*=>\s*\{\s*void fetchAlbums\(\);?\s*\}\s*,\s*\[fetchAlbums,\s*albumRefreshToken\]\)/.test(
       source,
     ),
-    "AlbumGrid must refetch when refreshToken changes",
+    "MediaGallery must refetch albums when albumRefreshToken changes",
   );
 });
 
@@ -88,7 +88,7 @@ test("AlbumView fetches album items with cache: 'no-store' so transient empty re
   );
 });
 
-test("MediaGallery bumps refreshToken in handleAlbumDeleted and passes it to AlbumGrid", () => {
+test("MediaGallery bumps albumRefreshToken in handleAlbumDeleted and passes fresh albums to AlbumGrid", () => {
   const source = read("src/components/media/MediaGallery.tsx");
   assert.ok(
     source.includes("albumRefreshToken"),
@@ -102,7 +102,7 @@ test("MediaGallery bumps refreshToken in handleAlbumDeleted and passes it to Alb
     "handleAlbumDeleted must increment albumRefreshToken so AlbumGrid refetches",
   );
   assert.ok(
-    /<AlbumGrid[\s\S]*?refreshToken=\{albumRefreshToken\}/.test(source),
-    "MediaGallery must pass albumRefreshToken into AlbumGrid",
+    /<AlbumGrid[\s\S]*?albums=\{albums\}/.test(source),
+    "MediaGallery must pass refreshed albums into AlbumGrid",
   );
 });
