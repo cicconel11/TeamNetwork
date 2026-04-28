@@ -31,12 +31,14 @@ interface AlbumGridProps {
   canCreate: boolean;
   hiddenAlbumIds?: Iterable<string>;
   albums: MediaAlbum[];
+  displayAlbums?: MediaAlbum[];
   loading: boolean;
   error: string | null;
   onRetry: () => void;
   onAlbumsChange: (next: MediaAlbum[]) => void;
   onSelectAlbum: (album: MediaAlbum) => void;
   onAlbumCreated: (album: MediaAlbum) => void;
+  onReorderModeChange?: (active: boolean) => void;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -97,12 +99,14 @@ export function AlbumGrid({
   canCreate,
   hiddenAlbumIds,
   albums,
+  displayAlbums,
   loading,
   error,
   onRetry,
   onAlbumsChange,
   onSelectAlbum,
   onAlbumCreated,
+  onReorderModeChange,
 }: AlbumGridProps) {
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
@@ -113,12 +117,18 @@ export function AlbumGrid({
   const reducedMotion = usePrefersReducedMotion();
   const albumsRef = useRef<MediaAlbum[]>([]);
   const sourceAlbumsRef = useRef<MediaAlbum[]>([]);
+  // Reorder must operate on the full album set; ignore displayAlbums while reordering.
+  const renderSource = reorderMode ? albums : (displayAlbums ?? albums);
   const visibleAlbums = useMemo(
-    () => mergeFolderImportAlbum(albums, importingAlbum, hiddenAlbumIds),
-    [albums, hiddenAlbumIds, importingAlbum],
+    () => mergeFolderImportAlbum(renderSource, importingAlbum, hiddenAlbumIds),
+    [renderSource, hiddenAlbumIds, importingAlbum],
   );
   albumsRef.current = visibleAlbums;
   sourceAlbumsRef.current = albums;
+
+  useEffect(() => {
+    onReorderModeChange?.(reorderMode);
+  }, [reorderMode, onReorderModeChange]);
 
   const canReorder = canCreate;
 

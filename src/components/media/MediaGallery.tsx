@@ -27,7 +27,9 @@ import {
   getBulkDeletePartialFailureMessage,
   getBulkDeleteSuccessMessage,
 } from "@/lib/media/delete-media-client";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, Input } from "@/components/ui";
+import { Search } from "lucide-react";
+import { filterAlbumsByQuery } from "@/lib/media/album-filter";
 import { MediaFilters } from "./MediaFilters";
 import { MediaCard, type MediaItem } from "./MediaCard";
 import { MediaDetailModal } from "./MediaDetailModal";
@@ -133,6 +135,7 @@ export function MediaGallery({ orgId, orgSlug, canUpload, isAdmin, currentUserId
       const target = albumId
         ? `/${orgSlug}/media?album=${encodeURIComponent(albumId)}`
         : `/${orgSlug}/media`;
+      setAlbumQuery("");
       router.push(target);
     },
     [orgSlug, router],
@@ -144,6 +147,20 @@ export function MediaGallery({ orgId, orgSlug, canUpload, isAdmin, currentUserId
   const [albumsLoading, setAlbumsLoading] = useState(true);
   const [albumsError, setAlbumsError] = useState<string | null>(null);
   const [albumRefreshToken, setAlbumRefreshToken] = useState(0);
+  const [albumQuery, setAlbumQuery] = useState("");
+  const [debouncedAlbumQuery, setDebouncedAlbumQuery] = useState("");
+  const [albumsReorderActive, setAlbumsReorderActive] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedAlbumQuery(albumQuery), 300);
+    return () => clearTimeout(t);
+  }, [albumQuery]);
+
+  const filteredAlbums = useMemo(
+    () => filterAlbumsByQuery(albums, debouncedAlbumQuery),
+    [albums, debouncedAlbumQuery],
+  );
+  const hasActiveAlbumQuery = debouncedAlbumQuery.trim().length > 0;
 
   const fetchAlbums = useCallback(async () => {
     setAlbumsLoading(true);
@@ -636,6 +653,7 @@ export function MediaGallery({ orgId, orgSlug, canUpload, isAdmin, currentUserId
               key={v}
               onClick={() => {
                 setView(v);
+                setAlbumQuery("");
                 if (selectedAlbumId) navigateToAlbum(null);
               }}
               className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors capitalize ${
@@ -743,21 +761,51 @@ export function MediaGallery({ orgId, orgSlug, canUpload, isAdmin, currentUserId
 
       {/* ── Albums view ── */}
       {view === "albums" && !selectedAlbum && (
-        <AlbumGrid
-          orgId={orgId}
-          canCreate={canUpload}
-          hiddenAlbumIds={hiddenAlbumIds}
-          albums={albums}
-          loading={albumsLoading}
-          error={albumsError}
-          onRetry={fetchAlbums}
-          onAlbumsChange={setAlbums}
-          onSelectAlbum={(album) => navigateToAlbum(album.id)}
-          onAlbumCreated={(album) => {
-            setAlbums((prev) => (prev.some((a) => a.id === album.id) ? prev : [album, ...prev]));
-            navigateToAlbum(album.id);
-          }}
-        />
+        <>
+          {!albumsReorderActive && albums.length > 0 && (
+            <div className="relative mb-4 max-w-sm">
+              <Search
+                aria-hidden="true"
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+              />
+              <Input
+                type="search"
+                aria-label={tMedia("searchAlbums")}
+                placeholder={tMedia("searchAlbumsPlaceholder")}
+                value={albumQuery}
+                onChange={(e) => setAlbumQuery(e.target.value)}
+                style={{ paddingLeft: "2.25rem" }}
+              />
+            </div>
+          )}
+
+          {hasActiveAlbumQuery &&
+          filteredAlbums.length === 0 &&
+          albums.length > 0 &&
+          !albumsReorderActive ? (
+            <EmptyState
+              title={tMedia("noAlbumsMatch", { query: debouncedAlbumQuery })}
+            />
+          ) : (
+            <AlbumGrid
+              orgId={orgId}
+              canCreate={canUpload}
+              hiddenAlbumIds={hiddenAlbumIds}
+              albums={albums}
+              displayAlbums={hasActiveAlbumQuery ? filteredAlbums : undefined}
+              loading={albumsLoading}
+              error={albumsError}
+              onRetry={fetchAlbums}
+              onAlbumsChange={setAlbums}
+              onSelectAlbum={(album) => navigateToAlbum(album.id)}
+              onAlbumCreated={(album) => {
+                setAlbums((prev) => (prev.some((a) => a.id === album.id) ? prev : [album, ...prev]));
+                navigateToAlbum(album.id);
+              }}
+              onReorderModeChange={setAlbumsReorderActive}
+            />
+          )}
+        </>
       )}
 
       {view === "albums" && displayedSelectedAlbum && (
