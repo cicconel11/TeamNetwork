@@ -107,7 +107,7 @@ export default async function CreatePage() {
                 </div>
                 <h3 className="text-xl font-semibold text-foreground mb-2">Enterprise</h3>
                 <p className="text-muted-foreground text-sm mb-4 flex-grow">
-                  Manage multiple organizations under one account. Ideal for athletic departments, universities, or organizations with multiple teams.
+                  Manage multiple organizations under one account. Ideal for schools, universities, associations, chapters, or any organization with multiple groups.
                 </p>
                 <ul className="text-sm text-muted-foreground space-y-2 mb-6">
                   <li className="flex items-center gap-2">
