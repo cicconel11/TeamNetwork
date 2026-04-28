@@ -44,7 +44,7 @@ export function FeedPost({ post, orgSlug, currentUserId, isAdmin }: FeedPostProp
   };
 
   return (
-    <Card className="px-4 pt-4 pb-3 group">
+    <Card className="group rounded-xl border-border/70 bg-card/75 px-4 pb-3 pt-4 shadow-none backdrop-blur-sm transition-colors hover:border-border">
       <div className="flex items-start gap-3">
         <Avatar name={authorName} size="sm" className="mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">
@@ -83,11 +83,11 @@ export function FeedPost({ post, orgSlug, currentUserId, isAdmin }: FeedPostProp
         </div>
       </div>
       {/* Interaction bar — full width, LinkedIn-style */}
-      <div className="flex items-center mt-3 pt-2.5 border-t border-border/40">
+      <div className="mt-4 flex items-center border-t border-border/30 pt-2">
         <LikeButton postId={post.id} likeCount={post.like_count} likedByUser={post.liked_by_user} />
         <button
           onClick={() => setIsCommentsOpen(!isCommentsOpen)}
-          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           aria-label={`${commentCount} comments`}
           aria-expanded={isCommentsOpen}
           type="button"
