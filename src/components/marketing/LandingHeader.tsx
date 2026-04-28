@@ -96,18 +96,18 @@ export function LandingHeader() {
   return (
     <>
     <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4">
-        <Link href="#top" className="group flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4">
+        <Link href="#top" className="group flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2.5">
           <Image
             src="/TeamNetwor.png"
             alt=""
             width={541}
             height={303}
             sizes="28px"
-            className="h-8 w-auto shrink-0 object-contain sm:h-7"
+            className="h-7 w-auto shrink-0 object-contain sm:h-7"
             aria-hidden="true"
           />
-          <span className="font-display truncate text-base font-bold tracking-tight text-landing-cream sm:text-xl">
+          <span className="font-display truncate text-sm font-bold tracking-tight text-landing-cream min-[380px]:text-base sm:text-xl">
             <span className="text-landing-green">Team</span>
             <span className="text-landing-cream">Network</span>
           </span>
@@ -142,7 +142,7 @@ export function LandingHeader() {
           <ButtonLink
             href="/auth/signup"
             variant="custom"
-            className="whitespace-nowrap bg-landing-green-dark px-2.5 py-2 text-sm font-semibold text-white hover:bg-[#15803d] sm:px-5 sm:text-base"
+            className="whitespace-nowrap bg-landing-green-dark px-2 py-2 text-xs font-semibold text-white hover:bg-[#15803d] min-[380px]:px-2.5 min-[380px]:text-sm sm:px-5 sm:text-base"
           >
             Get Started
           </ButtonLink>

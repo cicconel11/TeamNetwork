@@ -92,7 +92,7 @@ export default async function LandingPage() {
   }
 
   return (
-    <div id="top" className="landing-page min-h-screen text-landing-cream relative noise-overlay bg-landing-navy">
+    <div id="top" className="landing-page relative min-h-screen overflow-x-clip bg-landing-navy text-landing-cream noise-overlay">
       <LandingAnimations />
 
       {/* Diagonal stripe background */}
@@ -105,7 +105,7 @@ export default async function LandingPage() {
       <LandingHeader />
 
       {/* Hero - "The Emergence" */}
-      <section className="landing-hero-stage relative z-10 overflow-hidden px-6 pb-20 pt-12 sm:px-8 lg:px-6 lg:pb-16 lg:pt-10">
+      <section className="landing-hero-stage relative z-10 overflow-hidden px-4 pb-14 pt-10 sm:px-8 sm:pb-20 sm:pt-12 lg:px-6 lg:pb-16 lg:pt-10">
         {/* Animated paths — atmospheric background */}
         <BackgroundPaths />
 
@@ -117,9 +117,9 @@ export default async function LandingPage() {
             {/* Left - Copy (centered on mobile/tablet, left-aligned on desktop) */}
             <div className="text-center lg:text-left">
               <div className="hero-animate mb-4 flex justify-center lg:justify-start">
-                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-landing-green/30 bg-landing-green/10 px-4 py-2 shadow-[0_0_40px_rgba(34,197,94,0.12)]">
+                <div className="inline-flex max-w-full items-center justify-center gap-2 rounded-full border border-landing-green/30 bg-landing-green/10 px-3 py-2 shadow-[0_0_40px_rgba(34,197,94,0.12)] sm:px-4">
                   <span className="h-2 w-2 shrink-0 rounded-full bg-landing-green gold-shimmer" />
-                  <span className="text-balance text-center text-sm font-medium text-landing-cream/80">
+                  <span className="min-w-0 text-balance text-center text-sm font-medium leading-snug text-landing-cream/80">
                     Built for organizations that go the distance
                   </span>
                 </div>
@@ -138,11 +138,11 @@ export default async function LandingPage() {
                 />
               </h1>
 
-              <p className="hero-animate mb-3 text-center text-2xl font-semibold tracking-tight text-landing-cream sm:text-3xl lg:text-left lg:text-4xl">
+              <p className="hero-animate mx-auto mb-3 max-w-[12ch] text-center text-2xl font-semibold tracking-tight text-landing-cream sm:max-w-none sm:text-3xl lg:mx-0 lg:text-left lg:text-4xl">
                 One platform. Every member,<br className="hidden sm:block" /> past and present.
               </p>
 
-              <p className="hero-animate mx-auto mb-8 max-w-xl text-base leading-relaxed text-landing-cream/80 sm:text-lg lg:mx-0 lg:mb-6">
+              <p className="hero-animate mx-auto mb-8 max-w-[32ch] text-base leading-relaxed text-landing-cream/80 sm:max-w-xl sm:text-lg lg:mx-0 lg:mb-6">
                 Directories, events, donations, philanthropy, and records — all in one place. Built for{" "}
                 <span className="font-medium text-landing-cream">sports teams</span>,{" "}
                 <span className="font-medium text-landing-cream">Greek life</span>,{" "}
@@ -150,10 +150,10 @@ export default async function LandingPage() {
               </p>
 
               <div className="hero-animate flex flex-col items-stretch gap-4 sm:flex-row sm:justify-center lg:justify-start">
-                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="landing-primary-cta cta-glow bg-landing-green-dark px-6 py-4 text-base font-semibold text-white hover:bg-[#15803d] sm:px-8 sm:py-5">
+                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="landing-primary-cta cta-glow w-full justify-center bg-landing-green-dark px-6 py-4 text-base font-semibold text-white hover:bg-[#15803d] sm:w-auto sm:px-8 sm:py-5">
                   Create Your Organization
                 </ButtonLink>
-                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="landing-secondary-cta border border-landing-cream/20 bg-landing-cream/10 px-6 py-4 text-base text-landing-cream hover:bg-landing-cream/20 sm:px-8 sm:py-5">
+                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="landing-secondary-cta w-full justify-center border border-landing-cream/20 bg-landing-cream/10 px-6 py-4 text-base text-landing-cream hover:bg-landing-cream/20 sm:w-auto sm:px-8 sm:py-5">
                   Join an Organization
                 </ButtonLink>
               </div>
