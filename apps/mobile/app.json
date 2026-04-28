@@ -75,8 +75,26 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "www.myteamnetwork.com" },
-            { "scheme": "https", "host": "myteamnetwork.com" }
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPrefix": "/app/join" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPrefix": "/app/parents-join" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPrefix": "/auth/callback" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPattern": "/.*/announcements/.*" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPattern": "/.*/events/.*" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPattern": "/.*/chat/.*" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPattern": "/.*/discussions/.*" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPattern": "/.*/feed/.*" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPattern": "/.*/jobs/.*" },
+            { "scheme": "https", "host": "www.myteamnetwork.com", "pathPattern": "/.*/mentorship/.*" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPrefix": "/app/join" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPrefix": "/app/parents-join" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPrefix": "/auth/callback" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPattern": "/.*/announcements/.*" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPattern": "/.*/events/.*" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPattern": "/.*/chat/.*" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPattern": "/.*/discussions/.*" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPattern": "/.*/feed/.*" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPattern": "/.*/jobs/.*" },
+            { "scheme": "https", "host": "myteamnetwork.com", "pathPattern": "/.*/mentorship/.*" }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
         }

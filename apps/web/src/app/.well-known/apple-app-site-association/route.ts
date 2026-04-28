@@ -35,7 +35,14 @@ export function GET() {
         {
           appID,
           paths: [
-            // Match all org-scoped paths and the public app entry points.
+            // Allowlist-only. Each entry must map to a screen the app can
+            // actually render — a Universal Link that opens the app and
+            // dead-ends is worse UX than the web fallback.
+            //
+            // Web-only routes (admin/settings/billing, web sign-in pages,
+            // API, Next internals) are deliberately excluded by omission.
+            // The NOT patterns below are belt-and-suspenders in case anyone
+            // ever adds a catch-all wildcard above; harmless today.
             "/app/join",
             "/app/join/*",
             "/app/parents-join",
@@ -49,11 +56,15 @@ export function GET() {
             "/*/feed/*",
             "/*/jobs/*",
             "/*/mentorship/*",
-            // Catch-all for org-scoped routes (low priority — keep last).
             "NOT /api/*",
             "NOT /auth/login*",
             "NOT /auth/signup*",
             "NOT /_next/*",
+            "NOT /*/settings*",
+            "NOT /*/billing*",
+            "NOT /*/members*",
+            "NOT /*/parents*",
+            "NOT /enterprise*",
           ],
         },
       ],
