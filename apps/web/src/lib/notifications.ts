@@ -15,6 +15,7 @@ export type DeliveryChannel = "email" | "sms";
 
 export type NotificationCategory =
   | "announcement"
+  | "chat"
   | "discussion"
   | "event"
   | "event_reminder"
@@ -168,6 +169,10 @@ type PreferenceRow = Database["public"]["Tables"]["notification_preferences"]["R
 
 const CATEGORY_PREF_COLUMN: Record<NotificationCategory, keyof PreferenceRow> = {
   announcement: "announcement_emails_enabled",
+  // Chat has no per-category email column (we don't send email per chat
+  // message). Map to the master email switch so the lookup type-checks; in
+  // practice chat pushes bypass the email path entirely via sendPush().
+  chat: "email_enabled",
   discussion: "discussion_emails_enabled",
   event: "event_emails_enabled",
   // Event reminders share the email opt-out with events (no separate email column).

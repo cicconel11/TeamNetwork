@@ -159,9 +159,9 @@ export async function POST(request: Request) {
     let resolvedNotificationId: string | null = notificationId ?? null;
     let persistNotification = body.persistNotification !== false;
     let category: NotificationCategory | undefined = body.category;
-    const pushType: PushType | undefined = body.pushType;
-    const pushResourceId: string | undefined = body.pushResourceId;
-    const orgSlug: string | undefined = body.orgSlug ?? undefined;
+    let pushType: PushType | undefined = body.pushType;
+    let pushResourceId: string | undefined = body.pushResourceId;
+    let orgSlug: string | undefined = body.orgSlug ?? undefined;
 
     if (announcementId) {
       const { data: announcement, error: announcementError } = await service
@@ -202,6 +202,11 @@ export async function POST(request: Request) {
 
       // Default to announcement category for announcement-based flows
       category = category || "announcement";
+      // Auto-fill push routing fields so callers don't have to repeat them.
+      // Mobile receives `data.type === "announcement"` and routes to the
+      // announcement detail screen via getNotificationRoute().
+      pushType = pushType || "announcement";
+      pushResourceId = pushResourceId || announcement.id;
     } else if (notificationId) {
       const { data: notification, error: notificationError } = await service
         .from("notifications")

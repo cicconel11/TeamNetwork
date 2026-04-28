@@ -373,7 +373,7 @@ export default function NewAnnouncementScreen() {
             },
             body: JSON.stringify({
               announcementId: announcement.id,
-              channel: "email,push",
+              channel: "all",
               audience: notificationAudience,
             }),
           });

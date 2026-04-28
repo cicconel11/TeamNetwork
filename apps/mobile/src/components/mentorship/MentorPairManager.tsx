@@ -146,9 +146,11 @@ export function MentorPairManager({
             organizationId: orgId,
             title: "New Mentorship Pairing",
             body: `You've been paired for mentorship.\n\nMentor: ${mentorLabel}\nMentee: ${menteeLabel}`,
-            channel: "both",
+            channel: "all",
             audience: "both",
             targetUserIds: [mentorId, currentMenteeId],
+            category: "mentorship",
+            pushType: "mentorship",
           }),
         });
 

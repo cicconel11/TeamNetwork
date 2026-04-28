@@ -163,7 +163,11 @@ export default function NewAnnouncementPage() {
           await fetch("/api/notifications/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ announcementId: announcement.id, category: "announcement" }),
+            body: JSON.stringify({
+              announcementId: announcement.id,
+              category: "announcement",
+              channel: "all",
+            }),
           });
         }
       } catch (notifError) {

@@ -149,9 +149,11 @@ function AdminStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
           organizationId: orgId,
           title: "New Mentorship Pairing",
           body: `You've been paired for mentorship.\n\nMentor: ${mentorLabel}\nMentee: ${menteeLabel}`,
-          channel: "both",
+          channel: "all",
           audience: "both",
           targetUserIds: [mentorId, menteeId],
+          category: "mentorship",
+          pushType: "mentorship",
         }),
       });
       if (!res.ok) notifyFailed = true;
@@ -422,9 +424,11 @@ function AlumniStrip({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
             organizationId: orgId,
             title: "New Mentorship Pairing",
             body: `You've been paired for mentorship.\n\nMentor: ${mentorLabel}\nMentee: ${menteeLabel}`,
-            channel: "both",
+            channel: "all",
             audience: "both",
             targetUserIds: [mentorId, currentMenteeId],
+            category: "mentorship",
+            pushType: "mentorship",
           }),
         });
         if (!res.ok) notifyFailed = true;
