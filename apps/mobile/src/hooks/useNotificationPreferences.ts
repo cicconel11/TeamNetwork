@@ -112,7 +112,7 @@ export function useNotificationPreferences(
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
+  const { beginRequest, isCurrentRequest } = useRequestTracker();
   const userId = user?.id ?? null;
   const userEmail = user?.email ?? null;
 
@@ -176,11 +176,18 @@ export function useNotificationPreferences(
     };
   }, [fetchPrefs]);
 
+  // Reset displayed state when the active org/user changes so the user
+  // doesn't briefly see another tuple's prefs while the new fetch runs.
+  // We deliberately do NOT call invalidateRequests() here: fetchPrefs's own
+  // beginRequest() already bumps the version when org/user changes, and
+  // invalidating in a separate effect races with the fetch effect on
+  // initial mount (the fetch starts request v=1, this effect would bump
+  // to v=2, then the resolve sees isCurrentRequest(1)===false and never
+  // clears loading — symptom: Notifications spinner stuck forever).
   useEffect(() => {
-    invalidateRequests();
     setPrefs(null);
     setError(null);
-  }, [invalidateRequests, orgId, userId]);
+  }, [orgId, userId]);
 
   // Realtime subscription
   useEffect(() => {
