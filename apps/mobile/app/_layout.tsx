@@ -25,6 +25,11 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
 import { useSupabaseAppState } from "@/hooks/useSupabaseAppState";
 import { parseTeammeetUrl, routeIntent } from "@/lib/deep-link";
+import {
+  clearQuickActions,
+  registerQuickActions,
+  subscribeQuickActions,
+} from "@/lib/quick-actions";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -205,6 +210,17 @@ function RootLayoutInner() {
       subscription.remove();
     };
   }, [handleDeepLink]);
+
+  // Quick actions: register defaults on session, and dispatch presses through
+  // the same routeIntent pipeline as deep links.
+  useEffect(() => {
+    if (!session) {
+      void clearQuickActions();
+      return;
+    }
+    void registerQuickActions();
+    return subscribeQuickActions(router);
+  }, [session, router]);
 
   useEffect(() => {
     if (isLoading) return;

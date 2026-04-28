@@ -19,6 +19,7 @@
 
 import { unregisterPushToken } from "@/lib/notifications";
 import { setBiometricEnabled } from "@/lib/biometric";
+import { clearLastActiveOrg, clearQuickActions } from "@/lib/quick-actions";
 import * as sentry from "@/lib/analytics/sentry";
 
 export interface SignOutCleanupOptions {
@@ -41,6 +42,14 @@ export async function signOutCleanup({ userId }: SignOutCleanupOptions): Promise
   } catch (err) {
     sentry.captureException(err as Error, {
       context: "signOutCleanup.setBiometricEnabled",
+    });
+  }
+
+  try {
+    await Promise.all([clearLastActiveOrg(), clearQuickActions()]);
+  } catch (err) {
+    sentry.captureException(err as Error, {
+      context: "signOutCleanup.quickActions",
     });
   }
 }

@@ -127,6 +127,7 @@
           "calendarPermission": "Add TeamMeet events to your device calendar so you see them alongside your other commitments."
         }
       ],
+      "expo-quick-actions",
       "./plugins/withOptionalHardwareFeatures",
       "expo-font"
     ],

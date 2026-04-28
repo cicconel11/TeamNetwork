@@ -7,6 +7,8 @@ import LoadingScreen from "@/components/LoadingScreen";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { captureException } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
+import { rememberLastActiveOrg, registerQuickActions } from "@/lib/quick-actions";
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   captureException(error, { context: "OrgErrorBoundary" });
@@ -27,6 +29,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 function OrgLayoutInner() {
   const router = useRouter();
   const { orgSlug, status, isLoading } = useOrg();
+  const { isAdmin } = useOrgRole();
 
   useEffect(() => {
     if (!orgSlug || isLoading || status === "loading" || status === "ready") {
@@ -35,6 +38,16 @@ function OrgLayoutInner() {
 
     router.replace("/(app)");
   }, [orgSlug, isLoading, status, router]);
+
+  // Keep the home-screen Quick Actions in sync with the most recently visited
+  // org + role so the action set matches what the user is most likely to do.
+  useEffect(() => {
+    if (!orgSlug || status !== "ready") return;
+    void rememberLastActiveOrg({
+      orgSlug,
+      role: isAdmin ? "admin" : "member",
+    }).then(() => registerQuickActions());
+  }, [orgSlug, status, isAdmin]);
 
   if (!orgSlug || isLoading || status === "loading") {
     return <LoadingScreen />;
