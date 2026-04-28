@@ -7,6 +7,7 @@ import {
 } from "@/lib/linkedin/oauth";
 import { claimLinkedInResync } from "@/lib/linkedin/resync";
 import { getLinkedInProfileUrlForUser } from "@/lib/linkedin/settings";
+import { buildRateLimitResponse, checkRateLimit } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,15 @@ export const dynamic = "force-dynamic";
  * Non-admins require linkedin_resync_enabled = true on their org.
  * Rate limit (2/month) applies to all users.
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const ipRateLimit = checkRateLimit(request, {
+      feature: "linkedin sync",
+      limitPerIp: 10,
+      limitPerUser: 0,
+    });
+    if (!ipRateLimit.ok) return buildRateLimitResponse(ipRateLimit);
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -30,8 +38,16 @@ export async function POST() {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: ipRateLimit.headers });
     }
+
+    const userRateLimit = checkRateLimit(request, {
+      feature: "linkedin sync",
+      limitPerIp: 0,
+      limitPerUser: 5,
+      userId: user.id,
+    });
+    if (!userRateLimit.ok) return buildRateLimitResponse(userRateLimit);
 
     const serviceClient = createServiceClient();
 
@@ -42,7 +58,7 @@ export async function POST() {
           error: claim.error,
           remaining_syncs: claim.remaining_syncs,
         },
-        { status: claim.status },
+        { status: claim.status, headers: userRateLimit.headers },
       );
     }
 
@@ -52,7 +68,7 @@ export async function POST() {
     if (!result.success) {
       return NextResponse.json(
         { error: result.error || "Failed to sync LinkedIn profile" },
-        { status: 502 },
+        { status: 502, headers: userRateLimit.headers },
       );
     }
 
@@ -68,7 +84,7 @@ export async function POST() {
     return NextResponse.json({
       message: enriched ? "LinkedIn profile synced and enriched" : "LinkedIn profile synced",
       remaining_syncs: claim.remaining ?? null,
-    });
+    }, { headers: userRateLimit.headers });
   } catch (error) {
     console.error("[linkedin-sync] Error syncing profile:", error);
     return NextResponse.json(
