@@ -25,7 +25,11 @@ export async function generateQRSvg(
       errorCorrectionLevel: "M",
     });
     return { svg, error: null };
-  } catch {
-    return { svg: null, error: "Failed to generate QR code" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[qr-code] generation failed:", message, {
+      urlLength: url.length,
+    });
+    return { svg: null, error: `Failed to generate QR code: ${message}` };
   }
 }

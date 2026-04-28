@@ -214,9 +214,12 @@ export function useInvites(orgId: string | null): UseInvitesReturn {
 // Helper functions
 export function getInviteLink(invite: Invite, baseUrl: string): string {
   if (invite.token) {
-    return `${baseUrl}/app/join?token=${invite.token}`;
+    return `${baseUrl}/app/join?token=${encodeURIComponent(invite.token)}`;
   }
-  return `${baseUrl}/app/join?code=${invite.code}`;
+  if (invite.code) {
+    return `${baseUrl}/app/join?code=${encodeURIComponent(invite.code)}`;
+  }
+  return `${baseUrl}/app/join`;
 }
 
 export function isInviteExpired(expiresAt: string | null): boolean {

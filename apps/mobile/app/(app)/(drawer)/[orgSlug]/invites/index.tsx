@@ -16,7 +16,7 @@ import { useRouter, useNavigation } from "expo-router";
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import QRCode from "react-native-qrcode-svg";
+import { SafeQRCode } from "@/components/SafeQRCode";
 import {
   Link as LinkIcon,
   Plus,
@@ -644,11 +644,12 @@ export default function InvitesScreen() {
         {/* QR Code display */}
         {showQRCode === invite.id && (
           <View style={styles.qrContainer}>
-            <QRCode
+            <SafeQRCode
               value={getInviteLink(invite, getWebAppUrl())}
               size={180}
               backgroundColor={neutral.surface}
               color={neutral.foreground}
+              fallbackTextColor={neutral.muted}
             />
           </View>
         )}

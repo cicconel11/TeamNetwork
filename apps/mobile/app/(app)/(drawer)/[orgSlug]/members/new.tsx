@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useNavigation } from "expo-router";
 import { DrawerActions } from "@react-navigation/native";
-import QRCode from "react-native-qrcode-svg";
+import { SafeQRCode } from "@/components/SafeQRCode";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { getWebAppUrl } from "@/lib/web-api";
@@ -429,7 +429,7 @@ export default function NewMemberInviteScreen() {
                     {inviteLink}
                   </Text>
                   <View style={styles.qrContainer}>
-                    <QRCode value={inviteLink} size={180} />
+                    <SafeQRCode value={inviteLink} size={180} />
                     <Text style={styles.qrHint}>Scan to join</Text>
                   </View>
                 </>
