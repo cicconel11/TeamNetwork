@@ -3,6 +3,7 @@
 
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,6 +11,9 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, Captcha, CaptchaRef } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { EnterpriseOrgPicker } from "@/components/enterprise/EnterpriseOrgPicker";
+import { AppBackgroundEffects } from "@/components/app/AppBackgroundEffects";
+import { AppPageAnimations } from "@/components/app/AppPageAnimations";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { joinOrgSchema, type JoinOrgForm } from "@/lib/schemas/auth";
 import {
@@ -273,35 +277,68 @@ function JoinOrgFormComponent() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <AppBackgroundEffects />
+      <AppPageAnimations />
+
       {/* Header */}
-      <header className="border-b border-border bg-card">
+      <header className="relative z-10 border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/app">
-            <h1 className="text-2xl font-bold text-foreground">
-              Team<span className="text-emerald-500">Network</span>
+            <h1 className="app-hero-animate flex items-center gap-2.5" style={{ opacity: 0 }}>
+              <Image
+                src="/TeamNetwor.png"
+                alt=""
+                width={541}
+                height={303}
+                className="h-7 w-auto object-contain"
+                aria-hidden="true"
+              />
+              <span className="text-2xl font-bold text-foreground">
+                <span className="text-green-500">Team</span>Network
+              </span>
             </h1>
           </Link>
-          <form action="/auth/signout" method="POST">
-            <Button variant="ghost" size="sm" type="submit">
-              Sign Out
-            </Button>
-          </form>
+          <div className="app-hero-animate flex items-center gap-2" style={{ opacity: 0 }}>
+            <ThemeToggle />
+            <form action="/auth/signout" method="POST">
+              <Button variant="ghost" size="sm" type="submit">
+                Sign out
+              </Button>
+            </form>
+            <Link href="/app/join" aria-current="page" className="hidden sm:block">
+              <Button variant="secondary" size="sm">Join organization</Button>
+            </Link>
+            <Link href="/app/create" className="hidden sm:block">
+              <Button size="sm">Create organization</Button>
+            </Link>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-md mx-auto px-6 py-12">
-        <div className="mb-8">
-          <Link href="/app" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+      <main className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <div className="app-hero-animate mb-8" style={{ opacity: 0 }}>
+          <Link href="/app" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
-            Back
+            Back to organizations
           </Link>
         </div>
 
-        <Card className="p-8">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(360px,480px)] lg:items-start">
+          <section className="app-hero-animate hidden lg:block pt-14" style={{ opacity: 0 }}>
+            <p className="text-sm text-muted-foreground mb-2">Join existing</p>
+            <h2 className="text-3xl font-bold text-foreground tracking-tight">
+              Use an invite code to enter the right workspace.
+            </h2>
+            <p className="mt-4 max-w-xl text-muted-foreground leading-7">
+              Redeem an organization or enterprise invite, then land back in the same TeamNetwork dashboard with your teams and enterprises.
+            </p>
+          </section>
+
+          <Card className="app-hero-animate p-6 sm:p-8 bg-card/80 backdrop-blur-sm shadow-none" style={{ opacity: 0 }}>
           {chooseOrgState ? (
             // Enterprise-wide invite: choose org
             <div>
@@ -403,7 +440,7 @@ function JoinOrgFormComponent() {
                         onVerify={onVerify}
                         onExpire={onExpire}
                         onError={onCaptchaError}
-                        theme="light"
+                        theme="dark"
                       />
                     </div>
 
@@ -436,7 +473,7 @@ function JoinOrgFormComponent() {
                           onVerify={onVerify}
                           onExpire={onExpire}
                           onError={onCaptchaError}
-                          theme="light"
+                          theme="dark"
                         />
                       </div>
                     </>
@@ -457,6 +494,7 @@ function JoinOrgFormComponent() {
             </>
           )}
         </Card>
+        </div>
       </main>
     </div>
   );
