@@ -287,7 +287,7 @@ export const EventCard = React.memo(function EventCard({
         {hasRSVP && rsvpColors ? (
           <View style={[styles.rsvpBadge, { backgroundColor: rsvpColors.background }]}>
             <Text style={[styles.rsvpBadgeText, { color: rsvpColors.text }]}>
-              {event.user_rsvp_status === "going"
+              {event.user_rsvp_status === "attending"
                 ? "Going"
                 : event.user_rsvp_status === "maybe"
                 ? "Maybe"
@@ -298,7 +298,7 @@ export const EventCard = React.memo(function EventCard({
           <Button
             variant="outline"
             size="sm"
-            onPress={() => onRSVP?.("going")}
+            onPress={() => onRSVP?.("attending")}
             primaryColor={accentColor || semantic.success}
           >
             RSVP

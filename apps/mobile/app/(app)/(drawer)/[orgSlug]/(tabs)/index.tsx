@@ -14,6 +14,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useAuth } from "@/hooks/useAuth";
 import { useEvents } from "@/hooks/useEvents";
+import { promptAndSetRsvp } from "@/hooks/useRsvp";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useMembers } from "@/hooks/useMembers";
 import { useOrgStats } from "@/hooks/useOrgStats";
@@ -237,6 +238,23 @@ export default function HomeScreen() {
   const handleSearchPress = useCallback(
     () => router.push(`/(app)/(drawer)/${orgSlug}/search` as any),
     [router, orgSlug]
+  );
+
+  const handleHomeRsvp = useCallback(
+    (eventId: string) => {
+      if (!orgId || !user?.id) return;
+      promptAndSetRsvp({
+        eventId,
+        organizationId: orgId,
+        userId: user.id,
+        onComplete: (result) => {
+          if (result.ok) {
+            void refetchEvents();
+          }
+        },
+      });
+    },
+    [orgId, user?.id, refetchEvents]
   );
 
   // Derive user identity for child tabs
@@ -598,6 +616,7 @@ export default function HomeScreen() {
               refreshing={refreshing}
               onRefresh={handleRefresh}
               onNavigate={handleNavigate}
+              onRsvp={handleHomeRsvp}
             />
           </Animated.View>
         </View>

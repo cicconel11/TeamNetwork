@@ -27,6 +27,7 @@
     "test:ci": "jest --ci --coverage --reporters=default"
   },
   "dependencies": {
+    "@bacons/apple-targets": "^0.2.0",
     "@expo-google-fonts/dm-serif-display": "^0.4.2",
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/cli": "^54.0.21",
@@ -47,6 +48,7 @@
     "expo-apple-authentication": "^55.0.13",
     "expo-application": "~7.0.8",
     "expo-auth-session": "~7.0.10",
+    "expo-build-properties": "^55.0.13",
     "expo-calendar": "^55.0.14",
     "expo-camera": "^55.0.16",
     "expo-clipboard": "^55.0.8",
@@ -63,6 +65,7 @@
     "expo-linear-gradient": "^15.0.8",
     "expo-linking": "~8.0.11",
     "expo-local-authentication": "^55.0.13",
+    "expo-modules-core": "~3.0.29",
     "expo-notifications": "^0.32.16",
     "expo-quick-actions": "^6.0.1",
     "expo-router": "~6.0.21",

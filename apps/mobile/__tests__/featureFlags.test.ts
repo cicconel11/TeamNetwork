@@ -12,6 +12,7 @@ describe("Feature Flags", () => {
       expect(defaultFeatureFlags.donationsEnabled).toBe(false);
       expect(defaultFeatureFlags.recordsEnabled).toBe(false);
       expect(defaultFeatureFlags.formsEnabled).toBe(false);
+      expect(defaultFeatureFlags.liveActivitiesEnabled).toBe(false);
     });
 
     it("should have all expected flag keys", () => {
@@ -20,6 +21,7 @@ describe("Feature Flags", () => {
         "donationsEnabled",
         "recordsEnabled",
         "formsEnabled",
+        "liveActivitiesEnabled",
       ];
       expect(Object.keys(defaultFeatureFlags).sort()).toEqual(expectedKeys.sort());
     });

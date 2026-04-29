@@ -23,6 +23,7 @@ import { RSVP_COLORS, RADIUS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import type { RsvpStatus } from "@teammeet/core";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -35,7 +36,10 @@ export type ButtonVariant =
 
 export type ButtonSize = "sm" | "md" | "lg";
 
-export type RSVPStatus = "going" | "maybe" | "declined";
+/**
+ * Canonical RSVP status (mirrors DB enum + `@teammeet/core`).
+ */
+export type RSVPStatus = RsvpStatus;
 
 interface ButtonProps {
   children: React.ReactNode;
@@ -190,22 +194,22 @@ export function RSVPButton({
   const getIcon = () => {
     const iconSize = size === "sm" ? 14 : size === "lg" ? 18 : 16;
     switch (status) {
-      case "going":
+      case "attending":
         return <Check size={iconSize} color={colors.text} />;
       case "maybe":
         return <HelpCircle size={iconSize} color={colors.text} />;
-      case "declined":
+      case "not_attending":
         return <X size={iconSize} color={colors.text} />;
     }
   };
 
   const getLabel = () => {
     switch (status) {
-      case "going":
+      case "attending":
         return "Going";
       case "maybe":
         return "Maybe";
-      case "declined":
+      case "not_attending":
         return "Can't Go";
     }
   };

@@ -13,6 +13,7 @@ import { track } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { useRsvp } from "@/hooks/useRsvp";
 import { ErrorState } from "@/components/ui";
 import type { Event } from "@/hooks/useEvents";
 import { getWebPath } from "@/lib/web-api";
@@ -23,9 +24,28 @@ import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
+import * as sentry from "@/lib/analytics/sentry";
+import type { RsvpStatus } from "@teammeet/core";
 
 
-type RSVPStatus = "attending" | "not_attending" | "maybe";
+type RSVPStatus = RsvpStatus;
+
+function rsvpButtonLabel(status: RsvpStatus): string {
+  switch (status) {
+    case "attending":
+      return "Going";
+    case "maybe":
+      return "Maybe";
+    case "not_attending":
+      return "Can't Go";
+  }
+}
+
+function sentryCaptureRsvpRefetchError(err: unknown): void {
+  sentry.captureException(err as Error, {
+    context: "EventDetailScreen.fetchRsvps",
+  });
+}
 
 interface RSVP {
   id: string;
@@ -193,6 +213,27 @@ export default function EventDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
 
+  const rsvp = useRsvp(eventId, orgId, {
+    initialStatus: event?.user_rsvp_status ?? null,
+  });
+
+  const fetchRsvps = useCallback(async () => {
+    if (!eventId) return;
+    const { data: rsvpData, error: rsvpError } = await supabase
+      .from("event_rsvps")
+      .select("id, user_id, status, users(name, email)")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false });
+
+    if (rsvpError) {
+      sentryCaptureRsvpRefetchError(rsvpError);
+      return;
+    }
+    if (rsvpData) {
+      setRsvps(rsvpData as unknown as RSVP[]);
+    }
+  }, [eventId]);
+
   const fetchEvent = useCallback(async () => {
     if (!eventId || !orgSlug) return;
 
@@ -217,26 +258,42 @@ export default function EventDetailScreen() {
       if (eventError) throw eventError;
       setEvent(data as Event);
 
-      // Fetch RSVPs for admin view
-      const { data: rsvpData } = await supabase
-        .from("event_rsvps")
-        .select("id, user_id, status, users(name, email)")
-        .eq("event_id", eventId)
-        .order("created_at", { ascending: false });
-
-      if (rsvpData) {
-        setRsvps(rsvpData as unknown as RSVP[]);
-      }
+      await fetchRsvps();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [eventId, orgSlug]);
+  }, [eventId, orgSlug, fetchRsvps]);
 
   useEffect(() => {
     fetchEvent();
   }, [fetchEvent]);
+
+  // Realtime: keep admin RSVP counts live during a check-in session.
+  // Mirrors the channel pattern in `useEventRSVPs.ts`.
+  useEffect(() => {
+    if (!eventId) return;
+    const channel = supabase
+      .channel(`event_detail_rsvps:${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_rsvps",
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => {
+          void fetchRsvps();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [eventId, fetchRsvps]);
 
   // Admin action handlers
   const handleEditEvent = useCallback(() => {
@@ -468,8 +525,8 @@ export default function EventDetailScreen() {
           <Pressable style={({ pressed }) => [styles.rsvpSummary, pressed && { opacity: 0.7 }]} onPress={handleViewRsvps}>
             <Text style={styles.rsvpSummaryTitle}>RSVPs ({rsvpCounts.total})</Text>
             <View style={styles.rsvpCountsRow}>
-              <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.going.background }]}>
-                <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.going.text }]}>
+              <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.attending.background }]}>
+                <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.attending.text }]}>
                   {rsvpCounts.attending} Going
                 </Text>
               </View>
@@ -481,8 +538,8 @@ export default function EventDetailScreen() {
                 </View>
               )}
               {rsvpCounts.notAttending > 0 && (
-                <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.declined.background }]}>
-                  <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.declined.text }]}>
+                <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.not_attending.background }]}>
+                  <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.not_attending.text }]}>
                     {rsvpCounts.notAttending} Can't Go
                   </Text>
                 </View>
@@ -500,9 +557,28 @@ export default function EventDetailScreen() {
           </Pressable>
         )}
 
-        {!event.user_rsvp_status && (
-          <Pressable style={styles.rsvpButton}>
-            <Text style={styles.rsvpButtonText}>RSVP</Text>
+        {!isAdmin && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.rsvpButton,
+              (rsvp.saving || pressed) && { opacity: 0.7 },
+            ]}
+            onPress={rsvp.promptRsvp}
+            disabled={rsvp.saving}
+            accessibilityRole="button"
+            accessibilityLabel={
+              rsvp.status
+                ? `Update RSVP, currently ${rsvpButtonLabel(rsvp.status)}`
+                : "RSVP to event"
+            }
+          >
+            <Text style={styles.rsvpButtonText}>
+              {rsvp.saving
+                ? "Saving…"
+                : rsvp.status
+                ? `RSVP: ${rsvpButtonLabel(rsvp.status)}`
+                : "RSVP"}
+            </Text>
           </Pressable>
         )}
       </ScrollView>

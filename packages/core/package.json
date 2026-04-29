@@ -10,13 +10,15 @@
     "./pricing": "./src/pricing/index.ts",
     "./navigation": "./src/navigation/index.ts",
     "./announcements": "./src/announcements/index.ts",
-    "./formatters": "./src/formatters/index.ts"
+    "./formatters": "./src/formatters/index.ts",
+    "./apns": "./src/apns/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@teammeet/types": "workspace:*"
+    "@teammeet/types": "workspace:*",
+    "jose": "^5.9.6"
   },
   "devDependencies": {
     "typescript": "^5.9.2"

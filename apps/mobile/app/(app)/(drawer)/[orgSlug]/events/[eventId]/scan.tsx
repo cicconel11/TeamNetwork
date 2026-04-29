@@ -21,7 +21,7 @@ export default function ScanCheckInScreen() {
   const { orgSlug } = useOrg();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
-  const { rsvps, loading, checkInAttendee, findRsvpByUserId } =
+  const { rsvps, loading, checkInAttendee, findRsvpByUserId, attendingCount } =
     useEventRSVPs(eventId);
 
   const [toast, setToast] = useState<Toast>(null);
@@ -55,6 +55,17 @@ export default function ScanCheckInScreen() {
       if (!rsvp) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         showToast({ kind: "error", text: "Member is not on the RSVP list" });
+        return true;
+      }
+      // Only members who said they're attending should check in. We surface
+      // a clear message instead of silently checking in a `maybe` /
+      // `not_attending` row, so the admin can decide what to do.
+      if (rsvp.status !== "attending") {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        showToast({
+          kind: "error",
+          text: `${rsvp.user?.name ?? "Member"} is not on the attending list`,
+        });
         return true;
       }
       if (rsvp.checked_in_at) {
@@ -104,7 +115,11 @@ export default function ScanCheckInScreen() {
     <View style={styles.container}>
       <QRScanner
         onScan={handleScan}
-        hint={loading ? "Loading RSVPs…" : `${rsvps.length} attendees on list`}
+        hint={
+          loading
+            ? "Loading RSVPs…"
+            : `${attendingCount} attending · ${rsvps.length} total RSVPs`
+        }
       />
       <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.headerOverlay}>
         <Pressable

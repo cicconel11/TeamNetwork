@@ -13,6 +13,8 @@ export interface FeatureFlags {
   recordsEnabled: boolean;
   /** Enable forms module */
   formsEnabled: boolean;
+  /** iOS Live Activities for events. Build-time gate via EXPO_PUBLIC_MOBILE_LIVE_ACTIVITIES_ENABLED. */
+  liveActivitiesEnabled: boolean;
 }
 
 /**
@@ -25,7 +27,21 @@ export const defaultFeatureFlags: FeatureFlags = {
   donationsEnabled: false,
   recordsEnabled: false,
   formsEnabled: false,
+  liveActivitiesEnabled: false,
 };
+
+/**
+ * Read the build-time Live Activities flag. Default off so older builds that
+ * pre-date the widget extension never try to call ActivityKit (which would
+ * crash on missing entitlement). Server-side eligibility is gated separately
+ * through `/api/live-activity/eligibility` so we can kill-switch without an
+ * app rebuild.
+ */
+function readLiveActivitiesBuildFlag(): boolean {
+  const raw = process.env.EXPO_PUBLIC_MOBILE_LIVE_ACTIVITIES_ENABLED;
+  if (typeof raw !== "string") return false;
+  return raw.toLowerCase() === "true" || raw === "1";
+}
 
 /**
  * Get feature flags for an organization.
@@ -45,6 +61,7 @@ export function getFeatureFlags(_orgId?: string): FeatureFlags {
   if (__DEV__) {
     flags.alumniEnabled = true;
   }
+  flags.liveActivitiesEnabled = readLiveActivitiesBuildFlag();
   return flags;
 }
 

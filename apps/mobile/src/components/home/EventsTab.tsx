@@ -65,6 +65,12 @@ interface EventsTabProps {
   refreshing: boolean;
   onRefresh: () => void;
   onNavigate: (path: string) => void;
+  /**
+   * Invoked when a user taps the RSVP button on an event card. Parent is
+   * responsible for prompting the user, persisting the choice, and
+   * refetching events so the card reflects the new status.
+   */
+  onRsvp?: (eventId: string) => void;
 }
 
 export function EventsTab({
@@ -74,6 +80,7 @@ export function EventsTab({
   refreshing,
   onRefresh,
   onNavigate,
+  onRsvp,
 }: EventsTabProps) {
   const { neutral, semantic } = useAppColorScheme();
   const styles = useThemedStyles((n, s) => ({
@@ -153,7 +160,9 @@ export function EventsTab({
                 <EventCard
                   event={event}
                   onPress={() => handleEventPress(event.id)}
-                  onRSVP={() => handleEventPress(event.id)}
+                  onRSVP={
+                    onRsvp ? () => onRsvp(event.id) : () => handleEventPress(event.id)
+                  }
                   accentColor={semantic.success}
                   style={index === 0 ? { backgroundColor: semantic.successLight } : undefined}
                 />

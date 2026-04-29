@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { validateCronAuth } from "@/lib/security/cron-auth";
 import { sendPush } from "@/lib/notifications/push";
+import { auditNotificationSend } from "@/lib/notifications/audit";
 
 /**
  * Event reminder cron.
@@ -195,17 +196,34 @@ export async function GET(request: Request) {
         .maybeSingle();
       const orgSlug = (orgRow as { slug?: string } | null)?.slug;
 
+      const reminderTitle = `${window.titlePrefix}: ${event.title}`;
+      const reminderBody = buildReminderBody(event);
+
       const result = await sendPush({
         supabase: service,
         organizationId: event.organization_id,
         targetUserIds: userIds,
-        title: `${window.titlePrefix}: ${event.title}`,
-        body: buildReminderBody(event),
+        title: reminderTitle,
+        body: reminderBody,
         category: "event_reminder",
         pushType: "event_reminder",
         pushResourceId: event.id,
         orgSlug,
       });
+
+      // Audit-log the dispatch so admins can see reminder sends in the
+      // notifications dashboard alongside admin-broadcast announcements.
+      if (result.sent > 0) {
+        await auditNotificationSend(service, {
+          organizationId: event.organization_id,
+          kind: "standard",
+          title: reminderTitle,
+          body: reminderBody,
+          audience: null,
+          targetUserIds: userIds,
+          sentAt: new Date().toISOString(),
+        });
+      }
 
       summary.push({
         window: window.label,

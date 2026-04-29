@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
+import type { RsvpStatus } from "@teammeet/core";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
 const DEFAULT_PAGE_SIZE = 50;
@@ -16,7 +17,7 @@ export interface Event {
   end_date: string | null;
   created_at: string | null;
   rsvp_count?: number;
-  user_rsvp_status?: "going" | "maybe" | "not_going" | null;
+  user_rsvp_status?: RsvpStatus | null;
 }
 
 interface UseEventsOptions {
@@ -93,24 +94,26 @@ export function useEvents(
           setLoading(true);
         }
 
-        // Build query
-        let query = supabase
-          .from("events")
-          .select("*", { count: "exact" })
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-          .order("start_date", { ascending: true });
-
-        // Apply pagination if enabled
-        if (isPaginated) {
-          query = query.range(fetchOffset, fetchOffset + pageSize - 1);
-        }
-
-        const { data, error: eventsError, count } = await query;
+        // RPC returns events for the org plus the caller's RSVP status and
+        // total `attending` count, in one round-trip. Pagination is
+        // server-side via p_limit/p_offset; pass a sentinel large limit
+        // when callers opt out of pagination (`limit: 0`).
+        const rpcLimit = isPaginated ? pageSize : 10_000;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error: eventsError } = await (supabase as any).rpc(
+          "events_with_user_rsvp",
+          {
+            p_org_id: orgId,
+            p_limit: rpcLimit,
+            p_offset: fetchOffset,
+          },
+        );
 
         if (eventsError) {
-          // If events table doesn't exist, return empty array
-          if (eventsError.code === "42P01") {
+          // If function doesn't exist (yet) or table is missing, fall back
+          // gracefully with an empty list rather than blocking the screen.
+          const code = (eventsError as { code?: string }).code;
+          if (code === "42P01" || code === "42883") {
             if (isMountedRef.current) {
               setEvents([]);
               setError(null);
@@ -135,15 +138,12 @@ export function useEvents(
           setError(null);
           lastFetchTimeRef.current = Date.now();
 
-          if (count !== null) {
-            setTotalCount(count);
-            if (isPaginated) {
-              setHasMore(fetchOffset + newData.length < count);
-            }
-          } else if (isPaginated) {
-            // Fallback: check if we got a full page
+          // RPC doesn't return a total count — derive `hasMore` from the
+          // page fill heuristic instead.
+          if (isPaginated) {
             setHasMore(newData.length === pageSize);
           }
+          setTotalCount(null);
 
           setOffset(fetchOffset + newData.length);
         }

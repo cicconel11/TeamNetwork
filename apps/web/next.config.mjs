@@ -155,6 +155,29 @@ function validateBuildEnv() {
     throw new Error("Missing required environment variable: AUTH_HANDOFF_ENCRYPTION_KEY");
   }
 
+  // APNs (Live Activities + future wallet pushes). All three vars or none —
+  // partial config means LA pushes will fail at dispatch time with a confusing
+  // error, so we surface that here. On Vercel production we hard-fail; locally
+  // we warn so dev can still run without an APNs key.
+  const apnsEnv = ["APNS_KEY_ID", "APNS_TEAM_ID", "APNS_AUTH_KEY"];
+  const missingApnsVars = apnsEnv.filter(
+    (key) => !process.env[key] || process.env[key].trim() === "",
+  );
+  if (missingApnsVars.length > 0 && missingApnsVars.length < apnsEnv.length) {
+    const message = `APNs partial config: missing ${missingApnsVars.join(
+      ", ",
+    )}. Live Activity pushes will fail at dispatch.`;
+    if (isVercelProduction) {
+      throw new Error(message);
+    }
+    console.warn(`⚠️  ${message}`);
+  }
+  if (missingApnsVars.length === apnsEnv.length) {
+    console.log(
+      "ℹ️  APNs not configured (APNS_KEY_ID/APNS_TEAM_ID/APNS_AUTH_KEY) — Live Activities disabled",
+    );
+  }
+
   // Reject placeholder Android App Links fingerprint on Vercel production —
   // shipping the all-zero SHA256 means App Links won't verify and any later
   // additions could go unnoticed. Real fingerprint comes from

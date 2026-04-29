@@ -27,12 +27,20 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.myteamnetwork.teammeet",
       "buildNumber": "1",
+      "deploymentTarget": "17.0",
       "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:www.myteamnetwork.com",
         "applinks:myteamnetwork.com"
       ],
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.teammeet.shared"
+        ]
+      },
       "infoPlist": {
+        "NSSupportsLiveActivities": true,
+        "NSSupportsLiveActivitiesFrequentUpdates": true,
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Scan a TeamMeet QR code to join your organization or check members in at events.",
         "NSCalendarsFullAccessUsageDescription": "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
@@ -153,7 +161,16 @@
       "expo-quick-actions",
       "expo-apple-authentication",
       "./plugins/withOptionalHardwareFeatures",
-      "expo-font"
+      "expo-font",
+      "@bacons/apple-targets",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "17.0"
+          }
+        }
+      ]
     ],
     "extra": {
       "router": {

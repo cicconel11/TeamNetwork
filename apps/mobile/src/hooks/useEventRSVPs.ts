@@ -1,17 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
-import type { RsvpStatus } from "@teammeet/types";
+import { normalizeRsvpStatus, type RsvpStatus } from "@teammeet/core";
 
-function normalizeRsvpStatus(status: string | null | undefined): RsvpStatus {
-  switch (status) {
-    case "attending":
-    case "not_attending":
-    case "maybe":
-      return status;
-    default:
-      return "maybe";
-  }
+function coerceRsvpStatus(status: string | null | undefined): RsvpStatus {
+  return normalizeRsvpStatus(status) ?? "maybe";
 }
 
 export interface EventRSVP {
@@ -93,7 +86,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
         event_id: rsvp.event_id,
         user_id: rsvp.user_id,
         organization_id: rsvp.organization_id,
-        status: normalizeRsvpStatus(rsvp.status),
+        status: coerceRsvpStatus(rsvp.status),
         checked_in_at: rsvp.checked_in_at,
         checked_in_by: rsvp.checked_in_by,
         created_at: rsvp.created_at,
@@ -163,20 +156,27 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
           return { success: false, error: "Not authenticated" };
         }
 
-        // Direct database update for check-in
-        const { error: updateError } = await supabase
-          .from("event_rsvps")
-          .update({
-            checked_in_at: new Date().toISOString(),
-            checked_in_by: currentUserId,
-          })
-          .eq("id", rsvpId);
+        // Admin-only `SECURITY DEFINER` RPC. The DB enforces admin membership;
+        // mobile no longer touches `event_rsvps.checked_in_at` directly so
+        // RLS / `protect_checkin_columns` cannot block us.
+        const { data, error: rpcError } = await supabase.rpc(
+          "check_in_event_attendee",
+          { p_rsvp_id: rsvpId, p_undo: false },
+        );
 
-        if (updateError) {
-          return { success: false, error: updateError.message };
+        if (rpcError) {
+          return { success: false, error: rpcError.message };
+        }
+        const result = (data ?? null) as
+          | { success: boolean; error?: string }
+          | null;
+        if (!result?.success) {
+          return {
+            success: false,
+            error: result?.error ?? "Failed to check in attendee",
+          };
         }
 
-        // Update local state
         if (isMountedRef.current) {
           setRsvps((prev) =>
             prev.map((rsvp) =>
@@ -186,8 +186,8 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
                     checked_in_at: new Date().toISOString(),
                     checked_in_by: currentUserId,
                   }
-                : rsvp
-            )
+                : rsvp,
+            ),
           );
         }
 
@@ -197,26 +197,30 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
         return { success: false, error: (e as Error).message };
       }
     },
-    []
+    [],
   );
 
   const undoCheckIn = useCallback(
     async (rsvpId: string): Promise<{ success: boolean; error?: string }> => {
       try {
-        // Direct database update to undo check-in
-        const { error: updateError } = await supabase
-          .from("event_rsvps")
-          .update({
-            checked_in_at: null,
-            checked_in_by: null,
-          })
-          .eq("id", rsvpId);
+        const { data, error: rpcError } = await supabase.rpc(
+          "check_in_event_attendee",
+          { p_rsvp_id: rsvpId, p_undo: true },
+        );
 
-        if (updateError) {
-          return { success: false, error: updateError.message };
+        if (rpcError) {
+          return { success: false, error: rpcError.message };
+        }
+        const result = (data ?? null) as
+          | { success: boolean; error?: string }
+          | null;
+        if (!result?.success) {
+          return {
+            success: false,
+            error: result?.error ?? "Failed to undo check-in",
+          };
         }
 
-        // Update local state
         if (isMountedRef.current) {
           setRsvps((prev) =>
             prev.map((rsvp) =>
@@ -226,8 +230,8 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
                     checked_in_at: null,
                     checked_in_by: null,
                   }
-                : rsvp
-            )
+                : rsvp,
+            ),
           );
         }
 
@@ -237,7 +241,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
         return { success: false, error: (e as Error).message };
       }
     },
-    []
+    [],
   );
 
   const findRsvpByUserId = useCallback(

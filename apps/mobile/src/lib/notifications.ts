@@ -7,8 +7,14 @@ import Constants from "expo-constants";
 import { supabase } from "./supabase";
 import { captureException } from "./analytics";
 
-// Notification types that map to web
-export type NotificationType = "announcement" | "event";
+// Notification types that map to web. `event_reminder` is the cron-driven
+// 24h/1h reminder; `event_live_activity` is forward-compat for the iOS LA
+// taps coming in P3 — both deep-link to the same event detail screen.
+export type NotificationType =
+  | "announcement"
+  | "event"
+  | "event_reminder"
+  | "event_live_activity";
 
 export interface NotificationData {
   type: NotificationType;
@@ -236,6 +242,8 @@ export function getNotificationRoute(data: NotificationData): string | null {
     case "announcement":
       return `/(app)/${data.orgSlug}/announcements/${data.id}`;
     case "event":
+    case "event_reminder":
+    case "event_live_activity":
       return `/(app)/${data.orgSlug}/events/${data.id}`;
     default:
       return null;

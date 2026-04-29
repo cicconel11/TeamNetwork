@@ -1,0 +1,12 @@
+{
+  "type": "widget",
+  "name": "TeamMeetWidget",
+  "icon": "../../assets/icon.png",
+  "deploymentTarget": "17.0",
+  "frameworks": ["WidgetKit", "ActivityKit", "SwiftUI", "AppIntents"],
+  "entitlements": {
+    "com.apple.security.application-groups": [
+      "group.com.teammeet.shared"
+    ]
+  }
+}

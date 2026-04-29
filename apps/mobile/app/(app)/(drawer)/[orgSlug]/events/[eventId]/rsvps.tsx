@@ -39,8 +39,8 @@ interface EventInfo {
 const STATUS_CONFIG: Record<RSVPStatus, { label: string; icon: React.ReactNode; colors: { background: string; text: string; border: string } }> = {
   attending: {
     label: "Going",
-    icon: <Check size={16} color={RSVP_COLORS.going.text} />,
-    colors: RSVP_COLORS.going,
+    icon: <Check size={16} color={RSVP_COLORS.attending.text} />,
+    colors: RSVP_COLORS.attending,
   },
   maybe: {
     label: "Maybe",
@@ -49,8 +49,8 @@ const STATUS_CONFIG: Record<RSVPStatus, { label: string; icon: React.ReactNode; 
   },
   not_attending: {
     label: "Can't Go",
-    icon: <X size={16} color={RSVP_COLORS.declined.text} />,
-    colors: RSVP_COLORS.declined,
+    icon: <X size={16} color={RSVP_COLORS.not_attending.text} />,
+    colors: RSVP_COLORS.not_attending,
   },
 };
 

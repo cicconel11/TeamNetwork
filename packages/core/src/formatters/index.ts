@@ -5,7 +5,12 @@
  */
 
 // RSVP label formatting
-export { getRsvpLabel, RSVP_LABELS } from "./rsvp";
+export {
+  getRsvpLabel,
+  RSVP_LABELS,
+  normalizeRsvpStatus,
+  type RsvpStatus,
+} from "./rsvp";
 
 // Date/time formatting
 export {

@@ -17,6 +17,7 @@ import { ColorSchemeProvider } from "@/contexts/ColorSchemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NetworkProvider } from "@/contexts/NetworkContext";
 import { BiometricLockProvider } from "@/contexts/BiometricLockContext";
+import { LiveActivityProvider } from "@/contexts/LiveActivityContext";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { setGlobalShowToast } from "@/components/ui/Toast";
 import AuthLoadingScreen from "@/components/AuthLoadingScreen";
@@ -105,7 +106,9 @@ export default function RootLayout() {
       <AuthProvider>
         <NetworkProvider>
           <BiometricLockProvider>
-            <RootLayoutInner />
+            <LiveActivityProvider>
+              <RootLayoutInner />
+            </LiveActivityProvider>
           </BiometricLockProvider>
         </NetworkProvider>
       </AuthProvider>

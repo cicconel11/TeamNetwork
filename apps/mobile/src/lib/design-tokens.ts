@@ -140,9 +140,10 @@ export const ROLE_COLORS = {
   },
 } as const;
 
-// RSVP state colors
+// RSVP state colors. Keys mirror the canonical DB enum values
+// (`event_rsvps.status`): `attending | not_attending | maybe`.
 export const RSVP_COLORS = {
-  going: {
+  attending: {
     background: "#d1fae5",    // emerald-100
     text: "#047857",          // emerald-700
     border: "#a7f3d0",        // emerald-200
@@ -152,7 +153,7 @@ export const RSVP_COLORS = {
     text: "#b45309",          // amber-700
     border: "#fde68a",        // amber-200
   },
-  declined: {
+  not_attending: {
     background: "#f1f5f9",    // slate-100
     text: "#64748b",          // slate-500
     border: "#e2e8f0",        // slate-200

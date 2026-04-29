@@ -119,16 +119,16 @@ describe("Design Tokens", () => {
   });
 
   describe("RSVP_COLORS", () => {
-    it("should have colors for all RSVP statuses", () => {
-      expect(RSVP_COLORS.going).toBeDefined();
+    it("should have colors for all canonical RSVP statuses", () => {
+      expect(RSVP_COLORS.attending).toBeDefined();
       expect(RSVP_COLORS.maybe).toBeDefined();
-      expect(RSVP_COLORS.declined).toBeDefined();
+      expect(RSVP_COLORS.not_attending).toBeDefined();
     });
 
     it("should have background, text, and border for each status", () => {
-      expect(RSVP_COLORS.going.background).toBeDefined();
-      expect(RSVP_COLORS.going.text).toBeDefined();
-      expect(RSVP_COLORS.going.border).toBeDefined();
+      expect(RSVP_COLORS.attending.background).toBeDefined();
+      expect(RSVP_COLORS.attending.text).toBeDefined();
+      expect(RSVP_COLORS.attending.border).toBeDefined();
     });
   });
 
