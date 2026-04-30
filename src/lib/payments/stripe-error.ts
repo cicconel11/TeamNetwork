@@ -11,7 +11,7 @@ type ErrLike = {
   raw?: { code?: string; message?: string; requestId?: string; statusCode?: number; type?: string };
 };
 
-export type StripeErrorClass = "stripe" | "idempotency" | "internal";
+type StripeErrorClass = "stripe" | "idempotency" | "internal";
 
 export function classifyCheckoutError(error: unknown): StripeErrorClass {
   if (error instanceof IdempotencyConflictError) return "idempotency";
@@ -35,7 +35,7 @@ function isVerboseDev() {
   return true;
 }
 
-export type CheckoutErrorBody = {
+type CheckoutErrorBody = {
   error: string;
   detail?: string;
   errorClass?: StripeErrorClass;
