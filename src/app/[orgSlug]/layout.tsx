@@ -19,19 +19,7 @@ import { AIPanelProvider } from "@/components/ai-assistant";
 import { JoinOrgGate } from "@/components/join/JoinOrgGate";
 import { MediaUploadManagerProvider } from "@/components/media/MediaUploadManagerContext";
 import { pickCurrentOrgProfile } from "@/lib/auth/current-org-profile";
-import dynamic from "next/dynamic";
-const AIPanel = dynamic(
-  () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
-  { ssr: false },
-);
-const AIEdgeTab = dynamic(
-  () => import("@/components/ai-assistant/AIEdgeTab").then((m) => m.AIEdgeTab),
-  { ssr: false },
-);
-const OrgGlobalSearch = dynamic(
-  () => import("@/components/search/OrgGlobalSearch").then((m) => m.OrgGlobalSearch),
-  { ssr: false },
-);
+import { AIEdgeTab, AIPanel, OrgGlobalSearch } from "@/components/layout/OrgClientShell";
 import { computeOrgThemeVariables, safeCssValue, safeHexColor } from "@/lib/theming/org-colors";
 
 interface OrgLayoutProps {

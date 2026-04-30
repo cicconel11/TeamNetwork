@@ -240,17 +240,17 @@ const nextConfig = {
     staleTimes: {
       dynamic: 0,
     },
-    // Load server-side; avoids flaky missing `./vendor-chunks/@supabase.js` after HMR / partial `.next` deletes
-    serverComponentsExternalPackages: [
-      "googleapis",
-      "@supabase/supabase-js",
-      "@supabase/ssr",
-      "@js-temporal/polyfill",
-      "pdf-parse",
-      "falkordb",
-      "node-ical",
-    ],
   },
+  // Load server-side; avoids flaky missing `./vendor-chunks/@supabase.js` after HMR / partial `.next` deletes
+  serverExternalPackages: [
+    "googleapis",
+    "@supabase/supabase-js",
+    "@supabase/ssr",
+    "@js-temporal/polyfill",
+    "pdf-parse",
+    "falkordb",
+    "node-ical",
+  ],
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
