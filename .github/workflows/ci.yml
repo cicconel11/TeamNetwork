@@ -225,22 +225,7 @@ jobs:
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci $NPM_CI_FLAGS
       - name: Run npm audit
-        run: |
-          set -euo pipefail
-          # next@14 has known advisories with no patch below v16 (breaking).
-          # Track upgrade separately; fail only if other packages report high+ issues.
-          npm audit --audit-level=high --json > /tmp/audit.json || true
-          node -e "
-          const fs = require('fs');
-          const d = JSON.parse(fs.readFileSync('/tmp/audit.json', 'utf8'));
-          const keys = Object.keys(d.vulnerabilities || {});
-          const nonNext = keys.filter((k) => k !== 'next');
-          if (nonNext.length > 0) {
-            console.error('Unexpected high+ vulnerabilities in:', nonNext.join(', '));
-            process.exit(1);
-          }
-          console.log(keys.length === 0 ? 'No vulnerabilities found.' : 'Only known next@14 advisories remain — passing.');
-          "
+        run: npm audit --audit-level=moderate
 
   # Aggregate status check so branch protection can require a single
   # "CI / All Checks" check instead of listing every job. Update the

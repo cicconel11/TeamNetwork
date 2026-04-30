@@ -29,6 +29,9 @@ module.exports = [
   {
     rules: {
       "react-hooks/set-state-in-effect": "off",
+      // Next 15 flags intentional full-document/download anchors as internal navigation.
+      // Keep this off until those flows can be reviewed route-by-route.
+      "@next/next/no-html-link-for-pages": "off",
     },
   },
   {
