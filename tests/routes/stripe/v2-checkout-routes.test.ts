@@ -41,4 +41,77 @@ describe("v2 Stripe checkout routes", () => {
     assert.match(enterpriseRoute, /success_url: `\$\{origin\}\/app\?enterprise=\$\{slug\}&checkout=success`/);
     assert.match(enterpriseRoute, /cancel_url: `\$\{origin\}\/app\/create-enterprise\?checkout=cancel`/);
   });
+
+  it("v2 routes route catch-block errors through buildCheckoutErrorResponse (no generic 400 mask)", () => {
+    for (const route of [orgRoute, enterpriseRoute]) {
+      assert.match(route, /buildCheckoutErrorResponse\(error/);
+      assert.doesNotMatch(
+        route,
+        /return respond\(\{ error: "Unable to start checkout" \}, 400\)/,
+        "v2 route still returns generic 400 mask; should use buildCheckoutErrorResponse",
+      );
+    }
+  });
+});
+
+describe("buildCheckoutErrorResponse", () => {
+  it("classifies idempotency conflicts as 409, Stripe errors as 502, others as 500 with dev-only detail", async () => {
+    const env = process.env as Record<string, string | undefined>;
+    const prevEnv = env.NODE_ENV;
+    const prevVerbose = env.STRIPE_VERBOSE_ERRORS;
+
+    const { buildCheckoutErrorResponse } = await import("../../../src/lib/payments/stripe-error.ts");
+    const { IdempotencyConflictError } = await import("../../../src/lib/payments/idempotency.ts");
+
+    try {
+      // dev-mode: detail leaks
+      env.NODE_ENV = "development";
+      delete env.STRIPE_VERBOSE_ERRORS;
+
+      const idempRes = buildCheckoutErrorResponse(new IdempotencyConflictError("dup key"));
+      assert.equal(idempRes.status, 409);
+      const idempBody = await idempRes.json();
+      assert.equal(idempBody.error, "dup key");
+      assert.equal(idempBody.errorClass, "idempotency");
+
+      const stripeErr = Object.assign(new Error("No such product: prod_X"), {
+        type: "StripeInvalidRequestError",
+      });
+      const rawStripeErr = Object.assign(new Error("raw stripe failure"), {
+        raw: { type: "invalid_request_error", requestId: "req_123" },
+      });
+      const stripeRes = buildCheckoutErrorResponse(stripeErr);
+      assert.equal(stripeRes.status, 502);
+      const stripeBody = await stripeRes.json();
+      assert.equal(stripeBody.error, "Payment provider rejected the request");
+      assert.equal(stripeBody.errorClass, "stripe");
+      assert.equal(stripeBody.detail, "No such product: prod_X");
+      assert.equal(buildCheckoutErrorResponse(rawStripeErr).status, 502);
+
+      const internalRes = buildCheckoutErrorResponse(new Error("DB write failed"));
+      assert.equal(internalRes.status, 500);
+      const internalBody = await internalRes.json();
+      assert.equal(internalBody.error, "Unable to start checkout");
+      assert.equal(internalBody.errorClass, "internal");
+      assert.equal(internalBody.detail, "DB write failed");
+
+      // production without verbose flag: detail and class suppressed
+      env.NODE_ENV = "production";
+      delete env.STRIPE_VERBOSE_ERRORS;
+
+      const prodStripeRes = buildCheckoutErrorResponse(stripeErr);
+      const prodStripeBody = await prodStripeRes.json();
+      assert.equal(prodStripeBody.detail, undefined);
+      assert.equal(prodStripeBody.errorClass, undefined);
+      const prodInternalRes = buildCheckoutErrorResponse(new Error("secret leak"));
+      const prodInternalBody = await prodInternalRes.json();
+      assert.equal(prodInternalBody.detail, undefined);
+      assert.equal(prodInternalBody.errorClass, undefined);
+    } finally {
+      if (prevEnv === undefined) delete env.NODE_ENV;
+      else env.NODE_ENV = prevEnv;
+      if (prevVerbose === undefined) delete env.STRIPE_VERBOSE_ERRORS;
+      else env.STRIPE_VERBOSE_ERRORS = prevVerbose;
+    }
+  });
 });
