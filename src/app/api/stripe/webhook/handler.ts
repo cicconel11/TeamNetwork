@@ -151,6 +151,10 @@ export async function handleStripeWebhookPost(
   const {
     resolveOrgForSubscriptionFlow,
     validateOrgOwnsStripeResource,
+    ensureOrganizationFromMetadata,
+    ensureSubscriptionSeedV2,
+    grantAdminRole,
+    resolveCreatorFromPaymentAttempt,
   } = createOrgProvisioner({ supabase, debugLog });
 
   const objectId =
@@ -310,6 +314,346 @@ export async function handleStripeWebhookPost(
           typeof session.customer === "string" ? session.customer : session.customer?.id || null;
 
         debugLog("stripe-webhook", "checkout.session.completed - org:", maskPII(session.metadata?.organization_id), "session:", maskPII(session.id), "mode:", session.mode);
+
+        // v2 self-serve org signup. MUST short-circuit before the generic
+        // `mode === "subscription"` branch -- that branch reads v1-only
+        // metadata fields (alumni_bucket, base_interval) and would clobber
+        // v2 state with v1 column defaults.
+        if (session.metadata?.type === "org_v2") {
+          const v2AttemptId =
+            (session.metadata?.payment_attempt_id as string | undefined) ?? null;
+
+          if (v2AttemptId) {
+            const { data: priorAttempt } = await supabase
+              .from("payment_attempts")
+              .select("status")
+              .eq("id", v2AttemptId)
+              .maybeSingle();
+            if (priorAttempt?.status === "succeeded") {
+              debugLog("stripe-webhook", "org_v2 attempt already succeeded; skipping reprovision");
+              break;
+            }
+          }
+
+          if (session.payment_status !== "paid") {
+            debugLog("stripe-webhook", "org_v2 checkout completed without payment; skipping");
+            break;
+          }
+
+          const creatorId = (session.metadata?.creator_id as string | undefined) ?? null;
+          const orgSlug = (session.metadata?.org_slug as string | undefined) ?? null;
+          const orgName = (session.metadata?.org_name as string | undefined) ?? null;
+          const orgDescription = (session.metadata?.org_description as string | undefined) ?? null;
+          const orgPrimaryColor = (session.metadata?.org_primary_color as string | undefined) ?? null;
+          const billingInterval = session.metadata?.billing_interval === "year" ? "year" : "month";
+
+          if (!creatorId || !orgSlug || !orgName) {
+            console.error("[stripe-webhook] org_v2 missing required metadata", {
+              eventId: maskPII(event.id),
+              sessionId: maskPII(session.id),
+            });
+            if (v2AttemptId) {
+              await updatePaymentAttemptStatus(supabase, {
+                paymentAttemptId: v2AttemptId,
+                status: "failed",
+                lastError: "missing_required_metadata",
+              });
+            }
+            return NextResponse.json(
+              { error: "org_v2 provisioning failed - missing metadata" },
+              { status: 500 },
+            );
+          }
+
+          const orgId = await ensureOrganizationFromMetadata({
+            organizationId: null,
+            organizationSlug: orgSlug,
+            organizationName: orgName,
+            organizationDescription: orgDescription,
+            organizationColor: orgPrimaryColor,
+            createdBy: null,
+            baseInterval: billingInterval,
+            alumniBucket: "none",
+            isTrial: false,
+          });
+
+          if (!orgId) {
+            console.error("[stripe-webhook] org_v2 organization provisioning failed", {
+              eventId: maskPII(event.id),
+              sessionId: maskPII(session.id),
+            });
+            return NextResponse.json(
+              { error: "org_v2 organization provisioning failed - will retry" },
+              { status: 500 },
+            );
+          }
+
+          let v2Status = "active";
+          let v2PeriodEnd: string | null = null;
+          if (subscriptionId) {
+            try {
+              const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
+              v2Status = normalizeSubscriptionStatus(subscription);
+              v2PeriodEnd = extractSubscriptionPeriodEndIso(subscription);
+            } catch (error) {
+              console.error("[stripe-webhook] org_v2 subscription retrieve failed", error);
+            }
+          }
+
+          let snapshot: Record<string, unknown> = {};
+          const rawSnapshot = session.metadata?.quote_snapshot;
+          if (typeof rawSnapshot === "string" && rawSnapshot.length > 0) {
+            try {
+              const parsed = JSON.parse(rawSnapshot);
+              if (parsed && typeof parsed === "object") {
+                snapshot = parsed as Record<string, unknown>;
+              }
+            } catch {
+              // ignore — snapshot stays empty object, breakdown rebuildable from cents
+            }
+          }
+          snapshot.tier = "single";
+          snapshot.actives = parseInt(String(session.metadata?.actives ?? "0"), 10) || 0;
+          snapshot.alumni = parseInt(String(session.metadata?.alumni ?? "0"), 10) || 0;
+          snapshot.monthlyCents = parseInt(String(session.metadata?.monthly_cents ?? "0"), 10) || 0;
+          snapshot.yearlyCents = parseInt(String(session.metadata?.yearly_cents ?? "0"), 10) || 0;
+          snapshot.billingInterval = billingInterval;
+
+          await ensureSubscriptionSeedV2(orgId, {
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscriptionId,
+            billingInterval,
+            status: v2Status,
+            currentPeriodEnd: v2PeriodEnd,
+            snapshot,
+          });
+
+          // grantAdminRole resolves the creator from payment_attempts; safer than
+          // trusting metadata.creator_id directly. Skip if no attempt id.
+          if (v2AttemptId) {
+            const granted = await grantAdminRole(orgId, v2AttemptId);
+            if (!granted) {
+              console.error("[stripe-webhook] org_v2 admin grant failed", {
+                eventId: maskPII(event.id),
+                organizationId: maskPII(orgId),
+              });
+              return NextResponse.json(
+                { error: "org_v2 admin grant failed - will retry" },
+                { status: 500 },
+              );
+            }
+            await updatePaymentAttemptStatus(supabase, {
+              paymentAttemptId: v2AttemptId,
+              status: "succeeded",
+              checkoutSessionId: session.id,
+              organizationId: orgId,
+            });
+          } else {
+            // No payment_attempt_id -> creator from metadata fallback (legacy path).
+            await supabase
+              .from("user_organization_roles")
+              .upsert(
+                { user_id: creatorId, organization_id: orgId, role: "admin", status: "active" },
+                { onConflict: "organization_id,user_id" },
+              );
+          }
+
+          debugLog("stripe-webhook", "org_v2 provisioned:", maskPII(orgId));
+          break;
+        }
+
+        // v2 self-serve enterprise signup. Same precedence reasoning as org_v2.
+        if (session.metadata?.type === "enterprise_v2") {
+          const v2AttemptId =
+            (session.metadata?.payment_attempt_id as string | undefined) ?? null;
+
+          if (v2AttemptId) {
+            const { data: priorAttempt } = await supabase
+              .from("payment_attempts")
+              .select("status")
+              .eq("id", v2AttemptId)
+              .maybeSingle();
+            if (priorAttempt?.status === "succeeded") {
+              debugLog("stripe-webhook", "enterprise_v2 attempt already succeeded; skipping");
+              break;
+            }
+          }
+
+          if (session.payment_status !== "paid") {
+            debugLog("stripe-webhook", "enterprise_v2 completed without payment; skipping");
+            break;
+          }
+
+          const enterpriseSlug = (session.metadata?.enterprise_slug as string | undefined) ?? null;
+          const enterpriseName = (session.metadata?.enterprise_name as string | undefined) ?? null;
+          const enterpriseDescription =
+            (session.metadata?.enterprise_description as string | undefined) ?? null;
+          const billingContactEmail =
+            (session.metadata?.billing_contact_email as string | undefined) ?? null;
+          const billingInterval =
+            session.metadata?.billing_interval === "month" ? "month" : "year";
+
+          if (!enterpriseSlug || !enterpriseName) {
+            console.error("[stripe-webhook] enterprise_v2 missing required metadata", {
+              eventId: maskPII(event.id),
+              sessionId: maskPII(session.id),
+            });
+            if (v2AttemptId) {
+              await updatePaymentAttemptStatus(supabase, {
+                paymentAttemptId: v2AttemptId,
+                status: "failed",
+                lastError: "missing_required_metadata",
+              });
+            }
+            return NextResponse.json(
+              { error: "enterprise_v2 provisioning failed - missing metadata" },
+              { status: 500 },
+            );
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let { data: enterprise } = await (supabase as any)
+            .from("enterprises")
+            .select("*")
+            .eq("slug", enterpriseSlug)
+            .maybeSingle();
+
+          if (!enterprise) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: created, error: insertError } = await (supabase as any)
+              .from("enterprises")
+              .insert({
+                name: enterpriseName,
+                slug: enterpriseSlug,
+                description: enterpriseDescription || null,
+                billing_contact_email: billingContactEmail || null,
+              })
+              .select()
+              .single();
+
+            if (insertError || !created) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { data: retry } = await (supabase as any)
+                .from("enterprises")
+                .select("*")
+                .eq("slug", enterpriseSlug)
+                .maybeSingle();
+              if (!retry) {
+                if (v2AttemptId) {
+                  await updatePaymentAttemptStatus(supabase, {
+                    paymentAttemptId: v2AttemptId,
+                    status: "failed",
+                    lastError: insertError?.message || "enterprise_insert_failed",
+                  });
+                }
+                return NextResponse.json(
+                  { error: "enterprise_v2 provisioning failed - will retry" },
+                  { status: 500 },
+                );
+              }
+              enterprise = retry;
+            } else {
+              enterprise = created;
+            }
+          }
+
+          let snapshot: Record<string, unknown> = {};
+          const rawSnapshot = session.metadata?.quote_snapshot;
+          if (typeof rawSnapshot === "string" && rawSnapshot.length > 0) {
+            try {
+              const parsed = JSON.parse(rawSnapshot);
+              if (parsed && typeof parsed === "object") {
+                snapshot = parsed as Record<string, unknown>;
+              }
+            } catch {
+              // ignore
+            }
+          }
+          snapshot.tier = "enterprise";
+          snapshot.actives = parseInt(String(session.metadata?.actives ?? "0"), 10) || 0;
+          snapshot.alumni = parseInt(String(session.metadata?.alumni ?? "0"), 10) || 0;
+          snapshot.subOrgs = parseInt(String(session.metadata?.sub_orgs ?? "0"), 10) || 0;
+          snapshot.monthlyCents = parseInt(String(session.metadata?.monthly_cents ?? "0"), 10) || 0;
+          snapshot.yearlyCents = parseInt(String(session.metadata?.yearly_cents ?? "0"), 10) || 0;
+          snapshot.billingInterval = billingInterval;
+
+          let enterpriseStatus = "active";
+          let enterprisePeriodEnd: string | null = null;
+          if (subscriptionId) {
+            try {
+              const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
+              enterpriseStatus = normalizeSubscriptionStatus(subscription);
+              enterprisePeriodEnd = extractSubscriptionPeriodEndIso(subscription);
+            } catch (error) {
+              console.error("[stripe-webhook] enterprise_v2 subscription retrieve failed", error);
+            }
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: subErr } = await (supabase as any)
+            .from("enterprise_subscriptions")
+            .upsert(
+              {
+                enterprise_id: enterprise.id,
+                stripe_customer_id: customerId,
+                stripe_subscription_id: subscriptionId,
+                billing_interval: billingInterval,
+                pricing_model_version: "v2",
+                pricing_v2_snapshot: snapshot,
+                status: enterpriseStatus,
+                current_period_end: enterprisePeriodEnd,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "enterprise_id" },
+            );
+
+          if (subErr) {
+            console.error("[stripe-webhook] enterprise_v2 subscription upsert failed", subErr);
+            if (v2AttemptId) {
+              await updatePaymentAttemptStatus(supabase, {
+                paymentAttemptId: v2AttemptId,
+                status: "failed",
+                lastError: subErr.message || "subscription_upsert_failed",
+              });
+            }
+            return NextResponse.json(
+              { error: "enterprise_v2 subscription provisioning failed" },
+              { status: 500 },
+            );
+          }
+
+          const ownerUserId = await resolveCreatorFromPaymentAttempt(v2AttemptId);
+          if (!ownerUserId) {
+            console.error("[stripe-webhook] enterprise_v2 owner grant failed - no creator in payment_attempts", {
+              eventId: maskPII(event.id),
+              enterpriseId: maskPII(enterprise.id),
+            });
+            return NextResponse.json(
+              { error: "enterprise_v2 owner grant failed - will retry" },
+              { status: 500 },
+            );
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from("user_enterprise_roles")
+            .upsert(
+              { user_id: ownerUserId, enterprise_id: enterprise.id, role: "owner" },
+              { onConflict: "user_id,enterprise_id" },
+            );
+
+          if (v2AttemptId) {
+            await updatePaymentAttemptStatus(supabase, {
+              paymentAttemptId: v2AttemptId,
+              status: "succeeded",
+              checkoutSessionId: session.id,
+              metadataPatch: { provisioned_enterprise_id: enterprise.id },
+            });
+          }
+
+          debugLog("stripe-webhook", "enterprise_v2 provisioned:", enterprise.id);
+          break;
+        }
 
         // v2 dynamic-quote test slice. Must stay above the enterprise + generic
         // subscription branches: those branches require an org_id and would 500

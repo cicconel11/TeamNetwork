@@ -2268,6 +2268,8 @@ export type Database = {
           id: string
           price_per_sub_org_cents: number | null
           pricing_model: string | null
+          pricing_model_version: string
+          pricing_v2_snapshot: Json | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -2284,6 +2286,8 @@ export type Database = {
           id?: string
           price_per_sub_org_cents?: number | null
           pricing_model?: string | null
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2300,6 +2304,8 @@ export type Database = {
           id?: string
           price_per_sub_org_cents?: number | null
           pricing_model?: string | null
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -4863,6 +4869,8 @@ export type Database = {
           media_storage_quota_bytes: number | null
           organization_id: string
           parents_bucket: string
+          pricing_model_version: string
+          pricing_v2_snapshot: Json | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -4880,6 +4888,8 @@ export type Database = {
           media_storage_quota_bytes?: number | null
           organization_id: string
           parents_bucket?: string
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -4897,6 +4907,8 @@ export type Database = {
           media_storage_quota_bytes?: number | null
           organization_id?: string
           parents_bucket?: string
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null

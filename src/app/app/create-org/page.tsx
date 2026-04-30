@@ -1,28 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Input, Card, Textarea, Select, InlineBanner, ToggleSwitch } from "@/components/ui";
+import { Button, Input, Card, Textarea, InlineBanner } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { useIdempotencyKey } from "@/hooks";
-import { createOrgSchema, type CreateOrgForm } from "@/lib/schemas/organization";
-import { ORG_TRIAL_DAYS, isOrgFreeTrialSelectable } from "@/lib/subscription/org-trial";
-import {
-  BASE_PRICES,
-  ALUMNI_ADD_ON_PRICES,
-  ALUMNI_BUCKET_LABELS,
-  getTotalPrice,
-  formatPrice,
-} from "@/lib/pricing";
-import type { AlumniBucket } from "@/types/database";
+import { createOrgV2Schema, type CreateOrgV2Form } from "@/lib/schemas/organization-v2";
+import { quote, isSelfServeSalesLed } from "@/lib/pricing-v2";
 
-const ALUMNI_OPTIONS = (Object.entries(ALUMNI_BUCKET_LABELS) as [AlumniBucket, string][]).map(
-  ([value, label]) => ({ value, label }),
-);
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
 
 export default function CreateOrgPage() {
   const router = useRouter();
@@ -38,29 +30,35 @@ export default function CreateOrgPage() {
     setValue,
     trigger,
     formState: { errors },
-  } = useForm<CreateOrgForm>({
-    resolver: zodResolver(createOrgSchema),
+  } = useForm<CreateOrgV2Form>({
+    resolver: zodResolver(createOrgV2Schema),
     defaultValues: {
       name: "",
       slug: "",
       description: "",
       primaryColor: "#1e3a5f",
       billingInterval: "month",
-      alumniBucket: "none",
-      withTrial: false,
+      actives: 0,
+      alumni: 0,
     },
   });
 
   const formValues = watch();
-  const { name, slug, primaryColor, billingInterval, alumniBucket, withTrial } = formValues;
-  const trialEligible = isOrgFreeTrialSelectable({ billingInterval, alumniBucket });
-  const effectiveWithTrial = trialEligible && Boolean(withTrial);
+  const { name, slug, primaryColor, billingInterval, actives, alumni } = formValues;
 
-  useEffect(() => {
-    if (!trialEligible && withTrial) {
-      setValue("withTrial", false);
-    }
-  }, [setValue, trialEligible, withTrial]);
+  const q = useMemo(
+    () => quote({ tier: "single", actives: actives || 0, alumni: alumni || 0 }),
+    [actives, alumni],
+  );
+  const salesLed = isSelfServeSalesLed({
+    tier: "single",
+    actives: actives || 0,
+    alumni: alumni || 0,
+  });
+  const monthlyCents = q.monthlyCents;
+  const yearlyCents = q.yearlyCents;
+  const displayCents = billingInterval === "year" ? yearlyCents : monthlyCents;
+  const intervalLabel = billingInterval === "year" ? "/yr" : "/mo";
 
   const fingerprint = useMemo(
     () =>
@@ -70,20 +68,18 @@ export default function CreateOrgPage() {
         description: formValues.description?.trim() || "",
         primaryColor: primaryColor || "",
         billingInterval,
-        alumniBucket,
-        withTrial: effectiveWithTrial,
+        actives: actives || 0,
+        alumni: alumni || 0,
       }),
-    [alumniBucket, billingInterval, formValues.description, effectiveWithTrial, name, primaryColor, slug],
+    [actives, alumni, billingInterval, formValues.description, name, primaryColor, slug],
   );
   const { idempotencyKey } = useIdempotencyKey({
-    storageKey: "create-org-checkout",
+    storageKey: "create-org-v2-checkout",
     fingerprint,
   });
 
-  // Auto-generate slug from name
   const handleNameChange = (value: string) => {
     setValue("name", value);
-    // Generate slug: lowercase, replace spaces with hyphens, remove special chars
     const generatedSlug = value
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, "")
@@ -94,13 +90,11 @@ export default function CreateOrgPage() {
   };
 
   const handleNext = async () => {
-    const valid = await trigger(["name", "slug"]);
-    if (valid) {
-      setStep(2);
-    }
+    const valid = await trigger(["name", "slug", "primaryColor"]);
+    if (valid) setStep(2);
   };
 
-  const onSubmit = async (data: CreateOrgForm) => {
+  const onSubmit = async (data: CreateOrgV2Form) => {
     setIsLoading(true);
     setError(null);
     setInfoMessage(null);
@@ -111,38 +105,35 @@ export default function CreateOrgPage() {
     }
 
     try {
-      const response = await fetch("/api/stripe/create-org-checkout", {
+      const response = await fetch("/api/stripe/create-org-v2-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: data.name,
           slug: data.slug,
-          description: data.description,
+          description: data.description ?? "",
           primaryColor: data.primaryColor,
           billingInterval: data.billingInterval,
-          alumniBucket: data.alumniBucket,
-          withTrial: effectiveWithTrial,
+          actives: data.actives,
+          alumni: data.alumni,
           idempotencyKey,
         }),
       });
 
       const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(responseData.error || "Unable to start checkout");
-      }
+      if (!response.ok) throw new Error(responseData.error || "Unable to start checkout");
 
       if (responseData.mode === "sales") {
-        setInfoMessage("Thank you! We will contact you to finalize a custom alumni plan.");
+        setInfoMessage("Thank you! We will contact you to finalize a custom plan.");
         router.push(`/app?org=${data.slug}&billing=pending-sales`);
         return;
       }
 
-      if (responseData.url) {
-        window.location.href = responseData.url as string;
+      const checkoutUrl = responseData.checkoutUrl ?? responseData.url;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl as string;
         return;
       }
-
       throw new Error("Missing checkout URL");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -150,17 +141,10 @@ export default function CreateOrgPage() {
     }
   };
 
-  // Dynamic pricing summary
-  const basePrice = BASE_PRICES[billingInterval];
-  const alumniAddon =
-    alumniBucket !== "none" && alumniBucket !== "5000+"
-      ? ALUMNI_ADD_ON_PRICES[alumniBucket][billingInterval]
-      : null;
-  const totalPrice = getTotalPrice(billingInterval, alumniBucket);
+  const submitDisabled = !salesLed && displayCents <= 0;
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/app">
@@ -173,14 +157,11 @@ export default function CreateOrgPage() {
             </h1>
           </Link>
           <form action="/auth/signout" method="POST">
-            <Button variant="ghost" size="sm" type="submit">
-              Sign Out
-            </Button>
+            <Button variant="ghost" size="sm" type="submit">Sign Out</Button>
           </form>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="w-full max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="mb-8">
           <Link href="/app" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
@@ -193,16 +174,14 @@ export default function CreateOrgPage() {
 
         <Card className="p-8">
           <div className="mb-8">
-            <p className="text-sm font-medium text-muted-foreground mb-1">
-              Step {step} of 2
-            </p>
+            <p className="text-sm font-medium text-muted-foreground mb-1">Step {step} of 2</p>
             <h2 className="text-2xl font-bold text-foreground mb-2">
               {step === 1 ? "Your Organization" : "Plan & Billing"}
             </h2>
             <p className="text-muted-foreground">
               {step === 1
-                ? "Set up your team, club, or group. You\u2019ll be the admin and can invite members later."
-                : "Choose your billing plan and alumni access level."}
+                ? "Set up your team, club, or group. You’ll be the admin and can invite members later."
+                : "Tell us about your size — pricing scales with your active members and alumni."}
             </p>
           </div>
 
@@ -215,15 +194,10 @@ export default function CreateOrgPage() {
             </InlineBanner>
           )}
           {infoMessage && (
-            <InlineBanner variant="success" className="mb-6">
-              {infoMessage}
-            </InlineBanner>
+            <InlineBanner variant="success" className="mb-6">{infoMessage}</InlineBanner>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)}>
-            <input type="hidden" {...register("withTrial")} />
-
-            {/* Step 1: Your Organization */}
             {step === 1 && (
               <div className="space-y-6">
                 <Input
@@ -231,11 +205,8 @@ export default function CreateOrgPage() {
                   type="text"
                   placeholder="e.g., Stanford Crew, The Whiffenpoofs"
                   error={errors.name?.message}
-                  {...register("name", {
-                    onChange: (e) => handleNameChange(e.target.value),
-                  })}
+                  {...register("name", { onChange: (e) => handleNameChange(e.target.value) })}
                 />
-
                 <Input
                   label="URL Slug"
                   type="text"
@@ -248,7 +219,6 @@ export default function CreateOrgPage() {
                     },
                   })}
                 />
-
                 <Textarea
                   label="Description"
                   placeholder="Tell people about your organization..."
@@ -256,11 +226,8 @@ export default function CreateOrgPage() {
                   error={errors.description?.message}
                   {...register("description")}
                 />
-
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Brand Color
-                  </label>
+                  <label className="block text-sm font-medium text-foreground mb-2">Brand Color</label>
                   <div className="flex items-center gap-4">
                     <input
                       type="color"
@@ -280,24 +247,17 @@ export default function CreateOrgPage() {
                     This color will be used for your organization&apos;s branding
                   </p>
                 </div>
-
                 <div className="flex gap-4 pt-4">
                   <Link href="/app" className="flex-1">
-                    <Button type="button" variant="secondary" className="w-full">
-                      Cancel
-                    </Button>
+                    <Button type="button" variant="secondary" className="w-full">Cancel</Button>
                   </Link>
-                  <Button type="button" className="flex-1" onClick={handleNext}>
-                    Next
-                  </Button>
+                  <Button type="button" className="flex-1" onClick={handleNext}>Next</Button>
                 </div>
               </div>
             )}
 
-            {/* Step 2: Plan & Billing */}
             {step === 2 && (
               <div className="space-y-6">
-                {/* Billing Interval */}
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">Billing Interval</p>
                   <div className="flex gap-2">
@@ -312,88 +272,68 @@ export default function CreateOrgPage() {
                             : "border-border bg-muted text-foreground"
                         }`}
                       >
-                        {interval === "month" ? "Monthly" : "Yearly (save 2 months)"}
+                        {interval === "month" ? "Monthly" : "Yearly (save 17%)"}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Alumni Access */}
-                <Select
-                  label="Alumni Access"
-                  options={ALUMNI_OPTIONS}
-                  error={errors.alumniBucket?.message}
-                  {...register("alumniBucket")}
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Active Members"
+                    type="number"
+                    min={0}
+                    error={errors.actives?.message}
+                    {...register("actives", { valueAsNumber: true })}
+                  />
+                  <Input
+                    label="Alumni"
+                    type="number"
+                    min={0}
+                    error={errors.alumni?.message}
+                    {...register("alumni", { valueAsNumber: true })}
+                  />
+                </div>
 
-                {/* Dynamic Pricing Summary */}
                 <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm space-y-2">
                   <p className="font-semibold text-foreground">Pricing Summary</p>
-                  {totalPrice !== null ? (
+                  {salesLed ? (
+                    <p className="text-muted-foreground">
+                      Custom quote &mdash; we&apos;ll contact you to finalize pricing for your network size.
+                    </p>
+                  ) : displayCents > 0 ? (
                     <>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>Active Team</span>
-                        <span>{formatPrice(basePrice, billingInterval)}</span>
+                        <span>Active members ({actives || 0})</span>
+                        <span>{formatCents(q.breakdown.activeMonthlyCents)}/mo</span>
                       </div>
-                      {alumniAddon !== null && (
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Alumni ({ALUMNI_BUCKET_LABELS[alumniBucket]})</span>
-                          <span>+{formatPrice(alumniAddon, billingInterval)}</span>
-                        </div>
-                      )}
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Alumni ({alumni || 0})</span>
+                        <span>{formatCents(q.breakdown.alumniMonthlyCents)}/mo</span>
+                      </div>
                       <div className="border-t border-border my-1" />
                       <div className="flex justify-between font-medium text-foreground">
                         <span>Total</span>
-                        <span>{formatPrice(totalPrice, billingInterval)}</span>
+                        <span>{formatCents(displayCents)}{intervalLabel}</span>
                       </div>
                     </>
                   ) : (
                     <p className="text-muted-foreground">
-                      Custom quote &mdash; we&apos;ll reach out to discuss pricing for your alumni network.
+                      Add active members or alumni to see pricing.
                     </p>
                   )}
                 </div>
 
-                {/* 5000+ warning */}
-                {alumniBucket === "5000+" && (
+                {salesLed && (
                   <InlineBanner variant="warning">
-                    For 5,000+ alumni, we will contact you with custom pricing. No payment is collected now and the org will remain pending_sales.
+                    With {alumni?.toLocaleString()} alumni, we will contact you with custom pricing. No payment is collected now and the org remains pending_sales.
                   </InlineBanner>
                 )}
 
-                {/* Trial toggle */}
-                {trialEligible && (
-                  <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1 pr-4">
-                        <p className="font-medium text-foreground">
-                          {ORG_TRIAL_DAYS}-day free trial
-                        </p>
-                        <p className="text-muted-foreground">
-                          Your card is collected now. Billing starts when the trial ends unless you cancel.
-                        </p>
-                      </div>
-                      <ToggleSwitch
-                        checked={effectiveWithTrial}
-                        onChange={(checked) => setValue("withTrial", checked)}
-                        label={`Enable ${ORG_TRIAL_DAYS}-day free trial`}
-                      />
-                    </div>
-                    {effectiveWithTrial && (
-                      <p className="text-emerald-600 dark:text-emerald-400">
-                        Trial selected. Your organization will be active immediately, and the first charge will happen after {ORG_TRIAL_DAYS} days.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Action buttons */}
                 <div className="flex gap-4 pt-4">
-                  <Button type="button" variant="secondary" className="flex-1" onClick={() => setStep(1)}>
-                    Back
-                  </Button>
-                  <Button type="submit" className="flex-1" isLoading={isLoading}>
-                    {effectiveWithTrial ? `Start ${ORG_TRIAL_DAYS}-Day Free Trial` : "Create Organization"}
+                  <Button type="button" variant="secondary" className="flex-1" onClick={() => setStep(1)}>Back</Button>
+                  <Button type="submit" className="flex-1" isLoading={isLoading} disabled={submitDisabled}>
+                    {salesLed ? "Contact Sales" : "Create Organization"}
                   </Button>
                 </div>
               </div>

@@ -1,3 +1,6 @@
+// v1 pricing route retired from UI 2026-04-29. New signup flows use
+// /api/stripe/create-org-v2-checkout. Route retained for in-flight v1 sessions
+// and prior idempotency keys. Do not link new UI here.
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { stripe, getPriceIds, isSalesLedBucket } from "@/lib/stripe";
