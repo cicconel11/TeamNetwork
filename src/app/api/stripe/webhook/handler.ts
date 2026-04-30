@@ -311,6 +311,27 @@ export async function handleStripeWebhookPost(
 
         debugLog("stripe-webhook", "checkout.session.completed - org:", maskPII(session.metadata?.organization_id), "session:", maskPII(session.id), "mode:", session.mode);
 
+        // v2 dynamic-quote test slice. Must stay above the enterprise + generic
+        // subscription branches: those branches require an org_id and would 500
+        // on a v2 session that has none.
+        if (session.metadata?.type === "dynamic_v2") {
+          const attemptId =
+            (session.metadata?.payment_attempt_id as string | undefined) ?? null;
+          if (attemptId && session.payment_status === "paid") {
+            await updatePaymentAttemptStatus(supabase, {
+              paymentAttemptId: attemptId,
+              checkoutSessionId: session.id,
+              paymentIntentId:
+                typeof session.payment_intent === "string"
+                  ? session.payment_intent
+                  : session.payment_intent?.id || null,
+              status: "succeeded",
+              organizationId: null,
+            });
+          }
+          break;
+        }
+
         // Handle enterprise checkout (subscription mode)
         if (session.metadata?.type === "enterprise") {
           const enterprisePaymentAttemptId =

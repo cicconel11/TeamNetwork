@@ -432,6 +432,7 @@ export default async function LandingPage() {
                   <Link href="#features" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Features</Link>
                   <Link href="#pricing" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Pricing</Link>
                   <Link href="/demos" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Demos</Link>
+                  <Link href="/pricing/calculator" className="text-landing-cream/50 hover:text-landing-cream transition-colors">Pricing calculator</Link>
                 </nav>
               </div>
               <div>
