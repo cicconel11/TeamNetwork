@@ -150,6 +150,57 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
     }
   };
 
+  const ensureSubscriptionSeedV2 = async (
+    orgId: string,
+    params: {
+      stripeCustomerId: string | null;
+      stripeSubscriptionId: string | null;
+      billingInterval: SubscriptionInterval;
+      status: string;
+      currentPeriodEnd: string | null;
+      snapshot: Record<string, unknown>;
+    },
+  ) => {
+    const { data: existing, error: existingError } = await orgSubs()
+      .select("id")
+      .eq("organization_id", orgId)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(`[ensureSubscriptionSeedV2] Existence check failed: ${existingError.message}`);
+    }
+
+    const basePayload = {
+      pricing_model_version: "v2",
+      pricing_v2_snapshot: params.snapshot,
+      base_plan_interval: params.billingInterval,
+      alumni_bucket: "none",
+      alumni_plan_interval: null,
+      is_trial: false,
+      stripe_customer_id: params.stripeCustomerId,
+      stripe_subscription_id: params.stripeSubscriptionId,
+      status: params.status,
+      current_period_end: params.currentPeriodEnd,
+    };
+
+    if (existing?.id) {
+      const { error } = await orgSubs()
+        .update({ ...basePayload, updated_at: new Date().toISOString() })
+        .eq("organization_id", orgId);
+      if (error) {
+        throw new Error(`Failed to seed v2 subscription row: ${error.message}`);
+      }
+    } else {
+      const { error } = await orgSubs().insert({
+        organization_id: orgId,
+        ...basePayload,
+      });
+      if (error) {
+        throw new Error(`Failed to create v2 subscription row: ${error.message}`);
+      }
+    }
+  };
+
   const ensureSubscriptionSeed = async (orgId: string, metadata: OrgMetadata) => {
     const baseInterval = metadata.baseInterval || "month";
     const alumniBucket = metadata.alumniBucket || "none";
@@ -318,6 +369,7 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
     ensureOrganizationFromMetadata,
     grantAdminRole,
     ensureSubscriptionSeed,
+    ensureSubscriptionSeedV2,
     resolveOrgForSubscriptionFlow,
     validateOrgOwnsStripeResource,
   };

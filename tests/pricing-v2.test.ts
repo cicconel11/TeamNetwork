@@ -1,7 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 
-import { quote, SALES_LED_ALUMNI_THRESHOLD } from "@/lib/pricing-v2";
+import {
+  quote,
+  SALES_LED_ALUMNI_THRESHOLD,
+  isSelfServeSalesLed,
+  SELF_SERVE_ALUMNI_LIMIT,
+  SELF_SERVE_SUB_ORG_LIMIT,
+} from "@/lib/pricing-v2";
 
 describe("pricing-v2 quote() — pinned scenarios", () => {
   it("single org: 200 actives + 1,200 alumni → $320/mo, $3,187.20/yr", () => {
@@ -85,5 +91,69 @@ describe("pricing-v2 quote() — edges", () => {
     assert.strictEqual(q.monthlyCents, 0);
     assert.strictEqual(q.breakdown.subOrgMonthlyCents, 0);
     assert.strictEqual(q.breakdown.subOrgsBilled, 0);
+  });
+});
+
+describe("pricing-v2 isSelfServeSalesLed()", () => {
+  it("single tier at limit not sales-led", () => {
+    assert.strictEqual(
+      isSelfServeSalesLed({ tier: "single", actives: 100, alumni: SELF_SERVE_ALUMNI_LIMIT }),
+      false,
+    );
+  });
+
+  it("single tier above limit sales-led", () => {
+    assert.strictEqual(
+      isSelfServeSalesLed({ tier: "single", actives: 100, alumni: SELF_SERVE_ALUMNI_LIMIT + 1 }),
+      true,
+    );
+  });
+
+  it("enterprise tier at sub-org cap not sales-led", () => {
+    assert.strictEqual(
+      isSelfServeSalesLed({
+        tier: "enterprise",
+        actives: 100,
+        alumni: 1_000,
+        subOrgs: SELF_SERVE_SUB_ORG_LIMIT,
+      }),
+      false,
+    );
+  });
+
+  it("enterprise tier above sub-org cap sales-led", () => {
+    assert.strictEqual(
+      isSelfServeSalesLed({
+        tier: "enterprise",
+        actives: 100,
+        alumni: 1_000,
+        subOrgs: SELF_SERVE_SUB_ORG_LIMIT + 1,
+      }),
+      true,
+    );
+  });
+
+  it("enterprise alumni overflow trumps small sub-org count", () => {
+    assert.strictEqual(
+      isSelfServeSalesLed({
+        tier: "enterprise",
+        actives: 0,
+        alumni: SELF_SERVE_ALUMNI_LIMIT + 1,
+        subOrgs: 0,
+      }),
+      true,
+    );
+  });
+
+  it("single tier ignores subOrgs for sales-led check", () => {
+    assert.strictEqual(
+      isSelfServeSalesLed({
+        tier: "single",
+        actives: 0,
+        alumni: 0,
+        subOrgs: SELF_SERVE_SUB_ORG_LIMIT + 100,
+      }),
+      false,
+    );
   });
 });

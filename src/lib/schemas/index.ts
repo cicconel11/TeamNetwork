@@ -15,6 +15,7 @@ export * from "./content";
 
 // Organization schemas
 export * from "./organization";
+export * from "./organization-v2";
 
 // Schedule schemas
 export * from "./schedule";

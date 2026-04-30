@@ -28,6 +28,21 @@ export interface QuoteResult {
 export const SALES_LED_ALUMNI_THRESHOLD = 100_000;
 export const YEARLY_DISCOUNT_FACTOR = 0.83;
 
+// New-org / new-enterprise self-serve signup gates to sales much earlier
+// than the public calculator's 100k cap. Matches the v1 UX precedent
+// (>5000 alumni → sales-led on /app/create-org). Enterprise tier also
+// caps sub-orgs.
+export const SELF_SERVE_ALUMNI_LIMIT = 5_000;
+export const SELF_SERVE_SUB_ORG_LIMIT = 25;
+
+export function isSelfServeSalesLed(input: QuoteInput): boolean {
+  const alumni = Math.max(0, Math.floor(input.alumni));
+  const subOrgs = Math.max(0, Math.floor(input.subOrgs ?? 0));
+  if (alumni > SELF_SERVE_ALUMNI_LIMIT) return true;
+  if (input.tier === "enterprise" && subOrgs > SELF_SERVE_SUB_ORG_LIMIT) return true;
+  return false;
+}
+
 const ENTERPRISE_PLATFORM_BASE_CENTS = 25_000;
 const SUB_ORG_FIRST_TIER_CENTS = 2_000;
 const SUB_ORG_SECOND_TIER_CENTS = 1_500;
