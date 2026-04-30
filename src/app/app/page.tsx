@@ -178,17 +178,11 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
               <span className="text-green-500">Team</span>Network
             </span>
           </h1>
-          <div className="app-hero-animate flex items-center gap-2" style={{ opacity: 0 }}>
+          <div className="app-hero-animate flex items-center gap-1.5" style={{ opacity: 0 }}>
             <ThemeToggle />
             <form action="/auth/signout" method="POST">
               <Button variant="ghost" size="sm" type="submit">{tAuth("signOut")}</Button>
             </form>
-            <Link href="/app/join">
-              <Button variant="ghost" size="sm">{tApp("joinOrg")}</Button>
-            </Link>
-            <Link href="/app/create">
-              <Button size="sm">{tApp("createOrg")}</Button>
-            </Link>
           </div>
         </div>
       </header>
@@ -232,44 +226,46 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-sm text-amber-700 dark:text-amber-300">
-                {tApp("pendingApproval", { org: pendingOrg })}
+                {tApp("pendingApprovalDesc", { org: pendingOrg })}
               </p>
             </div>
           </Card>
         )}
 
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="app-hero-animate" style={{ opacity: 0 }}>
             <p className="text-sm text-muted-foreground">{tApp("welcomeBack")}</p>
             <h2 className="text-2xl font-bold text-foreground">{tApp("yourOrgs")}</h2>
           </div>
-          <div className="app-hero-animate hidden sm:flex items-center gap-2" style={{ opacity: 0 }}>
-            <Link href="/app/join">
-              <Button variant="secondary" size="sm">{tApp("joinExisting")}</Button>
-            </Link>
-            <Link href="/app/create">
-              <Button size="sm">{tApp("createNew")}</Button>
-            </Link>
-          </div>
+          {orgs.length > 0 && (
+            <div className="app-hero-animate flex items-center gap-2" style={{ opacity: 0 }}>
+              <Link href="/app/join">
+                <Button variant="secondary" size="sm">{tApp("joinExisting")}</Button>
+              </Link>
+              <Link href="/app/create">
+                <Button size="sm">{tApp("createNew")}</Button>
+              </Link>
+            </div>
+          )}
         </div>
 
         {orgs.length === 0 ? (
           <EmptyState
             icon={
               <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
               </svg>
             }
             title={tApp("noOrgsYet")}
-            description={tApp("noOrgsDescription")}
+            description={tApp("noOrgsDesc")}
             action={
               <div className="flex flex-col gap-3">
                 <div className="flex gap-3">
                   <Link href="/app/create">
-                    <Button>{tApp("createOrganization")}</Button>
+                    <Button>{tApp("createOrg")}</Button>
                   </Link>
                   <Link href="/app/join">
-                    <Button variant="secondary">{tApp("joinOrganization")}</Button>
+                    <Button variant="secondary">{tApp("joinOrg")}</Button>
                   </Link>
                 </div>
                 {enterprises.length === 0 && (
@@ -327,7 +323,9 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
           </div>
         )}
 
-        {/* Your Enterprises Section */}
+        {/* Your Enterprises Section — hidden for brand-new users (no orgs + no enterprises)
+            since the empty state already offers an inline "create enterprise" link. */}
+        {(enterprises.length > 0 || orgs.length > 0) && (
         <section className="mt-10">
           <div className="flex items-center justify-between mb-4">
             <div className="app-hero-animate" style={{ opacity: 0 }}>
@@ -407,7 +405,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {tApp("enterpriseDescription")}
+                    {tApp("manageMultiple")}
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -420,12 +418,13 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             </Card>
           )}
         </section>
+        )}
 
         {/* Pending memberships section */}
         {pendingDisplayMemberships.length > 0 && (
           <div className="mt-8">
             <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-              {tApp("pendingApprovalTitle")}
+              {tApp("pendingApproval")}
               <Badge variant="warning">{pendingDisplayMemberships.length}</Badge>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -456,7 +455,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                     </div>
                     <Badge variant="warning" className="ml-auto">Pending</Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">{tApp("awaitingAdminApproval")}</p>
+                  <p className="text-sm text-muted-foreground">{tApp("awaitingApproval")}</p>
                 </Card>
               ))}
             </div>
