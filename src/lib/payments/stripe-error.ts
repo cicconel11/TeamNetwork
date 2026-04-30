@@ -19,7 +19,9 @@ export function classifyCheckoutError(error: unknown): StripeErrorClass {
   const type = e?.type || e?.name || e?.raw?.type || "";
   if (typeof type === "string" && type.startsWith("Stripe")) return "stripe";
   if (typeof e?.raw?.type === "string" && e.raw.type.endsWith("_error")) return "stripe";
-  if (e?.requestId || e?.raw?.requestId || e?.statusCode || e?.raw?.statusCode) return "stripe";
+  // requestId is Stripe-specific (req_*); statusCode alone is not — many
+  // non-Stripe errors carry a statusCode and should fall through to "internal".
+  if (e?.requestId || e?.raw?.requestId) return "stripe";
   return "internal";
 }
 
