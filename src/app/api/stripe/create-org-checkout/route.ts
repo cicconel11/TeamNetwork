@@ -146,7 +146,7 @@ export async function POST(req: Request) {
           throw new Error(roleError.message);
         }
 
-        const { error: subError } = await supabase
+        const { error: subError } = await serviceSupabase
           .from("organization_subscriptions")
           .insert({
             organization_id: org.id,
@@ -182,7 +182,7 @@ export async function POST(req: Request) {
         });
 
         if (organizationId) {
-          await supabase.from("organization_subscriptions").delete().eq("organization_id", organizationId);
+          await serviceSupabase.from("organization_subscriptions").delete().eq("organization_id", organizationId);
           await supabase.from("user_organization_roles").delete().eq("organization_id", organizationId).eq("user_id", user.id);
           await supabase.from("organizations").delete().eq("id", organizationId);
         }
