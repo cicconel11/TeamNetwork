@@ -17,10 +17,13 @@ import {
   ensurePaymentAttempt,
   hashFingerprint,
   hasStripeResource,
-  IdempotencyConflictError,
   updatePaymentAttempt,
   waitForExistingStripeResource,
 } from "@/lib/payments/idempotency";
+import {
+  buildCheckoutErrorResponse,
+  extractErrorMessage,
+} from "@/lib/payments/stripe-error";
 import { buildDynamicQuoteCheckoutFingerprintPayload } from "@/lib/payments/dynamic-quote-checkout-fingerprint";
 import { quote } from "@/lib/pricing-v2";
 
@@ -243,15 +246,7 @@ export async function POST(req: Request) {
         paymentAttemptId: claimedAttempt.id,
       });
     } catch (error) {
-      if (error instanceof IdempotencyConflictError) {
-        return respond({ error: error.message }, 409);
-      }
-
-      const stripeErr = error as {
-        message?: string;
-        raw?: { message?: string };
-      };
-      const lastError = stripeErr?.message || stripeErr?.raw?.message || "checkout_failed";
+      const lastError = extractErrorMessage(error);
 
       if (resolvedAttemptId) {
         const errorUpdate: { last_error: string; status?: string } = { last_error: lastError };
@@ -262,8 +257,8 @@ export async function POST(req: Request) {
         await serviceSupabase.from("payment_attempts").update(errorUpdate as any).eq("id", resolvedAttemptId);
       }
 
-      const message = error instanceof Error ? error.message : "Unable to create checkout session";
-      return respond({ error: message }, 400);
+      console.error("[create-custom-quote-checkout] error:", lastError);
+      return buildCheckoutErrorResponse(error, { headers: rateLimit.headers });
     }
   } catch (error) {
     if (error instanceof ValidationError) {
