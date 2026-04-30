@@ -101,6 +101,14 @@ function validateBuildEnv() {
         throw new Error(`Invalid Stripe price id for ${key}: ${value}`);
       }
     });
+
+    // Dynamic-quote product (pricing v2): both v2 checkout routes pass
+    // `price_data.product = STRIPE_PRODUCT_ID_DYNAMIC`. Misconfigured product
+    // id surfaces only at first checkout click otherwise.
+    const dynamicProductId = assertEnv("STRIPE_PRODUCT_ID_DYNAMIC", true);
+    if (!dynamicProductId.startsWith("prod_")) {
+      throw new Error(`Invalid Stripe product id for STRIPE_PRODUCT_ID_DYNAMIC: ${dynamicProductId}`);
+    }
   }
 
   // Vercel production detection (used for stricter validation below)
