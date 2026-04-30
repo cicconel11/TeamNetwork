@@ -182,7 +182,6 @@ export async function POST(req: Request) {
       );
 
       const attemptMetadata: Record<string, unknown> = {
-        flow_type_v2: "enterprise_v2_checkout",
         pricing_model_version: "v2",
         tier: "enterprise",
         slug,
