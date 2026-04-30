@@ -405,7 +405,7 @@ export async function handleStripeWebhookPost(
           if (typeof rawSnapshot === "string" && rawSnapshot.length > 0) {
             try {
               const parsed = JSON.parse(rawSnapshot);
-              if (parsed && typeof parsed === "object") {
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
                 snapshot = parsed as Record<string, unknown>;
               }
             } catch {
@@ -562,7 +562,7 @@ export async function handleStripeWebhookPost(
           if (typeof rawSnapshot === "string" && rawSnapshot.length > 0) {
             try {
               const parsed = JSON.parse(rawSnapshot);
-              if (parsed && typeof parsed === "object") {
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
                 snapshot = parsed as Record<string, unknown>;
               }
             } catch {
