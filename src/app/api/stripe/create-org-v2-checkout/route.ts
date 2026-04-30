@@ -15,10 +15,14 @@ import {
   ensurePaymentAttempt,
   hashFingerprint,
   hasStripeResource,
-  IdempotencyConflictError,
   updatePaymentAttempt,
   waitForExistingStripeResource,
 } from "@/lib/payments/idempotency";
+import {
+  buildCheckoutErrorResponse,
+  classifyCheckoutError,
+  extractErrorMessage,
+} from "@/lib/payments/stripe-error";
 import { buildOrgV2CheckoutFingerprintPayload } from "@/lib/payments/org-v2-checkout-fingerprint";
 import { quote, isSelfServeSalesLed } from "@/lib/pricing-v2";
 import { createOrgV2Schema } from "@/lib/schemas/organization-v2";
@@ -130,8 +134,8 @@ export async function POST(req: Request) {
           await supabase.from("organizations").delete().eq("id", orgId);
         }
         const message = error instanceof Error ? error.message : "Unable to start checkout";
-        console.error("[create-org-v2-checkout] Sales-led error:", message);
-        return respond({ error: "Unable to start checkout" }, 400);
+        console.error("[create-org-v2-checkout] sales-led error:", message);
+        return buildCheckoutErrorResponse(error, { headers: rateLimit.headers });
       }
     }
 
@@ -295,12 +299,8 @@ export async function POST(req: Request) {
         paymentAttemptId: claimedAttempt.id,
       });
     } catch (error) {
-      if (error instanceof IdempotencyConflictError) {
-        return respond({ error: error.message }, 409);
-      }
-
-      const stripeErr = error as { message?: string; raw?: { message?: string } };
-      const lastError = stripeErr?.message || stripeErr?.raw?.message || "checkout_failed";
+      const lastError = extractErrorMessage(error);
+      const errorClass = classifyCheckoutError(error);
 
       if (resolvedAttemptId) {
         const errorUpdate: { last_error: string; status?: string } = { last_error: lastError };
@@ -311,8 +311,8 @@ export async function POST(req: Request) {
         await serviceSupabase.from("payment_attempts").update(errorUpdate as any).eq("id", resolvedAttemptId);
       }
 
-      console.error("[create-org-v2-checkout] error:", lastError);
-      return respond({ error: "Unable to start checkout" }, 400);
+      console.error("[create-org-v2-checkout] error:", { errorClass, lastError });
+      return buildCheckoutErrorResponse(error, { headers: rateLimit.headers });
     }
   } catch (error) {
     if (error instanceof ValidationError) {
