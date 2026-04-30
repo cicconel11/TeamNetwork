@@ -59,7 +59,6 @@ export async function POST(req: Request) {
       name,
       slug,
       description,
-      primaryColor,
       billingInterval,
       actives,
       alumni,
@@ -275,7 +274,6 @@ export async function POST(req: Request) {
         enterprise_name: name.slice(0, 200),
         enterprise_slug: slug,
         enterprise_description: (description || "").slice(0, 500),
-        enterprise_primary_color: primaryColor,
         billing_contact_email: billingContactEmail,
       } as const;
 
