@@ -113,7 +113,6 @@ export async function POST(req: Request) {
 
       const attemptMetadata: Record<string, unknown> = {
         pricing_model_version: "v2",
-        flow_type_v2: "dynamic_quote_checkout",
         tier,
         billing_interval: billingInterval,
         actives,
