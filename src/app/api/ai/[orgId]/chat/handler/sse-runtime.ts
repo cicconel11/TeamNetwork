@@ -135,6 +135,7 @@ export async function applySafetyGate(args: {
   collectPhoneNumberFields: (value: unknown, owned: Set<string>) => void;
   state: TurnRuntimeState;
   orgId: string;
+  spendBypass: boolean;
   logContext: AiLogContext;
 }): Promise<string> {
   if (args.disabled || !args.buffered) return args.buffered;
@@ -162,6 +163,8 @@ export async function applySafetyGate(args: {
     const result = await args.classifySafetyFn({
       content: args.buffered,
       orgContext: { ownedEmails, ownedPhones },
+      orgId: args.orgId,
+      spendBypass: args.spendBypass,
     });
     args.state.safetyVerdict = result.verdict;
     args.state.safetyCategories = result.categories;
@@ -206,6 +209,7 @@ export async function applyRagGrounding(args: {
   trackOpsEventServerFn: typeof trackOpsEventServer;
   state: TurnRuntimeState;
   orgId: string;
+  spendBypass: boolean;
   logContext: AiLogContext;
 }): Promise<string> {
   if (
@@ -236,6 +240,8 @@ export async function applyRagGrounding(args: {
     const result = await args.verifyRagGroundingFn({
       content: args.buffered,
       ragChunks: args.ragChunks,
+      orgId: args.orgId,
+      spendBypass: args.spendBypass,
     });
     args.state.ragGrounded = result.grounded;
     args.state.ragGroundingFailures = result.uncoveredClaims;

@@ -1,6 +1,7 @@
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { assessAiMessageSafety } from "@/lib/ai/message-safety";
 import { withStageTimeout } from "@/lib/ai/timeout";
+import { assertModelPriceConfigured, recordSpend } from "@/lib/ai/spend";
 import {
   canonicalizeIndustry,
   canonicalizeRoleFamily,
@@ -22,6 +23,8 @@ export interface BioGenerationInput {
   linkedinHeadline: string | null;
   customAttributes: Record<string, string> | null;
   orgName: string;
+  /** Org used for spend accounting. Optional; bulk backfills should pass it. */
+  orgId?: string;
 }
 
 export interface BioGenerationResult {
@@ -268,6 +271,7 @@ export async function generateMentorBio(
   try {
     const client = createZaiClient();
     const model = getZaiModel();
+    if (input.orgId) assertModelPriceConfigured(model);
 
     const completion = await withStageTimeout("bio_generation", 8000, () =>
       client.chat.completions.create({
@@ -282,6 +286,16 @@ export async function generateMentorBio(
     );
 
     const rawBio = completion.choices[0]?.message?.content?.trim() ?? "";
+
+    if (input.orgId && completion.usage) {
+      await recordSpend({
+        orgId: input.orgId,
+        model,
+        inputTokens: completion.usage.prompt_tokens ?? 0,
+        outputTokens: completion.usage.completion_tokens ?? 0,
+        surface: "bio_generator",
+      });
+    }
 
     // Output validation: reject if too long, empty, or contains code
     if (!rawBio || rawBio.length > 500 || rawBio.includes("```") || rawBio.includes("{")) {

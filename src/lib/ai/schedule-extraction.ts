@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import { z } from "zod";
 import { createZaiClient, getZaiImageModel, getZaiModel } from "@/lib/ai/client";
+import { assertModelPriceConfigured, recordSpend, type AiSurface } from "@/lib/ai/spend";
 
 const MAX_SOURCE_TEXT_CHARS = 12_000;
 const MAX_SOURCE_TEXT_CHUNK_COUNT = 4;
@@ -64,8 +65,10 @@ let testDeps: ScheduleExtractionDeps | null = null;
 
 type ScheduleExtractionSourceType = "website" | "pdf" | "image";
 
-type ScheduleExtractionContext = {
+export type ScheduleExtractionContext = {
   orgName?: string;
+  orgId?: string;
+  spendBypass?: boolean;
   sourceType: ScheduleExtractionSourceType;
   sourceLabel: string;
   now: string;
@@ -178,6 +181,8 @@ export async function extractScheduleFromText(
       model: deps.getTextModel(),
       messages,
       temperature: 0.2,
+      orgId: context.orgId,
+      spendBypass: context.spendBypass,
     });
 
     try {
@@ -194,6 +199,8 @@ export async function extractScheduleFromText(
       model: deps.getTextModel(),
       messages,
       temperature: 0,
+      orgId: context.orgId,
+      spendBypass: context.spendBypass,
     });
     results.push(parseExtractionResponse(retryResponse, context));
   }
@@ -237,6 +244,8 @@ export async function extractScheduleFromImage(
     model: deps.getImageModel(),
     messages,
     temperature: 0.2,
+    orgId: normalizedContext.orgId,
+    spendBypass: normalizedContext.spendBypass,
   });
 
   try {
@@ -251,6 +260,8 @@ export async function extractScheduleFromImage(
       model: deps.getImageModel(),
       messages,
       temperature: 0,
+      orgId: normalizedContext.orgId,
+      spendBypass: normalizedContext.spendBypass,
     });
 
     return parseExtractionResponse(retryResponse, normalizedContext);
@@ -262,8 +273,24 @@ async function requestExtraction(params: {
   model: string;
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
   temperature: number;
+  orgId?: string;
+  spendBypass?: boolean;
 }): Promise<string> {
-  const { client, model, messages, temperature } = params;
+  const { client, model, messages, temperature, orgId, spendBypass } = params;
+  const surface: AiSurface = "schedule_extraction";
+  if (orgId) assertModelPriceConfigured(model);
+
+  const chargeUsage = async (usage?: OpenAI.Completions.CompletionUsage | null) => {
+    if (!orgId || !usage) return;
+    await recordSpend({
+      orgId,
+      model,
+      inputTokens: usage.prompt_tokens ?? 0,
+      outputTokens: usage.completion_tokens ?? 0,
+      surface,
+      bypass: spendBypass,
+    });
+  };
 
   try {
     const completion = await client.chat.completions.create({
@@ -274,6 +301,7 @@ async function requestExtraction(params: {
       messages,
     });
 
+    await chargeUsage(completion.usage);
     return readCompletionText(completion);
   } catch (error) {
     if (!supportsPromptOnlyJsonFallback(error)) {
@@ -287,6 +315,7 @@ async function requestExtraction(params: {
       messages,
     });
 
+    await chargeUsage(completion.usage);
     return readCompletionText(completion);
   }
 }

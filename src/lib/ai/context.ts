@@ -7,6 +7,7 @@ import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import type { EnterpriseRole } from "@/types/enterprise";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { isMemberAccessKilled } from "@/lib/ai/access-policy";
+import { isDevAdmin } from "@/lib/auth/dev-admin";
 
 // ── Discriminated union return type ──
 
@@ -23,6 +24,8 @@ export type AiOrgContext =
       hideDonorNames?: boolean;
       enterpriseId?: string;
       enterpriseRole?: EnterpriseRole;
+      /** Dev-admin bypass: skip AI spend cap + ledger writes. */
+      aiSpendBypass: boolean;
       supabase: ServerSupabase; // auth-bound client (for threads/messages via RLS)
       serviceSupabase: ServiceSupabase; // service-role client (for tools/audit)
     }
@@ -206,6 +209,7 @@ export async function getAiOrgContext(
     hideDonorNames: orgRow?.hide_donor_names === true,
     enterpriseId,
     enterpriseRole,
+    aiSpendBypass: isDevAdmin(user),
     supabase: deps.supabase, // routes pass their auth-bound client
     serviceSupabase,
   };

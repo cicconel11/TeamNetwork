@@ -56,6 +56,7 @@ export interface CreateToolCallHandlerInput {
     hideDonorNames?: boolean;
     enterpriseId?: string;
     enterpriseRole?: EnterpriseRole;
+    aiSpendBypass: boolean;
     supabase: ServerSupabase;
     serviceSupabase: ServiceSupabase;
   };
@@ -281,6 +282,7 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
           hideDonorNames: input.ctx.hideDonorNames,
           enterpriseId: input.ctx.enterpriseId,
           enterpriseRole: input.ctx.enterpriseRole,
+          aiSpendBypass: input.ctx.aiSpendBypass,
           supabase: input.ctx.supabase,
           serviceSupabase: input.ctx.serviceSupabase,
           authorization: input.toolAuthorization,

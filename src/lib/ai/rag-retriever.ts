@@ -25,6 +25,8 @@ export interface RetrieveParams {
   maxChunks?: number;
   similarityThreshold?: number;
   sourceTables?: string[];
+  /** Skip ledger write (dev-admin bypass). */
+  spendBypass?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,10 +106,11 @@ export async function retrieveRelevantChunks(
     maxChunks = DEFAULT_MAX_CHUNKS,
     similarityThreshold = DEFAULT_SIMILARITY_THRESHOLD,
     sourceTables,
+    spendBypass,
   } = params;
 
   // Generate query embedding (expand bare domain terms first)
-  const queryEmbedding = await generateEmbedding(expandQuery(query));
+  const queryEmbedding = await generateEmbedding(expandQuery(query), orgId, spendBypass);
 
   // Call the search RPC
   const { data, error } = await (serviceSupabase.rpc as any)(

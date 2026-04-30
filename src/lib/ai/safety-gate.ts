@@ -10,6 +10,7 @@
 
 import type OpenAI from "openai";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
+import { assertModelPriceConfigured, recordSpend } from "@/lib/ai/spend";
 
 export type SafetyVerdict = "safe" | "controversial" | "unsafe";
 
@@ -19,6 +20,10 @@ export interface ClassifySafetyInput {
     ownedEmails?: Iterable<string>;
     ownedPhones?: Iterable<string>;
   };
+  /** Org used for spend accounting on the judge LLM call. */
+  orgId?: string;
+  /** Skip ledger write (dev-admin bypass). */
+  spendBypass?: boolean;
   judge?: SafetyJudge;
 }
 
@@ -170,10 +175,13 @@ export function buildSafetyJudgePrompt(): string {
 
 async function defaultJudge(
   prompt: string,
-  content: string
+  content: string,
+  orgId?: string,
+  spendBypass?: boolean
 ): Promise<{ verdict: SafetyVerdict; categories: string[] }> {
   const client: OpenAI = createZaiClient();
   const model = process.env.SAFETY_JUDGE_MODEL || getZaiModel();
+  if (orgId) assertModelPriceConfigured(model);
 
   const completion = await client.chat.completions.create({
     model,
@@ -183,6 +191,17 @@ async function defaultJudge(
       { role: "user", content: `ASSISTANT RESPONSE:\n${content}` },
     ],
   });
+
+  if (orgId && completion.usage) {
+    await recordSpend({
+      orgId,
+      model,
+      inputTokens: completion.usage.prompt_tokens ?? 0,
+      outputTokens: completion.usage.completion_tokens ?? 0,
+      surface: "safety_judge",
+      bypass: spendBypass,
+    });
+  }
 
   const raw = completion.choices?.[0]?.message?.content ?? "";
   return parseJudgeResponse(raw);
@@ -260,7 +279,8 @@ export async function classifySafety(
     };
   }
 
-  const judge = input.judge ?? defaultJudge;
+  const judge =
+    input.judge ?? ((p, c) => defaultJudge(p, c, input.orgId, input.spendBypass));
   try {
     const { verdict, categories: judgeCategories } = await judge(
       buildSafetyJudgePrompt(),

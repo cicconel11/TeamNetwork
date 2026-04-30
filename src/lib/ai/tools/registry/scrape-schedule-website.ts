@@ -110,6 +110,8 @@ export const scrapeScheduleWebsiteModule: ToolModule<Args> = {
     const { extractScheduleFromText } = await getScheduleExtractionModule();
     const extracted = await extractScheduleFromText(text, {
       orgName: typeof org?.name === "string" ? org.name : undefined,
+      orgId: ctx.orgId,
+      spendBypass: ctx.aiSpendBypass,
       sourceType: "website",
       sourceLabel: response.finalUrl,
       now: new Date().toISOString(),

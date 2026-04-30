@@ -33,6 +33,7 @@ export interface RunPendingEventRevisionInput {
     userId: string;
     enterpriseId?: string;
     enterpriseRole?: EnterpriseRole;
+    aiSpendBypass: boolean;
     supabase: ServerSupabase;
     serviceSupabase: ServiceSupabase;
   };
@@ -200,6 +201,7 @@ export async function runPendingEventRevision(
         userId: ctx.userId,
         enterpriseId: ctx.enterpriseId,
         enterpriseRole: ctx.enterpriseRole,
+        aiSpendBypass: ctx.aiSpendBypass,
         supabase: ctx.supabase,
         serviceSupabase: ctx.serviceSupabase,
         authorization: toolAuthorization,

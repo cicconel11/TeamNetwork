@@ -49,6 +49,8 @@ export interface ToolExecutionContext {
   hideDonorNames?: boolean;
   enterpriseId?: string;
   enterpriseRole?: EnterpriseRole;
+  /** Dev-admin bypass: skip AI spend cap + ledger writes. */
+  aiSpendBypass?: boolean;
   supabase?: SupabaseClient | null;
   serviceSupabase: SupabaseClient;
   authorization: ToolExecutionAuthorization;

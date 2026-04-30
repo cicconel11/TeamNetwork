@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateEmbeddings } from "./embeddings";
+import { AiCapReachedError, assertOrgUnderCap } from "./spend";
 import {
   renderChunks,
   computeContentHash,
@@ -423,17 +424,43 @@ export async function processEmbeddingQueue(
 
   if (pendingChunks.length === 0) return stats;
 
-  // Batch-embed all new/changed texts in a single API call
-  try {
-    const texts = pendingChunks.map((c) => c.text);
-    const embeddings = await generateEmbeddings(texts);
+  // Group chunks by org so spend is attributed accurately and per-org caps apply.
+  const chunksByOrg = new Map<string, PendingChunk[]>();
+  for (const chunk of pendingChunks) {
+    const list = chunksByOrg.get(chunk.item.org_id) ?? [];
+    list.push(chunk);
+    chunksByOrg.set(chunk.item.org_id, list);
+  }
 
-    // Group chunks by queue item for atomic per-item processing
+  // Batch-embed per org. Skip orgs over their AI cap (no caller to 402).
+  const embeddingByChunk = new Map<PendingChunk, number[]>();
+  try {
+    for (const [orgId, orgChunks] of chunksByOrg) {
+      try {
+        await assertOrgUnderCap(orgId);
+      } catch (err) {
+        if (err instanceof AiCapReachedError) {
+          console.warn("[embedding-worker] org over AI spend cap, skipping", { orgId });
+          stats.skipped += orgChunks.length;
+          continue;
+        }
+        throw err;
+      }
+
+      const texts = orgChunks.map((c) => c.text);
+      const orgEmbeddings = await generateEmbeddings(texts, orgId);
+      for (let i = 0; i < orgChunks.length; i++) {
+        embeddingByChunk.set(orgChunks[i], orgEmbeddings[i]);
+      }
+    }
+
+    // Group chunks by queue item for atomic per-item processing.
     const chunksByItem = new Map<string, Array<{ chunk: PendingChunk; embedding: number[] }>>();
-    for (let i = 0; i < pendingChunks.length; i++) {
-      const chunk = pendingChunks[i];
+    for (const chunk of pendingChunks) {
+      const embedding = embeddingByChunk.get(chunk);
+      if (!embedding) continue; // org skipped above
       const list = chunksByItem.get(chunk.item.id) ?? [];
-      list.push({ chunk, embedding: embeddings[i] });
+      list.push({ chunk, embedding });
       chunksByItem.set(chunk.item.id, list);
     }
 
