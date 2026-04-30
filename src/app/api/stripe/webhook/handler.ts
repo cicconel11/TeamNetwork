@@ -622,15 +622,9 @@ export async function handleStripeWebhookPost(
             );
           }
 
-          let ownerUserId = await resolveCreatorFromPaymentAttempt(v2AttemptId);
+          const ownerUserId = await resolveCreatorFromPaymentAttempt(v2AttemptId);
           if (!ownerUserId) {
-            // Fallback to metadata.creator_id when payment_attempts has no row.
-            // Mirrors the org_v2 branch above so a missing/lost attempt id does
-            // not orphan the enterprise without an owner.
-            ownerUserId = (session.metadata?.creator_id as string | undefined) ?? null;
-          }
-          if (!ownerUserId) {
-            console.error("[stripe-webhook] enterprise_v2 owner grant failed - no creator in payment_attempts or metadata", {
+            console.error("[stripe-webhook] enterprise_v2 owner grant failed - no creator in payment_attempts", {
               eventId: maskPII(event.id),
               enterpriseId: maskPII(enterprise.id),
             });
