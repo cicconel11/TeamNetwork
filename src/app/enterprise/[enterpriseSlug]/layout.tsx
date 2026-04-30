@@ -1,19 +1,10 @@
 import { redirect } from "next/navigation";
-import dynamic from "next/dynamic";
 import { AIPanelProvider } from "@/components/ai-assistant";
+import { AIEdgeTab, AIPanel } from "@/components/enterprise/EnterpriseClientShell";
 import { EnterpriseSidebar } from "@/components/enterprise/EnterpriseSidebar";
 import { getEnterpriseContext } from "@/lib/auth/enterprise-context";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-
-const AIPanel = dynamic(
-  () => import("@/components/ai-assistant/AIPanel").then((module) => module.AIPanel),
-  { ssr: false },
-);
-const AIEdgeTab = dynamic(
-  () => import("@/components/ai-assistant/AIEdgeTab").then((module) => module.AIEdgeTab),
-  { ssr: false },
-);
 
 interface EnterpriseLayoutProps {
   children: React.ReactNode;

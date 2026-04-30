@@ -1,12 +1,22 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import dynamic from "next/dynamic";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
 import { FAQ_ITEMS } from "@/lib/pricing";
 import { PricingSection } from "@/components/marketing/PricingSection";
+import {
+  BackToTop,
+  BackgroundPaths,
+  Confetti,
+  FAQAccordion,
+  FeaturesGrid,
+  HeroOrgCard,
+  LandingAnimations,
+  LandingHeader,
+  StadiumLightBeams,
+} from "@/components/marketing/LandingClientComponents";
 import "./landing-styles.css";
 
 export const metadata: Metadata = {
@@ -30,52 +40,6 @@ export const metadata: Metadata = {
     images: ["https://myteamnetwork.com/og-image.png"],
   },
 };
-
-const FAQAccordion = dynamic(
-  () => import("@/components/marketing/FAQAccordion").then((mod) => mod.FAQAccordion),
-  { ssr: false }
-);
-
-const HeroOrgCard = dynamic(
-  () => import("@/components/marketing/HeroOrgCard").then((mod) => mod.HeroOrgCard),
-  { ssr: false }
-);
-
-// Lazy-load animation components - only needed on landing page
-const LandingAnimations = dynamic(
-  () => import("@/components/marketing/LandingAnimations").then((mod) => mod.LandingAnimations),
-  { ssr: false }
-);
-
-const StadiumLightBeams = dynamic(
-  () => import("@/components/marketing/StadiumLightBeams").then((mod) => mod.StadiumLightBeams),
-  { ssr: false }
-);
-
-const Confetti = dynamic(
-  () => import("@/components/marketing/Confetti").then((mod) => mod.Confetti),
-  { ssr: false }
-);
-
-const LandingHeader = dynamic(
-  () => import("@/components/marketing/LandingHeader").then((mod) => mod.LandingHeader),
-  { ssr: false }
-);
-
-const BackToTop = dynamic(
-  () => import("@/components/marketing/BackToTop").then((mod) => mod.BackToTop),
-  { ssr: false }
-);
-
-const BackgroundPaths = dynamic(
-  () => import("@/components/marketing/BackgroundPaths").then((mod) => mod.BackgroundPaths),
-  { ssr: false }
-);
-
-const FeaturesGrid = dynamic(
-  () => import("@/components/marketing/FeaturesGrid").then((mod) => mod.FeaturesGrid),
-  { ssr: false }
-);
 
 const HERO_PROOF_POINTS = [
   { value: "10 min", label: "to launch an organization" },
