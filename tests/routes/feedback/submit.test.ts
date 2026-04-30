@@ -76,12 +76,11 @@ function simulateFeedbackSubmit(
     return { status: 400, error: "trigger is required", details: { trigger: ["Required"] } };
   }
 
-  // Validate screenshot URL if provided
+  // Validate private screenshot object path if provided
   if (request.screenshot_url) {
-    try {
-      new URL(request.screenshot_url);
-    } catch {
-      return { status: 400, error: "Invalid screenshot URL", details: { screenshot_url: ["Must be a valid URL"] } };
+    const privatePathPattern = /^(anonymous|[0-9a-f-]{36})\/[0-9a-f-]{36}\.(png|jpg|webp)$/i;
+    if (!privatePathPattern.test(request.screenshot_url)) {
+      return { status: 400, error: "Invalid screenshot reference", details: { screenshot_url: ["Must be a private screenshot path"] } };
     }
   }
 
@@ -214,7 +213,7 @@ test("feedback submit requires trigger", () => {
   assert.ok(result.error?.includes("trigger"));
 });
 
-test("feedback submit validates screenshot URL", () => {
+test("feedback submit validates screenshot reference", () => {
   const result = simulateFeedbackSubmit(
     {
       auth: AuthPresets.authenticatedNoOrg,
@@ -246,7 +245,7 @@ test("feedback submit succeeds with valid data", () => {
   assert.ok(result.submissionId);
 });
 
-test("feedback submit accepts optional screenshot URL", () => {
+test("feedback submit accepts optional private screenshot path", () => {
   const result = simulateFeedbackSubmit(
     {
       auth: AuthPresets.authenticatedNoOrg,
@@ -255,7 +254,7 @@ test("feedback submit accepts optional screenshot URL", () => {
       user_agent: "Mozilla/5.0",
       context: "main flow",
       trigger: "button_click",
-      screenshot_url: "https://storage.example.com/screenshots/123.png",
+      screenshot_url: "anonymous/123e4567-e89b-12d3-a456-426614174000.webp",
     }
   );
   assert.strictEqual(result.status, 200);

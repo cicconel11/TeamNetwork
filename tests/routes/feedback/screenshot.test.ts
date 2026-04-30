@@ -38,8 +38,7 @@ function simulateScreenshotUpload(
 
   return {
     status: 200,
-    screenshot_url:
-      "https://project.supabase.co/storage/v1/object/public/feedback-screenshots/anonymous/test.png",
+    screenshot_url: "anonymous/123e4567-e89b-12d3-a456-426614174000.png",
   };
 }
 
@@ -63,7 +62,7 @@ test("screenshot upload allows anonymous allowlisted auth friction", () => {
   });
 
   assert.equal(result.status, 200);
-  assert.match(result.screenshot_url ?? "", /feedback-screenshots/);
+  assert.match(result.screenshot_url ?? "", /^anonymous\/[0-9a-f-]+\.png$/);
 });
 
 test("screenshot upload allows authenticated flows", () => {

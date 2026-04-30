@@ -23,6 +23,21 @@ function extForMime(mime: string): string {
   return "png";
 }
 
+function matchesDeclaredImageType(buffer: Buffer, mime: string): boolean {
+  if (mime === "image/png") {
+    return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  if (mime === "image/jpeg" || mime === "image/jpg") {
+    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (mime === "image/webp") {
+    return buffer.length >= 12 &&
+      buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buffer.subarray(8, 12).toString("ascii") === "WEBP";
+  }
+  return false;
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -82,6 +97,13 @@ export async function POST(request: Request) {
     }
 
     const buf = Buffer.from(await (file as Blob).arrayBuffer());
+    if (!matchesDeclaredImageType(buf, mimeType)) {
+      return NextResponse.json(
+        { error: "File content does not match the declared image type" },
+        { status: 400, headers: rateLimit.headers },
+      );
+    }
+
     const ext = extForMime(mimeType);
     const prefix = user?.id ?? "anonymous";
     const path = `${prefix}/${randomUUID()}.${ext}`;
@@ -102,12 +124,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const {
-      data: { publicUrl },
-    } = service.storage.from(BUCKET).getPublicUrl(path);
-
     return NextResponse.json(
-      { screenshot_url: publicUrl },
+      { screenshot_url: path },
       { status: 200, headers: rateLimit.headers },
     );
   } catch (err) {

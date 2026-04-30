@@ -19,7 +19,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const FORM_ID = "00000000-0000-0000-0000-000000000001"; // Friction Feedback form UUID
+const BUCKET = "feedback-screenshots";
 const HOUR_MS = 60 * 60 * 1000;
+const SIGNED_SCREENSHOT_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -35,6 +37,34 @@ interface FeedbackResponses {
   user_agent: string;
   context: string;
   trigger: string;
+}
+
+function isAllowedScreenshotPath(path: string, userId: string | null, anonymousOk: boolean): boolean {
+  if (userId) return path.startsWith(`${userId}/`);
+  return anonymousOk && path.startsWith("anonymous/");
+}
+
+async function getSignedScreenshotUrl(
+  serviceSupabase: ReturnType<typeof createServiceClient>,
+  screenshotPath: string | undefined,
+  userId: string | null,
+  anonymousOk: boolean,
+): Promise<string | null> {
+  if (!screenshotPath) return null;
+  if (!isAllowedScreenshotPath(screenshotPath, userId, anonymousOk)) {
+    throw new Error("Screenshot reference is not allowed for this submitter");
+  }
+
+  const { data, error } = await serviceSupabase.storage
+    .from(BUCKET)
+    .createSignedUrl(screenshotPath, SIGNED_SCREENSHOT_URL_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    console.error("[feedback/submit] Failed to sign screenshot URL:", error);
+    throw new Error("Failed to attach screenshot");
+  }
+
+  return data.signedUrl;
 }
 
 async function sendAdminNotification(
@@ -144,7 +174,15 @@ export async function POST(request: Request) {
           .maybeSingle()
       : { data: null as null };
 
-    // Build the responses JSONB payload
+    const signedScreenshotUrl = await getSignedScreenshotUrl(
+      serviceSupabase,
+      screenshot_url,
+      user?.id ?? null,
+      anonymousOk,
+    );
+
+    // Build the responses JSONB payload. Store the private object path, not a
+    // public URL; email notifications receive a short-lived signed URL.
     const responses: FeedbackResponses = {
       message,
       screenshot_url: screenshot_url ?? null,
@@ -179,7 +217,7 @@ export async function POST(request: Request) {
     const emailResult = await sendAdminNotification(
       user?.email ?? null,
       user?.id ?? null,
-      responses,
+      { ...responses, screenshot_url: signedScreenshotUrl },
     );
     if (!emailResult.success) {
       console.error(
