@@ -129,9 +129,11 @@ export async function POST(req: Request) {
         return respond({ mode: "sales", organizationSlug: org.slug });
       } catch (error) {
         if (orgId) {
-          await supabase.from("organization_subscriptions").delete().eq("organization_id", orgId);
-          await supabase.from("user_organization_roles").delete().eq("organization_id", orgId).eq("user_id", user.id);
-          await supabase.from("organizations").delete().eq("id", orgId);
+          // Use service client uniformly so cleanup is not partially blocked
+          // by RLS if any single delete races with policy evaluation.
+          await serviceSupabase.from("organization_subscriptions").delete().eq("organization_id", orgId);
+          await serviceSupabase.from("user_organization_roles").delete().eq("organization_id", orgId).eq("user_id", user.id);
+          await serviceSupabase.from("organizations").delete().eq("id", orgId);
         }
         const message = error instanceof Error ? error.message : "Unable to start checkout";
         console.error("[create-org-v2-checkout] sales-led error:", message);
