@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { assertModelPriceConfigured, recordSpend } from "@/lib/ai/spend";
 
 // ---------------------------------------------------------------------------
 // Embedding client factory
@@ -33,18 +34,44 @@ export function getEmbeddingModel(): string {
 // Embedding generation
 // ---------------------------------------------------------------------------
 
+async function chargeEmbeddingUsage(
+  orgId: string | undefined,
+  model: string,
+  // OpenAI SDK exposes `prompt_tokens` on embeddings usage; total_tokens covers the rest.
+  usage: { prompt_tokens?: number | null; total_tokens?: number | null } | null | undefined,
+  spendBypass?: boolean,
+): Promise<void> {
+  if (!orgId || !usage) return;
+  const inputTokens = usage.prompt_tokens ?? usage.total_tokens ?? 0;
+  await recordSpend({
+    orgId,
+    model,
+    inputTokens,
+    outputTokens: 0,
+    surface: "embedding",
+    bypass: spendBypass,
+  });
+}
+
 /**
  * Generate a single embedding vector for the given text.
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(
+  text: string,
+  orgId?: string,
+  spendBypass?: boolean,
+): Promise<number[]> {
   const client = createEmbeddingClient();
   const model = getEmbeddingModel();
+  if (orgId) assertModelPriceConfigured(model);
 
   const response = await client.embeddings.create({
     model,
     input: text,
     dimensions: EXPECTED_DIMENSIONS,
   });
+
+  await chargeEmbeddingUsage(orgId, model, (response as { usage?: { prompt_tokens?: number; total_tokens?: number } }).usage, spendBypass);
 
   return response.data[0].embedding;
 }
@@ -54,18 +81,23 @@ export async function generateEmbedding(text: string): Promise<number[]> {
  * The OpenAI embeddings API supports up to ~2048 inputs per request.
  */
 export async function generateEmbeddings(
-  texts: string[]
+  texts: string[],
+  orgId?: string,
+  spendBypass?: boolean,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
   const client = createEmbeddingClient();
   const model = getEmbeddingModel();
+  if (orgId) assertModelPriceConfigured(model);
 
   const response = await client.embeddings.create({
     model,
     input: texts,
     dimensions: EXPECTED_DIMENSIONS,
   });
+
+  await chargeEmbeddingUsage(orgId, model, (response as { usage?: { prompt_tokens?: number; total_tokens?: number } }).usage, spendBypass);
 
   // Validate response count matches input count
   if (response.data.length !== texts.length) {

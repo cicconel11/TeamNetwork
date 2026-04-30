@@ -200,6 +200,7 @@ export async function loadMentorBioContext(
     linkedinHeadline: alumni?.headline ?? null,
     customAttributes,
     orgName: orgRow?.name ?? "",
+    orgId: organizationId,
   };
 
   return {

@@ -60,6 +60,7 @@ async function extractScheduleTextFromPdfBuffer(
   logContext: AiLogContext,
   extractionContext: {
     orgName?: string;
+    orgId?: string;
     sourceLabel: string;
     now: string;
   }
@@ -194,6 +195,8 @@ export const extractSchedulePdfModule: ToolModule<Args> = {
       const attachmentBuffer = Buffer.from(await attachmentFile.arrayBuffer());
       const extractionContext = {
         orgName: typeof org?.name === "string" ? org.name : undefined,
+        orgId: ctx.orgId,
+        spendBypass: ctx.aiSpendBypass,
         sourceLabel: attachment.fileName,
         now: new Date().toISOString(),
       };

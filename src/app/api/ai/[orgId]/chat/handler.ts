@@ -44,6 +44,7 @@ import {
 } from "@/lib/ai/draft-sessions";
 import { createStageTimings } from "@/lib/ai/chat-telemetry";
 import { aiLog } from "@/lib/ai/logger";
+import { recordSpend } from "@/lib/ai/spend";
 import {
   hasPendingConnectionDisambiguation,
   looksLikeConnectionDisambiguationReply,
@@ -437,6 +438,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           collectPhoneNumberFields,
           state: runtimeState,
           orgId: ctx.orgId,
+          spendBypass: ctx.aiSpendBypass,
           logContext: {
             ...requestLogContext,
             threadId: threadId!,
@@ -453,11 +455,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           trackOpsEventServerFn,
           state: runtimeState,
           orgId: ctx.orgId,
+          spendBypass: ctx.aiSpendBypass,
           logContext: {
             ...requestLogContext,
             threadId: threadId!,
           },
         });
+      const spendWrites: Promise<unknown>[] = [];
       const toolAuthorization: ToolExecutionAuthorization =
         ctx.role === "admin"
           ? {
@@ -470,8 +474,24 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               role: ctx.role,
             };
       const toolAuthMode = getToolAuthorizationMode(toolAuthorization);
-      const recordUsage = (usage: Parameters<typeof recordTurnUsage>[1]) =>
+      const recordUsage = (usage: Parameters<typeof recordTurnUsage>[1]) => {
         recordTurnUsage(runtimeState, usage);
+        spendWrites.push(
+          recordSpend({
+            orgId: ctx.orgId,
+            model: getZaiModelFn(),
+            inputTokens: usage.inputTokens ?? 0,
+            outputTokens: usage.outputTokens ?? 0,
+            surface: "chat",
+            bypass: ctx.aiSpendBypass,
+          }).catch((err) => {
+            aiLog("error", "spend", "recordSpend failed", {
+              requestId,
+              orgId: ctx.orgId,
+            }, { error: err });
+          }),
+        );
+      };
       const emitTimeoutError = () =>
         enqueue({
           type: "error",
@@ -709,6 +729,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           enqueue({ type: "error", message: "An error occurred", retryable: true });
         }
       } finally {
+        await Promise.allSettled(spendWrites);
         await finalizeTurnAudit({
           ctx,
           threadId: threadId!,

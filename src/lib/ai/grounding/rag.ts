@@ -12,6 +12,7 @@
 
 import type OpenAI from "openai";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
+import { assertModelPriceConfigured, recordSpend } from "@/lib/ai/spend";
 import {
   extractAllCurrencyDollars,
   extractEmails,
@@ -33,6 +34,10 @@ export interface RagGroundingInput {
   ragChunks: RagChunkForGrounding[];
   judge?: RagJudge;
   jaccardThreshold?: number;
+  /** Org used for spend accounting on judge LLM calls. */
+  orgId?: string;
+  /** Skip ledger write (dev-admin bypass). */
+  spendBypass?: boolean;
 }
 
 export interface RagGroundingResult {
@@ -200,10 +205,13 @@ function buildJudgePrompt(): string {
 
 async function defaultJudge(
   chunks: string,
-  claim: string
+  claim: string,
+  orgId?: string,
+  spendBypass?: boolean
 ): Promise<"yes" | "no" | "partial"> {
   const client: OpenAI = createZaiClient();
   const model = process.env.RAG_GROUNDING_JUDGE_MODEL || getZaiModel();
+  if (orgId) assertModelPriceConfigured(model);
   const completion = await client.chat.completions.create({
     model,
     temperature: 0,
@@ -215,6 +223,16 @@ async function defaultJudge(
       },
     ],
   });
+  if (orgId && completion.usage) {
+    await recordSpend({
+      orgId,
+      model,
+      inputTokens: completion.usage.prompt_tokens ?? 0,
+      outputTokens: completion.usage.completion_tokens ?? 0,
+      surface: "rag_judge",
+      bypass: spendBypass,
+    });
+  }
   const raw = (completion.choices?.[0]?.message?.content ?? "").toLowerCase().trim();
   if (raw.startsWith("yes")) return "yes";
   if (raw.startsWith("partial")) return "partial";
@@ -272,7 +290,9 @@ export async function verifyRagGrounding(
 
   let usedJudge = false;
   if (proseToJudge.length > 0) {
-    const judge = input.judge ?? defaultJudge;
+    const judge =
+      input.judge ??
+      ((c: string, s: string) => defaultJudge(c, s, input.orgId, input.spendBypass));
     const combined = ragChunks
       .map((c) => c.contentText ?? "")
       .join("\n---\n")

@@ -66,6 +66,7 @@ export interface RunModelToolsLoopInput {
     hideDonorNames?: boolean;
     enterpriseId?: string;
     enterpriseRole?: EnterpriseRole;
+    aiSpendBypass: boolean;
     supabase: ServerSupabase;
     serviceSupabase: ServiceSupabase;
   };
