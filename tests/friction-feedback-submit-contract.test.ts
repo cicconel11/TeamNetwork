@@ -20,16 +20,16 @@ test("Friction feedback JSON body matches frictionFeedbackSubmitSchema", () => {
   assert.equal(parsed.screenshot_url, undefined);
 });
 
-test("Friction feedback accepts optional screenshot_url", () => {
+test("Friction feedback accepts optional private screenshot path", () => {
   const parsed = frictionFeedbackSubmitSchema.parse({
     message: "UI glitch",
     page_url: "https://app.example.com/page",
     user_agent: "Mozilla/5.0",
     context: "settings",
     trigger: "feedback_button",
-    screenshot_url: "https://project.supabase.co/storage/v1/object/public/feedback-screenshots/u/abc.png",
+    screenshot_url: "anonymous/123e4567-e89b-12d3-a456-426614174000.png",
   });
-  assert.ok(parsed.screenshot_url?.includes("feedback-screenshots"));
+  assert.equal(parsed.screenshot_url, "anonymous/123e4567-e89b-12d3-a456-426614174000.png");
 });
 
 test("Friction feedback rejects unknown JSON keys (strict)", () => {
@@ -47,7 +47,7 @@ test("Friction feedback rejects unknown JSON keys (strict)", () => {
   );
 });
 
-test("Friction feedback rejects invalid screenshot_url", () => {
+test("Friction feedback rejects invalid screenshot path", () => {
   assert.throws(
     () =>
       frictionFeedbackSubmitSchema.parse({
