@@ -1,190 +1,308 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ButtonLink } from "@/components/ui";
-import {
-  BASE_PRICES,
-  ALUMNI_ADD_ON_PRICES,
-  ALUMNI_BUCKET_LABELS,
-  getTotalPrice,
-  formatPrice,
-} from "@/lib/pricing";
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import { quote, type Interval } from "@/lib/pricing-v2";
 
-const ALUMNI_TIERS: Exclude<AlumniBucket, "none">[] = [
-  "0-250",
-  "251-500",
-  "501-1000",
-  "1001-2500",
-  "2500-5000",
-  "5000+",
+const currencyFmt = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+
+function fmt(cents: number) {
+  return currencyFmt.format(cents / 100);
+}
+
+// Larger alumni slabs (10k+) exist in src/lib/pricing-v2.ts and remain
+// active in the calculator + checkout. Hidden from the landing page until
+// we're ready to publish them — for now route those orgs through sales.
+const ALUMNI_SLABS: { label: string; rateCents: number }[] = [
+  { label: "1 – 500", rateCents: 36 },
+  { label: "501 – 2,500", rateCents: 25 },
+  { label: "2,501 – 10,000", rateCents: 18 },
+];
+
+const ACTIVE_SLABS: { label: string; rateCents: number }[] = [
+  { label: "1 – 100", rateCents: 15 },
+  { label: "101 – 500", rateCents: 10 },
+  { label: "501+", rateCents: 5 },
+];
+
+const SCENARIOS = [
+  {
+    key: "club",
+    title: "Club",
+    blurb: "25 active members, no alumni yet",
+    actives: 25,
+    alumni: 0,
+    tier: "single" as const,
+    subOrgs: 0,
+  },
+  {
+    key: "small",
+    title: "Small program",
+    blurb: "200 active members, 750 alumni",
+    actives: 200,
+    alumni: 750,
+    tier: "single" as const,
+    subOrgs: 0,
+  },
+  {
+    key: "midsize",
+    title: "Midsize school",
+    blurb: "500 actives, 5,000 alumni",
+    actives: 500,
+    alumni: 5_000,
+    tier: "single" as const,
+    subOrgs: 0,
+  },
+  {
+    key: "enterprise",
+    title: "University network",
+    blurb: "1,000 actives · 10,000 alumni · 15 sub-orgs",
+    actives: 1_000,
+    alumni: 10_000,
+    tier: "enterprise" as const,
+    subOrgs: 15,
+  },
 ];
 
 export function PricingSection({ showCta = true }: { showCta?: boolean }) {
-  const [interval, setInterval] = useState<SubscriptionInterval>("month");
+  const [interval, setInterval] = useState<Interval>("month");
+  const [scenarioKey, setScenarioKey] = useState<string>("small");
+
+  const scenario = SCENARIOS.find((s) => s.key === scenarioKey) ?? SCENARIOS[0];
+
+  const q = useMemo(
+    () =>
+      quote({
+        tier: scenario.tier,
+        actives: scenario.actives,
+        alumni: scenario.alumni,
+        subOrgs: scenario.subOrgs,
+      }),
+    [scenario],
+  );
+
+  const totalCents = interval === "year" ? q.yearlyCents : q.monthlyCents;
+  const intervalLabel = interval === "year" ? "/yr" : "/mo";
 
   return (
     <section id="pricing" className="relative z-10 py-24 px-6" suppressHydrationWarning>
       <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-16">
-          <div suppressHydrationWarning className="scroll-reveal inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/60 text-xs uppercase tracking-[0.2em] mb-6">
+        <div className="text-center mb-12">
+          <div
+            suppressHydrationWarning
+            className="scroll-reveal inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/60 text-xs uppercase tracking-[0.2em] mb-6"
+          >
             Pricing
           </div>
           <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold text-landing-cream mb-6">
-            Simple, <span className="text-landing-cream">Transparent</span> Pricing
+            Priced <span className="text-landing-green">per user</span>
           </h2>
           <p className="scroll-reveal text-landing-cream/60 max-w-2xl mx-auto mb-10 text-lg">
-            One base price for unlimited active members. Add alumni access only if you need it.
+            One rate per active member, one rate per alumni. Both drop as your
+            roster grows. Over 10,000 alumni? <a href="mailto:sales@myteamnetwork.com" className="underline hover:text-landing-cream">Talk to us</a>.
           </p>
 
-          {/* Toggle */}
-          <div suppressHydrationWarning role="group" aria-label="Billing interval" className="scroll-reveal inline-flex items-center bg-landing-navy-light rounded-full p-1.5 border border-landing-cream/10">
+          <div
+            suppressHydrationWarning
+            role="group"
+            aria-label="Billing interval"
+            className="scroll-reveal inline-flex items-center bg-landing-navy-light rounded-full p-1.5 border border-landing-cream/10"
+          >
             <button
               onClick={() => setInterval("month")}
               aria-pressed={interval === "month"}
-              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all ${interval === "month"
-                ? "bg-landing-green-dark text-white shadow-lg"
-                : "text-landing-cream/60 hover:text-landing-cream"
-                }`}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                interval === "month"
+                  ? "bg-landing-green-dark text-white shadow-lg"
+                  : "text-landing-cream/60 hover:text-landing-cream"
+              }`}
             >
               Monthly
             </button>
             <button
               onClick={() => setInterval("year")}
               aria-pressed={interval === "year"}
-              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${interval === "year"
-                ? "bg-landing-green-dark text-white shadow-lg"
-                : "text-landing-cream/60 hover:text-landing-cream"
-                }`}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
+                interval === "year"
+                  ? "bg-landing-green-dark text-white shadow-lg"
+                  : "text-landing-cream/60 hover:text-landing-cream"
+              }`}
             >
               Yearly
-              <span className={`text-xs px-2 py-0.5 rounded-full ${interval === "year"
-                ? "bg-white/20 text-white"
-                : "bg-landing-cream/10 text-landing-cream/60"
-                }`}>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full ${
+                  interval === "year"
+                    ? "bg-white/20 text-white"
+                    : "bg-landing-cream/10 text-landing-cream/60"
+                }`}
+              >
                 Save 17%
               </span>
             </button>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 mb-12">
-          {/* Base Plan */}
-          <div className="pricing-card rounded-2xl p-8 pt-10 relative">
-            {/* Pick badge */}
-            <div className="pick-badge">Starter Pick</div>
-
-            {/* Corner accent */}
-            <div className="absolute top-0 right-0 w-24 h-24">
-              <div className="absolute inset-0 bg-gradient-to-bl from-landing-green/10 to-transparent" />
-            </div>
-
-            <div className="relative">
-              <div className="mb-6">
-                <h3 className="font-display text-xl font-bold text-landing-cream mb-2">Active Team</h3>
-                <p className="text-landing-cream/50 text-sm">Everything you need for current members</p>
-              </div>
-
-              <div className="mb-8">
-                <div className="flex items-baseline gap-2">
-                  <span className="athletic-number text-5xl">{formatPrice(BASE_PRICES[interval], interval).replace('/mo', '').replace('/yr', '')}</span>
-                  <span className="text-landing-cream/50">/{interval === "month" ? "mo" : "yr"}</span>
-                </div>
-                {interval === "year" && (
-                  <p className="text-sm text-landing-cream/70 mt-2">
-                    That&apos;s just $12.50/mo
-                  </p>
-                )}
-              </div>
-
-              <ul className="space-y-4 mb-8">
-                {[
-                  "Unlimited active members",
-                  "Member directory & profiles",
-                  "Events & calendar",
-                  "Announcements",
-                  "Donations via Stripe Connect",
-                  "Forms & document uploads",
-                ].map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-sm text-landing-cream/70">
-                    <svg className="w-5 h-5 text-landing-green flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-
-              {showCta && (
-                <ButtonLink href="/auth/signup" variant="custom" className="w-full bg-landing-green-dark hover:bg-landing-green-dark/90 text-white font-semibold py-3">
-                  Get Started
-                </ButtonLink>
-              )}
-            </div>
-          </div>
-
-          {/* Alumni Add-on */}
-          <div className="pricing-card pricing-card-featured holo-border rounded-2xl p-8 pt-10 relative pulse-glow">
-            {/* Pick badge */}
-            <div className="pick-badge" style={{ background: "linear-gradient(135deg, #15803d 0%, #22c55e 100%)" }}>Pro Pick</div>
-
-            {/* Featured badge */}
-            <div className="absolute top-14 right-6">
-              <span className="px-3 py-1 rounded-full bg-landing-green/20 text-landing-green text-xs font-semibold uppercase tracking-wider">
-                Popular Add-On
-              </span>
-            </div>
-
-            <div className="mb-6">
-              <h3 className="font-display text-xl font-bold text-landing-cream mb-2">Alumni Access</h3>
-              <p className="text-landing-cream/50 text-sm">Keep alumni connected with read access</p>
-            </div>
-
-            <div className="space-y-3 mb-8 bg-landing-navy/50 rounded-xl p-4">
-              {ALUMNI_TIERS.map((tier) => {
-                const prices = tier === "5000+" ? null : ALUMNI_ADD_ON_PRICES[tier];
-                return (
-                  <div key={tier} className="flex justify-between items-center text-sm py-1">
-                    <span className="text-landing-cream/60">{ALUMNI_BUCKET_LABELS[tier]}</span>
-                    <span className="font-semibold text-landing-cream">
-                      {prices ? (
-                        <>+{formatPrice(prices[interval], interval)}</>
-                      ) : (
-                        <span className="text-landing-green">Custom</span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <ul className="space-y-4">
-              {[
-                "Alumni directory access",
-                "View events & announcements",
-                "Mentorship connections",
-              ].map((item) => (
-                <li key={item} className="flex items-center gap-3 text-sm text-landing-cream/70">
-                  <svg className="w-5 h-5 text-landing-green flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  {item}
+        {/* Rate cards */}
+        <div className="grid md:grid-cols-2 gap-6 mb-10">
+          <div className="pricing-card rounded-2xl p-7">
+            <h3 className="font-display text-lg font-bold text-landing-cream mb-1">
+              Active members
+            </h3>
+            <p className="text-landing-cream/50 text-sm mb-5">
+              Per active member, per month. Drops as your active roster grows.
+            </p>
+            <ul className="space-y-2">
+              {ACTIVE_SLABS.map((s) => (
+                <li
+                  key={s.label}
+                  className="flex justify-between items-baseline text-sm border-b border-landing-cream/5 pb-2 last:border-0"
+                >
+                  <span className="text-landing-cream/70">{s.label} actives</span>
+                  <span className="font-semibold text-landing-cream">
+                    {fmt(s.rateCents)}/mo each
+                  </span>
                 </li>
               ))}
             </ul>
           </div>
+
+          <div className="pricing-card pricing-card-featured holo-border rounded-2xl p-7 relative">
+            <h3 className="font-display text-lg font-bold text-landing-cream mb-1">
+              Alumni
+            </h3>
+            <p className="text-landing-cream/50 text-sm mb-5">
+              Per alumni, per month. Volume rates kick in automatically.
+            </p>
+            <ul className="space-y-2">
+              {ALUMNI_SLABS.map((s) => (
+                <li
+                  key={s.label}
+                  className="flex justify-between items-baseline text-sm border-b border-landing-cream/5 pb-2 last:border-0"
+                >
+                  <span className="text-landing-cream/70">{s.label} alumni</span>
+                  <span className="font-semibold text-landing-cream">
+                    {fmt(s.rateCents)}/mo each
+                  </span>
+                </li>
+              ))}
+              <li className="flex justify-between items-baseline text-sm pt-1">
+                <span className="text-landing-cream/70">10,000+ alumni</span>
+                <span className="font-semibold text-landing-green">
+                  Contact sales
+                </span>
+              </li>
+            </ul>
+          </div>
         </div>
 
-        {/* Example calculation */}
-        <div suppressHydrationWarning className="scroll-reveal text-center p-6 rounded-xl bg-landing-navy-light/50 border border-landing-cream/10">
-          <p className="text-landing-cream/60">
-            <span className="text-landing-cream font-semibold">Example:</span> Active Team + 251–500 alumni ={" "}
-            <span className="font-bold text-landing-cream text-lg">
-              {formatPrice(getTotalPrice(interval, "251-500")!, interval)}
-            </span>
-          </p>
+        {/* Worked example */}
+        <div
+          suppressHydrationWarning
+          className="scroll-reveal rounded-2xl border border-landing-cream/10 bg-landing-navy-light/50 p-6 sm:p-8"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <h3 className="font-display text-lg font-bold text-landing-cream">
+              See what you&apos;d actually pay
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {SCENARIOS.map((s) => (
+                <button
+                  key={s.key}
+                  onClick={() => setScenarioKey(s.key)}
+                  aria-pressed={scenarioKey === s.key}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                    scenarioKey === s.key
+                      ? "bg-landing-green-dark text-white border-landing-green-dark"
+                      : "border-landing-cream/15 text-landing-cream/60 hover:text-landing-cream"
+                  }`}
+                >
+                  {s.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-landing-cream/60 text-sm mb-5">{scenario.blurb}</p>
+
+          <div className="grid sm:grid-cols-2 gap-6 items-start">
+            <ul className="space-y-2 text-sm">
+              <Row
+                label={`${scenario.actives.toLocaleString()} actives × ${fmt(q.breakdown.activeRateCents)}`}
+                value={`${fmt(q.breakdown.activeMonthlyCents)}/mo`}
+              />
+              <Row
+                label={`${scenario.alumni.toLocaleString()} alumni × ${fmt(q.breakdown.alumniRateCents)}`}
+                value={`${fmt(q.breakdown.alumniMonthlyCents)}/mo`}
+              />
+              {q.breakdown.platformBaseCents > 0 && (
+                <Row
+                  label="Enterprise platform base"
+                  value={`${fmt(q.breakdown.platformBaseCents)}/mo`}
+                />
+              )}
+              {q.breakdown.subOrgMonthlyCents > 0 && (
+                <Row
+                  label={`${q.breakdown.subOrgsBilled} sub-orgs (blended)`}
+                  value={`${fmt(q.breakdown.subOrgMonthlyCents)}/mo`}
+                />
+              )}
+            </ul>
+
+            <div className="rounded-xl bg-landing-navy/60 p-5 text-center">
+              <p className="text-landing-cream/50 text-xs uppercase tracking-[0.18em] mb-2">
+                Your bill
+              </p>
+              <div className="flex items-baseline justify-center gap-2">
+                <span className="athletic-number text-5xl text-landing-cream">
+                  {fmt(totalCents)}
+                </span>
+                <span className="text-landing-cream/50">{intervalLabel}</span>
+              </div>
+              {interval === "year" && q.monthlyCents > 0 && (
+                <p className="text-sm text-landing-cream/60 mt-2">
+                  ≈ {fmt(Math.round(q.yearlyCents / 12))}/mo · 17% off
+                </p>
+              )}
+              {interval === "month" && q.monthlyCents > 0 && (
+                <p className="text-sm text-landing-cream/60 mt-2">
+                  Pay yearly: {fmt(q.yearlyCents)}/yr (save 17%)
+                </p>
+              )}
+            </div>
+          </div>
+
+          {showCta && (
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
+              <ButtonLink
+                href="/pricing/calculator"
+                variant="custom"
+                className="bg-landing-cream/10 hover:bg-landing-cream/20 text-landing-cream font-semibold px-6 py-3 border border-landing-cream/15"
+              >
+                Run your own numbers
+              </ButtonLink>
+              <ButtonLink
+                href="/auth/signup"
+                variant="custom"
+                className="bg-landing-green-dark hover:bg-landing-green-dark/90 text-white font-semibold px-6 py-3"
+              >
+                Get Started
+              </ButtonLink>
+            </div>
+          )}
         </div>
       </div>
     </section>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <li className="flex justify-between items-baseline border-b border-landing-cream/5 pb-2 last:border-0">
+      <span className="text-landing-cream/70">{label}</span>
+      <span className="font-semibold text-landing-cream">{value}</span>
+    </li>
   );
 }

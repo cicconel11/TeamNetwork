@@ -25,6 +25,7 @@ const PUBLIC_ROUTES = [
   "/terms",
   "/privacy",
   "/app/parents-join",
+  "/pricing/calculator",
 ];
 
 const AUTH_ONLY_ROUTES = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
@@ -36,6 +37,7 @@ const NON_ORG_TOP_LEVEL_SEGMENTS = [
   "blog",
   "settings",
   "enterprise",
+  "pricing",
   "_next",
   "favicon.ico",
 ];
