@@ -25,6 +25,16 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+/**
+ * Realtime channels must register every `postgres_changes` listener before `subscribe()`.
+ * Reusing the same topic string can return an already-subscribed channel; a subsequent
+ * `.on('postgres_changes', …)` then throws ("cannot add … after subscribe()").
+ */
+export function createPostgresChangesChannel(topic: string) {
+  const uniqueTopic = `${topic}:${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return supabase.channel(uniqueTopic);
+}
+
 export async function signOut() {
   // Reset analytics identity regardless of session state
   resetAnalytics();
