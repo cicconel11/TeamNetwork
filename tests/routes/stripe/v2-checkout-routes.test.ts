@@ -42,6 +42,39 @@ describe("v2 Stripe checkout routes", () => {
     assert.match(enterpriseRoute, /cancel_url: `\$\{origin\}\/app\/create-enterprise\?checkout=cancel`/);
   });
 
+  it("org v2 route accepts Bearer auth via createAuthenticatedApiClient and exposes CORS preflight", () => {
+    assert.match(orgRoute, /createAuthenticatedApiClient/);
+    assert.doesNotMatch(
+      orgRoute,
+      /from "@\/lib\/supabase\/server"/,
+      "v2 org route should no longer import cookie-only createClient",
+    );
+    assert.match(orgRoute, /export async function OPTIONS\(/);
+    assert.match(orgRoute, /Access-Control-Allow-Origin/);
+    assert.match(orgRoute, /Access-Control-Allow-Headers.*authorization/i);
+    assert.match(
+      orgRoute,
+      /headers: \{ \.\.\.rateLimit\.headers, \.\.\.CORS_HEADERS \}/,
+      "respond() must merge CORS_HEADERS into success/error JSON",
+    );
+  });
+
+  it("middleware accepts Bearer tokens for /api/* and short-circuits OPTIONS", () => {
+    const mw = readSource("src/middleware.ts");
+    assert.match(mw, /pathname\.startsWith\("\/api\/"\)/);
+    assert.match(mw, /request\.method === "OPTIONS"/);
+    assert.match(mw, /\^Bearer \(eyJ\|sb_\)/);
+    assert.match(mw, /tokenClient\.auth\.getUser\(token\)/);
+  });
+
+  it("createAuthenticatedApiClient prefers Bearer token, falls back to cookie client", () => {
+    const api = readSource("src/lib/supabase/api.ts");
+    assert.match(api, /\^Bearer \(\.\+\)\$/);
+    assert.match(api, /Authorization: `Bearer \$\{token\}`/);
+    assert.match(api, /createClient\(\)/);
+    assert.match(api, /auth\.getUser\(token\)/);
+  });
+
   it("v2 routes route catch-block errors through buildCheckoutErrorResponse (no generic 400 mask)", () => {
     for (const route of [orgRoute, enterpriseRoute]) {
       assert.match(route, /buildCheckoutErrorResponse\(error/);

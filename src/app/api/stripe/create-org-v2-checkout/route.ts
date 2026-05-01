@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getStripeOrigin } from "@/lib/stripe-origin";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
@@ -30,11 +30,21 @@ import { createOrgV2Schema } from "@/lib/schemas/organization-v2";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": process.env.MOBILE_CORS_ORIGIN ?? "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, content-type",
+  "Access-Control-Max-Age": "86400",
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
+    const { supabase, user } = await createAuthenticatedApiClient(req);
     const serviceSupabase = createServiceClient();
-    const { data: { user } } = await supabase.auth.getUser();
 
     const rateLimit = checkRateLimit(req, {
       userId: user?.id ?? null,
@@ -48,7 +58,10 @@ export async function POST(req: Request) {
     }
 
     const respond = (payload: unknown, status = 200) =>
-      NextResponse.json(payload, { status, headers: rateLimit.headers });
+      NextResponse.json(payload, {
+        status,
+        headers: { ...rateLimit.headers, ...CORS_HEADERS },
+      });
 
     if (!user) {
       return respond({ error: "Unauthorized" }, 401);
@@ -137,7 +150,7 @@ export async function POST(req: Request) {
         }
         const message = error instanceof Error ? error.message : "Unable to start checkout";
         console.error("[create-org-v2-checkout] sales-led error:", message);
-        return buildCheckoutErrorResponse(error, { headers: rateLimit.headers });
+        return buildCheckoutErrorResponse(error, { headers: { ...rateLimit.headers, ...CORS_HEADERS } });
       }
     }
 
@@ -313,7 +326,7 @@ export async function POST(req: Request) {
       }
 
       console.error("[create-org-v2-checkout] error:", { errorClass, lastError });
-      return buildCheckoutErrorResponse(error, { headers: rateLimit.headers });
+      return buildCheckoutErrorResponse(error, { headers: { ...rateLimit.headers, ...CORS_HEADERS } });
     }
   } catch (error) {
     if (error instanceof ValidationError) {
