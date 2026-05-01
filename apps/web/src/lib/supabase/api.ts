@@ -14,6 +14,8 @@ function getBearerToken(req: Request): string | null {
 export async function createAuthenticatedApiClient(req: Request): Promise<{
   supabase: Awaited<ReturnType<typeof createServerClient>>;
   user: User | null;
+  authSource: "bearer" | "cookie";
+  authError: string | null;
 }> {
   const bearerToken = getBearerToken(req);
 
@@ -31,11 +33,11 @@ export async function createAuthenticatedApiClient(req: Request): Promise<{
       },
     }) as Awaited<ReturnType<typeof createServerClient>>;
 
-    const { data: { user } } = await supabase.auth.getUser(bearerToken);
-    return { supabase, user };
+    const { data: { user }, error } = await supabase.auth.getUser(bearerToken);
+    return { supabase, user, authSource: "bearer", authError: error?.message ?? null };
   }
 
   const supabase = await createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return { supabase, user };
+  const { data: { user }, error } = await supabase.auth.getUser();
+  return { supabase, user, authSource: "cookie", authError: error?.message ?? null };
 }

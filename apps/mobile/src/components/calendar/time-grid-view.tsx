@@ -22,8 +22,8 @@ interface TimeGridViewProps {
   onEventPress?: (item: UnifiedCalendarItem) => void;
 }
 
-const HOUR_HEIGHT = 60;
-const TIME_COLUMN_WIDTH = 60;
+const HOUR_HEIGHT = 44;
+const TIME_COLUMN_WIDTH = 48;
 
 function toDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -87,26 +87,42 @@ export function TimeGridView({
       borderRightWidth: 0,
     },
     dayHeader: {
-      height: 50,
+      paddingVertical: 6,
       justifyContent: "center" as const,
       alignItems: "center" as const,
-      borderBottomWidth: 1,
-      borderBottomColor: n.border,
       backgroundColor: n.background,
     },
-    dayHeaderText: {
-      ...TYPOGRAPHY.labelMedium,
+    dayHeaderWeekday: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      fontSize: 11,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.5,
+    },
+    dayHeaderDay: {
+      ...TYPOGRAPHY.titleMedium,
       color: n.foreground,
       fontWeight: "600" as const,
+      marginTop: 2,
     },
-    dayHeaderToday: {
-      backgroundColor: "rgba(14, 165, 233, 0.1)",
-      borderRadius: RADIUS.md,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.xs,
+    dayHeaderTodayCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: "#0ea5e9",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginTop: 2,
     },
-    dayHeaderTextToday: {
+    dayHeaderDayToday: {
+      ...TYPOGRAPHY.titleMedium,
+      color: "#ffffff",
+      fontWeight: "700" as const,
+      marginTop: 0,
+    },
+    dayHeaderWeekdayToday: {
       color: "#0ea5e9",
+      fontWeight: "700" as const,
     },
     gridLine: {
       height: HOUR_HEIGHT,
@@ -222,6 +238,36 @@ export function TimeGridView({
 
   return (
     <View style={styles.container}>
+      {/* Sticky day headers */}
+      <View style={[styles.content, { borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.08)" }]}>
+        <View style={{ width: TIME_COLUMN_WIDTH }} />
+        <View style={styles.dayColumnsContainer}>
+          {visibleDates.map((date, colIdx) => {
+            const dateKey = toDateKey(date);
+            const isToday = dateKey === todayKey;
+            const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
+            const dayNum = date.getDate();
+            return (
+              <View
+                key={`hdr-${colIdx}`}
+                style={[styles.dayHeader, { width: columnWidth }]}
+              >
+                <Text style={[styles.dayHeaderWeekday, isToday && styles.dayHeaderWeekdayToday]}>
+                  {weekday}
+                </Text>
+                {isToday ? (
+                  <View style={styles.dayHeaderTodayCircle}>
+                    <Text style={styles.dayHeaderDayToday}>{dayNum}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.dayHeaderDay}>{dayNum}</Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
+
       {/* All-day events row */}
       {allDayEvents.length > 0 && (
         <View style={styles.allDayRow}>
@@ -252,7 +298,6 @@ export function TimeGridView({
           <View style={styles.dayColumnsContainer}>
             {visibleDates.map((date, colIdx) => {
               const dateKey = toDateKey(date);
-              const isToday = dateKey === todayKey;
               const columnHourMap = eventsByDateAndHour.get(dateKey) ?? new Map();
 
               return (
@@ -262,26 +307,6 @@ export function TimeGridView({
                     { width: columnWidth, position: "relative" as const },
                   ]}
                 >
-                  {/* Day header */}
-                  <View
-                    style={[
-                      styles.dayHeader,
-                      isToday && styles.dayHeaderToday,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.dayHeaderText,
-                        isToday && styles.dayHeaderTextToday,
-                      ]}
-                    >
-                      {date.toLocaleDateString("en-US", {
-                        weekday: "short",
-                        day: "numeric",
-                      })}
-                    </Text>
-                  </View>
-
                   {/* Grid hours */}
                   <View>
                     {Array.from({ length: 24 }, (_, hour) => {

@@ -30,33 +30,31 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useNavConfig } from "@/hooks/useNavConfig";
 import { signOut } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
 import { spacing, fontSize, fontWeight } from "@/lib/theme";
 import { NEUTRAL, SEMANTIC, RADIUS } from "@/lib/design-tokens";
+import { Bell, Calendar, Megaphone } from "lucide-react-native";
 
 interface NavItem {
   label: string;
   href: string;
   icon: typeof Settings;
   openInWeb?: boolean;
+  configKey?: string; // matches nav_config key (slug after `/${slug}`)
 }
 
-interface NavSection {
-  id: string;
-  title: string | null; // null = no header
-  items: NavItem[];
-}
-
-// Pinned footer items (Settings, Navigation, Organizations, Sign Out) — Delete Account is under profile in scroll
-const PINNED_ITEM_HEIGHT = 44;
+// Pinned footer items (Settings, Navigation, Organizations, Sign Out)
+const PINNED_ITEM_HEIGHT = 48;
 const PINNED_FOOTER_COUNT = 4;
-const FOOTER_PADDING = 16;
-/** Pinned strip (wordmark) + divider margins — keeps scroll clear of fixed footer */
-const BRAND_STRIP_HEIGHT = 104;
+const BRAND_STRIP_HEIGHT = 88;
+const FOOTER_PADDING = 32;
+const FOOTER_TOP_INSET = 8;
 const FOOTER_HEIGHT =
-  BRAND_STRIP_HEIGHT +
   PINNED_ITEM_HEIGHT * PINNED_FOOTER_COUNT +
+  BRAND_STRIP_HEIGHT +
+  FOOTER_TOP_INSET +
   FOOTER_PADDING;
 
 export function DrawerContent(props: DrawerContentComponentProps) {
@@ -66,7 +64,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const { orgSlug } = useGlobalSearchParams<{ orgSlug?: string }>();
   const { user } = useAuth();
   const { permissions, role } = useOrgRole();
-  const { orgName, orgLogoUrl, hasParentsAccess } = useOrg();
+  const { orgName, orgLogoUrl, hasParentsAccess, orgId } = useOrg();
+  const { navConfig } = useNavConfig(orgId);
   const slug = typeof orgSlug === "string" ? orgSlug : "";
   const orgInitial = (orgName ?? slug ?? "").trim().charAt(0).toUpperCase() || "O";
   const userMeta = (user?.user_metadata ?? {}) as { name?: string; avatar_url?: string };
@@ -77,81 +76,68 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const initial = displayName.trim().charAt(0).toUpperCase() || "M";
 
   // Build sections for grouped navigation
-  const sections = useMemo<NavSection[]>(() => {
+  const items = useMemo<NavItem[]>(() => {
     if (!slug) {
-      // No org context - only show Organizations
-      return [
-        {
-          id: "main",
-          title: null,
-          items: [{ label: "Organizations", href: "/(app)", icon: Building2 }],
-        },
-      ];
+      return [{ label: "Organizations", href: "/(app)", icon: Building2 }];
     }
 
-    // Main section (no header): Home, Chat, Alumni*, Mentorship
-    const mainItems: NavItem[] = [
-      { label: "Home", href: `/(app)/${slug}`, icon: Home },
-      { label: "Chat", href: `/(app)/${slug}/chat`, icon: MessageCircle },
+    const all: NavItem[] = [
+      { label: "Home", href: `/(app)/${slug}`, icon: Home, configKey: "dashboard" },
+      { label: "Chat", href: `/(app)/${slug}/chat`, icon: MessageCircle, configKey: "/chat" },
+      { label: "Members", href: `/(app)/${slug}/members`, icon: Users, configKey: "/members" },
+      { label: "Parents", href: `/(app)/${slug}/parents`, icon: Users, configKey: "/parents" },
+      { label: "Alumni", href: `/(app)/${slug}/alumni`, icon: GraduationCap, configKey: "/alumni" },
+      { label: "Mentorship", href: `/(app)/${slug}/mentorship`, icon: Handshake, configKey: "/mentorship" },
+      { label: "Events", href: `/(app)/${slug}/events`, icon: Calendar, configKey: "/events" },
+      { label: "Announcements", href: `/(app)/${slug}/announcements`, icon: Megaphone, configKey: "/announcements" },
+      { label: "Jobs", href: `/(app)/${slug}/jobs`, icon: Briefcase, configKey: "/jobs" },
+      { label: "Workouts", href: `/(app)/${slug}/workouts`, icon: Dumbbell, configKey: "/workouts" },
+      { label: "Competition", href: `/(app)/${slug}/competition`, icon: Award, configKey: "/competition" },
+      { label: "Records", href: `/(app)/${slug}/records`, icon: Trophy, configKey: "/records" },
+      { label: "Schedules", href: `/(app)/${slug}/schedules`, icon: ClipboardList, configKey: "/schedules" },
+      { label: "Philanthropy", href: `/(app)/${slug}/philanthropy`, icon: Heart, configKey: "/philanthropy" },
+      { label: "Donations", href: `/(app)/${slug}/donations`, icon: DollarSign, configKey: "/donations" },
+      { label: "Expenses", href: `/(app)/${slug}/expenses`, icon: Receipt, configKey: "/expenses" },
+      { label: "Forms", href: `/(app)/${slug}/forms`, icon: ClipboardList, configKey: "/forms" },
     ];
 
-    if (
-      hasParentsAccess &&
-      (role === "admin" || role === "active_member" || role === "parent")
-    ) {
-      mainItems.push({ label: "Parents", href: `/(app)/${slug}/parents`, icon: Users });
-    }
+    const roleFiltered = all.filter((item) => {
+      if (item.configKey === "/parents") {
+        return (
+          hasParentsAccess &&
+          (role === "admin" || role === "active_member" || role === "parent")
+        );
+      }
+      if (item.configKey === "/alumni") return permissions.canViewAlumni;
+      return true;
+    });
 
-    if (permissions.canViewAlumni) {
-      mainItems.push({ label: "Alumni", href: `/(app)/${slug}/alumni`, icon: GraduationCap });
-    }
+    const visible = roleFiltered.filter((item) => {
+      if (!item.configKey) return true;
+      const cfg = navConfig[item.configKey];
+      if (!cfg) return true;
+      if (cfg.hidden) return false;
+      if (role && cfg.hiddenForRoles?.includes(role as any)) return false;
+      return true;
+    });
 
-    mainItems.push({ label: "Mentorship", href: `/(app)/${slug}/mentorship`, icon: Handshake });
+    const withLabels = visible.map((item) => {
+      const cfg = item.configKey ? navConfig[item.configKey] : undefined;
+      return cfg?.label ? { ...item, label: cfg.label } : item;
+    });
 
-    // Training section
-    const trainingItems: NavItem[] = [
-      { label: "Workouts", href: `/(app)/${slug}/workouts`, icon: Dumbbell },
-      { label: "Competition", href: `/(app)/${slug}/competition`, icon: Award },
-      { label: "Records", href: `/(app)/${slug}/records`, icon: Trophy },
-    ];
+    const indexed = withLabels.map((item, idx) => ({ item, idx }));
+    indexed.sort((a, b) => {
+      const oa = a.item.configKey ? navConfig[a.item.configKey]?.order : undefined;
+      const ob = b.item.configKey ? navConfig[b.item.configKey]?.order : undefined;
+      if (oa != null && ob != null) return oa - ob;
+      if (oa != null) return -1;
+      if (ob != null) return 1;
+      return a.idx - b.idx;
+    });
 
-    // Money section
-    const moneyItems: NavItem[] = [
-      { label: "Philanthropy", href: `/(app)/${slug}/philanthropy`, icon: Heart },
-      { label: "Donations", href: `/(app)/${slug}/donations`, icon: DollarSign },
-      { label: "Expenses", href: `/(app)/${slug}/expenses`, icon: Receipt },
-    ];
-
-    // Other section
-    const otherItems: NavItem[] = [
-      { label: "Forms", href: `/(app)/${slug}/forms`, icon: ClipboardList },
-    ];
-
-    // Community section
-    const communityItems: NavItem[] = [
-      {
-        label: "Jobs",
-        icon: Briefcase,
-        href: `/(app)/${slug}/jobs`,
-      },
-    ];
-
-    const sections: NavSection[] = [
-      { id: "main", title: null, items: mainItems },
-    ];
-
-    if (communityItems.length > 0) {
-      sections.push({ id: "community", title: "Community", items: communityItems });
-    }
-
-    sections.push(
-      { id: "training", title: "Training", items: trainingItems },
-      { id: "money", title: "Money", items: moneyItems },
-      { id: "other", title: "Other", items: otherItems },
-    );
-
-    return sections;
-  }, [slug, permissions.canViewAlumni, hasParentsAccess, role]);
+    return indexed.map((x) => x.item);
+  }, [slug, permissions.canViewAlumni, hasParentsAccess, role, navConfig]);
 
   // Pinned footer items
   const pinnedItems = useMemo<NavItem[]>(() => {
@@ -228,7 +214,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           pressed && styles.navItemPressed,
         ]}
       >
-        <Icon size={18} color={isDangerous ? SEMANTIC.error : NEUTRAL.placeholder} />
+        <Icon size={22} color={isDangerous ? SEMANTIC.error : NEUTRAL.placeholder} strokeWidth={1.8} />
         <Text style={[styles.navLabel, isDangerous && styles.signOutLabel]}>{item.label}</Text>
       </Pressable>
     );
@@ -241,7 +227,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         {...props}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: topInset + spacing.md, paddingBottom: FOOTER_HEIGHT + bottomInset },
+          { paddingTop: topInset + spacing.md, paddingBottom: FOOTER_HEIGHT + bottomInset + spacing.lg },
         ]}
         scrollEnabled
       >
@@ -303,33 +289,28 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         </Pressable>
         <View style={styles.divider} />
 
-        {/* Sections */}
-        {sections.map((section) => (
-          <View key={section.id} style={styles.section}>
-            {section.title ? <Text style={styles.sectionHeader}>{section.title}</Text> : null}
-            {section.items.map((item) => renderNavItem(item))}
-          </View>
-        ))}
+        <View style={styles.section}>
+          {items.map((item) => renderNavItem(item))}
+        </View>
+
       </DrawerContentScrollView>
 
-      {/* Pinned: TeamNetwork (always visible) + settings / account — does not scroll */}
+      {/* Pinned: settings / account — does not scroll */}
       <View style={[styles.pinnedFooter, { paddingBottom: bottomInset }]}>
-        <View style={styles.brandPinned}>
-          <View style={styles.brandLogoFrame}>
-            <Image
-              source={require("../../assets/brand-logo.png")}
-              style={styles.brandLogoInline}
-              contentFit="contain"
-              transition={0}
-              cachePolicy="memory"
-              accessibilityLabel="TeamNetwork"
-              accessibilityRole="image"
-            />
-          </View>
-        </View>
-        <View style={styles.divider} />
         {slug ? pinnedItems.map((item) => renderNavItem(item)) : null}
         {renderNavItem({ label: "Sign Out", href: "", icon: LogOut }, { isSignOut: true, isDangerous: true })}
+        <View style={styles.brandStrip}>
+          <Text style={styles.brandPoweredBy}>Powered by</Text>
+          <Image
+            source={require("../../assets/brand-logo.png")}
+            style={styles.brandLogoInline}
+            contentFit="contain"
+            transition={0}
+            cachePolicy="memory"
+            accessibilityLabel="TeamNetwork"
+            accessibilityRole="image"
+          />
+        </View>
       </View>
     </View>
   );
@@ -345,7 +326,8 @@ const styles = StyleSheet.create({
   },
   drawerHeader: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
   },
   orgIdentityRow: {
     flexDirection: "row",
@@ -353,8 +335,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   orgLogoContainer: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     borderRadius: RADIUS.sm,
     borderCurve: "continuous",
     backgroundColor: NEUTRAL.dark800,
@@ -363,8 +345,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   orgLogoImage: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
   },
   orgLogoFallback: {
     fontSize: fontSize.base,
@@ -377,38 +359,31 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     color: NEUTRAL.surface,
   },
-  /** Pinned footer strip — wordmark stays on screen while nav scrolls */
-  brandPinned: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+  brandStrip: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    width: "100%" as const,
-    backgroundColor: NEUTRAL.dark950,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    height: BRAND_STRIP_HEIGHT,
+    gap: 4,
   },
-  /** Fixed frame so Expo Image lays out at full size on web + native (avoids tiny absolute img) */
-  brandLogoFrame: {
-    width: "100%" as const,
-    maxWidth: 288,
-    height: 72,
-    minHeight: 72,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    alignSelf: "center" as const,
+  brandPoweredBy: {
+    fontSize: 11,
+    color: NEUTRAL.placeholder,
+    letterSpacing: 0.4,
+    opacity: 0.7,
   },
   brandLogoInline: {
-    width: "100%" as const,
-    height: "100%" as const,
-    maxHeight: 72,
-    opacity: 0.68,
+    width: 180,
+    height: 44,
+    opacity: 0.9,
   },
   profileCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
   },
   profileCardPressed: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
@@ -462,40 +437,35 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   section: {
-    gap: 2,
-  },
-  sectionHeader: {
-    fontSize: 11,
-    fontWeight: fontWeight.semibold,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    color: NEUTRAL.placeholder,
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    gap: 0,
   },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    height: 44,
-    paddingHorizontal: spacing.md,
+    gap: 14,
+    height: 48,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 10,
+    borderCurve: "continuous",
   },
   navItemActive: {
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
   },
   navItemPressed: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   navLabel: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: fontWeight.medium,
     color: NEUTRAL.surface,
+    letterSpacing: -0.2,
   },
   signOutLabel: {
     color: SEMANTIC.error,
@@ -505,9 +475,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
     backgroundColor: NEUTRAL.dark950,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255, 255, 255, 0.09)",
-    boxShadow: "0 -8px 24px rgba(0, 0, 0, 0.35)",
+    borderTopColor: "rgba(255, 255, 255, 0.12)",
+    boxShadow: "0 -1px 0 rgba(255, 255, 255, 0.06)",
   },
 });

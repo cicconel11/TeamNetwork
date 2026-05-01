@@ -7,6 +7,7 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import type { LeaderboardEntry } from "@/hooks/competitionHelpers";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { continuousBorderCurve } from "@/lib/ios-style";
 
 const COMP = {
   gold: "#eab308",
@@ -44,8 +45,7 @@ export function LeaderboardCard({ leaderboard, maxPoints, season }: LeaderboardC
     card: {
       backgroundColor: n.surface,
       borderRadius: RADIUS.lg,
-      // @ts-ignore — iOS continuous corner curves
-      borderCurve: "continuous",
+      ...continuousBorderCurve,
       borderWidth: 1,
       borderColor: n.border,
       padding: SPACING.md,

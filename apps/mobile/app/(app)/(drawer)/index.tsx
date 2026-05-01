@@ -7,8 +7,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
-  Linking,
 } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
@@ -31,8 +31,17 @@ const WORDMARK_HEIGHT = Math.round(WORDMARK_WIDTH / 1.507); // ≈ 86
 export default function OrganizationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useGlobalSearchParams<{ orgSlug?: string; currentSlug?: string }>();
+  const params = useGlobalSearchParams<{
+    orgSlug?: string;
+    currentSlug?: string;
+    pendingSales?: string;
+    pendingFinalize?: string;
+  }>();
   const currentSlug = params.currentSlug ?? params.orgSlug;
+  const pendingSalesSlug =
+    typeof params.pendingSales === "string" ? params.pendingSales : null;
+  const pendingFinalizeSlug =
+    typeof params.pendingFinalize === "string" ? params.pendingFinalize : null;
   const { organizations, pendingOrganizations, loading, error, refetch } = useOrganizations();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -49,7 +58,11 @@ export default function OrganizationsScreen() {
   );
 
   const openWebOnboardingRoute = useCallback((path: string) => {
-    Linking.openURL(getWebRoute(path)).catch(() => {
+    void WebBrowser.openBrowserAsync(getWebRoute(path), {
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+      controlsColor: NEUTRAL.foreground,
+      dismissButtonStyle: "close",
+    }).catch(() => {
       // No-op: keep the current screen stable if the browser can't open.
     });
   }, []);
@@ -117,6 +130,25 @@ export default function OrganizationsScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
           showsVerticalScrollIndicator={false}
         >
+          {pendingSalesSlug != null && (
+            <View style={styles.banner}>
+              <Text style={styles.bannerTitle}>Custom plan request received</Text>
+              <Text style={styles.bannerText}>
+                Thanks! We'll reach out to finalize pricing for{" "}
+                <Text style={styles.bannerSlug}>{pendingSalesSlug}</Text>. Your
+                organization will be visible once it's set up.
+              </Text>
+            </View>
+          )}
+          {pendingFinalizeSlug != null && pendingSalesSlug == null && (
+            <View style={styles.banner}>
+              <Text style={styles.bannerTitle}>Finalizing your organization</Text>
+              <Text style={styles.bannerText}>
+                Payment confirmed. Your new org should appear here in a few
+                seconds. Pull to refresh if it doesn't show up.
+              </Text>
+            </View>
+          )}
           {hasOrgs ? (
             <View style={styles.cardGroup}>
               {organizations.map((org, index) => {
@@ -173,7 +205,7 @@ export default function OrganizationsScreen() {
                     styles.emptyActionButtonSecondary,
                     pressed && { opacity: 0.8 },
                   ]}
-                  onPress={() => openWebOnboardingRoute("/app/create-org")}
+                  onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
                   accessibilityLabel="Create a Team"
                   accessibilityRole="button"
                 >
@@ -210,7 +242,7 @@ export default function OrganizationsScreen() {
                     styles.emptyActionButtonSecondary,
                     pressed && { opacity: 0.8 },
                   ]}
-                  onPress={() => openWebOnboardingRoute("/app/create-org")}
+                  onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
                   accessibilityLabel="Create a Team"
                   accessibilityRole="button"
                 >
@@ -267,6 +299,30 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: SPACING.lg,
+  },
+  banner: {
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    backgroundColor: "rgba(2, 132, 199, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(2, 132, 199, 0.24)",
+    gap: 4,
+  },
+  bannerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: NEUTRAL.foreground,
+  },
+  bannerText: {
+    fontSize: 13,
+    color: NEUTRAL.secondary,
+    lineHeight: 18,
+  },
+  bannerSlug: {
+    fontWeight: "600",
+    color: NEUTRAL.foreground,
   },
   // Grouped card container — iOS Settings style
   cardGroup: {

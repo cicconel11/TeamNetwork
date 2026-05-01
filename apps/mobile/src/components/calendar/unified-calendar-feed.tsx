@@ -13,6 +13,7 @@ import type {
 } from "@/hooks/useUnifiedCalendar";
 
 import { CalendarItemCard } from "./calendar-item-card";
+import { PoweredByTeamNetwork } from "@/components/PoweredByTeamNetwork";
 
 type FeedRow =
   | { kind: "header"; key: string; label: string }
@@ -160,6 +161,7 @@ export function UnifiedCalendarFeed({
             Events and your class schedule will show here.
           </Text>
         </View>
+        <PoweredByTeamNetwork variant="watermark" />
       </Animated.View>
     );
   }, [error, onRetry, neutral.muted, styles]);

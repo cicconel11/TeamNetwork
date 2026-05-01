@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet, Linking } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { ExternalLink, LogOut } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { signOut } from "@/lib/supabase";
@@ -8,13 +9,16 @@ import { NEUTRAL, SEMANTIC, SHADOWS, RADIUS, SPACING } from "@/lib/design-tokens
 export function OrgSwitcherActions() {
   const router = useRouter();
 
-  const handleJoin = () => {
-    Linking.openURL(`${getWebAppUrl()}/app/join`);
+  const openInApp = (path: string) => {
+    void WebBrowser.openBrowserAsync(`${getWebAppUrl()}${path}`, {
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+      controlsColor: NEUTRAL.foreground,
+      dismissButtonStyle: "close",
+    });
   };
 
-  const handleCreate = () => {
-    Linking.openURL(`${getWebAppUrl()}/app/create-org`);
-  };
+  const handleJoin = () => openInApp("/app/join");
+  const handleCreate = () => router.push("/(app)/(drawer)/create-org" as never);
 
   const handleSignOut = async () => {
     await signOut();
@@ -50,11 +54,10 @@ export function OrgSwitcherActions() {
               styles.rowLast,
               pressed && styles.rowPressed,
             ]}
-            accessibilityRole="link"
-            accessibilityLabel="Create a new organization (opens web)"
+            accessibilityRole="button"
+            accessibilityLabel="Create a new organization"
           >
             <Text style={styles.rowText}>Create a new organization</Text>
-            <ExternalLink size={16} color={NEUTRAL.muted} />
           </Pressable>
         </View>
       </View>

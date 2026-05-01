@@ -636,79 +636,99 @@ export default function NewEventScreen() {
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Start</Text>
             <View style={styles.dateTimeRow}>
-              <Pressable onPress={() => openPicker("start-date")} style={styles.dateTimeField}>
-                <Text
-                  style={[
-                    styles.dateTimeText,
-                    !startDate && styles.dateTimePlaceholder,
-                  ]}
-                >
-                  {formatDateLabel(startDate)}
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => openPicker("start-time")} style={styles.dateTimeField}>
-                <Text
-                  style={[
-                    styles.dateTimeText,
-                    !startTime && styles.dateTimePlaceholder,
-                  ]}
-                >
-                  {formatTimeLabel(startTime)}
-                </Text>
-              </Pressable>
+              {Platform.OS === "ios" ? (
+                <>
+                  <DateTimePicker
+                    value={startDate ?? todayStart}
+                    mode="date"
+                    display="compact"
+                    minimumDate={todayStart}
+                    onChange={(_e, d) => {
+                      if (!d) return;
+                      setStartDate(d);
+                      if (!startTime) setStartTime(d);
+                    }}
+                  />
+                  <DateTimePicker
+                    value={startTime ?? todayStart}
+                    mode="time"
+                    display="compact"
+                    onChange={(_e, d) => {
+                      if (!d) return;
+                      setStartTime(d);
+                      if (!startDate) setStartDate(d);
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <Pressable onPress={() => openPicker("start-date")} style={styles.dateTimeField}>
+                    <Text style={[styles.dateTimeText, !startDate && styles.dateTimePlaceholder]}>
+                      {formatDateLabel(startDate)}
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => openPicker("start-time")} style={styles.dateTimeField}>
+                    <Text style={[styles.dateTimeText, !startTime && styles.dateTimePlaceholder]}>
+                      {formatTimeLabel(startTime)}
+                    </Text>
+                  </Pressable>
+                </>
+              )}
             </View>
           </View>
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>End (optional)</Text>
             <View style={styles.dateTimeRow}>
-              <Pressable onPress={() => openPicker("end-date")} style={styles.dateTimeField}>
-                <Text
-                  style={[
-                    styles.dateTimeText,
-                    !endDate && styles.dateTimePlaceholder,
-                  ]}
-                >
-                  {formatDateLabel(endDate)}
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => openPicker("end-time")} style={styles.dateTimeField}>
-                <Text
-                  style={[
-                    styles.dateTimeText,
-                    !endTime && styles.dateTimePlaceholder,
-                  ]}
-                >
-                  {formatTimeLabel(endTime)}
-                </Text>
-              </Pressable>
+              {Platform.OS === "ios" ? (
+                <>
+                  <DateTimePicker
+                    value={endDate ?? startDate ?? todayStart}
+                    mode="date"
+                    display="compact"
+                    minimumDate={startDate ?? todayStart}
+                    onChange={(_e, d) => {
+                      if (!d) return;
+                      setEndDate(d);
+                      if (!endTime) setEndTime(d);
+                    }}
+                  />
+                  <DateTimePicker
+                    value={endTime ?? startTime ?? todayStart}
+                    mode="time"
+                    display="compact"
+                    onChange={(_e, d) => {
+                      if (!d) return;
+                      setEndTime(d);
+                      if (!endDate) setEndDate(d);
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <Pressable onPress={() => openPicker("end-date")} style={styles.dateTimeField}>
+                    <Text style={[styles.dateTimeText, !endDate && styles.dateTimePlaceholder]}>
+                      {formatDateLabel(endDate)}
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => openPicker("end-time")} style={styles.dateTimeField}>
+                    <Text style={[styles.dateTimeText, !endTime && styles.dateTimePlaceholder]}>
+                      {formatTimeLabel(endTime)}
+                    </Text>
+                  </Pressable>
+                </>
+              )}
             </View>
           </View>
 
-          {activePicker && (
-            <View style={styles.pickerContainer}>
-              <DateTimePicker
-                value={pickerValue}
-                mode={pickerMode}
-                minimumDate={pickerMinimumDate}
-                display={
-                  Platform.OS === "ios"
-                    ? pickerMode === "date"
-                      ? "inline"
-                      : "spinner"
-                    : "default"
-                }
-                onChange={handlePickerChange}
-              />
-              {Platform.OS === "ios" && (
-                <Pressable
-                  onPress={() => setActivePicker(null)}
-                  style={styles.pickerDoneButton}
-                >
-                  <Text style={styles.pickerDoneText}>Done</Text>
-                </Pressable>
-              )}
-            </View>
+          {activePicker && Platform.OS === "android" && (
+            <DateTimePicker
+              value={pickerValue}
+              mode={pickerMode}
+              minimumDate={pickerMinimumDate}
+              display="default"
+              onChange={handlePickerChange}
+            />
           )}
 
           <View style={styles.fieldGroup}>

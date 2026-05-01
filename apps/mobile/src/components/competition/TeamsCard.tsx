@@ -6,6 +6,7 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import { formatLocalDateString } from "@/lib/date-format";
 import type { CompetitionTeam } from "@teammeet/types";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { continuousBorderCurve } from "@/lib/ios-style";
 
 interface TeamsCardProps {
   teams: CompetitionTeam[];
@@ -19,8 +20,7 @@ export function TeamsCard({ teams, teamPoints, isAdmin, onAddTeam }: TeamsCardPr
     card: {
       backgroundColor: n.surface,
       borderRadius: RADIUS.lg,
-      // @ts-ignore — iOS continuous corner curves
-      borderCurve: "continuous",
+      ...continuousBorderCurve,
       borderWidth: 1,
       borderColor: n.border,
       padding: SPACING.md,

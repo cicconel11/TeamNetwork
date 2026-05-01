@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { stripe, getPriceIds, isSalesLedBucket } from "@/lib/stripe";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
@@ -45,15 +45,15 @@ const createOrgSchema = z
     withTrial: z.boolean().optional(),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
     paymentAttemptId: baseSchemas.uuid.optional(),
+    source: z.enum(["mobile", "web"]).optional(),
   })
   .strict();
 
 export async function POST(req: Request) {
   try {
     console.log("[create-org-checkout] Starting...");
-    const supabase = await createClient();
+    const { supabase, user, authSource, authError } = await createAuthenticatedApiClient(req);
     const serviceSupabase = createServiceClient();
-    const { data: { user } } = await supabase.auth.getUser();
 
     const rateLimit = checkRateLimit(req, {
       userId: user?.id ?? null,
@@ -70,7 +70,11 @@ export async function POST(req: Request) {
       NextResponse.json(payload, { status, headers: rateLimit.headers });
 
     if (!user) {
-      console.log("[create-org-checkout] Unauthorized - no user");
+      console.log("[create-org-checkout] Unauthorized - no user", {
+        authSource,
+        authError,
+        hasAuthorizationHeader: req.headers.has("authorization"),
+      });
       return respond({ error: "Unauthorized" }, 401);
     }
     console.log("[create-org-checkout] User:", user.id, user.email);
@@ -86,6 +90,7 @@ export async function POST(req: Request) {
       withTrial: requestedTrial,
       idempotencyKey: rawIdempotencyKey,
       paymentAttemptId,
+      source,
     } = body;
 
     const idempotencyKey = rawIdempotencyKey ?? null;
@@ -327,8 +332,14 @@ export async function POST(req: Request) {
             ...(withTrial ? { trial_period_days: ORG_TRIAL_DAYS } : {}),
           },
           metadata,
-          success_url: `${origin}/app?org=${slug}&checkout=success`,
-          cancel_url: `${origin}/app?org=${slug}&checkout=cancel`,
+          success_url:
+            source === "mobile"
+              ? `${origin}/app/checkout-return?status=success&org=${slug}&source=mobile`
+              : `${origin}/app?org=${slug}&checkout=success`,
+          cancel_url:
+            source === "mobile"
+              ? `${origin}/app/checkout-return?status=cancel&org=${slug}&source=mobile`
+              : `${origin}/app?org=${slug}&checkout=cancel`,
         },
         { idempotencyKey: claimedAttempt.idempotency_key },
       );

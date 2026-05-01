@@ -1,33 +1,18 @@
 import { z } from "zod";
-import { baseSchemas, safeString, optionalSafeString, hexColorSchema } from "./common";
+import { safeString, optionalSafeString, hexColorSchema } from "./common";
 
-// Alumni bucket tiers
-export const alumniBucketSchema = z.enum([
-  "none",
-  "0-250",
-  "251-500",
-  "501-1000",
-  "1001-2500",
-  "2500-5000",
-  "5000+",
-]);
-export type AlumniBucket = z.infer<typeof alumniBucketSchema>;
-
-// Billing interval
-export const subscriptionIntervalSchema = z.enum(["month", "year"]);
-export type SubscriptionInterval = z.infer<typeof subscriptionIntervalSchema>;
-
-// Create organization form
-export const createOrgSchema = z.object({
-  name: safeString(200),
-  slug: baseSchemas.slug,
-  description: optionalSafeString(1000),
-  primaryColor: hexColorSchema,
-  billingInterval: subscriptionIntervalSchema,
-  alumniBucket: alumniBucketSchema,
-  withTrial: z.boolean(),
-});
-export type CreateOrgForm = z.infer<typeof createOrgSchema>;
+// Re-export shared org schemas from @teammeet/validation so web and mobile
+// validate identically. Web-only schemas (org settings, locale) stay below.
+export {
+  alumniBucketSchema,
+  subscriptionIntervalSchema,
+  createOrgSchema,
+} from "@teammeet/validation";
+export type {
+  AlumniBucket,
+  SubscriptionInterval,
+  CreateOrgForm,
+} from "@teammeet/validation";
 
 // Organization settings form
 export const orgSettingsSchema = z.object({

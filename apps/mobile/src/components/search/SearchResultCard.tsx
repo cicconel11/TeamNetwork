@@ -5,6 +5,7 @@ import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import type { SearchResult } from "@/hooks/useGlobalSearch";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { continuousBorderCurve } from "@/lib/ios-style";
 
 const TYPE_CONFIG: Record<
   SearchResult["type"],
@@ -46,8 +47,7 @@ export function SearchResultCard({ result, index, onPress }: SearchResultCardPro
       alignItems: "center" as const,
       backgroundColor: n.surface,
       borderRadius: RADIUS.lg,
-      // @ts-ignore — iOS continuous corner curves
-      borderCurve: "continuous",
+      ...continuousBorderCurve,
       padding: SPACING.md,
       marginHorizontal: SPACING.md,
       marginBottom: SPACING.sm,

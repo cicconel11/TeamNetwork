@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./auth": "./src/auth/index.ts",
     "./pricing": "./src/pricing/index.ts",
+    "./pricing/per-user": "./src/pricing/per-user.ts",
     "./navigation": "./src/navigation/index.ts",
     "./announcements": "./src/announcements/index.ts",
     "./formatters": "./src/formatters/index.ts",

@@ -8,13 +8,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useOrg } from "@/contexts/OrgContext";
 import { useJobs } from "@/hooks/useJobs";
-import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
@@ -64,28 +61,31 @@ export default function EditJobScreen() {
       flex: 1,
       backgroundColor: n.background,
     },
-    headerGradient: {},
-    headerSafeArea: {},
-    headerContent: {
+    sheetHeader: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      minHeight: 44,
+      paddingTop: SPACING.md,
+      paddingBottom: SPACING.sm,
+      minHeight: 48,
+      backgroundColor: n.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: n.border,
     },
     cancelButton: {
       paddingVertical: SPACING.xs,
       paddingRight: SPACING.sm,
     },
     cancelButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: APP_CHROME.headerTitle,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
     },
     headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
       flex: 1,
       textAlign: "center" as const,
+      fontWeight: "600" as const,
     },
     headerSpacer: {
       width: 56,
@@ -103,13 +103,6 @@ export default function EditJobScreen() {
       padding: SPACING.md,
       paddingBottom: SPACING.xxl,
       gap: SPACING.lg,
-    },
-    formHeader: {
-      gap: SPACING.xs,
-    },
-    formSubtitle: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: n.secondary,
     },
     errorCard: {
       backgroundColor: s.errorLight,
@@ -320,20 +313,13 @@ export default function EditJobScreen() {
   if (job == null) {
     return (
       <View style={styles.container}>
-        <LinearGradient
-          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
-          style={styles.headerGradient}
-        >
-          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
-            <View style={styles.headerContent}>
-              <Pressable onPress={() => router.back()} style={styles.cancelButton}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
-              <Text style={styles.headerTitle}>Edit Job</Text>
-              <View style={styles.headerSpacer} />
-            </View>
-          </SafeAreaView>
-        </LinearGradient>
+        <View style={styles.sheetHeader}>
+          <Pressable onPress={() => router.back()} style={styles.cancelButton}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>Edit Job</Text>
+          <View style={styles.headerSpacer} />
+        </View>
         <View style={styles.centered}>
           <ActivityIndicator color={semantic.success} />
         </View>
@@ -343,20 +329,13 @@ export default function EditJobScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
-        style={styles.headerGradient}
-      >
-        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
-          <View style={styles.headerContent}>
-            <Pressable onPress={() => router.back()} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
-            <Text style={styles.headerTitle}>Edit Job</Text>
-            <View style={styles.headerSpacer} />
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+      <View style={styles.sheetHeader}>
+        <Pressable onPress={() => router.back()} style={styles.cancelButton}>
+          <Text style={styles.cancelButtonText}>Cancel</Text>
+        </Pressable>
+        <Text style={styles.headerTitle}>Edit Job</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
       <View style={styles.contentSheet}>
         <ScrollView
@@ -364,9 +343,6 @@ export default function EditJobScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.formHeader}>
-            <Text style={styles.formSubtitle}>Update the details for this opportunity</Text>
-          </View>
 
           {error != null && (
             <View style={styles.errorCard}>

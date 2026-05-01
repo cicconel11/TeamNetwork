@@ -9,6 +9,7 @@ import { formatRelativeTime } from "@/lib/date-format";
 import type { PointHistoryEntry } from "@/hooks/competitionHelpers";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { continuousBorderCurve } from "@/lib/ios-style";
 
 interface ActivityFeedCardProps {
   pointHistory: PointHistoryEntry[];
@@ -22,8 +23,7 @@ export function ActivityFeedCard({ pointHistory, isAdmin, onDelete }: ActivityFe
     card: {
       backgroundColor: n.surface,
       borderRadius: RADIUS.lg,
-      // @ts-ignore — iOS continuous corner curves
-      borderCurve: "continuous",
+      ...continuousBorderCurve,
       borderWidth: 1,
       borderColor: n.border,
       padding: SPACING.md,

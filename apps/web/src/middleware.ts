@@ -11,7 +11,7 @@ const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
 // Routes that don't require authentication
-const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy", "/app/parents-join", "/account/delete"];
+const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy", "/app/parents-join", "/app/checkout-return", "/account/delete"];
 
 // Enterprise public routes that don't require enterprise membership
 const enterprisePublicSlugs = ["pricing", "features"];

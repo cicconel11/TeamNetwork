@@ -34,6 +34,7 @@ import {
   buildSettingsColors,
 } from "@/components/settings";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { PoweredByTeamNetwork } from "@/components/PoweredByTeamNetwork";
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
@@ -197,6 +198,8 @@ export default function SettingsScreen() {
               </View>
             </View>
           </View>
+
+          <PoweredByTeamNetwork />
         </ScrollView>
       </View>
     </View>

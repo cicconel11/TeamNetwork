@@ -16,6 +16,7 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import type { JobPostingWithPoster } from "@/types/jobs";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { continuousBorderCurve } from "@/lib/ios-style";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -70,8 +71,7 @@ export const JobCard = React.memo(function JobCard({
       borderWidth: 1,
       borderColor: n.border,
       ...SHADOWS.sm,
-      // @ts-ignore — iOS continuous corner curves
-      borderCurve: "continuous",
+      ...continuousBorderCurve,
     },
     header: {
       flexDirection: "row" as const,

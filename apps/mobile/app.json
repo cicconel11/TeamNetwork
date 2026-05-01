@@ -27,7 +27,7 @@
       "supportsTablet": true,
       "appleTeamId": "5GWLTFG43T",
       "bundleIdentifier": "com.myteamnetwork.teammeet",
-      "buildNumber": "9",
+      "buildNumber": "11",
       "deploymentTarget": "17.0",
       "usesAppleSignIn": true,
       "associatedDomains": [

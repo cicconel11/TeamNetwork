@@ -28,7 +28,6 @@ interface CalendarToolbarProps {
 const VIEW_MODES: Array<{ mode: CalendarViewMode; label: string }> = [
   { mode: "month", label: "Month" },
   { mode: "week", label: "Week" },
-  { mode: "3day", label: "3 Day" },
   { mode: "day", label: "Day" },
   { mode: "list", label: "List" },
 ];
@@ -98,7 +97,7 @@ export function CalendarToolbar({
       justifyContent: "center" as const,
     },
     viewModePillActive: {
-      backgroundColor: n.foreground,
+      backgroundColor: "#ffffff",
     },
     viewModePillInactive: {
       backgroundColor: "transparent",
@@ -112,7 +111,7 @@ export function CalendarToolbar({
       fontWeight: "600" as const,
     },
     viewModePillTextInactive: {
-      color: n.muted,
+      color: "#cbd5e1",
     },
     filterContainer: {
       paddingHorizontal: SPACING.md,

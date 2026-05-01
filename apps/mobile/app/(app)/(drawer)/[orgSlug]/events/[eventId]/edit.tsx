@@ -331,16 +331,43 @@ export default function EditEventScreen() {
       <View style={styles.field}>
         <Text style={styles.label}>Start *</Text>
         <View style={styles.dateTimeRow}>
-          <Pressable onPress={() => openPicker("start-date")} style={fieldStyle}>
-            <Text style={[styles.dateText, !startDate && styles.placeholderText]}>
-              {formatDateLabel(startDate)}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => openPicker("start-time")} style={fieldStyle}>
-            <Text style={[styles.dateText, !startTime && styles.placeholderText]}>
-              {formatTimeLabel(startTime)}
-            </Text>
-          </Pressable>
+          {Platform.OS === "ios" ? (
+            <>
+              <DateTimePicker
+                value={startDate ?? new Date()}
+                mode="date"
+                display="compact"
+                onChange={(_e, d) => {
+                  if (!d) return;
+                  setStartDate(d);
+                  if (!startTime) setStartTime(d);
+                }}
+              />
+              <DateTimePicker
+                value={startTime ?? new Date()}
+                mode="time"
+                display="compact"
+                onChange={(_e, d) => {
+                  if (!d) return;
+                  setStartTime(d);
+                  if (!startDate) setStartDate(d);
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <Pressable onPress={() => openPicker("start-date")} style={fieldStyle}>
+                <Text style={[styles.dateText, !startDate && styles.placeholderText]}>
+                  {formatDateLabel(startDate)}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => openPicker("start-time")} style={fieldStyle}>
+                <Text style={[styles.dateText, !startTime && styles.placeholderText]}>
+                  {formatTimeLabel(startTime)}
+                </Text>
+              </Pressable>
+            </>
+          )}
         </View>
       </View>
 
@@ -348,43 +375,54 @@ export default function EditEventScreen() {
       <View style={styles.field}>
         <Text style={styles.label}>End (optional)</Text>
         <View style={styles.dateTimeRow}>
-          <Pressable onPress={() => openPicker("end-date")} style={fieldStyle}>
-            <Text style={[styles.dateText, !endDate && styles.placeholderText]}>
-              {formatDateLabel(endDate)}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => openPicker("end-time")} style={fieldStyle}>
-            <Text style={[styles.dateText, !endTime && styles.placeholderText]}>
-              {formatTimeLabel(endTime)}
-            </Text>
-          </Pressable>
+          {Platform.OS === "ios" ? (
+            <>
+              <DateTimePicker
+                value={endDate ?? startDate ?? new Date()}
+                mode="date"
+                display="compact"
+                onChange={(_e, d) => {
+                  if (!d) return;
+                  setEndDate(d);
+                  if (!endTime) setEndTime(d);
+                }}
+              />
+              <DateTimePicker
+                value={endTime ?? startTime ?? new Date()}
+                mode="time"
+                display="compact"
+                onChange={(_e, d) => {
+                  if (!d) return;
+                  setEndTime(d);
+                  if (!endDate) setEndDate(d);
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <Pressable onPress={() => openPicker("end-date")} style={fieldStyle}>
+                <Text style={[styles.dateText, !endDate && styles.placeholderText]}>
+                  {formatDateLabel(endDate)}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => openPicker("end-time")} style={fieldStyle}>
+                <Text style={[styles.dateText, !endTime && styles.placeholderText]}>
+                  {formatTimeLabel(endTime)}
+                </Text>
+              </Pressable>
+            </>
+          )}
         </View>
       </View>
 
-      {/* Date/Time Picker */}
-      {activePicker && (
-        <View style={styles.pickerContainer}>
-          <DateTimePicker
-            value={pickerValue}
-            mode={pickerMode}
-            display={
-              Platform.OS === "ios"
-                ? pickerMode === "date"
-                  ? "inline"
-                  : "spinner"
-                : "default"
-            }
-            onChange={handlePickerChange}
-          />
-          {Platform.OS === "ios" && (
-            <Pressable
-              onPress={() => setActivePicker(null)}
-              style={styles.pickerDoneButton}
-            >
-              <Text style={styles.pickerDoneText}>Done</Text>
-            </Pressable>
-          )}
-        </View>
+      {/* Android picker modal */}
+      {activePicker && Platform.OS === "android" && (
+        <DateTimePicker
+          value={pickerValue}
+          mode={pickerMode}
+          display="default"
+          onChange={handlePickerChange}
+        />
       )}
 
       {/* Location */}

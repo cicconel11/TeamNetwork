@@ -26,6 +26,26 @@ export {
   normalizeBucket,
 } from "./pricing/index";
 
+// Per-user pricing (volume tiers) — used by new orgs
+export {
+  ACTIVE_TIERS_MONTHLY,
+  ACTIVE_TIERS_YEARLY,
+  ALUMNI_TIERS_MONTHLY,
+  ALUMNI_TIERS_YEARLY,
+  SALES_LED_ALUMNI_THRESHOLD,
+  getActiveTiers,
+  getAlumniTiers,
+  pickRateCents,
+  isPerUserSalesLed,
+  calcPerUserQuote,
+  formatCents,
+  formatRateCents,
+  mapAlumniSeatsToBucket,
+  type SeatRate,
+  type PerUserQuote,
+  type LegacyAlumniBucket,
+} from "./pricing/per-user";
+
 // Announcements - Audience filtering
 export {
   canViewAnnouncement,

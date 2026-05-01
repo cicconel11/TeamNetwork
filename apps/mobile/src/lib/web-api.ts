@@ -26,6 +26,13 @@ export function getWebPath(orgSlug: string, path?: string): string {
     : `${WEB_API_URL}/${normalizedOrgSlug}`;
 }
 
+export class NetworkUnreachableError extends Error {
+  constructor(message = "Network request failed") {
+    super(message);
+    this.name = "NetworkUnreachableError";
+  }
+}
+
 export function buildAuthorizedHeaders(
   headers: HeadersInit | undefined,
   accessToken: string
@@ -65,8 +72,16 @@ export async function fetchWithAuth(path: string, options: RequestInit = {}) {
 
   const headers = buildAuthorizedHeaders(options.headers, accessToken);
 
-  return fetch(`${WEB_API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  try {
+    return await fetch(`${WEB_API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Network request failed";
+    if (/network request failed|failed to fetch/i.test(message)) {
+      throw new NetworkUnreachableError(message);
+    }
+    throw error;
+  }
 }

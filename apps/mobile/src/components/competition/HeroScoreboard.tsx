@@ -7,6 +7,7 @@ import { LiveDot } from "./LiveDot";
 import { RADIUS, SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { continuousBorderCurve } from "@/lib/ios-style";
 
 const COMP = {
   amber: "#f59e0b",
@@ -25,8 +26,7 @@ export function HeroScoreboard({ teamName, points }: HeroScoreboardProps) {
       borderWidth: 1,
       borderColor: n.dark800,
       borderRadius: RADIUS.xl,
-      // @ts-ignore — iOS continuous corner curves
-      borderCurve: "continuous",
+      ...continuousBorderCurve,
       padding: SPACING.lg,
       boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
     },

@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Link } from "expo-router";
-import { BookOpen, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react-native";
+import { Clock, MapPin } from "lucide-react-native";
 
 import { track } from "@/lib/analytics";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
@@ -36,44 +36,31 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
 
   const styles = useThemedStyles((n, s) => ({
     card: {
-      backgroundColor: color.bg,
+      flexDirection: "row" as const,
+      backgroundColor: n.surface,
       borderRadius: RADIUS.lg,
       borderCurve: "continuous" as const,
       borderWidth: 1,
-      borderLeftWidth: 3,
       borderColor: n.border,
-      borderLeftColor: color.text,
-      padding: SPACING.md,
+      overflow: "hidden" as const,
       ...SHADOWS.sm,
     },
     cardPressed: {
-      opacity: 0.7,
+      opacity: 0.6,
     },
-    headerRow: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      gap: SPACING.sm,
-      marginBottom: SPACING.sm,
+    accent: {
+      width: 4,
+      backgroundColor: color.text,
     },
-    sourceBadge: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      gap: 4,
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: 2,
-      borderRadius: RADIUS.full,
-      borderCurve: "continuous" as const,
-      backgroundColor: color.bg,
-    },
-    sourceBadgeText: {
-      ...TYPOGRAPHY.labelSmall,
-      color: color.text,
+    body: {
+      flex: 1,
+      padding: SPACING.md,
     },
     title: {
       ...TYPOGRAPHY.titleMedium,
-      color: color.text,
-      marginBottom: SPACING.xs,
+      color: n.foreground,
       fontWeight: "600" as const,
+      marginBottom: 4,
     },
     detailRow: {
       flexDirection: "row" as const,
@@ -83,16 +70,21 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
     },
     detailText: {
       ...TYPOGRAPHY.bodySmall,
-      color: color.text,
-      opacity: 0.8,
+      color: n.secondary,
       flex: 1,
       fontVariant: ["tabular-nums"] as const,
     },
     locationText: {
       ...TYPOGRAPHY.bodySmall,
-      color: color.text,
-      opacity: 0.7,
+      color: n.secondary,
       flex: 1,
+    },
+    sourceLabel: {
+      ...TYPOGRAPHY.labelSmall,
+      color: color.text,
+      marginBottom: 4,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.5,
     },
   }));
 
@@ -106,8 +98,6 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
     return `/(app)/${orgSlug}`;
   }, [item, orgSlug]);
 
-  const isEvent = item.sourceType === "event";
-  const SourceIcon = isEvent ? CalendarIcon : BookOpen;
   const accessibilityLabel = `${item.title}, ${item.sourceName}`;
 
   return (
@@ -123,32 +113,29 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
           });
         }}
       >
-        <View style={styles.headerRow}>
-          <View style={styles.sourceBadge}>
-            <SourceIcon size={12} color={color.text} />
-            <Text style={styles.sourceBadgeText}>{item.sourceName}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.title} numberOfLines={2} selectable>
-          {item.title}
-        </Text>
-
-        <View style={styles.detailRow}>
-          <Clock size={13} color={color.text} />
-          <Text style={styles.detailText} selectable>
-            {formatTimeRange(item.startAt, item.endAt)}
+        <View style={styles.accent} />
+        <View style={styles.body}>
+          <Text style={styles.sourceLabel}>{item.sourceName}</Text>
+          <Text style={styles.title} numberOfLines={2} selectable>
+            {item.title}
           </Text>
-        </View>
 
-        {item.location && (
           <View style={styles.detailRow}>
-            <MapPin size={13} color={color.text} />
-            <Text style={styles.locationText} numberOfLines={1} selectable>
-              {item.location}
+            <Clock size={13} color={neutral.secondary} />
+            <Text style={styles.detailText} selectable>
+              {formatTimeRange(item.startAt, item.endAt)}
             </Text>
           </View>
-        )}
+
+          {item.location && (
+            <View style={styles.detailRow}>
+              <MapPin size={13} color={neutral.secondary} />
+              <Text style={styles.locationText} numberOfLines={1} selectable>
+                {item.location}
+              </Text>
+            </View>
+          )}
+        </View>
       </Pressable>
     </Link>
   );

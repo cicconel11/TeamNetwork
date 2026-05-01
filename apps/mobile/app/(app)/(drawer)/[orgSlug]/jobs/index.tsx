@@ -24,6 +24,7 @@ import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import type { LocationType, ExperienceLevel } from "@/types/jobs";
 import type { JobPostingWithPoster } from "@/types/jobs";
+import { PoweredByTeamNetwork } from "@/components/PoweredByTeamNetwork";
 
 const LOCATION_PILLS: { value: LocationType; label: string }[] = [
   { value: "remote", label: "Remote" },
@@ -494,6 +495,7 @@ export default function JobsScreen() {
                     <Text style={styles.emptyCreateButtonText}>Post a Job</Text>
                   </Pressable>
                 )}
+                <PoweredByTeamNetwork variant="watermark" />
               </View>
             }
             initialNumToRender={8}
