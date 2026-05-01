@@ -75,13 +75,5 @@ export {
   type PairableOrgMemberRow,
 } from "./mentorship/index";
 
-// APNs - Apple Push Notification service client
-export {
-  ApnsClient,
-  createApnsClient,
-  type ApnsClientConfig,
-  type ApnsPushType,
-  type ApnsPriority,
-  type SendApnsArgs,
-  type SendApnsResult,
-} from "./apns/index";
+// APNs client lives at "@teammeet/core/apns" — server-only (uses node:buffer/jose).
+// Do not re-export from this barrel; mobile bundler cannot resolve node:buffer.

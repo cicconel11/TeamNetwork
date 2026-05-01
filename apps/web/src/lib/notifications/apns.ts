@@ -10,7 +10,7 @@
  * panicking at import time.
  */
 
-import { ApnsClient } from "@teammeet/core";
+import { ApnsClient } from "@teammeet/core/apns";
 
 let cachedClient: ApnsClient | null | undefined;
 
