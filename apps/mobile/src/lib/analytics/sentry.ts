@@ -16,6 +16,17 @@ export function init(dsn: string): void {
     environment: __DEV__ ? "development" : "production",
     sendDefaultPii: false,
     beforeSend(event) {
+      const ev = event as { message?: string; logentry?: { message?: string } };
+      const message =
+        typeof ev.message === "string"
+          ? ev.message
+          : typeof ev.logentry?.message === "string"
+            ? ev.logentry.message
+            : "";
+      // Third-party / bridge warning (e.g. auth session surface not ready yet); not actionable as an app error.
+      if (message === "auth_surface_unreachable" || message.endsWith(": auth_surface_unreachable")) {
+        return null;
+      }
       if (event.user) {
         delete event.user.email;
         delete event.user.username;
