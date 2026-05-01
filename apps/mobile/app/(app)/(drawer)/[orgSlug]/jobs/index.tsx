@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useFocusEffect, useRouter, useNavigation } from "expo-router";
-import { Briefcase, Plus, Search } from "lucide-react-native";
+import { Briefcase, Plus, Search, X } from "lucide-react-native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useJobs } from "@/hooks/useJobs";
 import { JobCard } from "@/components/jobs/JobCard";
@@ -117,6 +117,14 @@ export default function JobsScreen() {
       ...TYPOGRAPHY.caption,
       color: APP_CHROME.headerMeta,
       marginTop: 2,
+    },
+    exitButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: APP_CHROME.avatarBackground,
     },
     contentSheet: {
       flex: 1,
@@ -304,6 +312,15 @@ export default function JobsScreen() {
     router.push(`/(app)/(drawer)/${orgSlug}/jobs/new`);
   }, [router, orgSlug]);
 
+  const handleExitJobs = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace(`/(app)/(drawer)/${orgSlug}/(tabs)`);
+  }, [router, orgSlug]);
+
   const renderJob = useCallback(
     ({ item }: { item: JobPostingWithPoster }) => (
       <JobCard
@@ -424,6 +441,16 @@ export default function JobsScreen() {
                 {jobs.length} {jobs.length === 1 ? "posting" : "postings"}
               </Text>
             </View>
+
+            <Pressable
+              onPress={handleExitJobs}
+              style={styles.exitButton}
+              accessibilityRole="button"
+              accessibilityLabel="Close jobs"
+              hitSlop={8}
+            >
+              <X size={22} color={APP_CHROME.headerTitle} />
+            </Pressable>
           </View>
         </SafeAreaView>
       </LinearGradient>
