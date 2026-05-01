@@ -35,6 +35,10 @@ interface UseOrgSettingsReturn {
 
 export function useOrgSettings(orgId: string | null): UseOrgSettingsReturn {
   const isMountedRef = useRef(true);
+  /** Unique per hook instance so stacked screens (e.g. settings + customization) do not reuse one subscribed channel. */
+  const realtimeChannelSuffixRef = useRef(
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  );
   const [org, setOrg] = useState<OrgSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +94,7 @@ export function useOrgSettings(orgId: string | null): UseOrgSettingsReturn {
     if (!org?.id) return;
 
     const channel = supabase
-      .channel(`org-settings:${org.id}`)
+      .channel(`org-settings:${org.id}:${realtimeChannelSuffixRef.current}`)
       .on(
         "postgres_changes",
         {
