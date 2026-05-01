@@ -99,7 +99,7 @@ export async function runAuthContextStage(
   }
 
   try {
-    assertModelPriceConfigured(getZaiModel());
+    assertModelPriceConfigured(getZaiModel(), { bypass: ctx.aiSpendBypass });
     await assertOrgUnderCap(input.orgId, { bypass: ctx.aiSpendBypass });
   } catch (err) {
     if (err instanceof AiCapReachedError) {

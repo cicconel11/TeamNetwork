@@ -74,6 +74,16 @@ UPDATE public.organization_subscriptions
 `GET /api/ai/<orgId>/spend` — returns `{ currentCents, capCents,
 percentUsed, periodStart, periodEnd }`. Admin-only via `getAiOrgContext`.
 
+## Dev-admin bypass
+
+Users whose email appears in `DEV_ADMIN_EMAILS` (comma-separated) skip the
+spend cap entirely: no 402, no ledger write. Bypass is wired through
+`AiOrgContext.aiSpendBypass` and threaded into every `recordSpend` /
+`assertOrgUnderCap` call site (chat, safety judge, RAG judge, schedule
+extraction, bio generator, embedding RAG retrieval). Background workers
+(embedding cron, bio backfill) have no caller — they always charge the org
+normally.
+
 ## Risks
 
 - In-flight/concurrent overshoot: requests reserve no estimated spend before

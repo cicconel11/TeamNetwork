@@ -211,7 +211,7 @@ async function defaultJudge(
 ): Promise<"yes" | "no" | "partial"> {
   const client: OpenAI = createZaiClient();
   const model = process.env.RAG_GROUNDING_JUDGE_MODEL || getZaiModel();
-  if (orgId) assertModelPriceConfigured(model);
+  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
   const completion = await client.chat.completions.create({
     model,
     temperature: 0,

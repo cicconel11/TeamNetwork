@@ -7,6 +7,8 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { generateMentorBio } from "@/lib/mentorship/bio-generator";
 import { loadMentorBioContext } from "@/lib/mentorship/bio-backfill";
 import { logAiRequest } from "@/lib/ai/audit";
+import { isDevAdmin } from "@/lib/auth/dev-admin";
+import { assertOrgUnderCap, AiCapReachedError } from "@/lib/ai/spend";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -73,7 +75,15 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ bio: "", topics: [], expertiseAreas: [] });
   }
 
-  const result = await generateMentorBio(context.input);
+  const spendBypass = isDevAdmin(user);
+  try {
+    await assertOrgUnderCap(organizationId, { bypass: spendBypass });
+  } catch (err) {
+    if (err instanceof AiCapReachedError) return err.toResponse();
+    throw err;
+  }
+
+  const result = await generateMentorBio({ ...context.input, spendBypass });
 
   // Audit log (fire and forget)
   logAiRequest(

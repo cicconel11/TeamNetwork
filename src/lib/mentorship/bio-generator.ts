@@ -25,6 +25,8 @@ export interface BioGenerationInput {
   orgName: string;
   /** Org used for spend accounting. Optional; bulk backfills should pass it. */
   orgId?: string;
+  /** Skip ledger write (dev-admin bypass). */
+  spendBypass?: boolean;
 }
 
 export interface BioGenerationResult {
@@ -271,7 +273,7 @@ export async function generateMentorBio(
   try {
     const client = createZaiClient();
     const model = getZaiModel();
-    if (input.orgId) assertModelPriceConfigured(model);
+    if (input.orgId) assertModelPriceConfigured(model, { bypass: input.spendBypass });
 
     const completion = await withStageTimeout("bio_generation", 8000, () =>
       client.chat.completions.create({
@@ -294,6 +296,7 @@ export async function generateMentorBio(
         inputTokens: completion.usage.prompt_tokens ?? 0,
         outputTokens: completion.usage.completion_tokens ?? 0,
         surface: "bio_generator",
+        bypass: input.spendBypass,
       });
     }
 

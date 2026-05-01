@@ -40,6 +40,7 @@ export async function runRagRetrievalStage(
       retrieveRelevantChunksFn: input.retrieveRelevantChunksFn,
       query: input.promptSafeMessage,
       orgId: input.ctx.orgId,
+      spendBypass: input.ctx.aiSpendBypass,
       serviceSupabase: input.ctx.serviceSupabase,
       stageTimings: input.stageTimings,
       logContext: { ...input.requestLogContext, threadId: input.threadId },

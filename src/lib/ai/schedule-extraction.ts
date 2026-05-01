@@ -278,7 +278,7 @@ async function requestExtraction(params: {
 }): Promise<string> {
   const { client, model, messages, temperature, orgId, spendBypass } = params;
   const surface: AiSurface = "schedule_extraction";
-  if (orgId) assertModelPriceConfigured(model);
+  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
 
   const chargeUsage = async (usage?: OpenAI.Completions.CompletionUsage | null) => {
     if (!orgId || !usage) return;
