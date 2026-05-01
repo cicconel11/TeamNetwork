@@ -447,7 +447,7 @@ export default function PostDetailScreen() {
       <KeyboardAvoidingView
         style={styles.contentSheet}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={90}
+        keyboardVerticalOffset={0}
       >
         <FlatList
           data={comments}
