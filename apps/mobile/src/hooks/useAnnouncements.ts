@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, createPostgresChangesChannel } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
@@ -202,8 +202,7 @@ export function useAnnouncements(
   // Real-time subscription for announcement changes
   useEffect(() => {
     if (!orgId) return;
-    const channel = supabase
-      .channel(`announcements:${orgId}`)
+    const channel = createPostgresChangesChannel(`announcements:${orgId}`)
       .on(
         "postgres_changes",
         {
@@ -229,8 +228,7 @@ export function useAnnouncements(
   // Re-fetch announcements if user's role changes (affects audience filtering)
   useEffect(() => {
     if (!orgId || !userId) return;
-    const channel = supabase
-      .channel(`announcement-roles:${orgId}:${userId}`)
+    const channel = createPostgresChangesChannel(`announcement-roles:${orgId}:${userId}`)
       .on(
         "postgres_changes",
         {

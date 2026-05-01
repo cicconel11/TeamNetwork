@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "@/lib/supabase";
+import { supabase, createPostgresChangesChannel } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { canViewAnnouncement, type AnnouncementAudienceTarget, type ViewerContext, normalizeRole } from "@teammeet/core";
@@ -184,8 +184,7 @@ export function useUnreadAnnouncementCount(
   useEffect(() => {
     if (!orgId) return;
 
-    const channel = supabase
-      .channel(`unread-announcements:${orgId}`)
+    const channel = createPostgresChangesChannel(`unread-announcements:${orgId}`)
       .on(
         "postgres_changes",
         {

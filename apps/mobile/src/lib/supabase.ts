@@ -49,6 +49,23 @@ export async function getSession() {
   return session;
 }
 
+/**
+ * Create a Supabase Realtime channel for postgres_changes with a unique
+ * topic suffix per call.
+ *
+ * supabase-js caches channels by topic; on rapid unmount/remount, the async
+ * removeChannel may not finish before the next synchronous re-subscribe. The
+ * library returns the still-subscribed cached channel, and `.on()` then throws
+ * "cannot add `postgres_changes` callbacks ... after `subscribe()`". A unique
+ * suffix bypasses the cache.
+ */
+let __pgChannelCounter = 0;
+export function createPostgresChangesChannel(baseTopic: string) {
+  __pgChannelCounter += 1;
+  const unique = `${Date.now().toString(36)}-${__pgChannelCounter}`;
+  return supabase.channel(`${baseTopic}:${unique}`);
+}
+
 export async function getCurrentUser() {
   const session = await getSession();
   if (!session?.user) {
