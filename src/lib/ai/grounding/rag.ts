@@ -12,7 +12,7 @@
 
 import type OpenAI from "openai";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
-import { assertModelPriceConfigured, recordSpend } from "@/lib/ai/spend";
+import { AiCapReachedError, chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
 import {
   extractAllCurrencyDollars,
   extractEmails,
@@ -211,7 +211,14 @@ async function defaultJudge(
 ): Promise<"yes" | "no" | "partial"> {
   const client: OpenAI = createZaiClient();
   const model = process.env.RAG_GROUNDING_JUDGE_MODEL || getZaiModel();
-  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
+  if (orgId) {
+    try {
+      await checkAiSpend(orgId, { bypass: spendBypass });
+    } catch (err) {
+      if (err instanceof AiCapReachedError) return "no";
+      throw err;
+    }
+  }
   const completion = await client.chat.completions.create({
     model,
     temperature: 0,
@@ -224,12 +231,11 @@ async function defaultJudge(
     ],
   });
   if (orgId && completion.usage) {
-    await recordSpend({
+    await chargeAiSpend({
       orgId,
       model,
       inputTokens: completion.usage.prompt_tokens ?? 0,
       outputTokens: completion.usage.completion_tokens ?? 0,
-      surface: "rag_judge",
       bypass: spendBypass,
     });
   }

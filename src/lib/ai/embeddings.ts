@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { assertModelPriceConfigured, recordSpend } from "@/lib/ai/spend";
+import { chargeAiSpend } from "@/lib/ai/spend";
 
 // ---------------------------------------------------------------------------
 // Embedding client factory
@@ -43,12 +43,11 @@ async function chargeEmbeddingUsage(
 ): Promise<void> {
   if (!orgId || !usage) return;
   const inputTokens = usage.prompt_tokens ?? usage.total_tokens ?? 0;
-  await recordSpend({
+  await chargeAiSpend({
     orgId,
     model,
     inputTokens,
     outputTokens: 0,
-    surface: "embedding",
     bypass: spendBypass,
   });
 }
@@ -63,7 +62,6 @@ export async function generateEmbedding(
 ): Promise<number[]> {
   const client = createEmbeddingClient();
   const model = getEmbeddingModel();
-  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
 
   const response = await client.embeddings.create({
     model,
@@ -89,7 +87,6 @@ export async function generateEmbeddings(
 
   const client = createEmbeddingClient();
   const model = getEmbeddingModel();
-  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
 
   const response = await client.embeddings.create({
     model,

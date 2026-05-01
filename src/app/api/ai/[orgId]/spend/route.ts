@@ -39,12 +39,20 @@ export async function GET(
   if (!ctx.ok) return ctx.response;
 
   const status = await getOrgSpendStatus(orgId);
+  const percentUsed = status.capCents > 0
+    ? Math.min(100, (status.spendCents / status.capCents) * 100)
+    : 100;
+  // periodStart = first of same month as periodEnd (UTC), as YYYY-MM-DD.
+  const end = new Date(status.periodEnd);
+  const periodStart = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1))
+    .toISOString()
+    .slice(0, 10);
   return NextResponse.json(
     {
       currentCents: status.spendCents,
       capCents: status.capCents,
-      percentUsed: status.percentUsed,
-      periodStart: status.periodStart,
+      percentUsed,
+      periodStart,
       periodEnd: status.periodEnd,
     },
     { headers: rateLimit.headers },

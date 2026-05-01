@@ -1,7 +1,7 @@
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { assessAiMessageSafety } from "@/lib/ai/message-safety";
 import { withStageTimeout } from "@/lib/ai/timeout";
-import { assertModelPriceConfigured, recordSpend } from "@/lib/ai/spend";
+import { chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
 import {
   canonicalizeIndustry,
   canonicalizeRoleFamily,
@@ -273,7 +273,7 @@ export async function generateMentorBio(
   try {
     const client = createZaiClient();
     const model = getZaiModel();
-    if (input.orgId) assertModelPriceConfigured(model, { bypass: input.spendBypass });
+    if (input.orgId) await checkAiSpend(input.orgId, { bypass: input.spendBypass });
 
     const completion = await withStageTimeout("bio_generation", 8000, () =>
       client.chat.completions.create({
@@ -290,12 +290,11 @@ export async function generateMentorBio(
     const rawBio = completion.choices[0]?.message?.content?.trim() ?? "";
 
     if (input.orgId && completion.usage) {
-      await recordSpend({
+      await chargeAiSpend({
         orgId: input.orgId,
         model,
         inputTokens: completion.usage.prompt_tokens ?? 0,
         outputTokens: completion.usage.completion_tokens ?? 0,
-        surface: "bio_generator",
         bypass: input.spendBypass,
       });
     }

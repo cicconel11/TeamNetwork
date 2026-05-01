@@ -10,7 +10,7 @@
 
 import type OpenAI from "openai";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
-import { assertModelPriceConfigured, recordSpend } from "@/lib/ai/spend";
+import { AiCapReachedError, chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
 
 export type SafetyVerdict = "safe" | "controversial" | "unsafe";
 
@@ -181,7 +181,16 @@ async function defaultJudge(
 ): Promise<{ verdict: SafetyVerdict; categories: string[] }> {
   const client: OpenAI = createZaiClient();
   const model = process.env.SAFETY_JUDGE_MODEL || getZaiModel();
-  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
+  if (orgId) {
+    try {
+      await checkAiSpend(orgId, { bypass: spendBypass });
+    } catch (err) {
+      if (err instanceof AiCapReachedError) {
+        return { verdict: "safe", categories: [] };
+      }
+      throw err;
+    }
+  }
 
   const completion = await client.chat.completions.create({
     model,
@@ -193,12 +202,11 @@ async function defaultJudge(
   });
 
   if (orgId && completion.usage) {
-    await recordSpend({
+    await chargeAiSpend({
       orgId,
       model,
       inputTokens: completion.usage.prompt_tokens ?? 0,
       outputTokens: completion.usage.completion_tokens ?? 0,
-      surface: "safety_judge",
       bypass: spendBypass,
     });
   }

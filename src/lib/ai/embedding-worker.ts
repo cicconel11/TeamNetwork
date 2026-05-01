@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateEmbeddings } from "./embeddings";
-import { AiCapReachedError, assertOrgUnderCap } from "./spend";
+import { AiCapReachedError, checkAiSpend } from "./spend";
 import {
   renderChunks,
   computeContentHash,
@@ -437,7 +437,7 @@ export async function processEmbeddingQueue(
   try {
     for (const [orgId, orgChunks] of chunksByOrg) {
       try {
-        await assertOrgUnderCap(orgId);
+        await checkAiSpend(orgId);
       } catch (err) {
         if (err instanceof AiCapReachedError) {
           console.warn("[embedding-worker] org over AI spend cap, skipping", { orgId });
