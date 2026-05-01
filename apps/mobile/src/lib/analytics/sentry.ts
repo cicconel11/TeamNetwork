@@ -3,6 +3,7 @@
  */
 
 import * as Sentry from "@sentry/react-native";
+import { shouldIgnoreSentryError, shouldIgnoreSentryEvent } from "./sentry-noise";
 
 let initialized = false;
 let telemetryEnabled = false;
@@ -15,7 +16,10 @@ export function init(dsn: string): void {
     attachStacktrace: true,
     environment: __DEV__ ? "development" : "production",
     sendDefaultPii: false,
-    beforeSend(event) {
+    beforeSend(event, hint) {
+      if (shouldIgnoreSentryEvent(event)) return null;
+      const hintErr = hint.originalException ?? hint.syntheticException;
+      if (hintErr !== undefined && shouldIgnoreSentryError(hintErr)) return null;
       if (event.user) {
         delete event.user.email;
         delete event.user.username;
@@ -45,6 +49,7 @@ export function captureException(
   context?: Record<string, unknown>
 ): void {
   if (!initialized || !telemetryEnabled) return;
+  if (shouldIgnoreSentryError(error)) return;
   Sentry.captureException(error, { extra: context });
 }
 

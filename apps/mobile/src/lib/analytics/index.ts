@@ -16,6 +16,7 @@ import type {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as posthog from "./posthog";
 import * as sentry from "./sentry";
+import { shouldIgnoreSentryError } from "./sentry-noise";
 
 let enabled = !__DEV__;
 let configStored: AnalyticsConfig | null = null;
@@ -235,6 +236,8 @@ export function captureException(
   ...args: Parameters<typeof sentry.captureException>
 ): void {
   if (!enabled || !sdksInitialized) return;
+  const [err] = args;
+  if (shouldIgnoreSentryError(err)) return;
   sentry.captureException(...args);
 }
 
