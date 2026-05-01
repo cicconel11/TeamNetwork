@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeChannelInstanceSuffix } from "@/lib/realtime-instance-id";
 import * as sentry from "@/lib/analytics/sentry";
 import { normalizeRsvpStatus, type RsvpStatus } from "@teammeet/core";
 
@@ -39,6 +40,7 @@ interface UseEventRSVPsReturn {
 
 export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn {
   const isMountedRef = useRef(true);
+  const realtimeInstanceSuffix = useRealtimeChannelInstanceSuffix();
   const [rsvps, setRsvps] = useState<EventRSVP[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
     if (!eventId) return;
 
     const channel = supabase
-      .channel(`event_rsvps:${eventId}`)
+      .channel(`event_rsvps:${eventId}:${realtimeInstanceSuffix}`)
       .on(
         "postgres_changes",
         {
@@ -144,7 +146,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [eventId, fetchRSVPs]);
+  }, [eventId, fetchRSVPs, realtimeInstanceSuffix]);
 
   const checkInAttendee = useCallback(
     async (rsvpId: string): Promise<{ success: boolean; error?: string }> => {
