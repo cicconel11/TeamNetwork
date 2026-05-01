@@ -72,6 +72,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const userMeta = (user?.user_metadata ?? {}) as { name?: string; avatar_url?: string };
   const displayName = userMeta.name || user?.email || "Member";
   const displayEmail = user?.email || "";
+  const isAppleRelayEmail = /@privaterelay\.appleid\.com$/i.test(displayEmail);
   const avatarUrl = userMeta.avatar_url || "";
   const initial = displayName.trim().charAt(0).toUpperCase() || "M";
 
@@ -288,7 +289,16 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           </View>
           <View style={styles.profileMeta}>
             <Text style={styles.profileName}>{displayName}</Text>
-            {displayEmail ? <Text style={styles.profileEmail}>{displayEmail}</Text> : null}
+            {displayEmail ? (
+              <Text style={styles.profileEmail} numberOfLines={1} ellipsizeMode="tail">
+                {displayEmail}
+              </Text>
+            ) : null}
+            {isAppleRelayEmail ? (
+              <View style={styles.relayBadge}>
+                <Text style={styles.relayBadgeText}>Hidden by Apple</Text>
+              </View>
+            ) : null}
           </View>
         </Pressable>
         <View style={styles.divider} />
@@ -433,6 +443,22 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: fontSize.sm,
     color: NEUTRAL.placeholder,
+  },
+  relayBadge: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255, 255, 255, 0.16)",
+  },
+  relayBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeight.medium,
+    color: NEUTRAL.placeholder,
+    letterSpacing: 0.2,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
