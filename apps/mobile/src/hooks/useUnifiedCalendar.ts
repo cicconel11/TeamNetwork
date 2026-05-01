@@ -445,11 +445,11 @@ export function useUnifiedCalendar(orgId: string | null): UseUnifiedCalendarRetu
     };
   }, [fetchAll]);
 
-  // Realtime subscriptions on both tables
+  // Realtime: one channel, all postgres_changes listeners before subscribe (Supabase requirement)
   useEffect(() => {
     if (!orgId) return;
 
-    const eventsChannel = createPostgresChangesChannel(`unified-calendar-events:${orgId}`)
+    const channel = createPostgresChangesChannel(`unified-calendar:${orgId}`)
       .on(
         "postgres_changes",
         {
@@ -462,9 +462,6 @@ export function useUnifiedCalendar(orgId: string | null): UseUnifiedCalendarRetu
           fetchAll();
         }
       )
-      .subscribe();
-
-    const schedulesChannel = createPostgresChangesChannel(`unified-calendar-schedules:${orgId}`)
       .on(
         "postgres_changes",
         {
@@ -480,8 +477,7 @@ export function useUnifiedCalendar(orgId: string | null): UseUnifiedCalendarRetu
       .subscribe();
 
     return () => {
-      supabase.removeChannel(eventsChannel);
-      supabase.removeChannel(schedulesChannel);
+      supabase.removeChannel(channel);
     };
   }, [orgId, fetchAll]);
 
