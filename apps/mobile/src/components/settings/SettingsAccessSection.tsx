@@ -68,6 +68,7 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
       alignItems: "center" as const,
       justifyContent: "space-between" as const,
       paddingVertical: 12,
+      gap: 12,
       borderBottomWidth: 1,
       borderBottomColor: n.border,
     },
@@ -78,6 +79,7 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       flex: 1,
+      minWidth: 0,
       gap: 12,
     },
     memberAvatar: {
@@ -100,6 +102,7 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
     },
     memberDetails: {
       flex: 1,
+      minWidth: 0,
     },
     memberName: {
       fontSize: 15,
@@ -109,6 +112,7 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
     memberEmail: {
       fontSize: 13,
       color: n.placeholder,
+      marginTop: 2,
     },
     memberMeta: {
       fontSize: fontSize.xs,
@@ -118,7 +122,8 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
     memberActions: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
-      gap: 8,
+      gap: 6,
+      flexShrink: 0,
     },
     approveButton: {
       width: 32,
@@ -146,10 +151,12 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
       backgroundColor: n.background,
       borderWidth: 1,
       borderColor: n.border,
+      maxWidth: 130,
     },
     roleSelectorText: {
       fontSize: 13,
       color: n.foreground,
+      flexShrink: 1,
     },
     removeButton: {
       width: 32,
@@ -366,10 +373,10 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
                             </View>
                           )}
                           <View style={styles.memberDetails}>
-                            <Text style={styles.memberName}>
+                            <Text style={styles.memberName} numberOfLines={1} ellipsizeMode="tail">
                               {member.user?.name || member.user?.email || "Unknown"}
                             </Text>
-                            <Text style={styles.memberEmail}>{member.user?.email}</Text>
+                            <Text style={styles.memberEmail} numberOfLines={1} ellipsizeMode="middle">{member.user?.email}</Text>
                             <Text style={styles.memberMeta}>
                               Requested {formatDate(member.created_at)} • {getRoleLabel(member.role)}
                             </Text>
@@ -414,8 +421,8 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
                         </View>
                       )}
                       <View style={styles.memberDetails}>
-                        <Text style={styles.memberName}>{member.user?.name || member.user?.email || "Unknown"}</Text>
-                        <Text style={styles.memberEmail}>{member.user?.email}</Text>
+                        <Text style={styles.memberName} numberOfLines={1} ellipsizeMode="tail">{member.user?.name || member.user?.email || "Unknown"}</Text>
+                        <Text style={styles.memberEmail} numberOfLines={1} ellipsizeMode="middle">{member.user?.email}</Text>
                       </View>
                     </View>
                     <View style={styles.memberActions}>
@@ -434,7 +441,7 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
                           <ActivityIndicator size="small" color={colors.primary} />
                         ) : (
                           <>
-                            <Text style={styles.roleSelectorText}>{getRoleLabel(member.role)}</Text>
+                            <Text style={styles.roleSelectorText} numberOfLines={1}>{getRoleLabel(member.role)}</Text>
                             <ChevronDown size={14} color={colors.mutedForeground} />
                           </>
                         )}
@@ -462,10 +469,10 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
                             </Text>
                           </View>
                           <View style={styles.memberDetails}>
-                            <Text style={styles.memberName}>
+                            <Text style={styles.memberName} numberOfLines={1} ellipsizeMode="tail">
                               {member.user?.name || member.user?.email || "Unknown"}
                             </Text>
-                            <Text style={styles.memberEmail}>{member.user?.email}</Text>
+                            <Text style={styles.memberEmail} numberOfLines={1} ellipsizeMode="middle">{member.user?.email}</Text>
                           </View>
                         </View>
                         <Pressable
