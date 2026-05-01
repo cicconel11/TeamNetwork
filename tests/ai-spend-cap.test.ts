@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   AiCapReachedError,
+  isAiSpendBypassed,
   priceTokensMicrousd,
   type SpendStatus,
 } from "@/lib/ai/spend";
@@ -67,6 +68,18 @@ test("AiCapReachedError.toResponse: 402 JSON with status fields", async () => {
   assert.equal(body.currentCents, 2237);
   assert.equal(body.capCents, 2200);
   assert.equal(body.periodEnd, "2026-04-30T23:59:59.999Z");
+});
+
+test("isAiSpendBypassed: true for DEV_ADMIN_EMAILS, false otherwise", () => {
+  resetEnv();
+  process.env.DEV_ADMIN_EMAILS = "dev@example.com,owner@team.io";
+  assert.equal(isAiSpendBypassed({ email: "dev@example.com" }), true);
+  assert.equal(isAiSpendBypassed({ email: "DEV@example.com" }), true);
+  assert.equal(isAiSpendBypassed({ email: "owner@team.io" }), true);
+  assert.equal(isAiSpendBypassed({ email: "user@example.com" }), false);
+  assert.equal(isAiSpendBypassed(null), false);
+  assert.equal(isAiSpendBypassed(undefined), false);
+  assert.equal(isAiSpendBypassed({ email: null }), false);
 });
 
 test("AiCapReachedError carries original status", () => {

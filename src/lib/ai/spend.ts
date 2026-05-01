@@ -207,7 +207,11 @@ export async function getOrgSpendStatus(orgId: string): Promise<SpendStatus> {
   return buildStatus(current.microusd, capCents, current.periodStart);
 }
 
-export function assertModelPriceConfigured(model: string): void {
+export function assertModelPriceConfigured(
+  model: string,
+  opts?: { bypass?: boolean },
+): void {
+  if (opts?.bypass) return;
   // Route tests use mocked AI clients without production pricing env. Keep direct
   // pricing helpers fail-closed while avoiding broad fixture churn in test mode.
   if (process.env.NODE_ENV !== "production") return;
@@ -220,11 +224,13 @@ export async function assertOrgUnderCap(
   orgId: string,
   opts?: { bypass?: boolean },
 ): Promise<SpendStatus> {
+  if (opts?.bypass) {
+    return buildStatus(0, getDefaultCapCents(), new Date().toISOString().slice(0, 10));
+  }
   if (process.env.NODE_ENV !== "production" && !process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return buildStatus(0, getDefaultCapCents(), new Date().toISOString().slice(0, 10));
   }
   const status = await getOrgSpendStatus(orgId);
-  if (opts?.bypass) return status;
   if (!status.allowed) {
     throw new AiCapReachedError(status);
   }
