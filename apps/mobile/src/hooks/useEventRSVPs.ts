@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { createRealtimeChannelSuffix } from "@/lib/realtime-channel-suffix";
 import * as sentry from "@/lib/analytics/sentry";
 import { normalizeRsvpStatus, type RsvpStatus } from "@teammeet/core";
 
@@ -39,6 +40,11 @@ interface UseEventRSVPsReturn {
 
 export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn {
   const isMountedRef = useRef(true);
+  /** Unique per hook instance so two screens never share one subscribed channel name. */
+  const realtimeChannelSuffixRef = useRef<string | null>(null);
+  if (realtimeChannelSuffixRef.current === null) {
+    realtimeChannelSuffixRef.current = createRealtimeChannelSuffix();
+  }
   const [rsvps, setRsvps] = useState<EventRSVP[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +132,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
     if (!eventId) return;
 
     const channel = supabase
-      .channel(`event_rsvps:${eventId}`)
+      .channel(`event_rsvps:${eventId}:${realtimeChannelSuffixRef.current}`)
       .on(
         "postgres_changes",
         {
