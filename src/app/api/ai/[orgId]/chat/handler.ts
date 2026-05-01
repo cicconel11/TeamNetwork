@@ -44,7 +44,7 @@ import {
 } from "@/lib/ai/draft-sessions";
 import { createStageTimings } from "@/lib/ai/chat-telemetry";
 import { aiLog } from "@/lib/ai/logger";
-import { recordSpend } from "@/lib/ai/spend";
+import { chargeAiSpend } from "@/lib/ai/spend";
 import {
   hasPendingConnectionDisambiguation,
   looksLikeConnectionDisambiguationReply,
@@ -477,15 +477,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       const recordUsage = (usage: Parameters<typeof recordTurnUsage>[1]) => {
         recordTurnUsage(runtimeState, usage);
         spendWrites.push(
-          recordSpend({
+          chargeAiSpend({
             orgId: ctx.orgId,
             model: getZaiModelFn(),
             inputTokens: usage.inputTokens ?? 0,
             outputTokens: usage.outputTokens ?? 0,
-            surface: "chat",
             bypass: ctx.aiSpendBypass,
           }).catch((err) => {
-            aiLog("error", "spend", "recordSpend failed", {
+            aiLog("error", "spend", "chargeAiSpend failed", {
               requestId,
               orgId: ctx.orgId,
             }, { error: err });

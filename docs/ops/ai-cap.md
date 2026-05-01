@@ -1,9 +1,10 @@
 # Per-Org AI Spend Cap
 
-Soft monthly cap on AI inference spend per org per calendar UTC month. The
-system fails closed when pricing is not configured and blocks new calls once
-recorded spend reaches the cap; a request already in flight can still overshoot
-by its final token cost.
+Soft monthly cap on AI inference spend per org per calendar UTC month. Blocks
+new chat requests with HTTP 402 once recorded spend reaches the cap; a request
+already in flight can still overshoot by its final token cost. Pricing is
+**fail-open**: unknown models log once and price at 0 (preferred over 503ing
+real users on a config typo).
 
 ## Defaults
 
@@ -14,52 +15,30 @@ by its final token cost.
 
 ## Behavior
 
-- Pre-call: `assertOrgUnderCap(orgId)` throws `AiCapReachedError` if
-  `spendCents >= capCents`. Routes return HTTP 402 JSON
-  `{ error: "ai_monthly_cap_reached", currentCents, capCents, periodEnd }`.
-- Preflight pricing: metered surfaces call `assertModelPriceConfigured(model)`
-  before vendor calls so missing `AI_PRICE_*` env configuration returns 503 or
-  skips background work instead of producing unmetered usage.
-- Post-call: `recordSpend({ orgId, model, inputTokens, outputTokens, surface })`
-  prices tokens via env vars and atomically increments the ledger via the
-  `charge_ai_spend` RPC. API/worker paths await this write before finalizing
-  the operation where the platform lifecycle could otherwise drop a detached
-  promise.
-- Background workers (embedding cron, bio backfill) skip-and-log on cap;
-  they never produce a 402 since there is no caller.
+- Pre-call gate: surfaces call `checkAiSpend(orgId, { bypass })`. Throws
+  `AiCapReachedError` (HTTP 402 `{ error: "ai_monthly_cap_reached", currentCents, capCents, periodEnd }`)
+  if `spendCents >= capCents`.
+- Post-call charge: `chargeAiSpend({ orgId, model, inputTokens, outputTokens, bypass })`
+  prices tokens, atomically increments the ledger, and returns post-state — all
+  via the single `charge_and_check_ai_spend` RPC.
+- Background workers (embedding cron, bio backfill) skip-and-log on cap; they
+  never produce a 402 since there is no caller.
 
-## Pricing env vars
+## Pricing
 
-Microdollars per token = `cents_per_mtok / 100`. Set per model family;
-helper throws if a model has no env entry — caller must surface 503.
+Single env var with in-code defaults that match production:
 
 ```
-AI_SPEND_CAP_CENTS=2200
-
-# Z.AI glm-5.1 (chat)
-AI_PRICE_GLM_5_1_INPUT_PER_MTOK=600
-AI_PRICE_GLM_5_1_OUTPUT_PER_MTOK=2200
-
-# Z.AI glm-5v-turbo (vision/schedule extraction)
-AI_PRICE_GLM_5V_INPUT_PER_MTOK=2000
-AI_PRICE_GLM_5V_OUTPUT_PER_MTOK=6000
-
-# Gemini embedding
-AI_PRICE_GEMINI_EMBED_PER_MTOK=150
+AI_PRICES_JSON='{"glm-5v":{"in":2000,"out":6000},"glm-5":{"in":600,"out":2200},"embed":{"in":150,"out":0}}'
 ```
 
-## Vendor price verification (TODO)
-
-Reconcile placeholders above against current vendor pricing before launch
-and on every quarterly review:
-
-- [ ] Z.AI glm-5.1 input/output (https://docs.z.ai/pricing)
-- [ ] Z.AI glm-5v vision input/output
-- [ ] Gemini embedding (https://ai.google.dev/pricing)
+- Keys matched case-insensitively by substring against the model name.
+- `in` / `out` are cents per million tokens.
+- Missing or malformed env → defaults used.
+- Unknown model → log once `[ai_spend] unknown model "<x>"`, price at 0, no
+  ledger write. Set up a log alert on this string.
 
 ## Raising an org's cap
-
-Manual SQL only (no admin UI in v1):
 
 ```sql
 UPDATE public.organization_subscriptions
@@ -78,20 +57,14 @@ percentUsed, periodStart, periodEnd }`. Admin-only via `getAiOrgContext`.
 
 Users whose email appears in `DEV_ADMIN_EMAILS` (comma-separated) skip the
 spend cap entirely: no 402, no ledger write. Bypass is wired through
-`AiOrgContext.aiSpendBypass` and threaded into every `recordSpend` /
-`assertOrgUnderCap` call site (chat, safety judge, RAG judge, schedule
-extraction, bio generator, embedding RAG retrieval). Background workers
-(embedding cron, bio backfill) have no caller — they always charge the org
-normally.
+`AiOrgContext.aiSpendBypass` and threaded into every `chargeAiSpend` /
+`checkAiSpend` call site.
 
 ## Risks
 
 - In-flight/concurrent overshoot: requests reserve no estimated spend before
-  provider calls. A single request or several concurrent requests can exceed the
-  cap by their final token cost after passing the pre-call check. Acceptable for
-  v1; pre-flight reservation with release/settlement is future work.
-- Cap is USD-only; multi-currency not modeled in v1.
-- Tools that bypass the central helpers (`response-composer`, `safety-gate`,
-  `rag/grounding`, `schedule-extraction`, `bio-generator`, `embeddings`)
-  will not record spend. Audit before merging any new direct
-  `createOpenAIClient`/`createZaiClient` call.
+  provider calls. A single request or several concurrent requests can exceed
+  the cap by their final token cost after passing the pre-call check.
+- Cap is USD-only; multi-currency not modeled.
+- Unknown-model spend goes unbilled until pricing JSON is updated. Mitigate
+  with the log alert above.

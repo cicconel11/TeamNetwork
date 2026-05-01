@@ -1,7 +1,7 @@
 import type OpenAI from "openai";
 import { z } from "zod";
 import { createZaiClient, getZaiImageModel, getZaiModel } from "@/lib/ai/client";
-import { assertModelPriceConfigured, recordSpend, type AiSurface } from "@/lib/ai/spend";
+import { chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
 
 const MAX_SOURCE_TEXT_CHARS = 12_000;
 const MAX_SOURCE_TEXT_CHUNK_COUNT = 4;
@@ -277,17 +277,15 @@ async function requestExtraction(params: {
   spendBypass?: boolean;
 }): Promise<string> {
   const { client, model, messages, temperature, orgId, spendBypass } = params;
-  const surface: AiSurface = "schedule_extraction";
-  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
+  if (orgId) await checkAiSpend(orgId, { bypass: spendBypass });
 
   const chargeUsage = async (usage?: OpenAI.Completions.CompletionUsage | null) => {
     if (!orgId || !usage) return;
-    await recordSpend({
+    await chargeAiSpend({
       orgId,
       model,
       inputTokens: usage.prompt_tokens ?? 0,
       outputTokens: usage.completion_tokens ?? 0,
-      surface,
       bypass: spendBypass,
     });
   };

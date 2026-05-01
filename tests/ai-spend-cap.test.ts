@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   AiCapReachedError,
   isAiSpendBypassed,
-  priceTokensMicrousd,
+  __test,
   type SpendStatus,
 } from "@/lib/ai/spend";
 
@@ -11,53 +11,49 @@ const ORIGINAL_ENV = { ...process.env };
 
 function resetEnv() {
   process.env = { ...ORIGINAL_ENV };
+  delete process.env.AI_PRICES_JSON;
 }
 
-test("priceTokensMicrousd: glm-5.1 priced from env (input + output)", () => {
+test("priceCents: glm-5.1 default pricing math", () => {
   resetEnv();
-  process.env.AI_PRICE_GLM_5_1_INPUT_PER_MTOK = "600";   // $6 / Mtok input
-  process.env.AI_PRICE_GLM_5_1_OUTPUT_PER_MTOK = "2200"; // $22 / Mtok output
-  // 1000 input + 500 output = 6 + 11 = 17 cents = 170_000 microUSD
-  const microusd = priceTokensMicrousd("glm-5.1", 1000, 500);
-  assert.equal(microusd, 1000 * 6 + 500 * 22);
+  // defaults: in=600, out=2200 cents per Mtok
+  // 1_000_000 input @ 600c/Mtok + 1_000_000 output @ 2200c/Mtok = 2800c
+  const cents = __test.priceCents("glm-5.1", 1_000_000, 1_000_000);
+  assert.equal(cents, 2800);
 });
 
-test("priceTokensMicrousd: glm-5v vision-only env", () => {
+test("priceCents: unknown model returns 0 and logs once", () => {
   resetEnv();
-  process.env.AI_PRICE_GLM_5V_INPUT_PER_MTOK = "2000";
-  process.env.AI_PRICE_GLM_5V_OUTPUT_PER_MTOK = "6000";
-  const micro = priceTokensMicrousd("glm-5v-turbo", 1000, 1000);
-  assert.equal(micro, 1000 * 20 + 1000 * 60);
+  process.env.AI_PRICES_JSON = "{}";
+  const origWarn = console.warn;
+  let warnCount = 0;
+  console.warn = () => { warnCount++; };
+  try {
+    const a = __test.priceCents("totally-unknown-model-xyz", 1000, 1000);
+    const b = __test.priceCents("totally-unknown-model-xyz", 5000, 5000);
+    assert.equal(a, 0);
+    assert.equal(b, 0);
+    assert.equal(warnCount, 1);
+  } finally {
+    console.warn = origWarn;
+  }
 });
 
-test("priceTokensMicrousd: gemini embedding has output_per_mtok=0", () => {
+test("priceCents: AI_PRICES_JSON env beats defaults", () => {
   resetEnv();
-  process.env.AI_PRICE_GEMINI_EMBED_PER_MTOK = "150";
-  const micro = priceTokensMicrousd("gemini-embedding-001", 10_000, 0);
-  // 10_000 * 1.5 = 15_000 microUSD = 1.5 cents
-  assert.equal(micro, 15_000);
+  process.env.AI_PRICES_JSON = JSON.stringify({
+    "glm-5": { in: 100, out: 200 },
+  });
+  // 1_000_000 in @ 100 + 1_000_000 out @ 200 = 300
+  const cents = __test.priceCents("glm-5.1", 1_000_000, 1_000_000);
+  assert.equal(cents, 300);
 });
 
-test("priceTokensMicrousd: throws when model has no env entry", () => {
-  resetEnv();
-  delete process.env.AI_PRICE_GLM_5_1_INPUT_PER_MTOK;
-  delete process.env.AI_PRICE_GLM_5_1_OUTPUT_PER_MTOK;
-  delete process.env.AI_PRICE_GLM_5V_INPUT_PER_MTOK;
-  delete process.env.AI_PRICE_GLM_5V_OUTPUT_PER_MTOK;
-  delete process.env.AI_PRICE_GEMINI_EMBED_PER_MTOK;
-  assert.throws(
-    () => priceTokensMicrousd("totally-unknown-model", 100, 100),
-    /no price configured/,
-  );
-});
-
-test("AiCapReachedError.toResponse: 402 JSON with status fields", async () => {
+test("AiCapReachedError.toResponse: 402 JSON shape", async () => {
   const status: SpendStatus = {
     allowed: false,
     spendCents: 2237,
     capCents: 2200,
-    percentUsed: 100,
-    periodStart: "2026-04-01",
     periodEnd: "2026-04-30T23:59:59.999Z",
   };
   const err = new AiCapReachedError(status);
@@ -80,19 +76,4 @@ test("isAiSpendBypassed: true for DEV_ADMIN_EMAILS, false otherwise", () => {
   assert.equal(isAiSpendBypassed(null), false);
   assert.equal(isAiSpendBypassed(undefined), false);
   assert.equal(isAiSpendBypassed({ email: null }), false);
-});
-
-test("AiCapReachedError carries original status", () => {
-  const status: SpendStatus = {
-    allowed: false,
-    spendCents: 2200,
-    capCents: 2200,
-    percentUsed: 100,
-    periodStart: "2026-04-01",
-    periodEnd: "2026-04-30T23:59:59.999Z",
-  };
-  const err = new AiCapReachedError(status);
-  assert.equal(err.message, "ai_monthly_cap_reached");
-  assert.equal(err.status.spendCents, 2200);
-  assert.equal(err.name, "AiCapReachedError");
 });

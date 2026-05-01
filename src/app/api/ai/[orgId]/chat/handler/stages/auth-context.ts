@@ -10,7 +10,7 @@
  *
  * Pure orchestration — wraps existing helpers, no policy decisions.
  */
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import type { createClient } from "@/lib/supabase/server";
 import {
   buildRateLimitResponse,
@@ -24,13 +24,7 @@ import {
   runTimedStage,
 } from "@/lib/ai/chat-telemetry";
 import { supportsDraftSessionsStore } from "@/lib/ai/draft-sessions";
-import {
-  AiCapReachedError,
-  AiPricingConfigError,
-  assertModelPriceConfigured,
-  assertOrgUnderCap,
-} from "@/lib/ai/spend";
-import { getZaiModel } from "@/lib/ai/client";
+import { AiCapReachedError, checkAiSpend } from "@/lib/ai/spend";
 import type { AuthContextSlice, StageOutcome } from "./state";
 
 const DEFAULT_AI_ORG_RATE_LIMIT = 60;
@@ -99,20 +93,10 @@ export async function runAuthContextStage(
   }
 
   try {
-    assertModelPriceConfigured(getZaiModel(), { bypass: ctx.aiSpendBypass });
-    await assertOrgUnderCap(input.orgId, { bypass: ctx.aiSpendBypass });
+    await checkAiSpend(input.orgId, { bypass: ctx.aiSpendBypass });
   } catch (err) {
     if (err instanceof AiCapReachedError) {
       return { ok: false, response: err.toResponse(rateLimit.headers) };
-    }
-    if (err instanceof AiPricingConfigError) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { error: "ai_pricing_not_configured" },
-          { status: 503, headers: rateLimit.headers },
-        ),
-      };
     }
     throw err;
   }
