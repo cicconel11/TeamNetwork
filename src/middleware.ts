@@ -143,6 +143,35 @@ export async function middleware(request: NextRequest) {
     );
   }
 
+  // Bearer / CORS branch for /api/* (mobile clients).
+  // Web requests don't send Bearer + don't send OPTIONS preflights to same-origin
+  // POSTs, so this is provably unreachable from the existing web flow.
+  if (pathname.startsWith("/api/")) {
+    if (request.method === "OPTIONS") {
+      return NextResponse.next({ request: { headers: request.headers } });
+    }
+    const authHeader = request.headers.get("authorization");
+    const bearerMatch = authHeader?.match(/^Bearer (eyJ|sb_)/);
+    if (bearerMatch) {
+      const token = authHeader!.slice("Bearer ".length);
+      const tokenClient = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll: () => [],
+          setAll: () => {},
+        },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data, error } = await tokenClient.auth.getUser(token);
+      if (error || !data.user) {
+        return NextResponse.json(
+          { error: "Unauthorized", message: "Authentication required" },
+          { status: 401 },
+        );
+      }
+      return NextResponse.next({ request: { headers: request.headers } });
+    }
+  }
+
   const response = NextResponse.next({
     request: {
       headers: request.headers,
