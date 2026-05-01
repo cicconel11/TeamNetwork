@@ -3,6 +3,10 @@ import { supabase } from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
+import {
+  isMissingPerCategoryPushPreferenceColumnsError,
+  LEGACY_NOTIFICATION_PREF_SELECT_COLUMNS,
+} from "@/lib/notification-preferences-compat";
 
 export interface NotificationPreferences {
   id: string;
@@ -115,6 +119,8 @@ export function useNotificationPreferences(
   const { beginRequest, isCurrentRequest } = useRequestTracker();
   const userId = user?.id ?? null;
   const userEmail = user?.email ?? null;
+  /** False when Postgres lacks `*_push_enabled` columns (pre-20261101 migration). */
+  const perCategoryPushColumnsSupportedRef = useRef(true);
 
   const fetchPrefs = useCallback(async () => {
     const requestId = beginRequest();
@@ -129,12 +135,29 @@ export function useNotificationPreferences(
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
+      const full = await supabase
         .from("notification_preferences")
         .select(SELECT_COLUMNS)
         .eq("organization_id", orgId)
         .eq("user_id", userId)
         .maybeSingle<PrefRow>();
+
+      let data = full.data;
+      let fetchError = full.error;
+
+      if (fetchError && isMissingPerCategoryPushPreferenceColumnsError(fetchError)) {
+        perCategoryPushColumnsSupportedRef.current = false;
+        const legacy = await supabase
+          .from("notification_preferences")
+          .select(LEGACY_NOTIFICATION_PREF_SELECT_COLUMNS)
+          .eq("organization_id", orgId)
+          .eq("user_id", userId)
+          .maybeSingle<PrefRow>();
+        data = legacy.data;
+        fetchError = legacy.error;
+      } else if (!fetchError) {
+        perCategoryPushColumnsSupportedRef.current = true;
+      }
 
       if (fetchError) throw fetchError;
 
@@ -253,6 +276,15 @@ export function useNotificationPreferences(
         "mentorship_push_enabled",
         "donation_push_enabled",
       ] as const;
+
+      const stripPushCategoryWrites = (payload: Record<string, unknown>) => {
+        const next = { ...payload };
+        for (const k of pushCategoryKeys) {
+          delete next[k];
+        }
+        return next;
+      };
+
       for (const key of pushCategoryKeys) {
         if (key in updates) {
           writePayload[key] = updates[key] ?? prefs?.[key] ?? DEFAULT_PUSH_CATEGORIES[key];
@@ -269,19 +301,43 @@ export function useNotificationPreferences(
           // Cast: the new *_push_enabled columns aren't in the generated
           // Database types yet (regenerate via `bun run gen:types` after
           // migration applies in prod).
-          const { error: updateError } = await (supabase
-            .from("notification_preferences") as unknown as {
-              update: (v: Record<string, unknown>) => {
-                eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+          const prefsTable = supabase.from("notification_preferences") as unknown as {
+            update: (v: Record<string, unknown>) => {
+              eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+            };
+          };
+
+          let updatePayload: Record<string, unknown> = writePayload;
+          let { error: updateError } = await prefsTable.update(updatePayload).eq("id", prefs.id);
+
+          if (updateError && isMissingPerCategoryPushPreferenceColumnsError(updateError)) {
+            perCategoryPushColumnsSupportedRef.current = false;
+            updatePayload = stripPushCategoryWrites(writePayload);
+            if (Object.keys(updatePayload).length === 0) {
+              if (isMountedRef.current) {
+                setPrefs(previousPrefs);
+                setError(
+                  "Per-category push settings are not available on this server version yet. Email and master push settings still work."
+                );
+              }
+              return {
+                success: false,
+                error:
+                  "Per-category push settings are not available on this server version yet. Email and master push settings still work.",
               };
-            })
-            .update(writePayload)
-            .eq("id", prefs.id);
+            }
+            ({ error: updateError } = await prefsTable.update(updatePayload).eq("id", prefs.id));
+          }
 
           if (updateError) throw updateError;
         } else {
           // Insert new preferences. Defaults from the migration handle any
           // unset *_push_enabled columns; we still write what the caller set.
+          const categoryEntries = Object.fromEntries(
+            pushCategoryKeys
+              .filter((k) => k in writePayload)
+              .map((k) => [k, writePayload[k]])
+          );
           const insertPayload: Record<string, unknown> = {
             organization_id: orgId,
             user_id: userId,
@@ -290,27 +346,41 @@ export function useNotificationPreferences(
             phone_number: null,
             sms_enabled: false,
             push_enabled: writePayload.push_enabled ?? true,
-            ...Object.fromEntries(
-              pushCategoryKeys
-                .filter((k) => k in writePayload)
-                .map((k) => [k, writePayload[k]])
-            ),
+            ...(perCategoryPushColumnsSupportedRef.current ? categoryEntries : {}),
           };
 
-          const { data, error: insertError } = await (supabase
-            .from("notification_preferences") as unknown as {
-              insert: (v: Record<string, unknown>) => {
-                select: (cols: string) => {
-                  single: () => Promise<{
-                    data: { id: string } | null;
-                    error: { message: string } | null;
-                  }>;
-                };
+          const prefsInsert = supabase.from("notification_preferences") as unknown as {
+            insert: (v: Record<string, unknown>) => {
+              select: (cols: string) => {
+                single: () => Promise<{
+                  data: { id: string } | null;
+                  error: { message: string } | null;
+                }>;
               };
-            })
+            };
+          };
+
+          let { data, error: insertError } = await prefsInsert
             .insert(insertPayload)
             .select("id")
             .single();
+
+          if (insertError && isMissingPerCategoryPushPreferenceColumnsError(insertError)) {
+            perCategoryPushColumnsSupportedRef.current = false;
+            const legacyInsert = {
+              organization_id: orgId,
+              user_id: userId,
+              email_address: writePayload.email_address ?? userEmail,
+              email_enabled: writePayload.email_enabled ?? true,
+              phone_number: null,
+              sms_enabled: false,
+              push_enabled: writePayload.push_enabled ?? true,
+            };
+            ({ data, error: insertError } = await prefsInsert
+              .insert(legacyInsert)
+              .select("id")
+              .single());
+          }
 
           if (insertError) throw insertError;
 
