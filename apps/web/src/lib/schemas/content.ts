@@ -80,6 +80,10 @@ export const newEventSchema = z
     channel: channelSchema,
     is_recurring: z.boolean(),
     recurrence: recurrenceRuleSchema.optional(),
+    geofence_enabled: z.boolean(),
+    geofence_radius_m: z.number().int().min(10).max(200000),
+    geofence_latitude: z.string(),
+    geofence_longitude: z.string(),
   })
   .refine(
     (data) => {
@@ -106,7 +110,46 @@ export const newEventSchema = z
       message: "Recurrence settings are required for recurring events",
       path: ["recurrence"],
     }
-  );
+  )
+  .superRefine((data, ctx) => {
+    if (!data.geofence_enabled) return;
+    const latStr = (data.geofence_latitude ?? "").trim();
+    const lngStr = (data.geofence_longitude ?? "").trim();
+    let latParsed: number | null = null;
+    let lngParsed: number | null = null;
+    if (!latStr) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Latitude is required when location check-in is enabled",
+        path: ["geofence_latitude"],
+      });
+    } else {
+      latParsed = Number(latStr);
+      if (!Number.isFinite(latParsed) || latParsed < -90 || latParsed > 90) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Latitude must be a number between -90 and 90",
+          path: ["geofence_latitude"],
+        });
+      }
+    }
+    if (!lngStr) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Longitude is required when location check-in is enabled",
+        path: ["geofence_longitude"],
+      });
+    } else {
+      lngParsed = Number(lngStr);
+      if (!Number.isFinite(lngParsed) || lngParsed < -180 || lngParsed > 180) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Longitude must be a number between -180 and 180",
+          path: ["geofence_longitude"],
+        });
+      }
+    }
+  });
 export type NewEventForm = z.infer<typeof newEventSchema>;
 
 // Edit event form - no send_notification, audience, or channel (already sent)
@@ -121,6 +164,10 @@ export const editEventSchema = z
     location: optionalSafeString(500),
     event_type: eventTypeSchema,
     is_philanthropy: z.boolean(),
+    geofence_enabled: z.boolean(),
+    geofence_radius_m: z.number().int().min(10).max(200000),
+    geofence_latitude: z.string(),
+    geofence_longitude: z.string(),
   })
   .refine(
     (data) => {
@@ -135,7 +182,46 @@ export const editEventSchema = z
       message: "End date/time must be after start date/time",
       path: ["end_date"],
     }
-  );
+  )
+  .superRefine((data, ctx) => {
+    if (!data.geofence_enabled) return;
+    const latStr = (data.geofence_latitude ?? "").trim();
+    const lngStr = (data.geofence_longitude ?? "").trim();
+    let latParsed: number | null = null;
+    let lngParsed: number | null = null;
+    if (!latStr) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Latitude is required when location check-in is enabled",
+        path: ["geofence_latitude"],
+      });
+    } else {
+      latParsed = Number(latStr);
+      if (!Number.isFinite(latParsed) || latParsed < -90 || latParsed > 90) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Latitude must be a number between -90 and 90",
+          path: ["geofence_latitude"],
+        });
+      }
+    }
+    if (!lngStr) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Longitude is required when location check-in is enabled",
+        path: ["geofence_longitude"],
+      });
+    } else {
+      lngParsed = Number(lngStr);
+      if (!Number.isFinite(lngParsed) || lngParsed < -180 || lngParsed > 180) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Longitude must be a number between -180 and 180",
+          path: ["geofence_longitude"],
+        });
+      }
+    }
+  });
 export type EditEventForm = z.infer<typeof editEventSchema>;
 
 // Workout form

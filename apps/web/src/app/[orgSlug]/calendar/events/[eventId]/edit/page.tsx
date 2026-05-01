@@ -14,6 +14,7 @@ import { resolveEventActionLabel } from "@/lib/events/labels";
 import { EVENT_TYPE_OPTIONS } from "@/lib/events/event-type-options";
 import { calendarEventDetailPath } from "@/lib/calendar/routes";
 import { localToUtcIso, utcToLocalParts, resolveOrgTimezone } from "@/lib/utils/timezone";
+import { geofenceFormToDbFields } from "@/lib/events/geofence-form";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Event, EventType } from "@/types/database";
 
@@ -58,10 +59,15 @@ export default function EditCalendarEventPage() {
       location: "",
       event_type: "general",
       is_philanthropy: false,
+      geofence_enabled: false,
+      geofence_radius_m: 100,
+      geofence_latitude: "",
+      geofence_longitude: "",
     },
   });
 
   const eventType = watch("event_type");
+  const geofenceEnabled = watch("geofence_enabled");
   const isPhilanthropy = watch("is_philanthropy");
 
   useEffect(() => {
@@ -117,6 +123,10 @@ export default function EditCalendarEventPage() {
         location: e.location || "",
         event_type: e.event_type || "general",
         is_philanthropy: e.is_philanthropy || false,
+        geofence_enabled: e.geofence_enabled ?? false,
+        geofence_radius_m: e.geofence_radius_m ?? 100,
+        geofence_latitude: e.latitude != null ? String(e.latitude) : "",
+        geofence_longitude: e.longitude != null ? String(e.longitude) : "",
       });
       setIsFetching(false);
     };
@@ -166,6 +176,13 @@ export default function EditCalendarEventPage() {
       return;
     }
 
+    const geofence = geofenceFormToDbFields({
+      geofence_enabled: data.geofence_enabled,
+      geofence_radius_m: data.geofence_radius_m,
+      geofence_latitude: data.geofence_latitude ?? "",
+      geofence_longitude: data.geofence_longitude ?? "",
+    });
+
     if (scope === "this_and_future") {
       const { updatedIds, error: updateError } = await updateFutureEvents(supabase, eventId, org.id, {
         title: data.title,
@@ -173,6 +190,10 @@ export default function EditCalendarEventPage() {
         location: data.location || null,
         event_type: data.event_type,
         is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
+        geofence_enabled: geofence.geofence_enabled,
+        geofence_radius_m: geofence.geofence_radius_m,
+        latitude: geofence.latitude,
+        longitude: geofence.longitude,
       });
 
       if (updateError) {
@@ -224,6 +245,10 @@ export default function EditCalendarEventPage() {
         location: data.location || null,
         event_type: data.event_type,
         is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
+        geofence_enabled: geofence.geofence_enabled,
+        geofence_radius_m: geofence.geofence_radius_m,
+        latitude: geofence.latitude,
+        longitude: geofence.longitude,
         updated_at: new Date().toISOString(),
       })
       .eq("id", eventId)
@@ -251,6 +276,21 @@ export default function EditCalendarEventPage() {
 
     router.push(calendarEventDetailPath(orgSlug, eventId));
     router.refresh();
+  };
+
+  const fillGeolocation = () => {
+    if (!navigator.geolocation) {
+      window.alert("Geolocation is not available in this browser.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setValue("geofence_latitude", String(pos.coords.latitude));
+        setValue("geofence_longitude", String(pos.coords.longitude));
+      },
+      () => window.alert("Could not read your location. Try entering coordinates manually."),
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
+    );
   };
 
   if (isFetching) {
@@ -348,6 +388,57 @@ export default function EditCalendarEventPage() {
             error={errors.location?.message}
             {...register("location")}
           />
+
+          <div className="space-y-4 rounded-xl border border-border p-4">
+            <div>
+              <h4 className="text-sm font-medium text-foreground">Location check-in (optional)</h4>
+              <p className="mt-1 text-xs text-muted-foreground">
+                When enabled, mobile self check-in validates against this pin and radius.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="geofence_enabled"
+                checked={geofenceEnabled}
+                onChange={(e) => setValue("geofence_enabled", e.target.checked)}
+                className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
+              />
+              <label htmlFor="geofence_enabled" className="text-sm text-foreground">
+                Require geofence for QR check-in
+              </label>
+            </div>
+
+            {geofenceEnabled && (
+              <>
+                <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={fillGeolocation}>
+                  Use my current location
+                </Button>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Input
+                    label="Latitude"
+                    placeholder="-90 – 90"
+                    error={errors.geofence_latitude?.message}
+                    {...register("geofence_latitude")}
+                  />
+                  <Input
+                    label="Longitude"
+                    placeholder="-180 – 180"
+                    error={errors.geofence_longitude?.message}
+                    {...register("geofence_longitude")}
+                  />
+                </div>
+                <Input
+                  label="Radius (meters)"
+                  type="number"
+                  min={10}
+                  max={200000}
+                  error={errors.geofence_radius_m?.message}
+                  {...register("geofence_radius_m", { valueAsNumber: true })}
+                />
+              </>
+            )}
+          </div>
 
           <Select
             label="Event Type"

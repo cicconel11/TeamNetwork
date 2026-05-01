@@ -47,10 +47,15 @@ export async function isBiometricEnabled(): Promise<boolean> {
 }
 
 export async function setBiometricEnabled(enabled: boolean): Promise<void> {
-  if (enabled) {
-    await SecureStore.setItemAsync(BIOMETRIC_ENABLED_KEY, "1");
-  } else {
-    await SecureStore.deleteItemAsync(BIOMETRIC_ENABLED_KEY);
+  try {
+    if (enabled) {
+      await SecureStore.setItemAsync(BIOMETRIC_ENABLED_KEY, "1");
+    } else {
+      await SecureStore.deleteItemAsync(BIOMETRIC_ENABLED_KEY);
+    }
+  } catch {
+    // Some local simulator builds cannot carry keychain entitlements.
+    // Treat biometric opt-in as unavailable instead of breaking auth flows.
   }
 }
 

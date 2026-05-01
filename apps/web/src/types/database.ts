@@ -2589,9 +2589,13 @@ export type Database = {
           description: string | null
           end_date: string | null
           event_type: Database["public"]["Enums"]["event_type"] | null
+          geofence_enabled: boolean
+          geofence_radius_m: number
           id: string
           is_philanthropy: boolean | null
+          latitude: number | null
           location: string | null
+          longitude: number | null
           organization_id: string
           recurrence_group_id: string | null
           recurrence_index: number | null
@@ -2609,9 +2613,13 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           event_type?: Database["public"]["Enums"]["event_type"] | null
+          geofence_enabled?: boolean
+          geofence_radius_m?: number
           id?: string
           is_philanthropy?: boolean | null
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
           organization_id: string
           recurrence_group_id?: string | null
           recurrence_index?: number | null
@@ -2629,9 +2637,13 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           event_type?: Database["public"]["Enums"]["event_type"] | null
+          geofence_enabled?: boolean
+          geofence_radius_m?: number
           id?: string
           is_philanthropy?: boolean | null
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
           organization_id?: string
           recurrence_group_id?: string | null
           recurrence_index?: number | null
@@ -6405,7 +6417,20 @@ export type Database = {
         Returns: boolean
       }
       check_in_event_attendee: {
-        Args: { p_rsvp_id: string; p_undo?: boolean }
+        Args: {
+          p_lat?: number | null
+          p_lng?: number | null
+          p_rsvp_id: string
+          p_undo?: boolean
+        }
+        Returns: Json
+      }
+      self_check_in_event: {
+        Args: {
+          p_event_id: string
+          p_lat?: number | null
+          p_lng?: number | null
+        }
         Returns: Json
       }
       claim_linkedin_resync: { Args: { p_user_id: string }; Returns: Json }

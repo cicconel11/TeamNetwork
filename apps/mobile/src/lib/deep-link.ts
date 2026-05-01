@@ -46,7 +46,7 @@ export type Intent =
       kind: "event-checkin";
       orgSlug: string;
       eventId: string;
-      userId: string;
+      userId?: string;
       sig?: string;
     }
   | { kind: "announcement"; orgSlug: string; id: string }
@@ -194,9 +194,10 @@ function parseNativeRoute(
     }
     case "event-checkin": {
       const eventId = segments[0] || url.searchParams.get("event") || "";
-      const userId = url.searchParams.get("user") || segments[1] || "";
+      const userRaw = url.searchParams.get("user") || segments[1] || "";
+      const userId = userRaw.trim() ? userRaw : undefined;
       const sig = url.searchParams.get("sig") || undefined;
-      if (!eventId || !userId || !orgSlugParam) return null;
+      if (!eventId || !orgSlugParam) return null;
       return { kind: "event-checkin", orgSlug: orgSlugParam, eventId, userId, sig };
     }
     case "announcement": {
@@ -340,9 +341,15 @@ export async function routeIntent(
       return;
 
     case "event-checkin":
-      router.push(
-        `/(app)/${intent.orgSlug}/events/${intent.eventId}/check-in?user=${encodeURIComponent(intent.userId)}` as never
-      );
+      if (!intent.userId) {
+        router.push(
+          `/(app)/${intent.orgSlug}/events/${intent.eventId}/scan?mode=self` as never
+        );
+      } else {
+        router.push(
+          `/(app)/${intent.orgSlug}/events/check-in?eventId=${encodeURIComponent(intent.eventId)}&user=${encodeURIComponent(intent.userId)}` as never
+        );
+      }
       return;
 
     case "announcement":

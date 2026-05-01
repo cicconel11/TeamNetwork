@@ -4,7 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
-import { EventRsvp, AttendanceList, EventDeleteButton, RecurringEventDeleteButton } from "@/components/events";
+import {
+  EventRsvp,
+  AttendanceList,
+  EventDeleteButton,
+  RecurringEventDeleteButton,
+  EventSelfCheckInQrButton,
+} from "@/components/events";
 import type { RsvpStatus } from "@/types/database";
 import { EventOpenTracker } from "@/components/analytics/EventsViewTracker";
 import { LocalDate, LocalTime } from "@/components/ui";
@@ -83,6 +89,7 @@ export default async function CalendarEventDetailPage({ params }: EventDetailPag
         actions={
           isAdmin && (
             <div className="flex items-center gap-2">
+              <EventSelfCheckInQrButton eventId={eventId} orgSlug={orgSlug} />
               <Link href={calendarEventEditPath(orgSlug, eventId)} data-testid="event-edit-link">
                 <Button variant="secondary">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

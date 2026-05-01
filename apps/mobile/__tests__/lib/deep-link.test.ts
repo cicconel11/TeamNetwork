@@ -32,7 +32,7 @@ jest.mock("@teammeet/validation", () => ({
   },
 }));
 
-import { parseTeammeetUrl } from "@/lib/deep-link";
+import { parseTeammeetUrl, routeIntent } from "@/lib/deep-link";
 
 describe("parseTeammeetUrl", () => {
   describe("auth (native scheme)", () => {
@@ -155,6 +155,17 @@ describe("parseTeammeetUrl", () => {
       });
     });
 
+    it("parses event-checkin QR without member userId (venue self check-in)", () => {
+      const intent = parseTeammeetUrl("teammeet://event-checkin/evt-42?org=acme-hs");
+      expect(intent).toEqual({
+        kind: "event-checkin",
+        orgSlug: "acme-hs",
+        eventId: "evt-42",
+        userId: undefined,
+        sig: undefined,
+      });
+    });
+
     it("parses announcement", () => {
       const intent = parseTeammeetUrl(
         "teammeet://announcement/ann-1?org=acme-hs"
@@ -210,5 +221,36 @@ describe("parseTeammeetUrl", () => {
       const intent = parseTeammeetUrl("https://google.com");
       expect(intent.kind).toBe("unknown");
     });
+  });
+});
+
+describe("routeIntent", () => {
+  it("routes member-specific event check-in to the registered check-in screen", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+
+    await routeIntent(router, {
+      kind: "event-checkin",
+      orgSlug: "acme-hs",
+      eventId: "evt-1",
+      userId: "user-99",
+    });
+
+    expect(router.push).toHaveBeenCalledWith(
+      "/(app)/acme-hs/events/check-in?eventId=evt-1&user=user-99"
+    );
+  });
+
+  it("routes event self check-in QR links to scanner self mode", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+
+    await routeIntent(router, {
+      kind: "event-checkin",
+      orgSlug: "acme-hs",
+      eventId: "evt-42",
+    });
+
+    expect(router.push).toHaveBeenCalledWith(
+      "/(app)/acme-hs/events/evt-42/scan?mode=self"
+    );
   });
 });

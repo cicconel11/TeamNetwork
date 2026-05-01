@@ -1,22 +1,29 @@
-import { useCallback, useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { ArrowLeft } from "lucide-react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { QRScanner } from "@/components/QRScanner";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useEventRSVPs } from "@/hooks/useEventRSVPs";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { parseTeammeetUrl } from "@/lib/deep-link";
+import { getDeviceCoords } from "@/lib/event-location";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { SPACING } from "@/lib/design-tokens";
+import { supabase } from "@/lib/supabase";
 
 type Toast = { kind: "ok" | "error" | "info"; text: string } | null;
 
+type ScanMode = "admin" | "self";
+
 export default function ScanCheckInScreen() {
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const { eventId, mode: modeParam } = useLocalSearchParams<{
+    eventId: string;
+    mode?: string;
+  }>();
   const router = useRouter();
   const { orgSlug } = useOrg();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
@@ -24,11 +31,33 @@ export default function ScanCheckInScreen() {
   const { rsvps, loading, checkInAttendee, findRsvpByUserId, attendingCount } =
     useEventRSVPs(eventId);
 
+  const mode: ScanMode = modeParam === "self" ? "self" : "admin";
+
+  const [geofenceEnabled, setGeofenceEnabled] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadGeo() {
+      if (!eventId) return;
+      const { data } = await supabase
+        .from("events")
+        .select("geofence_enabled")
+        .eq("id", eventId)
+        .maybeSingle();
+      if (!cancelled) {
+        setGeofenceEnabled(!!data?.geofence_enabled);
+      }
+    }
+    void loadGeo();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
 
   const showToast = useCallback((next: NonNullable<Toast>) => {
     setToast(next);
-    setTimeout(() => setToast(null), 1800);
+    setTimeout(() => setToast(null), 2400);
   }, []);
 
   const handleScan = useCallback(
@@ -40,6 +69,7 @@ export default function ScanCheckInScreen() {
         showToast({ kind: "error", text: "Not a check-in QR code" });
         return true;
       }
+
       if (intent.eventId !== eventId) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         showToast({ kind: "error", text: "QR is for a different event" });
@@ -48,6 +78,63 @@ export default function ScanCheckInScreen() {
       if (intent.orgSlug !== orgSlug) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         showToast({ kind: "error", text: "QR is for a different organization" });
+        return true;
+      }
+
+      if (mode === "self") {
+        if (intent.userId) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          showToast({ kind: "error", text: "Use the event check-in QR code" });
+          return true;
+        }
+
+        let pLat: number | undefined;
+        let pLng: number | undefined;
+        if (geofenceEnabled) {
+          const loc = await getDeviceCoords();
+          if (!loc.ok) {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            showToast({ kind: "error", text: loc.error });
+            return true;
+          }
+          pLat = loc.coords.latitude;
+          pLng = loc.coords.longitude;
+        }
+
+        const { data, error: rpcError } = await supabase.rpc("self_check_in_event", {
+          p_event_id: eventId,
+          p_lat: pLat,
+          p_lng: pLng,
+        });
+
+        if (rpcError) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          showToast({ kind: "error", text: rpcError.message });
+          return true;
+        }
+
+        const payload =
+          data && typeof data === "object" && "success" in (data as object)
+            ? (data as { success?: boolean; error?: string })
+            : null;
+
+        if (!payload || payload.success !== true) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          showToast({
+            kind: "error",
+            text: typeof payload?.error === "string" ? payload.error : "Check-in failed",
+          });
+          return true;
+        }
+
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast({ kind: "ok", text: "You’re checked in" });
+        return true;
+      }
+
+      if (!intent.userId) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        showToast({ kind: "error", text: "Scan a member QR from this event" });
         return true;
       }
 
@@ -77,7 +164,18 @@ export default function ScanCheckInScreen() {
         return true;
       }
 
-      const result = await checkInAttendee(rsvp.id);
+      let coords: { latitude: number; longitude: number } | undefined;
+      if (geofenceEnabled) {
+        const loc = await getDeviceCoords();
+        if (!loc.ok) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          showToast({ kind: "error", text: loc.error });
+          return true;
+        }
+        coords = loc.coords;
+      }
+
+      const result = await checkInAttendee(rsvp.id, coords);
       if (result.success) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast({
@@ -90,10 +188,18 @@ export default function ScanCheckInScreen() {
       }
       return true;
     },
-    [eventId, orgSlug, findRsvpByUserId, checkInAttendee, showToast]
+    [
+      mode,
+      eventId,
+      orgSlug,
+      geofenceEnabled,
+      findRsvpByUserId,
+      checkInAttendee,
+      showToast,
+    ]
   );
 
-  if (!roleLoading && !isAdmin) {
+  if (!roleLoading && mode === "admin" && !isAdmin) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: neutral.background }]}>
         <Text style={[styles.title, { color: neutral.foreground }]}>Admins only</Text>
@@ -118,7 +224,11 @@ export default function ScanCheckInScreen() {
         hint={
           loading
             ? "Loading RSVPs…"
-            : `${attendingCount} attending · ${rsvps.length} total RSVPs`
+            : mode === "self"
+              ? geofenceEnabled
+                ? "Scan event QR (location verified at venue)"
+                : "Scan event QR to check in"
+              : `${attendingCount} attending · ${rsvps.length} total RSVPs`
         }
       />
       <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.headerOverlay}>

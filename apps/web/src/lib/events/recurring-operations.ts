@@ -18,6 +18,10 @@ interface BaseEventData {
   audience?: string | null;
   target_user_ids?: string[] | null;
   created_by_user_id?: string | null;
+  geofence_enabled?: boolean;
+  geofence_radius_m?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 /**
@@ -53,6 +57,10 @@ export async function createRecurringEvents(
     recurrence_group_id: groupId,
     recurrence_index: inst.recurrence_index,
     recurrence_rule: inst.recurrence_index === 0 ? (rule as unknown as Database["public"]["Tables"]["events"]["Insert"]["recurrence_rule"]) : null,
+    geofence_enabled: baseEvent.geofence_enabled ?? false,
+    geofence_radius_m: baseEvent.geofence_radius_m ?? 100,
+    latitude: baseEvent.latitude ?? null,
+    longitude: baseEvent.longitude ?? null,
   }));
 
   const { data, error } = await supabase
@@ -76,7 +84,17 @@ export async function updateFutureEvents(
   supabase: SupabaseClient<Database>,
   eventId: string,
   orgId: string,
-  updates: Pick<EventUpdate, "title" | "description" | "location" | "event_type" | "is_philanthropy">,
+  updates: Pick<EventUpdate,
+    | "title"
+    | "description"
+    | "location"
+    | "event_type"
+    | "is_philanthropy"
+    | "geofence_enabled"
+    | "geofence_radius_m"
+    | "latitude"
+    | "longitude"
+  >,
 ): Promise<{ updatedIds: string[]; error: string | null }> {
   // First, get the event to find its group and index
   const { data: event, error: fetchError } = await supabase

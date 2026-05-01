@@ -15,6 +15,7 @@ import { resolveEventActionLabel } from "@/lib/events/labels";
 import { EVENT_TYPE_OPTIONS } from "@/lib/events/event-type-options";
 import { calendarEventsPath } from "@/lib/calendar/routes";
 import { localToUtcIso, resolveOrgTimezone, getLocalWeekday, getLocalDayOfMonth } from "@/lib/utils/timezone";
+import { geofenceFormToDbFields } from "@/lib/events/geofence-form";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 type TargetUser = {
@@ -69,10 +70,15 @@ export default function NewCalendarEventPage() {
       send_notification: true,
       channel: "email",
       is_recurring: false,
+      geofence_enabled: false,
+      geofence_radius_m: 100,
+      geofence_latitude: "",
+      geofence_longitude: "",
     },
   });
 
   const audience = watch("audience");
+  const geofenceEnabled = watch("geofence_enabled");
   const startDate = watch("start_date");
   const startTime = watch("start_time");
   const endDate = watch("end_date");
@@ -230,6 +236,13 @@ export default function NewCalendarEventPage() {
     const audienceValue = data.audience === "specific" ? "both" : data.audience;
     const targetIds = data.audience === "specific" ? targetUserIds : null;
 
+    const geofence = geofenceFormToDbFields({
+      geofence_enabled: data.geofence_enabled,
+      geofence_radius_m: data.geofence_radius_m,
+      geofence_latitude: data.geofence_latitude ?? "",
+      geofence_longitude: data.geofence_longitude ?? "",
+    });
+
     let createdEventIds: string[] = [];
 
     if (data.is_recurring && data.recurrence) {
@@ -252,6 +265,10 @@ export default function NewCalendarEventPage() {
         created_by_user_id: user?.id || null,
         audience: audienceValue,
         target_user_ids: targetIds,
+        geofence_enabled: geofence.geofence_enabled,
+        geofence_radius_m: geofence.geofence_radius_m,
+        latitude: geofence.latitude,
+        longitude: geofence.longitude,
       }, rule);
 
       if (result.error) {
@@ -274,6 +291,10 @@ export default function NewCalendarEventPage() {
         created_by_user_id: user?.id || null,
         audience: audienceValue,
         target_user_ids: targetIds,
+        geofence_enabled: geofence.geofence_enabled,
+        geofence_radius_m: geofence.geofence_radius_m,
+        latitude: geofence.latitude,
+        longitude: geofence.longitude,
       }).select().single();
 
       if (insertError) {
@@ -334,6 +355,21 @@ export default function NewCalendarEventPage() {
 
     router.push(calendarEventsPath(orgSlug));
     router.refresh();
+  };
+
+  const fillGeolocation = () => {
+    if (!navigator.geolocation) {
+      window.alert("Geolocation is not available in this browser.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setValue("geofence_latitude", String(pos.coords.latitude));
+        setValue("geofence_longitude", String(pos.coords.longitude));
+      },
+      () => window.alert("Could not read your location. Try entering coordinates manually."),
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
+    );
   };
 
   return (
@@ -482,6 +518,57 @@ export default function NewCalendarEventPage() {
             error={errors.location?.message}
             {...register("location")}
           />
+
+          <div className="space-y-4 rounded-xl border border-border p-4">
+            <div>
+              <h4 className="text-sm font-medium text-foreground">Location check-in (optional)</h4>
+              <p className="mt-1 text-xs text-muted-foreground">
+                When enabled, mobile self check-in validates against this pin and radius.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="geofence_enabled"
+                checked={geofenceEnabled}
+                onChange={(e) => setValue("geofence_enabled", e.target.checked)}
+                className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
+              />
+              <label htmlFor="geofence_enabled" className="text-sm text-foreground">
+                Require geofence for QR check-in
+              </label>
+            </div>
+
+            {geofenceEnabled && (
+              <>
+                <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={fillGeolocation}>
+                  Use my current location
+                </Button>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Input
+                    label="Latitude"
+                    placeholder="-90 – 90"
+                    error={errors.geofence_latitude?.message}
+                    {...register("geofence_latitude")}
+                  />
+                  <Input
+                    label="Longitude"
+                    placeholder="-180 – 180"
+                    error={errors.geofence_longitude?.message}
+                    {...register("geofence_longitude")}
+                  />
+                </div>
+                <Input
+                  label="Radius (meters)"
+                  type="number"
+                  min={10}
+                  max={200000}
+                  error={errors.geofence_radius_m?.message}
+                  {...register("geofence_radius_m", { valueAsNumber: true })}
+                />
+              </>
+            )}
+          </div>
 
           <Select
             label="Event Type"

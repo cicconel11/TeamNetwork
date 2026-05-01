@@ -18,6 +18,10 @@ export interface Event {
   created_at: string | null;
   rsvp_count?: number;
   user_rsvp_status?: RsvpStatus | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  geofence_radius_m?: number | null;
+  geofence_enabled?: boolean | null;
 }
 
 interface UseEventsOptions {

@@ -43,6 +43,7 @@
         "NSSupportsLiveActivitiesFrequentUpdates": true,
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Scan a TeamMeet QR code to join your organization or check members in at events.",
+        "NSLocationWhenInUseUsageDescription": "TeamMeet verifies you are at the event venue before checking you in.",
         "NSCalendarsFullAccessUsageDescription": "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
         "NSCalendarsWriteOnlyAccessUsageDescription": "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
         "NSCalendarsUsageDescription": "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
@@ -73,6 +74,8 @@
         "android.permission.VIBRATE",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR"
       ],

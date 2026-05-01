@@ -30,7 +30,10 @@ interface UseEventRSVPsReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  checkInAttendee: (rsvpId: string) => Promise<{ success: boolean; error?: string }>;
+  checkInAttendee: (
+    rsvpId: string,
+    coords?: { latitude: number; longitude: number } | null
+  ) => Promise<{ success: boolean; error?: string }>;
   undoCheckIn: (rsvpId: string) => Promise<{ success: boolean; error?: string }>;
   findRsvpByUserId: (userId: string) => EventRSVP | undefined;
   attendingCount: number;
@@ -147,43 +150,52 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
   }, [eventId, fetchRSVPs]);
 
   const checkInAttendee = useCallback(
-    async (rsvpId: string): Promise<{ success: boolean; error?: string }> => {
+    async (
+      rsvpId: string,
+      coords?: { latitude: number; longitude: number } | null
+    ): Promise<{ success: boolean; error?: string }> => {
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        const currentUserId = userData.user?.id;
+        const rpcArgs = {
+          p_rsvp_id: rsvpId,
+          p_undo: false,
+          p_lat: coords?.latitude ?? undefined,
+          p_lng: coords?.longitude ?? undefined,
+        };
 
-        if (!currentUserId) {
-          return { success: false, error: "Not authenticated" };
-        }
-
-        // Admin-only `SECURITY DEFINER` RPC. The DB enforces admin membership;
-        // mobile no longer touches `event_rsvps.checked_in_at` directly so
-        // RLS / `protect_checkin_columns` cannot block us.
-        const { data, error: rpcError } = await supabase.rpc(
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
           "check_in_event_attendee",
-          { p_rsvp_id: rsvpId, p_undo: false },
+          rpcArgs
         );
 
         if (rpcError) {
           return { success: false, error: rpcError.message };
         }
-        const result = (data ?? null) as
-          | { success: boolean; error?: string }
-          | null;
-        if (!result?.success) {
+
+        const parsed =
+          rpcResult &&
+          typeof rpcResult === "object" &&
+          "success" in (rpcResult as object)
+            ? (rpcResult as { success?: boolean; error?: string })
+            : null;
+
+        if (!parsed || parsed.success !== true) {
           return {
             success: false,
-            error: result?.error ?? "Failed to check in attendee",
+            error: typeof parsed?.error === "string" ? parsed.error : "Check-in failed",
           };
         }
 
-        if (isMountedRef.current) {
+        const { data: userData } = await supabase.auth.getUser();
+        const currentUserId = userData.user?.id;
+        const nowIso = new Date().toISOString();
+
+        if (isMountedRef.current && currentUserId) {
           setRsvps((prev) =>
             prev.map((rsvp) =>
               rsvp.id === rsvpId
                 ? {
                     ...rsvp,
-                    checked_in_at: new Date().toISOString(),
+                    checked_in_at: nowIso,
                     checked_in_by: currentUserId,
                   }
                 : rsvp,
@@ -203,7 +215,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
   const undoCheckIn = useCallback(
     async (rsvpId: string): Promise<{ success: boolean; error?: string }> => {
       try {
-        const { data, error: rpcError } = await supabase.rpc(
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
           "check_in_event_attendee",
           { p_rsvp_id: rsvpId, p_undo: true },
         );
@@ -211,13 +223,19 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
         if (rpcError) {
           return { success: false, error: rpcError.message };
         }
-        const result = (data ?? null) as
-          | { success: boolean; error?: string }
-          | null;
-        if (!result?.success) {
+
+        const parsed =
+          rpcResult &&
+          typeof rpcResult === "object" &&
+          "success" in (rpcResult as object)
+            ? (rpcResult as { success?: boolean; error?: string })
+            : null;
+
+        if (!parsed || parsed.success !== true) {
           return {
             success: false,
-            error: result?.error ?? "Failed to undo check-in",
+            error:
+              typeof parsed?.error === "string" ? parsed.error : "Failed to undo check-in",
           };
         }
 

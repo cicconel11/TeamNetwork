@@ -90,6 +90,10 @@ describe("newEventSchema recurrence validation", () => {
     send_notification: true,
     channel: "email",
     is_recurring: false,
+    geofence_enabled: false,
+    geofence_radius_m: 100,
+    geofence_latitude: "",
+    geofence_longitude: "",
   };
 
   it("accepts non-recurring event without recurrence field", () => {

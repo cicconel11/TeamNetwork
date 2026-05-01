@@ -43,6 +43,22 @@ export default function EventsLayout() {
           presentation: "card",
         }}
       />
+      <Stack.Screen
+        name="[eventId]/scan"
+        options={{
+          headerShown: false,
+          title: "Scan",
+          presentation: "fullScreenModal",
+        }}
+      />
+      <Stack.Screen
+        name="[eventId]/qr"
+        options={{
+          headerShown: false,
+          title: "Event QR",
+          presentation: "card",
+        }}
+      />
     </Stack>
   );
 }

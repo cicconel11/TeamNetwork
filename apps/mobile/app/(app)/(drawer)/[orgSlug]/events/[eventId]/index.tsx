@@ -3,7 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from "rea
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List, Share2, CalendarPlus } from "lucide-react-native";
+import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List, Share2, CalendarPlus, QrCode } from "lucide-react-native";
 import { shareEvent } from "@/lib/share";
 import { syncEventToDevice } from "@/lib/native-calendar";
 import { useDevicePermission } from "@/lib/device-permissions";
@@ -26,6 +26,7 @@ import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import * as sentry from "@/lib/analytics/sentry";
 import type { RsvpStatus } from "@teammeet/core";
+import { useAuth } from "@/hooks/useAuth";
 
 
 type RSVPStatus = RsvpStatus;
@@ -196,6 +197,28 @@ export default function EventDetailScreen() {
       color: "#ffffff",
       fontWeight: "600" as const,
     },
+    selfScanRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: SPACING.sm,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      paddingVertical: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    selfScanText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.foreground,
+      fontWeight: "600" as const,
+    },
+    rsvpError: {
+      ...TYPOGRAPHY.caption,
+      color: s.error,
+      marginTop: SPACING.xs,
+    },
     loadingOverlay: {
       position: "absolute" as const,
       top: 0,
@@ -212,6 +235,7 @@ export default function EventDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const { user } = useAuth();
 
   const rsvp = useRsvp(eventId, orgId, {
     initialStatus: event?.user_rsvp_status ?? null,
@@ -378,6 +402,10 @@ export default function EventDetailScreen() {
     }
   }, [event, orgId, orgName, calendarPermission]);
 
+  const handleShowEventQr = useCallback(() => {
+    router.push(`/(app)/${orgSlug}/events/${eventId}/qr`);
+  }, [router, orgSlug, eventId]);
+
   const adminMenuItems: OverflowMenuItem[] = useMemo(() => {
     const shareItem: OverflowMenuItem = {
       id: "share",
@@ -409,6 +437,12 @@ export default function EventDetailScreen() {
         onPress: handleViewRsvps,
       },
       {
+        id: "event-qr",
+        label: "Show Event QR",
+        icon: <QrCode size={20} color={neutral.foreground} />,
+        onPress: handleShowEventQr,
+      },
+      {
         id: "open-web",
         label: "Open in Web",
         icon: <ExternalLink size={20} color={semantic.success} />,
@@ -422,7 +456,18 @@ export default function EventDetailScreen() {
         destructive: true,
       },
     ];
-  }, [permissions.canUseAdminActions, handleEditEvent, handleViewRsvps, handleOpenInWeb, handleCancelEvent, handleShareEvent, handleAddToCalendar, neutral, semantic]);
+  }, [
+    permissions.canUseAdminActions,
+    handleEditEvent,
+    handleViewRsvps,
+    handleShowEventQr,
+    handleOpenInWeb,
+    handleCancelEvent,
+    handleShareEvent,
+    handleAddToCalendar,
+    neutral,
+    semantic,
+  ]);
 
   // RSVP counts
   const rsvpCounts = useMemo(() => {
@@ -576,9 +621,21 @@ export default function EventDetailScreen() {
               {rsvp.saving
                 ? "Saving…"
                 : rsvp.status
-                ? `RSVP: ${rsvpButtonLabel(rsvp.status)}`
-                : "RSVP"}
+                  ? `RSVP: ${rsvpButtonLabel(rsvp.status)}`
+                  : "RSVP"}
             </Text>
+          </Pressable>
+        )}
+
+        {user && !isAdmin && (
+          <Pressable
+            style={({ pressed }) => [styles.selfScanRow, pressed && { opacity: 0.85 }]}
+            onPress={() =>
+              router.push(`/(app)/${orgSlug}/events/${eventId}/scan?mode=self` as never)
+            }
+          >
+            <QrCode size={22} color={semantic.success} />
+            <Text style={styles.selfScanText}>Scan event QR to check in</Text>
           </Pressable>
         )}
       </ScrollView>

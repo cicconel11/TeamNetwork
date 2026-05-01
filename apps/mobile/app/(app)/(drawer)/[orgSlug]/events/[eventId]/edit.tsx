@@ -9,6 +9,7 @@ import {
   View,
   StyleSheet,
   Alert,
+  Switch,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -18,6 +19,7 @@ import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatDatePickerLabel, formatTimePickerLabel } from "@/lib/date-format";
+import { getDeviceCoords } from "@/lib/event-location";
 import type { ThemeColors } from "@/lib/theme";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import type { NeutralColors, SemanticColors } from "@/lib/design-tokens";
@@ -70,6 +72,10 @@ export default function EditEventScreen() {
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [location, setLocation] = useState("");
+  const [geofenceEnabled, setGeofenceEnabled] = useState(false);
+  const [geofenceRadiusM, setGeofenceRadiusM] = useState("100");
+  const [latitudeStr, setLatitudeStr] = useState("");
+  const [longitudeStr, setLongitudeStr] = useState("");
   const [eventType, setEventType] = useState<EventType>("general");
   const [audience, setAudience] = useState<Audience>("both");
   const [loading, setLoading] = useState(true);
@@ -99,6 +105,22 @@ export default function EditEventScreen() {
         setTitle(data.title || "");
         setDescription(data.description || "");
         setLocation(data.location || "");
+        setGeofenceEnabled(!!data.geofence_enabled);
+        setGeofenceRadiusM(
+          typeof data.geofence_radius_m === "number"
+            ? String(data.geofence_radius_m)
+            : "100"
+        );
+        setLatitudeStr(
+          data.latitude != null && typeof data.latitude === "number"
+            ? String(data.latitude)
+            : ""
+        );
+        setLongitudeStr(
+          data.longitude != null && typeof data.longitude === "number"
+            ? String(data.longitude)
+            : ""
+        );
         setEventType((data.event_type as EventType) || "general");
         setAudience((data.audience as Audience) || "both");
 
@@ -222,6 +244,19 @@ export default function EditEventScreen() {
           start_date: startDateTime,
           end_date: endDateTime,
           location: location.trim() || null,
+          geofence_enabled: geofenceEnabled,
+          geofence_radius_m: (() => {
+            const r = parseInt(geofenceRadiusM, 10);
+            return Number.isFinite(r) && r > 0 ? r : 100;
+          })(),
+          latitude:
+            latitudeStr.trim() !== "" && Number.isFinite(Number(latitudeStr))
+              ? Number(latitudeStr)
+              : null,
+          longitude:
+            longitudeStr.trim() !== "" && Number.isFinite(Number(longitudeStr))
+              ? Number(longitudeStr)
+              : null,
           event_type: eventType,
           is_philanthropy: eventType === "philanthropy",
           audience,
@@ -240,7 +275,24 @@ export default function EditEventScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [orgId, eventId, title, description, startDate, startTime, endDate, endTime, location, eventType, audience, router]);
+  }, [
+    orgId,
+    eventId,
+    title,
+    description,
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    location,
+    geofenceEnabled,
+    geofenceRadiusM,
+    latitudeStr,
+    longitudeStr,
+    eventType,
+    audience,
+    router,
+  ]);
 
   const fieldStyle = {
     flex: 1,
@@ -371,6 +423,69 @@ export default function EditEventScreen() {
           style={styles.input}
         />
       </View>
+
+      <View style={styles.field}>
+        <View
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <Text style={styles.label}>Verify check-in at venue (geofence)</Text>
+          <Switch
+            value={geofenceEnabled}
+            onValueChange={setGeofenceEnabled}
+            trackColor={{ false: neutral.border, true: semantic.success }}
+          />
+        </View>
+      </View>
+      {geofenceEnabled ? (
+        <View style={styles.field}>
+          <Text style={[styles.label, { marginBottom: SPACING.sm }]}>Venue GPS + radius</Text>
+          <Pressable
+            onPress={async () => {
+              const loc = await getDeviceCoords();
+              if (!loc.ok) {
+                Alert.alert("Location", loc.error);
+                return;
+              }
+              setLatitudeStr(String(loc.coords.latitude));
+              setLongitudeStr(String(loc.coords.longitude));
+            }}
+            style={({ pressed }) => [
+              fieldStyle,
+              { marginBottom: SPACING.sm, alignItems: "center" as const },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Text style={styles.dateText}>Use my current location</Text>
+          </Pressable>
+          <Text style={styles.label}>Latitude</Text>
+          <TextInput
+            value={latitudeStr}
+            onChangeText={setLatitudeStr}
+            placeholder="e.g. 42.3601"
+            placeholderTextColor={neutral.placeholder}
+            keyboardType="decimal-pad"
+            style={[styles.input, { marginBottom: SPACING.sm }]}
+          />
+          <Text style={styles.label}>Longitude</Text>
+          <TextInput
+            value={longitudeStr}
+            onChangeText={setLongitudeStr}
+            placeholder="e.g. -71.0589"
+            placeholderTextColor={neutral.placeholder}
+            keyboardType="decimal-pad"
+            style={[styles.input, { marginBottom: SPACING.sm }]}
+          />
+          <Text style={styles.label}>Radius (meters)</Text>
+          <TextInput
+            value={geofenceRadiusM}
+            onChangeText={setGeofenceRadiusM}
+            placeholder="100"
+            placeholderTextColor={neutral.placeholder}
+            keyboardType="number-pad"
+            style={styles.input}
+          />
+        </View>
+      ) : null}
 
       {/* Event Type */}
       <View style={styles.field}>
