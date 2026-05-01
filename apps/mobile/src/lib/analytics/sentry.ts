@@ -7,6 +7,33 @@ import * as Sentry from "@sentry/react-native";
 let initialized = false;
 let telemetryEnabled = false;
 
+/**
+ * Postgrest / Supabase client errors are plain objects { code, message, details, hint }.
+ * Passing them to Sentry shows "Object captured as exception" with a useless title.
+ */
+export function toSentryError(value: unknown): { error: Error; extraFromValue?: Record<string, unknown> } {
+  if (value instanceof Error) {
+    return { error: value };
+  }
+  if (value !== null && typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    const message = typeof o.message === "string" ? o.message : JSON.stringify(value);
+    const err = new Error(message);
+    const extra: Record<string, unknown> = {};
+    if (typeof o.code === "string") {
+      extra.postgrest_code = o.code;
+    }
+    if (o.details != null) {
+      extra.postgrest_details = o.details;
+    }
+    if (typeof o.hint === "string") {
+      extra.postgrest_hint = o.hint;
+    }
+    return Object.keys(extra).length > 0 ? { error: err, extraFromValue: extra } : { error: err };
+  }
+  return { error: new Error(String(value)) };
+}
+
 export function init(dsn: string): void {
   if (initialized) return;
   Sentry.init({
@@ -41,11 +68,14 @@ export function setUser(user: { id: string } | null): void {
 }
 
 export function captureException(
-  error: Error,
+  error: unknown,
   context?: Record<string, unknown>
 ): void {
   if (!initialized || !telemetryEnabled) return;
-  Sentry.captureException(error, { extra: context });
+  const { error: normalized, extraFromValue } = toSentryError(error);
+  const extra =
+    extraFromValue && context ? { ...extraFromValue, ...context } : extraFromValue ?? context;
+  Sentry.captureException(normalized, extra ? { extra } : undefined);
 }
 
 export function captureMessage(
