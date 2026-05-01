@@ -5,6 +5,7 @@ import type { ErrorBoundaryProps } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoadingScreen from "@/components/LoadingScreen";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ColorSchemeProvider } from "@/contexts/ColorSchemeContext";
 import { captureException } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
@@ -19,15 +20,17 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
     (error as { message?: string } | null)?.message ?? String(error ?? "");
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0f172a" }}>
-      <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
-        <ErrorState
-          onRetry={retry}
-          title="Something went wrong"
-          subtitle={message || "This screen encountered an error."}
-        />
-      </View>
-    </SafeAreaView>
+    <ColorSchemeProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#0f172a" }}>
+        <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+          <ErrorState
+            onRetry={retry}
+            title="Something went wrong"
+            subtitle={message || "This screen encountered an error."}
+          />
+        </View>
+      </SafeAreaView>
+    </ColorSchemeProvider>
   );
 }
 
@@ -205,14 +208,6 @@ function OrgLayoutInner() {
         options={{
           headerShown: false,
           title: "Mentorship",
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="mentorship/[pairId]"
-        options={{
-          headerShown: false,
-          title: "Mentorship Pair",
           presentation: "card",
         }}
       />

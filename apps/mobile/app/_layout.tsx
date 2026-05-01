@@ -39,15 +39,17 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   captureException(error, { context: "RootErrorBoundary" });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0f172a" }}>
-      <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
-        <ErrorState
-          onRetry={retry}
-          title="Something went wrong"
-          subtitle="The app encountered an unexpected error."
-        />
-      </View>
-    </SafeAreaView>
+    <ColorSchemeProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#0f172a" }}>
+        <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+          <ErrorState
+            onRetry={retry}
+            title="Something went wrong"
+            subtitle="The app encountered an unexpected error."
+          />
+        </View>
+      </SafeAreaView>
+    </ColorSchemeProvider>
   );
 }
 
