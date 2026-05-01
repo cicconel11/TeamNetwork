@@ -3,6 +3,7 @@
  */
 
 import * as Sentry from "@sentry/react-native";
+import { shouldDropBenignNetworkNoise } from "./sentry-noise";
 
 let initialized = false;
 let telemetryEnabled = false;
@@ -15,7 +16,10 @@ export function init(dsn: string): void {
     attachStacktrace: true,
     environment: __DEV__ ? "development" : "production",
     sendDefaultPii: false,
-    beforeSend(event) {
+    beforeSend(event, hint) {
+      if (shouldDropBenignNetworkNoise(event, hint)) {
+        return null;
+      }
       if (event.user) {
         delete event.user.email;
         delete event.user.username;

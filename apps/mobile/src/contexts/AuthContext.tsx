@@ -7,6 +7,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
+import { isBenignNetworkFailure } from "@/lib/analytics/sentry-noise";
 import { signOutCleanup } from "@/lib/lifecycle";
 import { listSyncedOrgIds, removeAllOrgCalendars } from "@/lib/native-calendar";
 import { setOrgCalendarSyncEnabled } from "@/lib/native-calendar-prefs";
@@ -44,7 +45,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       })
       .catch((error: Error) => {
-        sentry.captureException(error, { context: "AuthContext.getSession" });
+        if (!isBenignNetworkFailure(error)) {
+          sentry.captureException(error, { context: "AuthContext.getSession" });
+        }
         if (isMountedRef.current) {
           setSession(null);
         }
