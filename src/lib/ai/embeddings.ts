@@ -63,7 +63,7 @@ export async function generateEmbedding(
 ): Promise<number[]> {
   const client = createEmbeddingClient();
   const model = getEmbeddingModel();
-  if (orgId) assertModelPriceConfigured(model);
+  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
 
   const response = await client.embeddings.create({
     model,
@@ -89,7 +89,7 @@ export async function generateEmbeddings(
 
   const client = createEmbeddingClient();
   const model = getEmbeddingModel();
-  if (orgId) assertModelPriceConfigured(model);
+  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
 
   const response = await client.embeddings.create({
     model,

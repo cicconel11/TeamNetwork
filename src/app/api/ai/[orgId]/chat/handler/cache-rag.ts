@@ -124,6 +124,7 @@ export async function retrieveRag(args: {
   retrieveRelevantChunksFn: typeof retrieveRelevantChunks;
   query: string;
   orgId: string;
+  spendBypass: boolean;
   serviceSupabase: SupabaseClient;
   stageTimings: AiAuditStageTimings;
   logContext: AiLogContext;
@@ -136,6 +137,7 @@ export async function retrieveRag(args: {
         args.retrieveRelevantChunksFn({
           query: args.query,
           orgId: args.orgId,
+          spendBypass: args.spendBypass,
           serviceSupabase: args.serviceSupabase,
           logContext: args.logContext,
         })

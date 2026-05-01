@@ -181,7 +181,7 @@ async function defaultJudge(
 ): Promise<{ verdict: SafetyVerdict; categories: string[] }> {
   const client: OpenAI = createZaiClient();
   const model = process.env.SAFETY_JUDGE_MODEL || getZaiModel();
-  if (orgId) assertModelPriceConfigured(model);
+  if (orgId) assertModelPriceConfigured(model, { bypass: spendBypass });
 
   const completion = await client.chat.completions.create({
     model,
