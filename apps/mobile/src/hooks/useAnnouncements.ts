@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useId } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
@@ -7,6 +7,10 @@ import * as sentry from "@/lib/analytics/sentry";
 import { filterAnnouncementsForUser, ViewerContext } from "@teammeet/core";
 import { normalizeRole } from "@teammeet/core";
 import type { Announcement } from "@teammeet/types";
+import {
+  announcementRolesChannelTopic,
+  announcementsTableChannelTopic,
+} from "@/lib/announcementRealtimeTopics";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
 const DEFAULT_PAGE_SIZE = 50;
@@ -46,6 +50,8 @@ export function useAnnouncements(
 ): UseAnnouncementsReturn {
   const pageSize = options?.limit ?? DEFAULT_PAGE_SIZE;
   const isPaginated = pageSize > 0;
+  /** Unique per hook instance so multiple screens can subscribe without colliding on the same channel topic. */
+  const realtimeInstanceId = useId().replace(/:/g, "");
 
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
@@ -203,7 +209,7 @@ export function useAnnouncements(
   useEffect(() => {
     if (!orgId) return;
     const channel = supabase
-      .channel(`announcements:${orgId}`)
+      .channel(announcementsTableChannelTopic(orgId, realtimeInstanceId))
       .on(
         "postgres_changes",
         {
@@ -224,13 +230,13 @@ export function useAnnouncements(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, fetchAnnouncements]);
+  }, [orgId, fetchAnnouncements, realtimeInstanceId]);
 
   // Re-fetch announcements if user's role changes (affects audience filtering)
   useEffect(() => {
     if (!orgId || !userId) return;
     const channel = supabase
-      .channel(`announcement-roles:${orgId}:${userId}`)
+      .channel(announcementRolesChannelTopic(orgId, userId, realtimeInstanceId))
       .on(
         "postgres_changes",
         {
@@ -256,7 +262,7 @@ export function useAnnouncements(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, userId, fetchAnnouncements]);
+  }, [orgId, userId, fetchAnnouncements, realtimeInstanceId]);
 
   const refetchIfStale = useCallback(() => {
     const now = Date.now();
