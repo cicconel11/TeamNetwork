@@ -81,7 +81,7 @@ export function NavGroupSection({
       <div
         id={panelId}
         aria-hidden={!isOpen}
-        {...(!isOpen ? { inert: "" as unknown as boolean } : {})}
+        {...(!isOpen ? { inert: true } : {})}
         className="grid transition-[grid-template-rows] duration-200 ease-in-out motion-reduce:transition-none"
         style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
       >
