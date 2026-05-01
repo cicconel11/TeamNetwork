@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeChannelInstanceSuffix } from "@/lib/realtime-instance-id";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { canViewAnnouncement, type AnnouncementAudienceTarget, type ViewerContext, normalizeRole } from "@teammeet/core";
@@ -48,6 +49,7 @@ export function useUnreadAnnouncementCount(
   const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const realtimeInstanceSuffix = useRealtimeChannelInstanceSuffix();
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
 
@@ -185,7 +187,7 @@ export function useUnreadAnnouncementCount(
     if (!orgId) return;
 
     const channel = supabase
-      .channel(`unread-announcements:${orgId}`)
+      .channel(`unread-announcements:${orgId}:${realtimeInstanceSuffix}`)
       .on(
         "postgres_changes",
         {
@@ -219,7 +221,7 @@ export function useUnreadAnnouncementCount(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, userId, fetchUnreadCount]);
+  }, [orgId, userId, fetchUnreadCount, realtimeInstanceSuffix]);
 
   return {
     unreadCount,
