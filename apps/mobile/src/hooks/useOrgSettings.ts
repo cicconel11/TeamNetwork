@@ -3,6 +3,15 @@ import { supabase } from "@/lib/supabase";
 import { fetchWithAuth } from "@/lib/web-api";
 import * as sentry from "@/lib/analytics/sentry";
 
+/**
+ * Supabase reuses realtime channels by topic string. Multiple `useOrgSettings`
+ * instances (e.g. Settings + Customization) must not share the same channel
+ * name or the second `.on()` runs after `subscribe()` and throws.
+ */
+export function orgSettingsRealtimeChannelName(orgId: string, instanceSuffix: string): string {
+  return `org-settings:${orgId}:${instanceSuffix}`;
+}
+
 export interface OrgSettings {
   id: string;
   name: string;
@@ -35,6 +44,9 @@ interface UseOrgSettingsReturn {
 
 export function useOrgSettings(orgId: string | null): UseOrgSettingsReturn {
   const isMountedRef = useRef(true);
+  const realtimeChannelSuffixRef = useRef(
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`
+  );
   const [org, setOrg] = useState<OrgSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +102,7 @@ export function useOrgSettings(orgId: string | null): UseOrgSettingsReturn {
     if (!org?.id) return;
 
     const channel = supabase
-      .channel(`org-settings:${org.id}`)
+      .channel(orgSettingsRealtimeChannelName(org.id, realtimeChannelSuffixRef.current))
       .on(
         "postgres_changes",
         {
