@@ -14,7 +14,12 @@ export type NotificationType =
   | "announcement"
   | "event"
   | "event_reminder"
-  | "event_live_activity";
+  | "event_live_activity"
+  | "chat"
+  | "discussion"
+  | "mentorship"
+  | "donation"
+  | "membership";
 
 export interface NotificationData {
   type: NotificationType;
@@ -245,6 +250,21 @@ export function getNotificationRoute(data: NotificationData): string | null {
     case "event_reminder":
     case "event_live_activity":
       return `/(app)/${data.orgSlug}/events/${data.id}`;
+    case "chat":
+      // For chat, `id` is the chat group id; the messages screen lives at
+      // /[orgSlug]/chat/[groupId]
+      return `/(app)/${data.orgSlug}/chat/${data.id}`;
+    case "discussion":
+      return `/(app)/${data.orgSlug}/discussions/${data.id}`;
+    case "mentorship":
+      // `id` is the mentorship pair id (or the mentee/mentor request id).
+      // The mentorship hub does its own resolution; we deep-link into it.
+      return `/(app)/${data.orgSlug}/mentorship/${data.id}`;
+    case "donation":
+      // Org-admin only surface; donations dashboard lives under settings.
+      return `/(app)/${data.orgSlug}/donations`;
+    case "membership":
+      return `/(app)/${data.orgSlug}/members`;
     default:
       return null;
   }
