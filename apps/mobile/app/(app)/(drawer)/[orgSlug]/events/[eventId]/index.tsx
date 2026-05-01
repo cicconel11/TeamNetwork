@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -9,6 +9,7 @@ import { syncEventToDevice } from "@/lib/native-calendar";
 import { useDevicePermission } from "@/lib/device-permissions";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
+import { createRealtimeChannelSuffix } from "@/lib/realtime-channel-suffix";
 import { track } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
@@ -59,6 +60,10 @@ interface RSVP {
 }
 
 export default function EventDetailScreen() {
+  const realtimeChannelSuffixRef = useRef<string | null>(null);
+  if (realtimeChannelSuffixRef.current === null) {
+    realtimeChannelSuffixRef.current = createRealtimeChannelSuffix();
+  }
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { orgId, orgSlug, orgName } = useOrg();
   const calendarPermission = useDevicePermission("calendar");
@@ -295,11 +300,11 @@ export default function EventDetailScreen() {
   }, [fetchEvent]);
 
   // Realtime: keep admin RSVP counts live during a check-in session.
-  // Mirrors the channel pattern in `useEventRSVPs.ts`.
+  // Suffix avoids colliding with another postgres_changes subscription on the same topic.
   useEffect(() => {
     if (!eventId) return;
     const channel = supabase
-      .channel(`event_detail_rsvps:${eventId}`)
+      .channel(`event_detail_rsvps:${eventId}:${realtimeChannelSuffixRef.current}`)
       .on(
         "postgres_changes",
         {
