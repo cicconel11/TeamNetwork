@@ -43,7 +43,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setSession(session);
         }
       })
-      .catch((error: Error) => {
+      .catch((error: unknown) => {
         sentry.captureException(error, { context: "AuthContext.getSession" });
         if (isMountedRef.current) {
           setSession(null);
