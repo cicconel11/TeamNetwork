@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
+import { subscribeUnreadAnnouncementsRealtime } from "@/lib/announcementsRealtimePool";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { canViewAnnouncement, type AnnouncementAudienceTarget, type ViewerContext, normalizeRole } from "@teammeet/core";
@@ -180,45 +181,12 @@ export function useUnreadAnnouncementCount(
     };
   }, [orgId, userId]);
 
-  // Real-time subscription for announcement changes
+  // Real-time subscription (pooled — tab layout + announcements screen both mount this hook)
   useEffect(() => {
     if (!orgId) return;
-
-    const channel = supabase
-      .channel(`unread-announcements:${orgId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "announcements",
-          filter: `organization_id=eq.${orgId}`,
-        },
-        () => {
-          fetchUnreadCount();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "user_organization_roles",
-          filter: userId ? `user_id=eq.${userId}` : undefined,
-        },
-        (payload) => {
-          const nextOrgId = (payload.new as { organization_id?: string } | null)?.organization_id;
-          const previousOrgId = (payload.old as { organization_id?: string } | null)?.organization_id;
-          if (nextOrgId === orgId || previousOrgId === orgId) {
-            fetchUnreadCount();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return subscribeUnreadAnnouncementsRealtime(orgId, userId, () => {
+      fetchUnreadCount();
+    });
   }, [orgId, userId, fetchUnreadCount]);
 
   return {

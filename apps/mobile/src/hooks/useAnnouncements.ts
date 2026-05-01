@@ -1,5 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  subscribeAnnouncementRolesForOrgUser,
+  subscribeAnnouncementsPostgresChanges,
+} from "@/lib/announcementsRealtimePool";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
@@ -199,63 +203,24 @@ export function useAnnouncements(
     };
   }, [fetchAnnouncements]);
 
-  // Real-time subscription for announcement changes
+  // Real-time subscription for announcement changes (pooled — Home + Announcements tabs both mount this hook)
   useEffect(() => {
     if (!orgId) return;
-    const channel = supabase
-      .channel(`announcements:${orgId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "announcements",
-          filter: `organization_id=eq.${orgId}`,
-        },
-        () => {
-          // On realtime update, refetch from beginning to ensure consistency
-          setOffset(0);
-          viewerContextRef.current = null;
-          fetchAnnouncements(0, false);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return subscribeAnnouncementsPostgresChanges(orgId, () => {
+      setOffset(0);
+      viewerContextRef.current = null;
+      fetchAnnouncements(0, false);
+    });
   }, [orgId, fetchAnnouncements]);
 
   // Re-fetch announcements if user's role changes (affects audience filtering)
   useEffect(() => {
     if (!orgId || !userId) return;
-    const channel = supabase
-      .channel(`announcement-roles:${orgId}:${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "user_organization_roles",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const nextOrgId = (payload.new as { organization_id?: string } | null)
-            ?.organization_id;
-          const previousOrgId = (payload.old as { organization_id?: string } | null)
-            ?.organization_id;
-          if (nextOrgId === orgId || previousOrgId === orgId) {
-            setOffset(0);
-            viewerContextRef.current = null;
-            fetchAnnouncements(0, false);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return subscribeAnnouncementRolesForOrgUser(orgId, userId, () => {
+      setOffset(0);
+      viewerContextRef.current = null;
+      fetchAnnouncements(0, false);
+    });
   }, [orgId, userId, fetchAnnouncements]);
 
   const refetchIfStale = useCallback(() => {
