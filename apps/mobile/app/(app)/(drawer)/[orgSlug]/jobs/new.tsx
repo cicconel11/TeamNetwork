@@ -98,10 +98,6 @@ export default function NewJobScreen() {
     formHeader: {
       gap: SPACING.xs,
     },
-    formTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: n.foreground,
-    },
     formSubtitle: {
       ...TYPOGRAPHY.bodyMedium,
       color: n.secondary,
@@ -320,7 +316,6 @@ export default function NewJobScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>New Job Posting</Text>
             <Text style={styles.formSubtitle}>Share an opportunity with the community</Text>
           </View>
 

@@ -107,10 +107,6 @@ export default function EditJobScreen() {
     formHeader: {
       gap: SPACING.xs,
     },
-    formTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: n.foreground,
-    },
     formSubtitle: {
       ...TYPOGRAPHY.bodyMedium,
       color: n.secondary,
@@ -369,7 +365,6 @@ export default function EditJobScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Edit Job Posting</Text>
             <Text style={styles.formSubtitle}>Update the details for this opportunity</Text>
           </View>
 
