@@ -10,6 +10,8 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
+  Easing,
   type SharedValue,
 } from "react-native-reanimated";
 import { useAuth } from "@/hooks/useAuth";
@@ -100,17 +102,19 @@ export default function HomeScreen() {
     (tab: ActiveTab) => {
       setActiveTab(tab);
 
-      // Animate pill to new tab
+      // Animate pill to new tab — gentler spring, less overshoot
       pillX.value = withSpring(tabLayouts.current[tab], {
-        damping: ANIMATION.spring.damping,
-        stiffness: ANIMATION.spring.stiffness,
+        damping: 22,
+        stiffness: 220,
+        mass: 0.8,
+        overshootClamping: false,
       });
 
-      // Crossfade tabs
+      // Crossfade tabs — linear timing so content never overshoots into neighbor
       TAB_ORDER.forEach((t) => {
-        opacityMap[t].value = withSpring(t === tab ? 1 : 0, {
-          damping: ANIMATION.spring.damping,
-          stiffness: ANIMATION.spring.stiffness,
+        opacityMap[t].value = withTiming(t === tab ? 1 : 0, {
+          duration: 180,
+          easing: Easing.out(Easing.quad),
         });
       });
     },
