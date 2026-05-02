@@ -289,7 +289,12 @@ export function AIPanel({ orgId }: AIPanelProps) {
     sendMessage,
     cancel,
     clearError,
-  } = useAIStream({ orgId });
+  } = useAIStream({
+    orgId,
+    onNavigate: (href) => {
+      router.push(href);
+    },
+  });
   const attachmentRef = useRef<AIChatAttachment | null>(null);
 
   useEffect(() => {

@@ -120,7 +120,7 @@ const GUIDANCE_BY_FEATURE: Record<GuidanceFeature, Omit<ActionGuidance, "userCan
     assistantCanHelpWith: ["Find customization pages and explain which settings live there."],
   },
   settings: {
-    manualSteps: ["Open settings to manage invites, membership, integrations, or organization preferences."],
+    manualSteps: ["Open settings to manage invites, approvals, subscriptions, integrations, or organization access preferences."],
     assistantCanHelpWith: ["Find the right settings page and explain the manual steps to take there."],
   },
   navigation: {

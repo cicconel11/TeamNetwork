@@ -112,7 +112,12 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
     sendMessage,
     cancel,
     clearError,
-  } = useAIStream({ orgId });
+  } = useAIStream({
+    orgId,
+    onNavigate: (href) => {
+      router.push(href);
+    },
+  });
 
   const attachmentRef = useRef<AIChatAttachment | null>(null);
   const idempotencyRef = useRef<RetryRequestIdentity | null>(null);
