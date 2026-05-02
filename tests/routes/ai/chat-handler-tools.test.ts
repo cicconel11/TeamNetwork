@@ -1501,6 +1501,8 @@ test("navigation requests only attach find_navigation_targets on pass 1", async 
   assert.equal(executeToolCallCalls[0].call.name, "find_navigation_targets");
   assert.equal(composeResponseCalls.length, 1);
   assert.match(body, /\[Announcements\]\(\/acme\/announcements\)/);
+  assert.match(body, /"type":"navigation"/);
+  assert.match(body, /"href":"\/acme\/announcements"/);
   assert.match(body, /"type":"done"/);
 });
 

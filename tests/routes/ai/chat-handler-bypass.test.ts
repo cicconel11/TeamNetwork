@@ -129,4 +129,17 @@ describe("runPass1Bypass — telemetry shape additivity", () => {
     assert.equal(timings.schema_version, 1);
     assert.ok(timings.request.pass1_path);
   });
+
+  it("keeps fast_path_label optional and under the audit growth guard", () => {
+    const before = createStageTimings("req-test-1");
+    before.request.pass1_path = "model";
+    const after = createStageTimings("req-test-1");
+    after.request.pass1_path = "model";
+    after.request.fast_path_label = "bypass_shadow";
+
+    assert.equal(before.schema_version, 1);
+    assert.equal(after.schema_version, 1);
+    assert.equal(before.request.fast_path_label, undefined);
+    assert.ok(JSON.stringify(after).length - JSON.stringify(before).length < 100);
+  });
 });

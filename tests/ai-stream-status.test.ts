@@ -4,7 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { consumeSSEStream } from "../src/hooks/useAIStream.ts";
+import {
+  consumeSSEStream,
+  isSafeAssistantNavigationHref,
+} from "../src/hooks/useAIStream.ts";
 import {
   deriveToolStatusLabel,
   formatToolStatusLabel,
@@ -144,6 +147,35 @@ test("consumeSSEStream forwards pending_action events before completion", async 
   assert.deepEqual(pendingActions, [
     { actionId: "action-123", actionType: "create_job_posting" },
   ]);
+});
+
+test("consumeSSEStream forwards navigation events without changing content", async () => {
+  const navigationEvents: Array<{ href: string; label: string }> = [];
+
+  const result = await consumeSSEStream(
+    makeSSEEventStream([
+      { type: "chunk", content: "[Announcements](/acme/announcements)" },
+      { type: "navigation", href: "/acme/announcements", label: "Announcements" },
+      { type: "done", threadId: "thread-123" },
+    ]),
+    {
+      onNavigation: (event) => {
+        navigationEvents.push({ href: event.href, label: event.label });
+      },
+    }
+  );
+
+  assert.deepEqual(navigationEvents, [
+    { href: "/acme/announcements", label: "Announcements" },
+  ]);
+  assert.equal(result?.content, "[Announcements](/acme/announcements)");
+});
+
+test("isSafeAssistantNavigationHref only allows internal absolute paths", () => {
+  assert.equal(isSafeAssistantNavigationHref("/acme/announcements"), true);
+  assert.equal(isSafeAssistantNavigationHref("//evil.example/path"), false);
+  assert.equal(isSafeAssistantNavigationHref("https://evil.example/path"), false);
+  assert.equal(isSafeAssistantNavigationHref("/acme\\announcements"), false);
 });
 
 test("consumeSSEStream forwards pending_action_updated events", async () => {
