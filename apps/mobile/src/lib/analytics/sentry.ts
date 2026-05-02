@@ -3,6 +3,7 @@
  */
 
 import * as Sentry from "@sentry/react-native";
+import { normalizeErrorForSentry } from "./normalizeErrorForSentry";
 
 let initialized = false;
 let telemetryEnabled = false;
@@ -41,11 +42,12 @@ export function setUser(user: { id: string } | null): void {
 }
 
 export function captureException(
-  error: Error,
+  error: Error | unknown,
   context?: Record<string, unknown>
 ): void {
   if (!initialized || !telemetryEnabled) return;
-  Sentry.captureException(error, { extra: context });
+  const { error: normalized, extra } = normalizeErrorForSentry(error, context);
+  Sentry.captureException(normalized, { extra });
 }
 
 export function captureMessage(
