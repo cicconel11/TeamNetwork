@@ -34,7 +34,8 @@ import {
   formatDeterministicToolErrorResponse,
   formatGlobalLookupToolResponse,
 } from "../formatters/index";
-import { MEMBER_ROSTER_PROMPT_PATTERN, canBypassPass1 } from "../pass1-tools";
+import { MEMBER_ROSTER_PROMPT_PATTERN } from "../pass1-tools";
+import { classifyFastPath } from "../fast-path-classifier";
 import { runPass1Bypass } from "./run-pass1-bypass";
 import type { PendingEventRevisionAnalysis } from "../pending-event-revision";
 import {
@@ -133,6 +134,27 @@ export interface RunModelToolsLoopOutcome {
   completed: boolean;
 }
 
+function getSingleNavigationTarget(data: unknown): { href: string; label: string } | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const payload = data as { state?: unknown; matches?: unknown };
+  if (payload.state !== "resolved" || !Array.isArray(payload.matches)) return null;
+
+  const accessible = payload.matches
+    .map((match) => {
+      if (!match || typeof match !== "object" || Array.isArray(match)) return null;
+      const target = match as { href?: unknown; label?: unknown; userCanAccess?: unknown };
+      if (target.userCanAccess === false) return null;
+      if (typeof target.href !== "string" || typeof target.label !== "string") return null;
+      const href = target.href.trim();
+      const label = target.label.trim();
+      if (!href.startsWith("/") || href.startsWith("//") || !label) return null;
+      return { href, label };
+    })
+    .filter((target): target is { href: string; label: string } => target != null);
+
+  return accessible.length === 1 ? accessible[0] : null;
+}
+
 /**
  * Run pass1 → tool-call serial loop → pass2 → grounding. Mirrors the previous
  * inline orchestration block byte-for-byte (covered by the SSE snapshot suite).
@@ -183,14 +205,20 @@ export async function runModelToolsLoop(
     saveDraftSessionFn: input.saveDraftSessionFn,
   });
 
-  const forcedFirstTool =
-    input.pass1Tools && input.pass1Tools.length === 1 && input.pass1ToolChoice
-      ? input.pass1Tools[0]
-      : null;
-  const forcedSingleToolName =
-    forcedFirstTool && "function" in forcedFirstTool
-      ? forcedFirstTool.function.name
-      : null;
+  const fastPath = classifyFastPath({
+    executionPolicy: input.executionPolicy,
+    pass1Tools: input.pass1Tools,
+    pass1ToolChoice: input.pass1ToolChoice,
+    activeDraftSession: input.getActiveDraftSession(),
+    pendingEventRevisionAnalysis: input.pendingEventRevisionAnalysis,
+    pendingConnectionDisambiguation: input.pendingConnectionDisambiguation,
+    attachment: input.attachment,
+    retrievalReason: input.executionPolicy.retrieval.reason,
+    usesSharedStaticContext: input.executionPolicy.contextPolicy === "shared_static",
+    pass1BypassMode: input.pass1BypassMode,
+  });
+  input.stageTimings.request.fast_path_label = fastPath.fastPathLabel;
+  const forcedSingleToolName = fastPath.forcedSingleToolName;
   if (forcedSingleToolName) {
     input.enqueue({
       type: "tool_status",
@@ -213,25 +241,12 @@ export async function runModelToolsLoop(
     }
   };
 
-  const bypassEligible =
-    forcedSingleToolName != null &&
-    canBypassPass1({
-      pass1Tools: input.pass1Tools,
-      pass1ToolChoice: input.pass1ToolChoice,
-      activeDraftSession: input.getActiveDraftSession(),
-      pendingEventRevisionAnalysis: input.pendingEventRevisionAnalysis,
-      pendingConnectionDisambiguation: input.pendingConnectionDisambiguation,
-      attachment: input.attachment,
-      executionPolicy: input.executionPolicy,
-    });
+  const bypassEligible = fastPath.canBypassPass1;
 
   const usingBypass = bypassEligible && input.pass1BypassMode === "on";
 
   if (!usingBypass) {
-    input.stageTimings.request.pass1_path =
-      bypassEligible && input.pass1BypassMode === "shadow"
-        ? "model_shadow_bypass_eligible"
-        : "model";
+    input.stageTimings.request.pass1_path = fastPath.pass1Path ?? "model";
   }
 
   if (usingBypass) {
@@ -312,6 +327,10 @@ export async function runModelToolsLoop(
     if (willRenderNavigationDeterministically) {
       pass1BufferedContent = "";
     }
+    const navigationTarget =
+      willRenderNavigationDeterministically && input.successfulToolResults[0]
+        ? getSingleNavigationTarget(input.successfulToolResults[0].data)
+        : null;
     const canUseDeterministicMemberRoster =
       input.successfulToolResults.length === 1 &&
       input.successfulToolResults[0]?.name === "list_members" &&
@@ -445,6 +464,13 @@ export async function runModelToolsLoop(
       pass2BufferedContent = await input.applyTurnSafetyGate(pass2BufferedContent);
       fullContent += pass2BufferedContent;
       input.enqueue({ type: "chunk", content: pass2BufferedContent });
+      if (navigationTarget) {
+        input.enqueue({
+          type: "navigation",
+          href: navigationTarget.href,
+          label: navigationTarget.label,
+        });
+      }
     }
   } else {
     skipStage(input.stageTimings, "pass2");

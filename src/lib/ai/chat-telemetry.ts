@@ -49,6 +49,19 @@ export type AiPass1Path =
   | "bypass_derived"
   | "bypass_zero_arg";
 
+export type FastPathLabel =
+  | "pending_disambiguation"
+  | "pending_revision"
+  | "draft_active"
+  | "attachment_present"
+  | "multi_tool"
+  | "bypass_disabled"
+  | "bypass_shadow"
+  | "pass1_bypass_eligible"
+  | "forced_single_tool"
+  | "tool_first_eligible"
+  | "model_default";
+
 export interface AiAuditStageSummary {
   status: AiAuditStageStatus;
   duration_ms: number;
@@ -93,6 +106,7 @@ export interface AiAuditStageTimings {
     outcome: string;
     total_duration_ms: number;
     pass1_path?: AiPass1Path;
+    fast_path_label?: FastPathLabel;
     time_to_first_event_ms?: number;
   };
   retrieval: {
