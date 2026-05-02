@@ -9,6 +9,11 @@ export type CacheStatus =
 export type SSEEvent =
   | { type: "chunk"; content: string }
   | {
+      type: "navigation";
+      href: string;
+      label: string;
+    }
+  | {
       type: "pending_action";
       actionId: string;
       actionType: string;

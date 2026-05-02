@@ -7,6 +7,7 @@ import type { PendingActionState } from "@/components/ai-assistant/panel-state";
 
 interface UseAIStreamOptions {
   orgId: string;
+  onNavigate?: (href: string) => void;
 }
 
 export interface AIChatAttachment {
@@ -52,6 +53,7 @@ interface StreamCallbacks {
   onChunk?: (content: string) => void;
   onDone?: (event: Extract<SSEEvent, { type: "done" }>) => void;
   onError?: (message: string) => void;
+  onNavigation?: (event: Extract<SSEEvent, { type: "navigation" }>) => void;
   onToolStatus?: (event: Extract<SSEEvent, { type: "tool_status" }>) => void;
   onPendingAction?: (event: Extract<SSEEvent, { type: "pending_action" }>) => void;
   onPendingActionUpdated?: (
@@ -134,6 +136,11 @@ export async function consumeSSEStream(
           };
         }
 
+        if (event.type === "navigation") {
+          callbacks.onNavigation?.(event);
+          continue;
+        }
+
         if (event.type === "tool_status") {
           callbacks.onToolStatus?.(event);
           continue;
@@ -161,7 +168,11 @@ export async function consumeSSEStream(
   return null;
 }
 
-export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
+export function isSafeAssistantNavigationHref(href: string): boolean {
+  return href.startsWith("/") && !href.startsWith("//") && !href.includes("\\");
+}
+
+export function useAIStream({ orgId, onNavigate }: UseAIStreamOptions): UseAIStreamReturn {
   const [state, setState] = useState<AIStreamState>({
     isStreaming: false,
     error: null,
@@ -262,6 +273,11 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
             toolStatusLabel: null,
           }));
         },
+        onNavigation: (event) => {
+          if (isSafeAssistantNavigationHref(event.href)) {
+            onNavigate?.(event.href);
+          }
+        },
         onToolStatus: (event) => {
           setState((prev) => ({
             ...prev,
@@ -350,7 +366,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
         abortRef.current = null;
       }
     }
-  }, [orgId]);
+  }, [onNavigate, orgId]);
 
   return {
     ...state,
