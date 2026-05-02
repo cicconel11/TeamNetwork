@@ -10,28 +10,24 @@ dependencies: []
 
 ## Problem Statement
 
-Recent AI routing work added broader global lookup coverage and more deterministic fast paths, but several turns still perform avoidable database reads or model round trips before returning a response.
+Recent AI routing work added broader global lookup coverage and more deterministic fast paths, but future optimization should be selected from aggregate audit telemetry instead of guessed from code inspection alone.
 
 ## Findings
 
-- `get_org_stats` is scoped for narrow questions, but generic snapshot prompts still fan out across members, alumni, parents, events, and donation stats.
-- `search_org_content` calls the shared search RPC and then direct announcement/event fallback queries, so content-search turns can perform three database reads.
-- Some deterministic `tool_first` renderers perform post-tool lookups such as org slug resolution for chat groups and donor privacy lookup for donations.
-- Pass-1 bypass is limited to zero-arg or locally derivable read tools; search/navigation prompts still need the model planner even when query extraction is straightforward.
-- `tool_first` prompt context still loads baseline org info instead of reusing already-known auth/org context.
+- `GET /api/admin/ai/latency-stats?days=1|7|30` now exposes dev-admin aggregate latency buckets over capped `ai_audit_log.stage_timings` scans.
+- `stage_timings.request.fast_path_label` now separates suppressors (`draft_active`, `attachment_present`, etc.) from eligible fast paths while preserving the existing `pass1_path` contract.
+- Old audit rows without `fast_path_label` bucket as `unclassified`; wait for 2-3 days of real traffic before choosing the next latency PR.
+- Current candidate areas remain `get_org_stats` fan-out, `search_org_content` fallback reads, renderer-side post-tool lookups, and broader deterministic pass-1 bypasses, but telemetry should rank them.
 
 ## Proposed Solutions
 
-1. Add a compact stats RPC/materialized view or short-TTL sliced cache for dashboard-style `get_org_stats` snapshots.
-2. Fold announcement/event fallback matching into the `search_org_content` RPC, or only run fallback queries when the RPC returns too few relevant rows.
-3. Include formatting context (org slug, donor privacy flags) in tool payloads to avoid renderer-side round trips.
-4. Extend pass-1 bypass to deterministic search/navigation once local query extraction is covered by routing tests.
-5. Make `tool_first` prompt context explicitly minimal and reuse org name/slug from existing request context where possible.
+1. Review `/api/admin/ai/latency-stats?days=1` and `?days=7` after real traffic has populated `fast_path_label`.
+2. Pick the next speed PR from the slowest high-volume `fast_path_label`, `pass1_path`, stage, or tool bucket with reliable sample size.
+3. Prefer changes that preserve the current SSE event sequence, final assistant bytes, tool calls executed, and audit `schema_version: 1`.
 
 ## Acceptance Criteria
 
-- [ ] Stage timing audits show fewer DB reads on common `tool_first` turns.
-- [ ] Generic stats prompts avoid full fan-out or use a cached/materialized aggregate.
-- [ ] Content search does not perform fallback reads when the RPC result is already sufficient.
-- [ ] Search/navigation bypass candidates have regression tests proving extracted args match model-planned args.
+- [ ] Stage timing audits identify a high-volume bottleneck with `n >= 20` in the relevant bucket.
+- [ ] The chosen optimization includes before/after latency evidence from the aggregate endpoint.
+- [ ] Any expanded bypass path has regression tests proving parity for SSE event sequence, final assistant bytes, and tool calls executed.
 - [ ] Docs in `docs/agent/assistant.md` and `docs/agent/chat-pipeline-codemap.md` remain aligned with the implemented latency path.
