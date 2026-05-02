@@ -84,7 +84,7 @@ The assistant is locked to TeamNetwork organization tasks. Enforcement runs at f
 
 ## Database Tables
 
-Ten migrations create all AI-related schema (plus two cross-cutting performance migrations):
+AI-related migrations create the assistant tables, cache, audit telemetry, pending actions, and hot-path indexes:
 
 | Migration | Tables / Objects |
 |---|---|
@@ -100,6 +100,7 @@ Ten migrations create all AI-related schema (plus two cross-cutting performance 
 | `20260812000000_rls_initplan_auth_uid.sql` | Wraps bare `auth.uid()` in all user-facing RLS policies with `(select auth.uid())` initplan (10-100x scan improvement) |
 | `20260812000003_perf_hotpath_indexes_and_initplan.sql` | Composite indexes on `ai_threads(org_id, created_at, id)` and `ai_messages(thread_id, status, created_at)` for thread listing and message history hot paths |
 | `20261027000000_ai_org_stats_snapshot.sql` | `get_org_stats_snapshot(p_org_id uuid)` RPC for compact generic org-stat snapshots |
+| `20261102000000_ai_audit_log_created_at_index.sql` | `ai_audit_log(created_at DESC)` index for bounded dev-admin latency telemetry scans |
 
 ### Table Summary
 
@@ -138,6 +139,8 @@ Negative AI feedback can now be exported into reviewable eval candidates with `n
 | POST | `/api/ai/[orgId]/pending-actions/[actionId]/cancel` | Cancel a structured assistant action before execution |
 | GET | `/api/ai/[orgId]/threads` | List threads (cursor-paginated) |
 | DELETE | `/api/ai/[orgId]/threads/[threadId]` | Soft-delete a thread |
+| GET | `/api/admin/ai/cache-stats` | Dev-admin aggregate semantic-cache hit-rate telemetry |
+| GET | `/api/admin/ai/latency-stats?days=1\|7\|30` | Dev-admin aggregate AI latency telemetry from `ai_audit_log.stage_timings` |
 | GET | `/api/ai/[orgId]/threads/[threadId]/messages` | List messages in a thread |
 | POST | `/api/ai/[orgId]/pending-actions/cleanup` | Best-effort cleanup for expired or abandoned pending actions |
 | POST | `/api/ai/[orgId]/upload-schedule` | Upload a schedule file (PDF/image) for AI extraction |
@@ -173,7 +176,7 @@ The assistant now resolves a compact trusted route entity for core detail pages 
 #### Partial-capability output shape
 The `PARTIAL_CAPABILITY_POLICY` block in `src/lib/ai/context-builder.ts` hard-requires pass-1 to call `find_navigation_targets` (instead of answering in prose) whenever the user asks for an action the assistant cannot execute — edit, delete, change, manage, moderate, configure, send, invite, revoke, export, bill. Two few-shot exemplars pin the output shape: a "not on a detail page for this X" block that names the page, a `Next:` step, and an `I can help:` line; and a pure "where do I manage X" block that skips the disclaimer and emits only the link + `Next:` + `I can help:`.
 
-When pass-1 emits a `find_navigation_targets` call and that is the only successful tool, the handler in `src/app/api/ai/[orgId]/chat/handler.ts` now suppresses any buffered pass-1 prose before streaming the deterministic nav block, so preambles like "Based on your organization's URL…" and trailing prompts like "Need to do anything specific?" cannot leak around the structured output.
+When pass-1 emits a `find_navigation_targets` call and that is the only successful tool, the handler in `src/app/api/ai/[orgId]/chat/handler.ts` now suppresses any buffered pass-1 prose before streaming the deterministic nav block, so preambles like "Based on your organization's URL…" and trailing prompts like "Need to do anything specific?" cannot leak around the structured output. If the deterministic result contains exactly one accessible internal target, the server also emits a structured `navigation` SSE event; the panel validates the href and calls `router.push()` so requests like "bring me to announcements" update the browser route while preserving the clickable markdown link in chat.
 
 #### Deterministic navigation formatter
 `formatDeterministicToolResponse` renders nav matches with hard line breaks (`  \n`) between `Next:` / `I can help:` lines and paragraph breaks (`\n\n`) between targets, so adjacent lines do not collapse into a single soft-wrapped paragraph in react-markdown. Labels are run through `escapeLabel` (`_` → `\_`) before emission so org-customized nav labels like `Job_Board` render as literal text instead of triggering markdown emphasis.
