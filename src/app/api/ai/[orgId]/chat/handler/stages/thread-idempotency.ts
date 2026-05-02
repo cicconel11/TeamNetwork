@@ -50,7 +50,7 @@ import {
   type PendingEventActionRecord,
   type PendingEventRevisionAnalysis,
 } from "../pending-event-revision";
-import { isToolFirstEligible } from "../pass1-tools";
+import { classifyFastPath } from "../fast-path-classifier";
 import { buildSseResponse } from "../sse-runtime";
 import type { getPass1Tools } from "../pass1-tools";
 import type { StageOutcome, ThreadIdempotencySlice } from "./state";
@@ -144,10 +144,18 @@ export async function runThreadIdempotencyStage(
     skipStage(stageTimings, "thread_resolution");
   }
 
-  const usesToolFirstContext =
-    !usesSharedStaticContext &&
-    retrievalReason === "tool_only_structured_query" &&
-    isToolFirstEligible(pass1Tools);
+  const usesToolFirstContext = classifyFastPath({
+    executionPolicy: { toolPolicy: "none" },
+    pass1Tools,
+    pass1ToolChoice: undefined,
+    activeDraftSession,
+    pendingEventRevisionAnalysis,
+    pendingConnectionDisambiguation: false,
+    attachment,
+    retrievalReason,
+    usesSharedStaticContext,
+    pass1BypassMode: "off",
+  }).usesToolFirstContext;
 
   const routeEntityRef = extractRouteEntity(currentPath);
   if (routeEntityRef) {
