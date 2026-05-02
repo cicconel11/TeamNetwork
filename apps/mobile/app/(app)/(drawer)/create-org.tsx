@@ -469,7 +469,7 @@ export default function CreateOrgScreen() {
     setIsSubmitting(true);
     try {
       const response = await fetchWithAuth(
-        "/api/stripe/create-org-checkout",
+        "/api/stripe/create-org-v2-checkout",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -479,10 +479,9 @@ export default function CreateOrgScreen() {
             description: parsed.data.description,
             primaryColor: parsed.data.primaryColor,
             billingInterval: parsed.data.billingInterval,
-            alumniBucket: parsed.data.alumniBucket,
-            withTrial: parsed.data.withTrial,
+            actives: activeSeats,
+            alumni: alumniSeats,
             idempotencyKey,
-            source: "mobile",
           }),
         }
       );
