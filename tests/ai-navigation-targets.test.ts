@@ -32,6 +32,33 @@ test("searchNavigationTargets finds page targets for open-page queries", () => {
   assert.match(result.matches[0]?.assistantCanHelpWith[0] ?? "", /List members/i);
 });
 
+test("searchNavigationTargets treats manage-members wording as the Members page", () => {
+  const result = searchNavigationTargets({
+    query: "where do I manage members",
+    orgSlug: "acme",
+    role: "admin",
+  });
+
+  assert.equal(result.state, "resolved");
+  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches[0]?.label, "Members");
+  assert.equal(result.matches[0]?.href, "/acme/members");
+  assert.match(result.matches[0]?.manualSteps[0] ?? "", /manage member records/i);
+});
+
+test("searchNavigationTargets keeps membership-settings wording on Settings", () => {
+  const result = searchNavigationTargets({
+    query: "open membership settings",
+    orgSlug: "acme",
+    role: "admin",
+  });
+
+  assert.equal(result.state, "resolved");
+  assert.equal(result.matches[0]?.label, "Settings");
+  assert.equal(result.matches[0]?.href, "/acme/settings/invites");
+  assert.match(result.matches[0]?.manualSteps[0] ?? "", /invites, approvals, subscriptions/i);
+});
+
 test("searchNavigationTargets returns not_found for unrelated queries", () => {
   const result = searchNavigationTargets({
     query: "quantum grapes",
