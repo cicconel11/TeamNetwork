@@ -262,9 +262,9 @@
       },
       "eas": {
         "projectId": "b5e6a305-0c4c-4c1d-b04f-cd5c3674ae9d"
-      }
+      },
+      "privacyPolicyUrl": "https://www.myteamnetwork.com/privacy"
     },
-    "privacy": "https://www.myteamnetwork.com/privacy",
     "updates": {
       "url": "https://u.expo.dev/b5e6a305-0c4c-4c1d-b04f-cd5c3674ae9d"
     }
