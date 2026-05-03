@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { UserContent } from "@/components/i18n/UserContent";
-import { Card, Button, Badge } from "@/components/ui";
+import { Card, Button, Badge, ConfirmActionButton } from "@/components/ui";
+import { requestJson } from "@/lib/client/request-json";
+import { useMutationAction } from "@/lib/client/use-mutation-action";
 
 const EXPERIENCE_LABELS: Record<string, string> = {
   entry: "Entry Level",
@@ -41,7 +43,6 @@ interface JobDetailProps {
 
 export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
   const router = useRouter();
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [isActive, setIsActive] = useState(job.is_active);
 
@@ -49,51 +50,30 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
     setIsActive(job.is_active);
   }, [job.is_active]);
 
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this job posting?")) {
-      return;
-    }
-
-    setIsDeleting(true);
-    try {
-      const response = await fetch(`/api/jobs/${job.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to delete job");
-      }
-
-      router.replace(`/${orgSlug}/jobs`);
-      router.refresh();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to delete job");
-      setIsDeleting(false);
-    }
+  const deleteJob = async () => {
+    await requestJson(`/api/jobs/${job.id}`, { method: "DELETE" });
   };
+
+  const toggleActive = useMutationAction({
+    action: async () => {
+      await requestJson(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        body: { is_active: !isActive },
+      });
+      return !isActive;
+    },
+    successMessage: (nextActive) => nextActive ? "Job posting reactivated" : "Job posting deactivated",
+    errorMessage: "Failed to update job",
+    onSuccess: (nextActive) => {
+      setIsActive(nextActive);
+      router.refresh();
+    },
+  });
 
   const handleToggleActive = async () => {
     setIsToggling(true);
-    try {
-      const response = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: !isActive }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to update job");
-      }
-
-      setIsActive(!isActive);
-      router.refresh();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to update job");
-    } finally {
-      setIsToggling(false);
-    }
+    await toggleActive.run();
+    setIsToggling(false);
   };
 
   const isExpired = job.expires_at && new Date(job.expires_at) < new Date();
@@ -122,22 +102,33 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
                 <div className="flex gap-2">
                   <Button
                     onClick={handleToggleActive}
-                    disabled={isToggling || isDeleting}
+                    disabled={isToggling || toggleActive.isPending}
                   >
                     {isToggling ? "Updating..." : isActive ? "Deactivate" : "Reactivate"}
                   </Button>
                   <Button
                     onClick={() => router.push(`/${orgSlug}/jobs/${job.id}/edit`)}
-                    disabled={isDeleting}
+                    disabled={toggleActive.isPending}
                   >
                     Edit
                   </Button>
-                  <Button
-                    onClick={handleDelete}
-                    disabled={isDeleting}
+                  <ConfirmActionButton
+                    confirmation={{
+                      title: "Delete job posting?",
+                      description: "This removes the job from active lists. You cannot undo this from the job page.",
+                      confirmLabel: "Delete job",
+                      destructive: true,
+                    }}
+                    action={deleteJob}
+                    successMessage="Job posting deleted"
+                    errorMessage="Failed to delete job"
+                    onSuccess={() => {
+                      router.replace(`/${orgSlug}/jobs`);
+                      router.refresh();
+                    }}
                   >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </Button>
+                    Delete
+                  </ConfirmActionButton>
                 </div>
               )}
             </div>

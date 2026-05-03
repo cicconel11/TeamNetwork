@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui";
+import { Button, ConfirmActionButton } from "@/components/ui";
+import { showFeedback } from "@/lib/feedback/show-feedback";
 import type { ScheduleFile, User } from "@/types/database";
 
 interface ScheduleFilesListProps {
@@ -23,7 +24,7 @@ export function ScheduleFilesList({ files, isAdmin, onDelete }: ScheduleFilesLis
       .createSignedUrl(file.file_path, 60 * 5); // 5 min expiry
 
     if (error || !data?.signedUrl) {
-      alert("Failed to get file URL");
+      showFeedback("Failed to get file URL", "error", { duration: 4000 });
       setLoadingId(null);
       return;
     }
@@ -32,36 +33,33 @@ export function ScheduleFilesList({ files, isAdmin, onDelete }: ScheduleFilesLis
     setLoadingId(null);
   };
 
-  const handleDelete = async (file: ScheduleFile) => {
-    if (!confirm("Delete this file?")) return;
-    
+  const deleteFile = async (file: ScheduleFile) => {
     setLoadingId(file.id);
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    // Delete from storage first
-    const { error: storageError } = await supabase.storage
-      .from("schedule-files")
-      .remove([file.file_path]);
+      // Delete from storage first
+      const { error: storageError } = await supabase.storage
+        .from("schedule-files")
+        .remove([file.file_path]);
 
-    if (storageError) {
-      console.error("Storage delete error:", storageError);
-      // Continue with DB delete even if storage fails
-    }
+      if (storageError) {
+        console.error("Storage delete error:", storageError);
+        // Continue with DB delete even if storage fails
+      }
 
-    // Hard delete from DB (or soft delete if you prefer)
-    const { error: dbError } = await supabase
-      .from("schedule_files")
-      .delete()
-      .eq("id", file.id);
+      // Hard delete from DB (or soft delete if you prefer)
+      const { error: dbError } = await supabase
+        .from("schedule_files")
+        .delete()
+        .eq("id", file.id);
 
-    if (dbError) {
-      alert("Failed to delete file");
+      if (dbError) {
+        throw new Error("Failed to delete file");
+      }
+    } finally {
       setLoadingId(null);
-      return;
     }
-
-    setLoadingId(null);
-    onDelete?.();
   };
 
   const formatFileSize = (bytes: number | null) => {
@@ -119,14 +117,23 @@ export function ScheduleFilesList({ files, isAdmin, onDelete }: ScheduleFilesLis
               View
             </Button>
             {!isAdmin && (
-              <Button
+              <ConfirmActionButton
                 variant="ghost"
                 size="sm"
-                onClick={() => handleDelete(file)}
                 className="text-red-600 hover:text-red-700"
+                confirmation={{
+                  title: "Delete schedule file?",
+                  description: "This removes the uploaded file from the schedule. You can upload it again later if needed.",
+                  confirmLabel: "Delete file",
+                  destructive: true,
+                }}
+                action={() => deleteFile(file)}
+                successMessage="Schedule file deleted"
+                errorMessage="Failed to delete file"
+                onSuccess={() => onDelete?.()}
               >
                 Delete
-              </Button>
+              </ConfirmActionButton>
             )}
           </div>
         </li>
