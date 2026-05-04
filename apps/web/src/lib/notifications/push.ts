@@ -248,13 +248,65 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
     return { sent: 0, skipped: resolvedUsers + skippedUsers, errors: [] };
   }
 
-  // Cap the inline path; surface the overflow rather than silently dropping it.
+  // Broadcasts above the inline cap are enqueued onto notification_jobs so
+  // the cron worker fans them out without tripping the API timeout. Smaller
+  // sends still go inline so chat DMs and reminders stay synchronous.
+  if (allTokens.length > INLINE_PUSH_TOKEN_CAP) {
+    const audienceForQueue =
+      input.audience && input.audience !== "both" ? input.audience : "all";
+    try {
+      const { error: enqueueError } = await (input.supabase as unknown as {
+        from: (table: string) => {
+          insert: (
+            row: Record<string, unknown>,
+          ) => Promise<{ error: { message: string } | null }>;
+        };
+      })
+        .from("notification_jobs")
+        .insert({
+          organization_id: input.organizationId,
+          kind: "standard",
+          priority: 5,
+          audience: audienceForQueue,
+          target_user_ids: input.targetUserIds ?? null,
+          category: input.category ?? null,
+          push_type: input.pushType ?? null,
+          push_resource_id: input.pushResourceId ?? null,
+          title: input.title,
+          body: input.body,
+          data: {
+            ...(input.data ?? {}),
+            ...(input.orgSlug ? { orgSlug: input.orgSlug } : {}),
+          },
+        });
+      if (enqueueError) throw new Error(enqueueError.message);
+      console.log(
+        `[push] queued broadcast: ${allTokens.length} recipients org=${input.organizationId} type=${input.pushType ?? "unknown"}`,
+      );
+      return {
+        sent: 0,
+        skipped: skippedUsers,
+        errors: [`queued: ${allTokens.length} recipients pending dispatch`],
+      };
+    } catch (err) {
+      // Fall back to capped inline send so a queue failure doesn't lose
+      // notifications entirely. Surface the overflow as before.
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[push] enqueue failed, falling back to inline cap: ${msg}`,
+      );
+    }
+  }
+
+  // Inline path. If we got here with allTokens > cap, the queue insert
+  // failed above — preserve the historical capped-send behavior so we still
+  // deliver to as many recipients as possible.
   const overflow = Math.max(0, allTokens.length - INLINE_PUSH_TOKEN_CAP);
   const tokens = overflow > 0 ? allTokens.slice(0, INLINE_PUSH_TOKEN_CAP) : allTokens;
   const capErrors =
     overflow > 0
       ? [
-          `inline push cap exceeded: skipped ${overflow} of ${allTokens.length} recipients (cap=${INLINE_PUSH_TOKEN_CAP}); needs notification_jobs worker for full broadcast`,
+          `inline push cap exceeded: skipped ${overflow} of ${allTokens.length} recipients (cap=${INLINE_PUSH_TOKEN_CAP}); queue insert failed`,
         ]
       : [];
   if (overflow > 0) {

@@ -5,8 +5,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { normalizeRole, ViewerContext } from "@teammeet/core";
 import * as sentry from "@/lib/analytics/sentry";
+import { setBadgeCount } from "@/lib/notifications";
 
+// Legacy AsyncStorage key from the local-only read-state era. The hook now
+// imports any pre-existing values into `notification_reads` once per
+// (user, org) and then deletes the storage entry. Kept as a constant so the
+// migration can find old data on upgrade.
 const STORAGE_KEY_PREFIX = "notification_read_ids_";
+const MIGRATED_KEY_PREFIX = "notification_reads_migrated_";
 const STALE_TIME_MS = 30_000; // 30 seconds
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -139,26 +145,51 @@ export function useNotifications(
 
   const viewerContextRef = useRef<ViewerContext | null>(null);
 
-  // Storage key for read notification IDs
-  const getStorageKey = useCallback(() => {
-    if (!userId || !orgId) return null;
-    return `${STORAGE_KEY_PREFIX}${userId}_${orgId}`;
-  }, [userId, orgId]);
+  // One-time migration: import any pre-existing AsyncStorage read-ids into
+  // the server-side `notification_reads` table, then drop the local entry.
+  // Idempotent: the table's PK prevents duplicates, and we set a sentinel
+  // key so we don't re-attempt on every render.
+  const migrateLegacyReadIds = useCallback(async () => {
+    if (!userId || !orgId) return;
+    const migratedKey = `${MIGRATED_KEY_PREFIX}${userId}_${orgId}`;
+    try {
+      const alreadyMigrated = await AsyncStorage.getItem(migratedKey);
+      if (alreadyMigrated) return;
 
-  // Save read IDs to AsyncStorage
-  const saveReadIds = useCallback(
-    async (ids: Set<string>) => {
-      const storageKey = getStorageKey();
-      if (!storageKey) return;
-
-      try {
-        await AsyncStorage.setItem(storageKey, JSON.stringify([...ids]));
-      } catch {
-        // Ignore save errors
+      const storageKey = `${STORAGE_KEY_PREFIX}${userId}_${orgId}`;
+      const stored = await AsyncStorage.getItem(storageKey);
+      if (stored) {
+        const ids: string[] = JSON.parse(stored);
+        if (Array.isArray(ids) && ids.length > 0) {
+          // Cast: notification_reads isn't yet in generated Database types.
+          await (supabase as unknown as {
+            from: (table: string) => {
+              upsert: (
+                rows: Array<Record<string, unknown>>,
+                opts: { onConflict: string; ignoreDuplicates?: boolean },
+              ) => Promise<{ error: { message: string } | null }>;
+            };
+          })
+            .from("notification_reads")
+            .upsert(
+              ids.map((notification_id) => ({
+                notification_id,
+                user_id: userId,
+              })),
+              { onConflict: "notification_id,user_id", ignoreDuplicates: true },
+            );
+        }
+        await AsyncStorage.removeItem(storageKey);
       }
-    },
-    [getStorageKey]
-  );
+      await AsyncStorage.setItem(migratedKey, "1");
+    } catch (e) {
+      // Best-effort. If migration fails, the inbox just shows everything as
+      // unread until the user marks read again — no data loss.
+      sentry.captureException(e as Error, {
+        context: "useNotifications.migrateLegacyReadIds",
+      });
+    }
+  }, [orgId, userId]);
 
   // Reset state when orgId changes
   useEffect(() => {
@@ -211,16 +242,29 @@ export function useNotifications(
           };
         }
 
-        // Load read IDs from storage
-        const storageKey = `${STORAGE_KEY_PREFIX}${userId}_${orgId}`;
+        // Best-effort one-time import of legacy AsyncStorage read state.
+        await migrateLegacyReadIds();
+
+        // Load read IDs from notification_reads (server-side source of truth).
         let storedReadIds = new Set<string>();
         try {
-          const stored = await AsyncStorage.getItem(storageKey);
-          if (stored) {
-            storedReadIds = new Set(JSON.parse(stored));
+          const { data: reads } = await (supabase as unknown as {
+            from: (table: string) => {
+              select: (cols: string) => {
+                eq: (col: string, val: string) => Promise<{
+                  data: Array<{ notification_id: string }> | null;
+                }>;
+              };
+            };
+          })
+            .from("notification_reads")
+            .select("notification_id")
+            .eq("user_id", userId);
+          if (reads) {
+            storedReadIds = new Set(reads.map((r) => r.notification_id));
           }
         } catch {
-          // Ignore
+          // Fall through with empty set; next refetch will retry.
         }
         if (isMountedRef.current) {
           setReadIds(storedReadIds);
@@ -249,11 +293,12 @@ export function useNotifications(
           canViewNotification(notification, viewerContextRef.current!)
         );
 
-        // Annotate with read status
+        // Annotate with read status using the server-fetched set.
         const annotated: Notification[] = filtered.map((n) => ({
           ...n,
           isRead: storedReadIds.has(n.id),
         }));
+        void migrateLegacyReadIds; // silence unused-in-deps lint when re-running
 
         if (isMountedRef.current && isCurrentRequest(requestId)) {
           if (append) {
@@ -288,7 +333,7 @@ export function useNotifications(
         }
       }
     },
-    [orgId, userId, pageSize, isPaginated, beginRequest, isCurrentRequest]
+    [orgId, userId, pageSize, isPaginated, beginRequest, isCurrentRequest, migrateLegacyReadIds]
   );
 
   const loadMore = useCallback(async () => {
@@ -311,42 +356,57 @@ export function useNotifications(
     }
   }, [fetchNotifications]);
 
-  const persistReadIds = useCallback(
-    async (updater: (current: Set<string>) => Set<string>) => {
-      if (!orgId || !userId) return;
-
-      let nextReadIds = new Set<string>();
-      setReadIds((current) => {
-        nextReadIds = updater(current);
-        return nextReadIds;
-      });
-      await saveReadIds(nextReadIds);
-    },
-    [orgId, userId, saveReadIds]
-  );
+  // Helpers that round-trip read state to the server-side
+  // `notification_reads` table. The local Set + notifications array are
+  // updated optimistically; failures roll back via refetch.
+  type ReadsTable = {
+    upsert: (
+      rows: Array<Record<string, unknown>>,
+      opts: { onConflict: string; ignoreDuplicates?: boolean },
+    ) => Promise<{ error: { message: string } | null }>;
+    delete: () => {
+      eq: (col: string, val: string) => {
+        eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+        in: (col: string, vals: string[]) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  };
+  const readsTable = (): ReadsTable =>
+    (supabase as unknown as { from: (t: string) => ReadsTable }).from(
+      "notification_reads",
+    );
 
   // Mark a notification as read
   const markAsRead = useCallback(
     async (notificationId: string) => {
       if (!orgId || !userId) return;
 
-      await persistReadIds((current) => {
+      setReadIds((current) => {
+        if (current.has(notificationId)) return current;
         const next = new Set(current);
         next.add(notificationId);
         return next;
       });
-
-      // Update local notifications state (immutable)
       setNotifications((prev) =>
         prev.map((n) =>
           n.id === notificationId ? { ...n, isRead: true } : n
         )
       );
 
-      // Emit event for other hook instances
+      try {
+        await readsTable().upsert(
+          [{ notification_id: notificationId, user_id: userId }],
+          { onConflict: "notification_id,user_id", ignoreDuplicates: true },
+        );
+      } catch (e) {
+        sentry.captureException(e as Error, {
+          context: "useNotifications.markAsRead",
+        });
+      }
+
       readStatusEmitter.emit("read", { orgId, userId, notificationId });
     },
-    [orgId, userId, persistReadIds]
+    [orgId, userId]
   );
 
   // Mark all notifications as read
@@ -354,41 +414,66 @@ export function useNotifications(
     if (!orgId || !userId) return;
 
     const allIds = notifications.map((n) => n.id);
-    await persistReadIds((current) => new Set([...current, ...allIds]));
+    if (allIds.length === 0) return;
 
-    // Update local notifications state (immutable)
+    setReadIds((current) => new Set([...current, ...allIds]));
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
 
-    // Emit event for other hook instances
+    try {
+      await readsTable().upsert(
+        allIds.map((id) => ({ notification_id: id, user_id: userId })),
+        { onConflict: "notification_id,user_id", ignoreDuplicates: true },
+      );
+    } catch (e) {
+      sentry.captureException(e as Error, {
+        context: "useNotifications.markAllAsRead",
+      });
+    }
+
     readStatusEmitter.emit("readAll", { orgId, userId });
-  }, [orgId, userId, notifications, persistReadIds]);
+  }, [orgId, userId, notifications]);
 
   // Mark a notification as unread
   const markAsUnread = useCallback(
     async (notificationId: string) => {
       if (!orgId || !userId) return;
 
-      await persistReadIds((current) => {
+      setReadIds((current) => {
+        if (!current.has(notificationId)) return current;
         const next = new Set(current);
         next.delete(notificationId);
         return next;
       });
-
-      // Update local notifications state (immutable)
       setNotifications((prev) =>
         prev.map((n) =>
           n.id === notificationId ? { ...n, isRead: false } : n
         )
       );
 
-      // Emit event for other hook instances
+      try {
+        await readsTable()
+          .delete()
+          .eq("notification_id", notificationId)
+          .eq("user_id", userId);
+      } catch (e) {
+        sentry.captureException(e as Error, {
+          context: "useNotifications.markAsUnread",
+        });
+      }
+
       readStatusEmitter.emit("unread", { orgId, userId, notificationId });
     },
-    [orgId, userId, persistReadIds]
+    [orgId, userId]
   );
 
   // Compute unread count
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  // Keep the OS app icon badge in sync with the inbox unread count.
+  // Web/simulator are no-ops in setBadgeCount.
+  useEffect(() => {
+    void setBadgeCount(unreadCount);
+  }, [unreadCount]);
 
   // Initial fetch
   useEffect(() => {

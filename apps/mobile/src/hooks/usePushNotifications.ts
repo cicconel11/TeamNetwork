@@ -8,9 +8,7 @@ import {
   registerPushToken,
   unregisterPushToken,
   getNotificationRoute,
-  clearAllNotifications,
-  getBadgeCount,
-  setBadgeCount,
+  dismissDeliveredNotifications,
   type NotificationData,
 } from "@/lib/notifications";
 import { captureException } from "@/lib/analytics";
@@ -33,16 +31,6 @@ export function usePushNotifications({
   const pushTokenListener = useRef<Notifications.EventSubscription | null>(null);
   const isRegisteredRef = useRef(false);
   const lastTokenRef = useRef<string | null>(null);
-
-  const incrementBadge = useCallback(async () => {
-    try {
-      const currentCount = await getBadgeCount();
-      await setBadgeCount(currentCount + 1);
-    } catch (error) {
-      console.error("Error updating badge count:", error);
-      captureException(error as Error, { context: "incrementBadge" });
-    }
-  }, []);
 
   // Handle notification response (user tapped on notification)
   const handleNotificationResponse = useCallback(
@@ -110,11 +98,11 @@ export function usePushNotifications({
       register();
     }
 
-    // Listen for notifications received while app is foregrounded
+    // Foreground notifications no longer increment the badge; the inbox
+    // unread count drives the badge via useNotifications.
     notificationListener.current = Notifications.addNotificationReceivedListener(
       () => {
-        void incrementBadge();
-        // Optionally handle foreground notifications here
+        // Hook reserved for analytics / in-app banners.
       }
     );
 
@@ -152,11 +140,13 @@ export function usePushNotifications({
       }
     });
 
-    // Clear badge when app is opened
-    clearAllNotifications();
+    // Dismiss delivered banners from the OS center on launch and resume.
+    // Badge count is left alone — useNotifications keeps it in sync with
+    // the actual unread inbox count.
+    dismissDeliveredNotifications();
     const appStateSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        void clearAllNotifications();
+        void dismissDeliveredNotifications();
       }
     });
 
@@ -166,7 +156,7 @@ export function usePushNotifications({
       pushTokenListener.current?.remove();
       appStateSubscription.remove();
     };
-  }, [userId, enabled, register, handleNotificationResponse, incrementBadge]);
+  }, [userId, enabled, register, handleNotificationResponse]);
 
   // Handle logout - unregister token
   useEffect(() => {

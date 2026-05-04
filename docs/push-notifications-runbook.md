@@ -27,7 +27,7 @@ After uploading, **reinstall the TestFlight build** on the device. Tokens issued
 Run against the project's Supabase:
 
 ```sql
-select user_id, platform, expo_push_token, last_seen_at
+select user_id, platform, expo_push_token, updated_at
 from user_push_tokens
 where user_id = '<auth.uid()>';
 ```

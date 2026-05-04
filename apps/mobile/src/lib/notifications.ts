@@ -295,12 +295,21 @@ export async function setBadgeCount(count: number): Promise<void> {
 }
 
 /**
- * Clear all notifications and reset badge
+ * Dismiss any delivered notifications from the OS notification center.
+ * Badge count is now driven by the inbox unread count via useNotifications,
+ * so this no longer touches the badge.
  */
-export async function clearAllNotifications(): Promise<void> {
+export async function dismissDeliveredNotifications(): Promise<void> {
   if (Platform.OS === "web") return;
   await Notifications.dismissAllNotificationsAsync();
-  await setBadgeCount(0);
+}
+
+/**
+ * @deprecated Use dismissDeliveredNotifications + the inbox-driven badge.
+ * Retained as a thin shim so callers outside this PR don't break.
+ */
+export async function clearAllNotifications(): Promise<void> {
+  await dismissDeliveredNotifications();
 }
 
 /**
