@@ -1,26 +1,28 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncEventToUsers, SyncOperation } from "@/lib/google/calendar-sync";
+import { baseSchemas } from "@/lib/security/validation";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 
 export const dynamic = "force-dynamic";
 
+const bodySchema = z.object({
+    eventId: baseSchemas.uuid,
+    organizationId: baseSchemas.uuid,
+    operation: z.enum(["create", "update", "delete"]),
+});
+
 /**
  * POST /api/calendar/event-sync
- * 
+ *
  * Triggers calendar synchronization for a specific event.
- * Called automatically when events are created, updated, or deleted.
- * 
- * Request body:
- * - eventId: string - The event ID to sync
- * - organizationId: string - The organization ID
- * - operation: "create" | "update" | "delete" - The sync operation type
- * 
- * Requirements: 2.1, 3.1, 4.1
+ * Caller must be an active admin of the org OR the event creator.
+ * Event must belong to the supplied organizationId.
  */
 export async function POST(request: Request) {
     try {
-        // Get the authenticated user
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -31,55 +33,49 @@ export async function POST(request: Request) {
             );
         }
 
-        // Parse request body
-        const body = await request.json();
-        const { eventId, organizationId, operation } = body as {
-            eventId: string;
-            organizationId: string;
-            operation: SyncOperation;
-        };
-
-        if (!eventId || !organizationId || !operation) {
+        const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: "Bad request", message: "Missing required fields: eventId, organizationId, operation" },
+                { error: "Bad request", message: "Invalid sync request." },
                 { status: 400 }
             );
         }
+        const { eventId, organizationId, operation } = parsed.data;
 
-        if (!["create", "update", "delete"].includes(operation)) {
-            return NextResponse.json(
-                { error: "Bad request", message: "Invalid operation. Must be create, update, or delete." },
-                { status: 400 }
-            );
-        }
-
-        // Verify user has access to this organization
-        const { data: membership, error: membershipError } = await supabase
-            .from("user_organization_roles")
-            .select("role")
-            .eq("user_id", user.id)
+        // Fetch event scoped to the supplied org (RLS scoped to caller).
+        // 404 on miss prevents cross-org event ID enumeration.
+        const { data: event } = await supabase
+            .from("events")
+            .select("id, organization_id, created_by_user_id")
+            .eq("id", eventId)
             .eq("organization_id", organizationId)
-            .single();
+            .maybeSingle();
 
-        if (membershipError || !membership) {
+        if (!event) {
             return NextResponse.json(
-                { error: "Forbidden", message: "You do not have access to this organization." },
+                { error: "Not found", message: "Event not found." },
+                { status: 404 }
+            );
+        }
+
+        // Authorize: active admin OR event creator.
+        const isActiveAdmin = await requireActiveOrgAdmin(supabase, user.id, organizationId);
+        const isCreator = event.created_by_user_id === user.id;
+        if (!isActiveAdmin && !isCreator) {
+            return NextResponse.json(
+                { error: "Forbidden", message: "You cannot sync this event." },
                 { status: 403 }
             );
         }
 
-        // Use service client for sync operations (needs elevated permissions)
         const serviceClient = createServiceClient();
 
-        // Trigger the sync operation
-        await syncEventToUsers(serviceClient, organizationId, eventId, operation);
+        await syncEventToUsers(serviceClient, organizationId, eventId, operation as SyncOperation);
 
-        // Also sync to Outlook for connected members
         try {
             const { syncOutlookEventToUsers } = await import("@/lib/microsoft/calendar-sync");
-            await syncOutlookEventToUsers(serviceClient, organizationId, eventId, operation);
+            await syncOutlookEventToUsers(serviceClient, organizationId, eventId, operation as SyncOperation);
         } catch (outlookError) {
-            // Log but don't fail the overall sync
             console.error("[calendar-event-sync] Outlook sync error:", outlookError instanceof Error ? outlookError.message : outlookError);
         }
 

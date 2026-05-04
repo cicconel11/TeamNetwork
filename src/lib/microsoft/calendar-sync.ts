@@ -336,12 +336,14 @@ export async function syncOutlookEventToUsers(
     eventId: string,
     operation: SyncOperation
 ): Promise<void> {
+    // Event query scoped to organizationId for tenant isolation.
     const [eventResult, orgResult] = await Promise.all([
         supabase
             .from("events")
             .select("*")
             .eq("id", eventId)
-            .single(),
+            .eq("organization_id", organizationId)
+            .maybeSingle(),
         supabase
             .from("organizations")
             .select("timezone")
