@@ -37,6 +37,12 @@ export function SettingsNotificationsSection({ orgId }: Props) {
   const [announcementPush, setAnnouncementPush] = useState(true);
   const [chatPush, setChatPush] = useState(true);
   const [eventReminderPush, setEventReminderPush] = useState(true);
+  const [eventPush, setEventPush] = useState(false);
+  const [workoutPush, setWorkoutPush] = useState(false);
+  const [competitionPush, setCompetitionPush] = useState(false);
+  const [discussionPush, setDiscussionPush] = useState(false);
+  const [mentorshipPush, setMentorshipPush] = useState(false);
+  const [donationPush, setDonationPush] = useState(false);
 
   useEffect(() => {
     if (prefs) {
@@ -46,6 +52,12 @@ export function SettingsNotificationsSection({ orgId }: Props) {
       setAnnouncementPush(prefs.announcement_push_enabled);
       setChatPush(prefs.chat_push_enabled);
       setEventReminderPush(prefs.event_reminder_push_enabled);
+      setEventPush(prefs.event_push_enabled);
+      setWorkoutPush(prefs.workout_push_enabled);
+      setCompetitionPush(prefs.competition_push_enabled);
+      setDiscussionPush(prefs.discussion_push_enabled);
+      setMentorshipPush(prefs.mentorship_push_enabled);
+      setDonationPush(prefs.donation_push_enabled);
     }
   }, [prefs]);
 
@@ -57,6 +69,12 @@ export function SettingsNotificationsSection({ orgId }: Props) {
       announcement_push_enabled: announcementPush,
       chat_push_enabled: chatPush,
       event_reminder_push_enabled: eventReminderPush,
+      event_push_enabled: eventPush,
+      workout_push_enabled: workoutPush,
+      competition_push_enabled: competitionPush,
+      discussion_push_enabled: discussionPush,
+      mentorship_push_enabled: mentorshipPush,
+      donation_push_enabled: donationPush,
     });
   };
 
@@ -304,6 +322,90 @@ export function SettingsNotificationsSection({ orgId }: Props) {
                   disabled={!pushEnabled}
                   trackColor={{ false: colors.border, true: colors.primaryLight }}
                   thumbColor={eventReminderPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>New events</Text>
+                  <Text style={styles.switchHint}>When admins post a new event</Text>
+                </View>
+                <Switch
+                  value={eventPush}
+                  onValueChange={setEventPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={eventPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Workouts</Text>
+                  <Text style={styles.switchHint}>New training plans and workouts</Text>
+                </View>
+                <Switch
+                  value={workoutPush}
+                  onValueChange={setWorkoutPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={workoutPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Competitions</Text>
+                  <Text style={styles.switchHint}>Meet results and competition updates</Text>
+                </View>
+                <Switch
+                  value={competitionPush}
+                  onValueChange={setCompetitionPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={competitionPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Discussions</Text>
+                  <Text style={styles.switchHint}>Replies to threads you participate in</Text>
+                </View>
+                <Switch
+                  value={discussionPush}
+                  onValueChange={setDiscussionPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={discussionPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Mentorship</Text>
+                  <Text style={styles.switchHint}>Mentorship requests and pair updates</Text>
+                </View>
+                <Switch
+                  value={mentorshipPush}
+                  onValueChange={setMentorshipPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={mentorshipPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Donations</Text>
+                  <Text style={styles.switchHint}>New donations to your org (admins only)</Text>
+                </View>
+                <Switch
+                  value={donationPush}
+                  onValueChange={setDonationPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={donationPush ? colors.primary : colors.card}
                 />
               </View>
 

@@ -20,7 +20,10 @@ export type NotificationType =
   | "discussion"
   | "mentorship"
   | "donation"
-  | "membership";
+  | "membership"
+  // Generic admin-composed blast with no specific resource. Routes to the
+  // inbox so the recipient can read the body in context.
+  | "notification";
 
 export interface NotificationData {
   type: NotificationType;
@@ -267,6 +270,9 @@ export function getNotificationRoute(data: NotificationData): string | null {
       return `/(app)/${data.orgSlug}/donations`;
     case "membership":
       return `/(app)/${data.orgSlug}/members`;
+    case "notification":
+      // Generic blast — open the inbox; the row carries body/title.
+      return `/(app)/${data.orgSlug}/notifications`;
     default:
       return null;
   }

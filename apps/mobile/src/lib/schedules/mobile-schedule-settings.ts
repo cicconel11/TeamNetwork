@@ -1,5 +1,10 @@
 import type { NotificationAudience, NotificationChannel } from "@teammeet/types";
 
+// Mobile composer accepts the wider set of channels supported by
+// /api/notifications/send. Push and All are mobile-only additions on top of
+// the shared NotificationChannel ("email" | "sms" | "both").
+export type ComposerChannel = NotificationChannel | "push" | "all";
+
 export interface CalendarSyncPreferences {
   sync_general: boolean;
   sync_game: boolean;
@@ -53,7 +58,7 @@ export interface NotificationComposerValues {
   title: string;
   body: string;
   audience: NotificationAudience;
-  channel: NotificationChannel;
+  channel: ComposerChannel;
 }
 
 export function buildNotificationComposerPayload(

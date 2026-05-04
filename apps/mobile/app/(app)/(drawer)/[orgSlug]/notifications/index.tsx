@@ -36,6 +36,11 @@ import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui";
 import { getNotificationComposerPath } from "@/lib/schedules/mobile-schedule-settings";
+import {
+  getNotificationRoute,
+  type NotificationData,
+  type NotificationType,
+} from "@/lib/notifications";
 
 // Relative time formatter
 function formatRelativeTime(dateString: string | null): string {
@@ -350,13 +355,40 @@ export default function NotificationsScreen() {
 
   const handleNotificationPress = useCallback(
     async (notification: Notification) => {
-      // Mark as read when tapped
+      // Mark as read when tapped.
       if (!notification.isRead) {
         await markAsRead(notification.id);
       }
-      // Future: navigate to notification detail or related content
+
+      // Build a NotificationData object from the persisted row and route via
+      // the same helper used for push taps. Prefer the explicit type/
+      // resource_id columns; fall back to the data jsonb blob for forward
+      // compatibility.
+      const dataBlob = (notification.data ?? {}) as Record<string, unknown>;
+      const type =
+        (notification.type as NotificationType | null | undefined) ??
+        (dataBlob.type as NotificationType | undefined);
+      const resourceId =
+        notification.resource_id ??
+        (dataBlob.id as string | undefined) ??
+        notification.id;
+
+      if (!type || !orgSlug) return;
+
+      const routeData: NotificationData = {
+        type,
+        orgSlug,
+        id: resourceId,
+      };
+      const path = getNotificationRoute(routeData);
+      if (!path) return;
+
+      // "notification" routes back to /notifications — already there, skip.
+      if (type === "notification") return;
+
+      router.push(path as never);
     },
-    [markAsRead]
+    [markAsRead, orgSlug, router]
   );
 
   const handleToggleRead = useCallback(

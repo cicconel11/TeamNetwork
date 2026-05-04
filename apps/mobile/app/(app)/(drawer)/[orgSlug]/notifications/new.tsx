@@ -23,7 +23,8 @@ import {
   getNotificationComposerErrorMessage,
   getNotificationsPath,
 } from "@/lib/schedules/mobile-schedule-settings";
-import type { NotificationAudience, NotificationChannel } from "@teammeet/types";
+import type { NotificationAudience } from "@teammeet/types";
+import type { ComposerChannel } from "@/lib/schedules/mobile-schedule-settings";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
@@ -34,10 +35,12 @@ const AUDIENCE_OPTIONS: Array<{ value: NotificationAudience; label: string }> = 
   { value: "alumni", label: "Alumni" },
 ];
 
-const CHANNEL_OPTIONS: Array<{ value: NotificationChannel; label: string }> = [
+const CHANNEL_OPTIONS: Array<{ value: ComposerChannel; label: string }> = [
   { value: "email", label: "Email" },
   { value: "sms", label: "SMS" },
+  { value: "push", label: "Push" },
   { value: "both", label: "Email + SMS" },
+  { value: "all", label: "All channels" },
 ];
 
 export default function NewNotificationScreen() {
@@ -212,7 +215,7 @@ export default function NewNotificationScreen() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<NotificationAudience>("both");
-  const [channel, setChannel] = useState<NotificationChannel>("email");
+  const [channel, setChannel] = useState<ComposerChannel>("email");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -338,7 +341,7 @@ export default function NewNotificationScreen() {
           <View style={styles.formHeader}>
             <Text style={styles.formTitle}>Compose a team notification</Text>
             <Text style={styles.formSubtitle}>
-              Send an email, SMS, or both to the selected audience.
+              Send by email, SMS, push, or all channels to the selected audience.
             </Text>
           </View>
 

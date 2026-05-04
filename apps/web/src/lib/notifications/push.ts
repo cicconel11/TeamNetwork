@@ -33,7 +33,8 @@ export type PushType =
   | "discussion"
   | "mentorship"
   | "donation"
-  | "membership";
+  | "membership"
+  | "notification";
 
 export interface SendPushInput {
   supabase: SupabaseClient<Database>;

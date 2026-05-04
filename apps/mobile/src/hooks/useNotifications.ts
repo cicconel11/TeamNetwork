@@ -56,6 +56,10 @@ export interface Notification {
   sent_at: string | null;
   created_by_user_id: string | null;
   deleted_at: string | null;
+  // Deep-link metadata (P1c). Nullable on legacy rows.
+  type?: string | null;
+  resource_id?: string | null;
+  data?: Record<string, unknown> | null;
   isRead?: boolean;
 }
 

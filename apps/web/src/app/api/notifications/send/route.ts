@@ -71,7 +71,17 @@ const notificationSchema = z
     // Push fan-out fields. When `channel` is "push" or "all", these drive
     // the Expo push payload + per-category preference filtering.
     pushType: z
-      .enum(["announcement", "event", "event_reminder", "chat", "discussion", "mentorship", "donation", "membership"])
+      .enum([
+        "announcement",
+        "event",
+        "event_reminder",
+        "chat",
+        "discussion",
+        "mentorship",
+        "donation",
+        "membership",
+        "notification",
+      ])
       .optional(),
     pushResourceId: baseSchemas.uuid.optional(),
     orgSlug: optionalSafeString(120),
@@ -278,12 +288,27 @@ export async function POST(request: Request) {
           audience,
           target_user_ids: targetUserIds,
           created_by_user_id: user.id,
-        })
+          // Carry deep-link metadata so the inbox row tap can route to the
+          // same screen the push tap routes to. Falls back to "notification"
+          // (inbox itself) for generic blasts without a tied resource.
+          type: pushType ?? "notification",
+          resource_id: pushResourceId ?? null,
+          data: {
+            ...(pushType ? { type: pushType } : {}),
+            ...(pushResourceId ? { id: pushResourceId } : {}),
+            ...(orgSlug ? { orgSlug } : {}),
+          },
+        } as never)
         .select("id")
         .maybeSingle();
 
       if (createdNotification?.id) {
         resolvedNotificationId = createdNotification.id;
+        // For generic blasts where pushResourceId wasn't set, the inbox row
+        // is the resource — link it to itself so mobile can mark-read on tap.
+        if (shouldSendPush(requestedChannel) && !pushResourceId) {
+          pushResourceId = createdNotification.id;
+        }
       }
     }
 
@@ -311,6 +336,13 @@ export async function POST(request: Request) {
           },
         })
       : { total: 0, emailCount: 0, smsCount: 0, skippedMissingContact: 0, errors: [] };
+
+    // For generic admin blasts (channel=push|all without an explicit pushType),
+    // default to the "notification" type so mobile taps land on the inbox.
+    if (shouldSendPush(requestedChannel) && !pushType) {
+      pushType = "notification";
+      pushResourceId = pushResourceId || resolvedNotificationId || undefined;
+    }
 
     // Resolve orgSlug from organizationId if caller didn't supply one.
     // Mobile push routing requires orgSlug; without it, taps no-op.

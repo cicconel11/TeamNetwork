@@ -148,7 +148,8 @@ export default function NewAnnouncementPage() {
           : data.audience === "individuals" ? "both"
           : data.audience;
 
-        // Create notification record
+        // Create notification record. type/resource_id/data let the mobile
+        // inbox tap route to the same screen as the push tap.
         const { data: notification } = await supabase.from("notifications").insert({
           organization_id: org.id,
           title: data.title,
@@ -156,7 +157,10 @@ export default function NewAnnouncementPage() {
           channel: "email",
           audience: notifAudience,
           target_user_ids: audienceUserIds,
-        }).select().single();
+          type: "announcement",
+          resource_id: announcement.id,
+          data: { type: "announcement", id: announcement.id, orgSlug },
+        } as never).select().single();
 
         // Trigger actual email sending via API
         if (notification) {
