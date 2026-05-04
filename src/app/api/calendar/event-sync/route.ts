@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncEventToUsers, SyncOperation } from "@/lib/google/calendar-sync";
 import { baseSchemas } from "@/lib/security/validation";
-import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { authorizeEventSync } from "@/lib/calendar/event-sync-authz";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const bodySchema = z.object({
     eventId: baseSchemas.uuid,
@@ -26,46 +28,48 @@ export async function POST(request: Request) {
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+        // Rate limit before any external sync work. Caps both anonymous
+        // probing (per IP) and authenticated abuse (per user).
+        const rateLimit = checkRateLimit(request, {
+            userId: user?.id ?? null,
+            feature: "calendar event-sync",
+            limitPerIp: 60,
+            limitPerUser: 30,
+        });
+        if (!rateLimit.ok) {
+            return buildRateLimitResponse(rateLimit);
+        }
+
+        const respond = (payload: unknown, status = 200) =>
+            NextResponse.json(payload, { status, headers: rateLimit.headers });
+
         if (authError || !user) {
-            return NextResponse.json(
+            return respond(
                 { error: "Unauthorized", message: "You must be logged in to sync events." },
-                { status: 401 }
+                401
             );
         }
 
         const parsed = bodySchema.safeParse(await request.json().catch(() => null));
         if (!parsed.success) {
-            return NextResponse.json(
+            return respond(
                 { error: "Bad request", message: "Invalid sync request." },
-                { status: 400 }
+                400
             );
         }
         const { eventId, organizationId, operation } = parsed.data;
 
-        // Fetch event scoped to the supplied org (RLS scoped to caller).
-        // 404 on miss prevents cross-org event ID enumeration.
-        const { data: event } = await supabase
-            .from("events")
-            .select("id, organization_id, created_by_user_id")
-            .eq("id", eventId)
-            .eq("organization_id", organizationId)
-            .maybeSingle();
-
-        if (!event) {
-            return NextResponse.json(
-                { error: "Not found", message: "Event not found." },
-                { status: 404 }
-            );
-        }
-
-        // Authorize: active admin OR event creator.
-        const isActiveAdmin = await requireActiveOrgAdmin(supabase, user.id, organizationId);
-        const isCreator = event.created_by_user_id === user.id;
-        if (!isActiveAdmin && !isCreator) {
-            return NextResponse.json(
-                { error: "Forbidden", message: "You cannot sync this event." },
-                { status: 403 }
-            );
+        const authz = await authorizeEventSync({
+            client: supabase,
+            userId: user.id,
+            eventId,
+            organizationId,
+        });
+        if (!authz.ok) {
+            if (authz.status === 404) {
+                return respond({ error: "Not found", message: "Event not found." }, 404);
+            }
+            return respond({ error: "Forbidden", message: "You cannot sync this event." }, 403);
         }
 
         const serviceClient = createServiceClient();
@@ -79,7 +83,7 @@ export async function POST(request: Request) {
             console.error("[calendar-event-sync] Outlook sync error:", outlookError instanceof Error ? outlookError.message : outlookError);
         }
 
-        return NextResponse.json({
+        return respond({
             success: true,
             message: `Calendar sync triggered for event ${eventId} (${operation})`,
         });

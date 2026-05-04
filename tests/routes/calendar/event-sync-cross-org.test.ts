@@ -16,33 +16,33 @@ describe("POST /api/calendar/event-sync cross-org isolation", () => {
     assert.ok(src.includes("baseSchemas.uuid"), "Route must validate eventId/organizationId as UUIDs");
   });
 
-  it("route fetches event filtered by both id and organization_id", () => {
+  it("route delegates authorization to authorizeEventSync helper", () => {
+    // Behavioral coverage of the helper lives in
+    // tests/security/event-sync-authz.test.ts. This regression guard just
+    // confirms the route still funnels through that helper rather than
+    // re-implementing the (event lookup + admin/creator) check inline.
     const src = readFileSync(routePath, "utf8");
-    const block = src.match(/from\("events"\)([\s\S]*?)maybeSingle\(\)/);
-    assert.ok(block, "Expected events fetch block in route");
-    assert.ok(block[1].includes('.eq("id", eventId)'), "Route must filter by id");
     assert.ok(
-      block[1].includes('.eq("organization_id", organizationId)'),
-      "Route must filter by organization_id (cross-org isolation)",
+      src.includes("authorizeEventSync"),
+      "Route must use authorizeEventSync helper for cross-org + admin/creator gating",
     );
   });
 
-  it("route returns 404 when event is missing or in another org", () => {
+  it("route maps helper decision to 404/403/200 statuses", () => {
     const src = readFileSync(routePath, "utf8");
-    assert.ok(src.includes('status: 404'), "Route must respond with 404 when event missing");
-    assert.ok(src.includes("Not found"), "Route must use Not found error for missing event");
+    assert.ok(src.includes("status === 404"), "Route must surface helper 404");
+    assert.ok(src.includes("Not found"), "Route must use Not found message for missing/cross-org event");
+    assert.ok(src.includes("Forbidden"), "Route must use Forbidden message for non-admin/non-creator");
   });
 
-  it("route requires active admin OR event creator", () => {
+  it("route applies per-IP and per-user rate limits before sync work", () => {
     const src = readFileSync(routePath, "utf8");
-    assert.ok(
-      src.includes("requireActiveOrgAdmin"),
-      "Route must use requireActiveOrgAdmin helper",
-    );
-    assert.ok(
-      src.includes("event.created_by_user_id === user.id"),
-      "Route must allow the event creator as a fallback",
-    );
+    assert.ok(src.includes("checkRateLimit"), "Route must rate-limit before triggering external sync");
+    assert.ok(src.includes("calendar event-sync"), "Rate-limit feature label expected");
+    const idxRate = src.indexOf("checkRateLimit");
+    const idxAuthz = src.indexOf("authorizeEventSync");
+    assert.ok(idxRate > -1 && idxAuthz > -1 && idxRate < idxAuthz,
+      "Rate limit must run before authorization to cap anonymous probes");
   });
 
   it("google sync library scopes event lookup by organization_id", () => {
