@@ -11,6 +11,7 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -55,18 +56,9 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     if (!user) return respond({ error: "Unauthorized" }, 401);
 
-    const { data: role, error: roleError } = await serviceSupabase
-      .from("user_organization_roles")
-      .select("role, status")
-      .eq("organization_id", organizationId)
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-    if (roleError) {
-      console.error("[start-checkout] Failed to fetch role:", roleError);
-      return respond({ error: "Unable to verify permissions" }, 500);
+    if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
+      return respond({ error: "Forbidden" }, 403);
     }
-    if (role?.role !== "admin") return respond({ error: "Forbidden" }, 403);
 
     let body: z.infer<typeof bodySchema>;
     try {

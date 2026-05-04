@@ -6,8 +6,8 @@ import {
   logDevAdminAction,
   extractRequestContext,
 } from "@/lib/auth/dev-admin";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import type { Database } from "@/types/database";
-import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { extractSubscriptionPeriodEndIso } from "@/lib/stripe/subscription-period";
 import {
   resolveRecoverableAttemptLookup,
@@ -61,16 +61,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Unauthorized" }, 401);
   }
 
-  let membership: { role: string } | null = null;
-  try {
-    membership = await getOrgMembership(serviceSupabase as never, user.id, organizationId);
-  } catch (error) {
-    console.error("[reconcile-subscription] Failed to fetch role:", error);
-    return respond({ error: "Unable to verify permissions" }, 500);
-  }
-
   const isDevAdminAllowed = canDevAdminPerform(user, "reconcile_subscription");
-  if (membership?.role !== "admin" && !isDevAdminAllowed) {
+  const isActiveAdmin = await requireActiveOrgAdmin(supabase, user.id, organizationId);
+  if (!isActiveAdmin && !isDevAdminAllowed) {
     return respond({ error: "Forbidden" }, 403);
   }
 
