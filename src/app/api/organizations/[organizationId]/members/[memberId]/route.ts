@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
-import { getOrgMemberRole } from "@/lib/parents/auth";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,8 +57,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return respond({ error: "Unauthorized" }, 401);
   }
 
-  const role = await getOrgMemberRole(supabase, user.id, organizationId);
-  if (role !== "admin") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return respond({ error: "Forbidden" }, 403);
   }
 

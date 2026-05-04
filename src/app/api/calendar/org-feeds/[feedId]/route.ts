@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +33,7 @@ export async function DELETE(
       );
     }
 
-    const membership = await getOrgMembership(supabase, user.id, feed.organization_id);
-    if (!membership || membership.role !== "admin") {
+    if (!(await requireActiveOrgAdmin(supabase, user.id, feed.organization_id))) {
       return NextResponse.json(
         { error: "Forbidden", message: "Only admins can manage org feeds." },
         { status: 403 }

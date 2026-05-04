@@ -5,9 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
-import { normalizeRole } from "@/lib/auth/role-utils";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
-import type { UserRole } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -92,15 +91,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Unauthorized" }, 401);
   }
 
-  const { data: membership } = await supabase
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const role = normalizeRole((membership?.role as UserRole | null) ?? null);
-  if (!role || role !== "admin" || membership?.status !== "active") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return respond({ error: "Forbidden" }, 403);
   }
 

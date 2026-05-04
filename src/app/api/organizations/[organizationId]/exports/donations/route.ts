@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import { escapeCsvCell } from "@/lib/export/spreadsheet";
 
 export const dynamic = "force-dynamic";
@@ -46,14 +47,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   });
   if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
-  const { data: role } = await supabase
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
-  if (role?.role !== "admin" || role.status === "revoked") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return NextResponse.json({ error: "Forbidden", message: "Only admins can export donations." }, { status: 403 });
   }
 

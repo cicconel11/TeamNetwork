@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { CALENDAR_FEED_SYNC_SELECT, syncFeedByProvider } from "@/lib/calendar/feedSync";
 import type { CalendarFeedRow } from "@/lib/calendar/syncHelpers";
-import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +54,7 @@ async function handleSync(params: { feedId: string }) {
       );
     }
 
-    const membership = await getOrgMembership(supabase, user.id, typedFeed.organization_id);
-    if (!membership || membership.role !== "admin") {
+    if (!(await requireActiveOrgAdmin(supabase, user.id, typedFeed.organization_id))) {
       return NextResponse.json(
         { error: "Forbidden", message: "Only admins can sync org feeds." },
         { status: 403 }
