@@ -16,6 +16,7 @@ import {
   clientErrorPayloadSchema,
 } from "@/lib/schemas/telemetry";
 import { generateFingerprint } from "@/lib/telemetry/fingerprint";
+import { resolveTrustedUserId } from "@/lib/telemetry/trusted-user";
 import { checkAndNotify } from "@/lib/errors/notify";
 
 export const dynamic = "force-dynamic";
@@ -80,8 +81,7 @@ export async function POST(request: Request) {
     // could otherwise attribute errors to arbitrary users and split the
     // per-user rate-limit bucket across forged identities.
     const supabaseAuth = await createClient();
-    const trustedUserId =
-      (await supabaseAuth.auth.getUser()).data.user?.id ?? null;
+    const trustedUserId = await resolveTrustedUserId(supabaseAuth);
     const user_id = trustedUserId;
 
     // Fields that differ between formats
@@ -112,16 +112,19 @@ export async function POST(request: Request) {
       });
     }
 
-    // User/session rate limit (20/min) - if user_id or session_id provided
-    const rateLimitKey = user_id || session_id;
-    if (rateLimitKey) {
+    // Per-user rate limit (20/min) — only applied when we have a TRUSTED
+    // identity from the auth session. Anonymous callers must not be allowed
+    // to rotate body.session_id to mint fresh buckets; the IP limit above
+    // is the only secondary cap available until we add a server-issued
+    // telemetry cookie.
+    if (trustedUserId) {
       const userRateLimit = checkRateLimit(request, {
-        userId: rateLimitKey,
+        userId: trustedUserId,
         feature: "error telemetry (user)",
         limitPerIp: 0, // Already checked above
         limitPerUser: 20,
         windowMs: MINUTE_MS,
-        pathOverride: `/api/telemetry/error/user/${rateLimitKey}`,
+        pathOverride: `/api/telemetry/error/user/${trustedUserId}`,
       });
 
       if (!userRateLimit.ok) {
