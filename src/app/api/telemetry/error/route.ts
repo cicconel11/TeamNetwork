@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   checkRateLimit,
@@ -73,7 +74,15 @@ export async function POST(request: Request) {
     const stack = body.stack;
     const route = body.route;
     const session_id = body.session_id;
-    const user_id = body.user_id;
+
+    // Trust the authenticated session, not body.user_id. The body field is
+    // accepted for backwards compatibility but ignored — anonymous attackers
+    // could otherwise attribute errors to arbitrary users and split the
+    // per-user rate-limit bucket across forged identities.
+    const supabaseAuth = await createClient();
+    const trustedUserId =
+      (await supabaseAuth.auth.getUser()).data.user?.id ?? null;
+    const user_id = trustedUserId;
 
     // Fields that differ between formats
     const api_path = isClientFormat ? undefined : (body as z.infer<typeof telemetryErrorEventSchema>).api_path;

@@ -69,6 +69,8 @@ export const telemetryErrorEventSchema = z
     route: optionalSafeString(500),
     api_path: optionalSafeString(500),
     component: optionalSafeString(200),
+    // accepted for backwards compatibility, ignored server-side
+    // (the route trusts the authenticated session, not body claims)
     user_id: optionalSafeString(100),
     session_id: optionalSafeString(100),
     severity: telemetrySeveritySchema.optional(),
@@ -105,6 +107,7 @@ export const clientErrorPayloadSchema = z
 
     // Optional fields
     stack: optionalSafeString(10000),
+    // accepted for backwards compatibility, ignored server-side
     user_id: optionalSafeString(100),
     context: z
       .record(z.string(), z.unknown())
