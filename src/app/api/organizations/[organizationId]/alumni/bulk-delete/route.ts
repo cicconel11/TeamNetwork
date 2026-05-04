@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,22 +48,14 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: rateLimit.headers });
   }
 
-  // Admin role check
-  const serviceSupabase = createServiceClient();
-  const { data: roleData } = await serviceSupabase
-    .from("user_organization_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .eq("status", "active")
-    .maybeSingle();
-
-  if (roleData?.role !== "admin") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return NextResponse.json(
       { error: "Only admins can bulk-delete alumni" },
       { status: 403, headers: rateLimit.headers }
     );
   }
+
+  const serviceSupabase = createServiceClient();
 
   // Read-only check
   const { isReadOnly } = await checkOrgReadOnly(organizationId);

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import { orgBulkInviteSchema } from "@/lib/schemas/invite";
 import { sendEmail } from "@/lib/notifications";
 import { buildInviteLink } from "@/lib/invites/buildInviteLink";
@@ -53,23 +54,11 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Unauthorized" }, 401);
   }
 
-  const serviceSupabase = createServiceClient();
-  const { data: roleData, error: roleError } = await serviceSupabase
-    .from("user_organization_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .eq("status", "active")
-    .maybeSingle();
-
-  if (roleError) {
-    console.error("[org/invites/bulk POST] Failed to fetch role:", roleError);
-    return respond({ error: "Unable to verify permissions" }, 500);
-  }
-
-  if (roleData?.role !== "admin") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return respond({ error: "Forbidden" }, 403);
   }
+
+  const serviceSupabase = createServiceClient();
 
   let body: z.infer<typeof orgBulkInviteSchema>;
   try {

@@ -7,7 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { calendarFeedCreateSchema, googleCalendarFeedCreateSchema } from "@/lib/schemas";
-import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -113,8 +113,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const membership = await getOrgMembership(supabase, user.id, organizationId);
-    if (!membership || membership.role !== "admin") {
+    if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
       return respond(
         { error: "Forbidden", message: "Only admins can manage org calendar feeds." },
         403
@@ -211,8 +210,7 @@ async function handleIcsFeedCreate(
 ) {
   const body = parseBodyWithSchema(rawBody, calendarFeedCreateSchema);
 
-  const membership = await getOrgMembership(supabase, user.id, body.organizationId);
-  if (!membership || membership.role !== "admin") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, body.organizationId))) {
     return respond(
       { error: "Forbidden", message: "Only admins can manage org calendar feeds." },
       403
@@ -289,8 +287,7 @@ async function handleGoogleFeedCreate(
 ) {
   const body = parseBodyWithSchema(rawBody, googleCalendarFeedCreateSchema);
 
-  const membership = await getOrgMembership(supabase, user.id, body.organizationId);
-  if (!membership || membership.role !== "admin") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, body.organizationId))) {
     return respond(
       { error: "Forbidden", message: "Only admins can manage org calendar feeds." },
       403

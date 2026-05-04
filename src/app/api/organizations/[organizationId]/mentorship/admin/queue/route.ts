@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import {
   rankMentorsForMentee,
   type MentorInput,
@@ -80,17 +81,11 @@ export async function GET(req: Request, { params }: RouteParams) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const service = createServiceClient();
-  const { data: role } = await service
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
-  if (role?.role !== "admin" || role?.status !== "active") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const service = createServiceClient();
 
   const url = new URL(req.url);
   const sort = url.searchParams.get("sort") ?? "score";
@@ -194,17 +189,11 @@ export async function POST(req: Request, { params }: RouteParams) {
   });
   if (!rl.ok) return buildRateLimitResponse(rl);
 
-  const service = createServiceClient();
-  const { data: role } = await service
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
-  if (role?.role !== "admin" || role?.status !== "active") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const service = createServiceClient();
 
   const svc = service as unknown as {
     from: (t: string) => {

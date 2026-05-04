@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas, sanitizeIlikeInput } from "@/lib/security/validation";
-import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 
 const searchQuerySchema = z.object({
   query: z.string().trim().min(1).max(200),
@@ -54,18 +54,11 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Invalid query parameters", details }, 400);
   }
 
-  const serviceSupabase = createServiceClient();
-  let membership;
-  try {
-    membership = await getOrgMembership(serviceSupabase, user.id, organizationId);
-  } catch (error) {
-    console.error("[alumni/search GET] Failed to verify membership:", error);
-    return respond({ error: "Unable to verify permissions" }, 500);
-  }
-
-  if (membership?.role !== "admin") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return respond({ error: "Forbidden" }, 403);
   }
+
+  const serviceSupabase = createServiceClient();
 
   const cleanedQuery = parsed.data.query.replace(/,/g, " ").trim();
   const tokens = Array.from(new Set(cleanedQuery.split(/\s+/).filter(Boolean)));

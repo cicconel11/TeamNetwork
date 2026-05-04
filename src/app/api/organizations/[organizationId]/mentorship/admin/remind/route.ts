@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildRateLimitResponse, checkRateLimit } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import { sendNotificationBlast } from "@/lib/notifications";
 import { proposalReminderTemplate } from "@/lib/notifications/templates/mentorship/proposal_reminder";
 import { z } from "zod";
@@ -58,17 +59,11 @@ export async function POST(req: Request, { params }: RouteParams) {
   });
   if (!userRateLimit.ok) return buildRateLimitResponse(userRateLimit);
 
-  const service = createServiceClient();
-  const { data: role } = await service
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
-  if (role?.role !== "admin" || role?.status !== "active") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: userRateLimit.headers });
   }
+
+  const service = createServiceClient();
 
   let body: z.infer<typeof BodySchema>;
   try {
