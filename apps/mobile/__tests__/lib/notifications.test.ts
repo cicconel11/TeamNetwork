@@ -157,6 +157,71 @@ describe("Notifications Library", () => {
       const route = getNotificationRoute(data);
       expect(route).toBe("/(app)/test-org/announcements/ann-123");
     });
+
+    it("should route event_reminder to event detail", () => {
+      const data: NotificationData = {
+        type: "event_reminder",
+        orgSlug: "org",
+        id: "evt-1",
+      };
+      expect(getNotificationRoute(data)).toBe("/(app)/org/events/evt-1");
+    });
+
+    it("should route event_live_activity to event detail", () => {
+      const data: NotificationData = {
+        type: "event_live_activity",
+        orgSlug: "org",
+        id: "evt-2",
+      };
+      expect(getNotificationRoute(data)).toBe("/(app)/org/events/evt-2");
+    });
+
+    it("should route chat to chat group screen", () => {
+      const data: NotificationData = {
+        type: "chat",
+        orgSlug: "org",
+        id: "group-1",
+      };
+      expect(getNotificationRoute(data)).toBe("/(app)/org/chat/group-1");
+    });
+
+    it("should route discussion to chat threads (not /discussions)", () => {
+      const data: NotificationData = {
+        type: "discussion",
+        orgSlug: "org",
+        id: "thread-1",
+      };
+      expect(getNotificationRoute(data)).toBe(
+        "/(app)/org/chat/threads/thread-1",
+      );
+    });
+
+    it("should route mentorship to mentorship hub by id", () => {
+      const data: NotificationData = {
+        type: "mentorship",
+        orgSlug: "org",
+        id: "pair-1",
+      };
+      expect(getNotificationRoute(data)).toBe("/(app)/org/mentorship/pair-1");
+    });
+
+    it("should route donation to org donations screen", () => {
+      const data: NotificationData = {
+        type: "donation",
+        orgSlug: "org",
+        id: "donation-1",
+      };
+      expect(getNotificationRoute(data)).toBe("/(app)/org/donations");
+    });
+
+    it("should route membership to org members screen", () => {
+      const data: NotificationData = {
+        type: "membership",
+        orgSlug: "org",
+        id: "user-1",
+      };
+      expect(getNotificationRoute(data)).toBe("/(app)/org/members");
+    });
   });
 });
 

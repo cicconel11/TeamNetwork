@@ -262,14 +262,23 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
     );
   }
 
+  // Mobile's getNotificationRoute requires orgSlug + type + id to deep-link
+  // on tap. Don't overwrite values from input.data with undefined — only set
+  // each key when the corresponding input field is present.
   const data: Record<string, unknown> = {
     ...(input.data ?? {}),
-    type: input.pushType,
-    id: input.pushResourceId,
-    orgSlug: input.orgSlug,
     title: input.title,
     body: input.body,
   };
+  if (input.pushType) data.type = input.pushType;
+  if (input.pushResourceId) data.id = input.pushResourceId;
+  if (input.orgSlug) data.orgSlug = input.orgSlug;
+
+  if (input.pushType && !data.orgSlug) {
+    console.warn(
+      `[push] sending typed push without orgSlug (type=${input.pushType} org=${input.organizationId}); mobile taps will no-op`,
+    );
+  }
 
   const messages: ExpoPushMessage[] = tokens.map((token) => ({
     to: token,

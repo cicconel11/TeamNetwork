@@ -164,6 +164,18 @@ export async function GET(request: Request) {
       let sentCount = 0;
       switch (job.kind) {
         case "standard": {
+          // Resolve orgSlug so mobile push taps deep-link correctly.
+          // Prefer the value persisted in job.data; fall back to org lookup.
+          let jobOrgSlug =
+            (job.data as { orgSlug?: string } | null)?.orgSlug ?? undefined;
+          if (!jobOrgSlug && job.organization_id) {
+            const { data: orgRow } = await service
+              .from("organizations")
+              .select("slug")
+              .eq("id", job.organization_id)
+              .maybeSingle();
+            jobOrgSlug = orgRow?.slug ?? undefined;
+          }
           const result = await sendPush({
             supabase: service,
             organizationId: job.organization_id,
@@ -175,6 +187,7 @@ export async function GET(request: Request) {
             pushType: (job.push_type as PushType | undefined) ?? undefined,
             pushResourceId: job.push_resource_id ?? undefined,
             data: (job.data ?? {}) as Record<string, unknown>,
+            orgSlug: jobOrgSlug,
           });
           sentCount = result.sent;
           if (result.errors.length > 0) {

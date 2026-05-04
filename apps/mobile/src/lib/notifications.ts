@@ -6,6 +6,7 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { supabase } from "./supabase";
 import { captureException } from "./analytics";
+import { buildMobileDiscussionThreadRoute } from "./chat-helpers";
 
 // Notification types that map to web. `event_reminder` is the cron-driven
 // 24h/1h reminder; `event_live_activity` is forward-compat for the iOS LA
@@ -255,7 +256,8 @@ export function getNotificationRoute(data: NotificationData): string | null {
       // /[orgSlug]/chat/[groupId]
       return `/(app)/${data.orgSlug}/chat/${data.id}`;
     case "discussion":
-      return `/(app)/${data.orgSlug}/discussions/${data.id}`;
+      // `id` is the discussion thread id; threads live under chat.
+      return buildMobileDiscussionThreadRoute(data.orgSlug, data.id);
     case "mentorship":
       // `id` is the mentorship pair id (or the mentee/mentor request id).
       // The mentorship hub does its own resolution; we deep-link into it.

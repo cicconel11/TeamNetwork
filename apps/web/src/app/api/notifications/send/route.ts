@@ -312,6 +312,24 @@ export async function POST(request: Request) {
         })
       : { total: 0, emailCount: 0, smsCount: 0, skippedMissingContact: 0, errors: [] };
 
+    // Resolve orgSlug from organizationId if caller didn't supply one.
+    // Mobile push routing requires orgSlug; without it, taps no-op.
+    if (shouldSendPush(requestedChannel) && !orgSlug) {
+      const { data: org } = await service
+        .from("organizations")
+        .select("slug")
+        .eq("id", organizationId)
+        .maybeSingle();
+      orgSlug = org?.slug ?? undefined;
+    }
+
+    if (shouldSendPush(requestedChannel) && !orgSlug) {
+      return respond(
+        { error: "Unable to resolve organization slug for push notification" },
+        400,
+      );
+    }
+
     // Expo push fan-out (P0a). Inline send for now; later phases may move to
     // a worker draining notification_jobs.
     const pushResult = shouldSendPush(requestedChannel)
