@@ -9,7 +9,7 @@ export function AuthHeader({ subtitle }: AuthHeaderProps) {
   const heading = subtitle;
 
   return (
-    <div className="text-center mb-8">
+    <div className="text-center mb-3 sm:mb-4">
       <h1 className="sr-only">{heading}</h1>
       <Link href="/" className="inline-block">
         <Image
@@ -17,11 +17,11 @@ export function AuthHeader({ subtitle }: AuthHeaderProps) {
           alt="TeamNetwork"
           width={541}
           height={303}
-          className="h-32 w-auto object-contain mx-auto"
+          className="h-14 sm:h-16 w-auto object-contain mx-auto"
           priority
         />
       </Link>
-      {subtitle && <p className="text-white/50 mt-3">{subtitle}</p>}
+      {subtitle && <p className="text-white/50 text-sm mt-1">{subtitle}</p>}
     </div>
   );
 }
