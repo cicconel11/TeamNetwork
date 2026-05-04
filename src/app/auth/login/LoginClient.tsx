@@ -151,11 +151,11 @@ function LoginFormComponent({
   };
 
   return (
-    <Card className="p-6">
+    <Card className="p-5 sm:p-6">
       <Button
         type="button"
         variant="secondary"
-        className="w-full mb-6"
+        className="w-full mb-3"
         onClick={() => handleSocialLogin("google")}
         isLoading={isGoogleLoading}
         disabled={isSocialLoading}
@@ -186,7 +186,7 @@ function LoginFormComponent({
         <Button
           type="button"
           variant="secondary"
-          className="w-full mb-6"
+          className="w-full mb-3"
           onClick={() => handleSocialLogin(LINKEDIN_OIDC_PROVIDER)}
           isLoading={isLinkedInLoading}
           disabled={isSocialLoading}
@@ -201,7 +201,7 @@ function LoginFormComponent({
         <Button
           type="button"
           variant="secondary"
-          className="w-full mb-6"
+          className="w-full mb-3"
           onClick={() => handleSocialLogin(MICROSOFT_SSO_PROVIDER)}
           isLoading={isMicrosoftLoading}
           disabled={isSocialLoading}
@@ -212,7 +212,7 @@ function LoginFormComponent({
         </Button>
       )}
 
-      <div className="relative mb-6">
+      <div className="relative my-3">
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-white/10" />
         </div>
@@ -221,7 +221,7 @@ function LoginFormComponent({
         </div>
       </div>
 
-      <div className="flex rounded-xl bg-white/5 p-1 mb-6">
+      <div className="flex rounded-xl bg-white/5 p-1 mb-3">
         <button
           type="button"
           onClick={() => setMode("password")}
@@ -264,7 +264,7 @@ function LoginFormComponent({
       )}
 
       <form data-testid="login-form" onSubmit={mode === "password" ? handleSubmit(onPasswordLogin) : handleMagicLink}>
-        <div className="space-y-4">
+        <div className="space-y-2.5">
           <Input
             label={t("emailLabel")}
             type="email"
@@ -275,7 +275,7 @@ function LoginFormComponent({
           />
 
           {mode === "password" && (
-            <>
+            <div className="relative">
               <Input
                 label={t("passwordLabel")}
                 type="password"
@@ -284,15 +284,13 @@ function LoginFormComponent({
                 error={errors.password?.message}
                 {...register("password")}
               />
-              <div className="text-right">
-                <Link
-                  href={`/auth/forgot-password?redirect=${encodeURIComponent(redirectTo)}`}
-                  className="text-sm text-white/50 hover:text-white hover:underline"
-                >
-                  {t("forgotPassword")}
-                </Link>
-              </div>
-            </>
+              <Link
+                href={`/auth/forgot-password?redirect=${encodeURIComponent(redirectTo)}`}
+                className="absolute top-0 right-0 text-xs text-white/50 hover:text-white hover:underline"
+              >
+                {t("forgotPassword")}
+              </Link>
+            </div>
           )}
 
           <div className="flex justify-center">
@@ -318,7 +316,7 @@ function LoginFormComponent({
         </div>
       </form>
 
-      <div className="mt-6 text-center text-sm text-white/50">
+      <div className="mt-4 text-center text-sm text-white/50">
         {t("noAccount")}{" "}
         <Link href={buildAuthLink("/auth/signup", redirectTo)} className="text-white font-medium hover:underline">
           {t("signUp")}
