@@ -3,6 +3,26 @@ import { z } from "zod";
 // Re-export base schemas from validation.ts
 export { baseSchemas, safeString, uuidArray } from "@/lib/security/validation";
 
+export const uuidSchema = z.string().uuid();
+
+export const orgIdSchema = uuidSchema.brand<"OrgId">();
+export type OrgId = z.infer<typeof orgIdSchema>;
+
+export const userIdSchema = uuidSchema.brand<"UserId">();
+export type UserId = z.infer<typeof userIdSchema>;
+
+export const memberIdSchema = uuidSchema.brand<"MemberId">();
+export type MemberId = z.infer<typeof memberIdSchema>;
+
+export const enterpriseIdSchema = uuidSchema.brand<"EnterpriseId">();
+export type EnterpriseId = z.infer<typeof enterpriseIdSchema>;
+
+export const albumIdSchema = uuidSchema.brand<"AlbumId">();
+export type AlbumId = z.infer<typeof albumIdSchema>;
+
+export const mediaIdSchema = uuidSchema.brand<"MediaId">();
+export type MediaId = z.infer<typeof mediaIdSchema>;
+
 // Create form-friendly versions without transforms
 // (transforms cause type mismatches with react-hook-form)
 export const optionalSafeString = (max: number) =>
