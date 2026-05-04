@@ -13,13 +13,11 @@ function fmt(cents: number) {
   return currencyFmt.format(cents / 100);
 }
 
-// Larger alumni slabs (10k+) exist in src/lib/pricing-v2.ts and remain
-// active in the calculator + checkout. Hidden from the landing page until
-// we're ready to publish them — for now route those orgs through sales.
 const ALUMNI_SLABS: { label: string; rateCents: number }[] = [
   { label: "1 – 500", rateCents: 36 },
   { label: "501 – 2,500", rateCents: 25 },
   { label: "2,501 – 10,000", rateCents: 18 },
+  { label: "10,001 – 25,000", rateCents: 13 },
 ];
 
 const ACTIVE_SLABS: { label: string; rateCents: number }[] = [
@@ -59,9 +57,9 @@ const SCENARIOS = [
   {
     key: "enterprise",
     title: "University network",
-    blurb: "1,000 actives · 10,000 alumni · 15 sub-orgs",
+    blurb: "1,000 actives · 20,000 alumni · 15 sub-orgs",
     actives: 1_000,
-    alumni: 10_000,
+    alumni: 20_000,
     tier: "enterprise" as const,
     subOrgs: 15,
   },
@@ -102,7 +100,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
           </h2>
           <p className="scroll-reveal text-landing-cream/60 max-w-2xl mx-auto mb-10 text-lg">
             One rate per active member, one rate per alumni. Both drop as your
-            roster grows. Over 10,000 alumni? <a href="mailto:sales@myteamnetwork.com" className="underline hover:text-landing-cream">Talk to us</a>.
+            roster grows. Over 100,000 alumni? <a href="mailto:sales@myteamnetwork.com" className="underline hover:text-landing-cream">Talk to us</a>.
           </p>
 
           <div
@@ -189,7 +187,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
                 </li>
               ))}
               <li className="flex justify-between items-baseline text-sm pt-1">
-                <span className="text-landing-cream/70">10,000+ alumni</span>
+                <span className="text-landing-cream/70">100,000+ alumni</span>
                 <span className="font-semibold text-landing-green">
                   Contact sales
                 </span>

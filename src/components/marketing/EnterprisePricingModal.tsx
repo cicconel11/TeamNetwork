@@ -1,18 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  formatBucketRange,
-  formatSeatPrice,
-  getEnterpriseTotalPricing,
-  getFreeSubOrgCount,
-  isSalesLed,
-} from "@/lib/enterprise/pricing";
-import {
-  ALUMNI_BUCKET_PRICING,
-  ENTERPRISE_SEAT_PRICING,
-} from "@/types/enterprise";
+import { quote } from "@/lib/pricing-v2";
 import type { SubscriptionInterval } from "@/types/database";
 
 interface EnterprisePricingModalProps {
@@ -21,41 +11,21 @@ interface EnterprisePricingModalProps {
   interval: SubscriptionInterval;
 }
 
-const BUCKET_ROWS = ALUMNI_BUCKET_PRICING.maxSelfServeBuckets + 1; // Buckets 1–5
+const currencyFmt = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
 
 function formatIntervalUnit(interval: SubscriptionInterval): string {
   return interval === "month" ? "mo" : "yr";
 }
 
+function formatCents(cents: number): string {
+  return currencyFmt.format(cents / 100);
+}
+
 function formatTotal(cents: number, interval: SubscriptionInterval): string {
-  return `$${(cents / 100).toFixed(0)}/${formatIntervalUnit(interval)}`;
-}
-
-function getOrgCostLabel(
-  orgCount: number,
-  interval: SubscriptionInterval,
-  bucketCount: number
-): string {
-  const freeCount = getFreeSubOrgCount(bucketCount);
-  const billable = Math.max(0, orgCount - freeCount);
-  if (billable === 0) return "Free!";
-  const unitCents =
-    interval === "month"
-      ? ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly
-      : ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
-  return `${formatSeatPrice(billable * unitCents)}/${formatIntervalUnit(interval)}`;
-}
-
-function getBucketPriceLabel(
-  bucket: number,
-  interval: SubscriptionInterval
-): string {
-  if (isSalesLed(bucket)) return "Contact Sales";
-  const unitCents =
-    interval === "month"
-      ? ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket
-      : ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket;
-  return `${formatSeatPrice(bucket * unitCents)}/${formatIntervalUnit(interval)}`;
+  return `${formatCents(cents)}/${formatIntervalUnit(interval)}`;
 }
 
 export function EnterprisePricingModal({
@@ -63,9 +33,15 @@ export function EnterprisePricingModal({
   onClose,
   interval,
 }: EnterprisePricingModalProps) {
-  const [orgCount, setOrgCount] = useState(3);
-  const [bucketCount, setBucketCount] = useState(1);
+  const [orgCount, setOrgCount] = useState(15);
+  const [activeCount, setActiveCount] = useState(1_000);
+  const [alumniCount, setAlumniCount] = useState(20_000);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  const pricing = useMemo(
+    () => quote({ tier: "enterprise", actives: activeCount, alumni: alumniCount, subOrgs: orgCount }),
+    [activeCount, alumniCount, orgCount],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -76,7 +52,6 @@ export function EnterprisePricingModal({
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  // Lock body scroll while modal is open so page content can't scroll behind it
   useEffect(() => {
     if (!open) return;
     const original = document.body.style.overflow;
@@ -92,23 +67,16 @@ export function EnterprisePricingModal({
 
   if (!open) return null;
 
-  const pricing = getEnterpriseTotalPricing(bucketCount, orgCount, interval);
-  const salesLed = isSalesLed(bucketCount);
-  const freeSubOrgCount = getFreeSubOrgCount(bucketCount);
-  const billableOrgs = Math.max(0, orgCount - freeSubOrgCount);
-  const freeOrgs = Math.min(orgCount, freeSubOrgCount);
-  const orgCostLabel = getOrgCostLabel(orgCount, interval, bucketCount);
+  const displayCents = interval === "year" ? pricing.yearlyCents : pricing.monthlyCents;
 
   return createPortal(
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/80 z-50"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Dialog */}
       <div
         role="dialog"
         aria-modal="true"
@@ -116,10 +84,8 @@ export function EnterprisePricingModal({
         className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none overscroll-contain"
       >
         <div className="modal-panel rounded-2xl p-8 w-full max-w-lg pointer-events-auto modal-enter relative">
-          {/* Enterprise badge */}
           <div className="pick-badge enterprise-badge">Enterprise</div>
 
-          {/* Header */}
           <div className="flex items-start justify-between mb-8 mt-4">
             <div>
               <h2
@@ -129,7 +95,7 @@ export function EnterprisePricingModal({
                 Enterprise Pricing
               </h2>
               <p className="text-landing-cream/50 text-sm mt-1">
-                {interval === "month" ? "Monthly" : "Yearly"} billing
+                {interval === "month" ? "Monthly" : "Yearly"} billing · 17% yearly discount
               </p>
             </div>
             <button
@@ -154,126 +120,70 @@ export function EnterprisePricingModal({
             </button>
           </div>
 
-          {/* Sub-org stepper */}
-          <div className="bg-landing-navy/60 rounded-xl p-5 mb-4 border border-landing-cream/10">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <h3 className="text-landing-cream font-semibold text-sm">
-                  Managed Organizations
-                </h3>
-                <p className="text-landing-cream/40 text-xs mt-0.5">
-                  First {freeSubOrgCount} FREE (3 per bucket) &middot;{" "}
-                  {interval === "month" ? "$15/mo" : "$150/yr"} each additional
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  onClick={() => setOrgCount((c) => Math.max(1, c - 1))}
-                  className="w-8 h-8 rounded-lg bg-landing-navy-light border border-landing-cream/10 text-landing-cream hover:border-landing-cream/30 transition-[border-color,opacity] flex items-center justify-center text-lg leading-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-green/50"
-                  aria-label="Decrease organization count"
-                  disabled={orgCount <= 1}
-                >
-                  &minus;
-                </button>
-                <span className="text-landing-cream text-xl w-7 text-center">
-                  {orgCount}
-                </span>
-                <button
-                  onClick={() => setOrgCount((c) => c + 1)}
-                  className="w-8 h-8 rounded-lg bg-landing-navy-light border border-landing-cream/10 text-landing-cream hover:border-landing-cream/30 transition-[border-color] flex items-center justify-center text-lg leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-green/50"
-                  aria-label="Increase organization count"
-                >
-                  +
-                </button>
-                <span
-                  className={`text-sm min-w-[72px] text-right ${
-                    billableOrgs === 0
-                      ? "text-landing-green"
-                      : "text-landing-cream"
-                  }`}
-                >
-                  {orgCostLabel}
-                </span>
-              </div>
-            </div>
-            {billableOrgs > 0 && (
-              <p className="text-landing-cream/40 text-xs mt-2">
-                {freeOrgs} free + {billableOrgs} additional
-              </p>
-            )}
-          </div>
+          <CounterCard
+            title="Managed Organizations"
+            helper="First 10 at $20/mo each · additional orgs at $15/mo each"
+            value={orgCount}
+            min={1}
+            onChange={setOrgCount}
+            sideLabel={formatCents(pricing.breakdown.subOrgMonthlyCents) + "/mo"}
+          />
 
-          {/* Alumni bucket selector */}
-          <div className="bg-landing-navy/60 rounded-xl p-5 mb-6 border border-landing-cream/10">
-            <h3 className="text-landing-cream font-semibold text-sm mb-0.5">
-              Alumni Capacity
+          <CounterCard
+            title="Active Members"
+            helper="Volume rate shown below follows the public team pricing table"
+            value={activeCount}
+            min={0}
+            step={50}
+            onChange={setActiveCount}
+            sideLabel={`${formatCents(pricing.breakdown.activeRateCents)}/mo each`}
+          />
+
+          <CounterCard
+            title="Alumni"
+            helper="Volume rate shown below follows the public team pricing table"
+            value={alumniCount}
+            min={0}
+            step={500}
+            onChange={setAlumniCount}
+            sideLabel={`${formatCents(pricing.breakdown.alumniRateCents)}/mo each`}
+          />
+
+          <div className="rounded-xl bg-landing-navy/60 p-5 mb-6 border border-landing-cream/10">
+            <h3 className="text-landing-cream font-semibold text-sm mb-3">
+              Breakdown
             </h3>
-            <p className="text-landing-cream/40 text-xs mb-4">
-              2,500 alumni per bucket
-            </p>
-            <div className="space-y-2" role="radiogroup" aria-label="Alumni bucket size">
-              {Array.from({ length: BUCKET_ROWS }, (_, i) => i + 1).map(
-                (bucket) => {
-                  const selected = bucket === bucketCount;
-                  const salesBucket = isSalesLed(bucket);
-                  const priceLabel = getBucketPriceLabel(bucket, interval);
-
-                  return (
-                    <button
-                      key={bucket}
-                      role="radio"
-                      onClick={() => setBucketCount(bucket)}
-                      className={`w-full flex items-center justify-between rounded-lg px-4 py-3 border text-sm transition-[border-color,background-color] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-green/50 ${
-                        selected
-                          ? "bucket-row-selected"
-                          : "border-landing-cream/10 hover:border-landing-cream/20"
-                      }`}
-                      aria-checked={selected}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          aria-hidden="true"
-                          className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-[border-color,background-color] ${
-                            selected
-                              ? "border-landing-green bg-landing-green"
-                              : "border-landing-cream/30"
-                          }`}
-                        />
-                        <span className="text-landing-cream/70">
-                          Bucket {bucket} &middot; {formatBucketRange(bucket)} alumni
-                        </span>
-                      </div>
-                      <span
-                        className={`font-semibold ${
-                          salesBucket ? "text-landing-green" : "text-landing-cream"
-                        }`}
-                      >
-                        {priceLabel}
-                      </span>
-                    </button>
-                  );
-                }
-              )}
-            </div>
+            <ul className="space-y-2 text-sm">
+              <BreakdownRow label="Base fee" value={`${formatCents(pricing.breakdown.platformBaseCents)}/mo`} />
+              <BreakdownRow label="Org fees" value={`${formatCents(pricing.breakdown.subOrgMonthlyCents)}/mo`} />
+              <BreakdownRow label="Active cost" value={`${formatCents(pricing.breakdown.activeMonthlyCents)}/mo`} />
+              <BreakdownRow label="Alumni cost" value={`${formatCents(pricing.breakdown.alumniMonthlyCents)}/mo`} />
+            </ul>
           </div>
 
-          {/* Total + CTA */}
           <div className="flex items-center justify-between">
             <div>
               <p className="text-landing-cream/40 text-xs uppercase tracking-wider mb-1">
                 Total
               </p>
-              {salesLed ? (
+              {pricing.salesLed ? (
                 <p className="text-xl font-bold text-landing-green">
                   Contact Sales
                 </p>
               ) : (
-                <p className="text-2xl font-bold text-landing-cream">
-                  {formatTotal(pricing.totalCents, interval)}
-                </p>
+                <>
+                  <p className="text-2xl font-bold text-landing-cream">
+                    {formatTotal(displayCents, interval)}
+                  </p>
+                  {interval === "year" && (
+                    <p className="text-xs text-landing-cream/50 mt-1">
+                      17% off monthly · {formatCents(Math.round(pricing.yearlyCents / 12))}/mo effective
+                    </p>
+                  )}
+                </>
               )}
             </div>
-            {salesLed ? (
+            {pricing.salesLed ? (
               <a
                 href="/contact"
                 className="bg-landing-green/20 hover:bg-landing-green/30 border border-landing-green/40 text-landing-green font-semibold py-3 px-6 rounded-xl transition-[background-color] text-sm"
@@ -292,6 +202,71 @@ export function EnterprisePricingModal({
         </div>
       </div>
     </>,
-    document.body
+    document.body,
+  );
+}
+
+function CounterCard({
+  title,
+  helper,
+  value,
+  min,
+  step = 1,
+  sideLabel,
+  onChange,
+}: {
+  title: string;
+  helper: string;
+  value: number;
+  min: number;
+  step?: number;
+  sideLabel: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="bg-landing-navy/60 rounded-xl p-5 mb-4 border border-landing-cream/10">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-landing-cream font-semibold text-sm">
+            {title}
+          </h3>
+          <p className="text-landing-cream/40 text-xs mt-0.5">
+            {helper}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => onChange(Math.max(min, value - step))}
+            className="w-8 h-8 rounded-lg bg-landing-navy-light border border-landing-cream/10 text-landing-cream hover:border-landing-cream/30 transition-[border-color,opacity] flex items-center justify-center text-lg leading-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-green/50"
+            aria-label={`Decrease ${title.toLowerCase()}`}
+            disabled={value <= min}
+          >
+            &minus;
+          </button>
+          <span className="text-landing-cream text-xl min-w-16 text-center tabular-nums">
+            {value.toLocaleString()}
+          </span>
+          <button
+            onClick={() => onChange(value + step)}
+            className="w-8 h-8 rounded-lg bg-landing-navy-light border border-landing-cream/10 text-landing-cream hover:border-landing-cream/30 transition-[border-color] flex items-center justify-center text-lg leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-green/50"
+            aria-label={`Increase ${title.toLowerCase()}`}
+          >
+            +
+          </button>
+          <span className="text-sm min-w-[96px] text-right text-landing-cream">
+            {sideLabel}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BreakdownRow({ label, value }: { label: string; value: string }) {
+  return (
+    <li className="flex justify-between items-baseline border-b border-landing-cream/5 pb-2 last:border-0">
+      <span className="text-landing-cream/70">{label}</span>
+      <span className="font-semibold text-landing-cream">{value}</span>
+    </li>
   );
 }
