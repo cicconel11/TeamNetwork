@@ -135,7 +135,9 @@ export function useNotifications(
   const userId = user?.id ?? null;
   const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  // Read state is mirrored on each notification via `isRead`. We keep the
+  // setter so the realtime/inter-instance event handlers can still nudge UI.
+  const [, setReadIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -356,25 +358,8 @@ export function useNotifications(
     }
   }, [fetchNotifications]);
 
-  // Helpers that round-trip read state to the server-side
-  // `notification_reads` table. The local Set + notifications array are
-  // updated optimistically; failures roll back via refetch.
-  type ReadsTable = {
-    upsert: (
-      rows: Array<Record<string, unknown>>,
-      opts: { onConflict: string; ignoreDuplicates?: boolean },
-    ) => Promise<{ error: { message: string } | null }>;
-    delete: () => {
-      eq: (col: string, val: string) => {
-        eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
-        in: (col: string, vals: string[]) => Promise<{ error: { message: string } | null }>;
-      };
-    };
-  };
-  const readsTable = (): ReadsTable =>
-    (supabase as unknown as { from: (t: string) => ReadsTable }).from(
-      "notification_reads",
-    );
+  // (helpers inlined below — earlier extraction triggered exhaustive-deps
+  // false positives in the read/unread callbacks)
 
   // Mark a notification as read
   const markAsRead = useCallback(
@@ -394,10 +379,19 @@ export function useNotifications(
       );
 
       try {
-        await readsTable().upsert(
-          [{ notification_id: notificationId, user_id: userId }],
-          { onConflict: "notification_id,user_id", ignoreDuplicates: true },
-        );
+        await (supabase as unknown as {
+          from: (t: string) => {
+            upsert: (
+              rows: Array<Record<string, unknown>>,
+              opts: { onConflict: string; ignoreDuplicates?: boolean },
+            ) => Promise<{ error: { message: string } | null }>;
+          };
+        })
+          .from("notification_reads")
+          .upsert(
+            [{ notification_id: notificationId, user_id: userId }],
+            { onConflict: "notification_id,user_id", ignoreDuplicates: true },
+          );
       } catch (e) {
         sentry.captureException(e as Error, {
           context: "useNotifications.markAsRead",
@@ -420,10 +414,19 @@ export function useNotifications(
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
 
     try {
-      await readsTable().upsert(
-        allIds.map((id) => ({ notification_id: id, user_id: userId })),
-        { onConflict: "notification_id,user_id", ignoreDuplicates: true },
-      );
+      await (supabase as unknown as {
+        from: (t: string) => {
+          upsert: (
+            rows: Array<Record<string, unknown>>,
+            opts: { onConflict: string; ignoreDuplicates?: boolean },
+          ) => Promise<{ error: { message: string } | null }>;
+        };
+      })
+        .from("notification_reads")
+        .upsert(
+          allIds.map((id) => ({ notification_id: id, user_id: userId })),
+          { onConflict: "notification_id,user_id", ignoreDuplicates: true },
+        );
     } catch (e) {
       sentry.captureException(e as Error, {
         context: "useNotifications.markAllAsRead",
@@ -451,7 +454,16 @@ export function useNotifications(
       );
 
       try {
-        await readsTable()
+        await (supabase as unknown as {
+          from: (t: string) => {
+            delete: () => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+              };
+            };
+          };
+        })
+          .from("notification_reads")
           .delete()
           .eq("notification_id", notificationId)
           .eq("user_id", userId);
