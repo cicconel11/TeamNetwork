@@ -404,13 +404,16 @@ export async function syncEventToUsers(
     operation: SyncOperation
 ): Promise<void> {
 
-    // Fetch the event details and org timezone in parallel
+    // Fetch the event details and org timezone in parallel.
+    // Event query is scoped to the supplied organizationId so a stale or
+    // mis-routed call cannot leak an event from another tenant.
     const [eventResult, orgResult] = await Promise.all([
         supabase
             .from("events")
             .select("*")
             .eq("id", eventId)
-            .single(),
+            .eq("organization_id", organizationId)
+            .maybeSingle(),
         supabase
             .from("organizations")
             .select("timezone")
