@@ -20,6 +20,7 @@ import {
   logDevAdminAction,
   extractRequestContext,
 } from "@/lib/auth/dev-admin";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -336,16 +337,9 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
     return respond({ error: "Unauthorized" }, 401);
   }
 
-  // Require admin role in the organization
-  const { data: role } = await supabase
-    .from("user_organization_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
   const isDevAdminAllowed = canDevAdminPerform(user, "delete_org");
-  if (role?.role !== "admin" && !isDevAdminAllowed) {
+  const isActiveAdmin = await requireActiveOrgAdmin(supabase, user.id, organizationId);
+  if (!isActiveAdmin && !isDevAdminAllowed) {
     return respond({ error: "Forbidden" }, 403);
   }
 

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import { rejectAdoptionRequest } from "@/lib/enterprise/adoption";
 import type { AdoptionRequestStatus } from "@/types/enterprise";
 
@@ -51,15 +52,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Unauthorized" }, 401);
   }
 
-  // Check user is admin of the organization
-  const { data: role } = await supabase
-    .from("user_organization_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
-  if (role?.role !== "admin") {
+  if (!(await requireActiveOrgAdmin(supabase, user.id, organizationId))) {
     return respond({ error: "Forbidden" }, 403);
   }
 

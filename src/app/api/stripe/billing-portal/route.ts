@@ -16,6 +16,7 @@ import {
   logDevAdminAction,
   extractRequestContext,
 } from "@/lib/auth/dev-admin";
+import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import type { Database } from "@/types/database";
 import { createTelemetryReporter, reportExternalServiceWarning } from "@/lib/telemetry/server";
 
@@ -82,15 +83,9 @@ export async function POST(req: Request) {
       return respond({ error: "Organization not found" }, 404);
     }
 
-    const { data: role } = await supabase
-      .from("user_organization_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("organization_id", organization.id)
-      .maybeSingle();
-
     const isDevAdminAllowed = canDevAdminPerform(user, "open_billing_portal");
-    if (role?.role !== "admin" && !isDevAdminAllowed) {
+    const isActiveAdmin = await requireActiveOrgAdmin(supabase, user.id, organization.id);
+    if (!isActiveAdmin && !isDevAdminAllowed) {
       return respond({ error: "Forbidden" }, 403);
     }
 
