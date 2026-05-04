@@ -21,7 +21,11 @@ export function AuthHeader({ subtitle }: AuthHeaderProps) {
           priority
         />
       </Link>
-      {subtitle && <p className="text-white/50 text-sm mt-1">{subtitle}</p>}
+      {subtitle && (
+        <p className="text-white/50 text-sm mt-1 [@media(max-height:700px)]:hidden">
+          {subtitle}
+        </p>
+      )}
     </div>
   );
 }

@@ -155,7 +155,7 @@ function LoginFormComponent({
       <Button
         type="button"
         variant="secondary"
-        className="w-full mb-3"
+        className="w-full mb-3 [@media(max-height:700px)]:mb-2"
         onClick={() => handleSocialLogin("google")}
         isLoading={isGoogleLoading}
         disabled={isSocialLoading}
@@ -186,7 +186,7 @@ function LoginFormComponent({
         <Button
           type="button"
           variant="secondary"
-          className="w-full mb-3"
+          className="w-full mb-3 [@media(max-height:700px)]:mb-2"
           onClick={() => handleSocialLogin(LINKEDIN_OIDC_PROVIDER)}
           isLoading={isLinkedInLoading}
           disabled={isSocialLoading}
@@ -201,7 +201,7 @@ function LoginFormComponent({
         <Button
           type="button"
           variant="secondary"
-          className="w-full mb-3"
+          className="w-full mb-3 [@media(max-height:700px)]:mb-2"
           onClick={() => handleSocialLogin(MICROSOFT_SSO_PROVIDER)}
           isLoading={isMicrosoftLoading}
           disabled={isSocialLoading}
