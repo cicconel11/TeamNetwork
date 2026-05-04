@@ -152,7 +152,21 @@ export async function POST(request: Request) {
     respond = (payload: unknown, status = 200) =>
       NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-    const body = await validateJson(request, notificationSchema, { maxBodyBytes: 40_000 });
+    let body: z.infer<typeof notificationSchema>;
+    try {
+      body = await validateJson(request, notificationSchema, { maxBodyBytes: 40_000 });
+    } catch (err) {
+      if (err instanceof ValidationError) {
+        // Log validation failures so we can see which field tripped them in
+        // Vercel runtime logs without forcing the client to surface details.
+        console.warn(
+          "[notifications/send] validation failed:",
+          err.message,
+          err.details,
+        );
+      }
+      throw err;
+    }
     const { announcementId, notificationId } = body;
 
     if (!user) {

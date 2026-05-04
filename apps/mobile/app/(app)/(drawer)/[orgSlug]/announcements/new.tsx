@@ -380,9 +380,15 @@ export default function NewAnnouncementScreen() {
 
           if (!response.ok) {
             const data = await response.json().catch(() => ({}));
-            showToast(data?.error || "Failed to send notification", "error");
+            const details = Array.isArray(data?.details)
+              ? `: ${data.details.join("; ")}`
+              : "";
+            const msg = `${data?.error || "Failed to send notification"}${details}`;
+            console.warn("[notifications/send] failed", response.status, data);
+            showToast(msg, "error");
           }
         } catch (notifyError) {
+          console.warn("[notifications/send] threw", notifyError);
           showToast("Failed to send notification", "error");
         }
       }
