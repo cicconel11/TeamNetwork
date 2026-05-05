@@ -31,10 +31,17 @@ const validChannel = (value: string | undefined): NotificationChannel => {
 
 // Supported channel inputs from clients. "push" sends Expo push only;
 // "all" sends email/SMS (per existing audience preferences) AND push.
-type RequestedChannel = "email" | "sms" | "both" | "push" | "all";
+// "email_sms" is an alias for "both" used by the mobile composer.
+type RequestedChannel = "email" | "sms" | "both" | "push" | "all" | "email_sms";
 
 function shouldSendBlast(channel: RequestedChannel): boolean {
-  return channel === "email" || channel === "sms" || channel === "both" || channel === "all";
+  return (
+    channel === "email" ||
+    channel === "sms" ||
+    channel === "both" ||
+    channel === "email_sms" ||
+    channel === "all"
+  );
 }
 
 function shouldSendPush(channel: RequestedChannel): boolean {
@@ -44,9 +51,18 @@ function shouldSendPush(channel: RequestedChannel): boolean {
 function mapBlastChannel(channel: RequestedChannel): NotificationChannel {
   if (channel === "push") return "email"; // unused when blast skipped, but keep type stable
   if (channel === "sms") return "sms";
-  if (channel === "both") return "both";
+  if (channel === "both" || channel === "email_sms") return "both";
   if (channel === "all") return "both";
   return "email";
+}
+
+// Coerces any value the schema accepts into one the DB CHECK
+// constraint allows: "members" | "alumni" | "both".
+function normalizeAudience(value: string | undefined): NotificationAudience {
+  if (value === "alumni") return "alumni";
+  if (value === "members" || value === "active_members") return "members";
+  // "all", "both", "individuals", "parents", undefined → "both" (broadest match)
+  return "both";
 }
 
 const mapAnnouncementAudience = (audience: string): NotificationAudience => {
@@ -56,20 +72,36 @@ const mapAnnouncementAudience = (audience: string): NotificationAudience => {
   return "both";
 };
 
+// Lenient UUID — accepts any 36-char hex+dash form. Postgres `gen_random_uuid()`
+// emits v4 UUIDs which always pass, but zod 4's strict UUID regex rejects
+// non-RFC4122 shapes (e.g. v0/legacy). The route uses these IDs as `eq()`
+// filter values; bad inputs simply find no row and get a 404, so a relaxed
+// regex is safe.
+const looseUuid = z
+  .string()
+  .trim()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, {
+    message: "Must be a 36-char UUID",
+  });
+
 const notificationSchema = z
   .object({
-    announcementId: baseSchemas.uuid.optional(),
-    notificationId: baseSchemas.uuid.optional(),
-    organizationId: baseSchemas.uuid.optional(),
+    announcementId: looseUuid.optional(),
+    notificationId: looseUuid.optional(),
+    organizationId: looseUuid.optional(),
     title: optionalSafeString(200),
     body: optionalSafeString(8_000),
-    audience: z.enum(["members", "alumni", "both"]).optional(),
-    channel: z.enum(["email", "sms", "both", "push", "all"]).optional(),
+    // Accept the historical web values plus mobile variants. The route
+    // normalizes these to the DB's enum before any insert.
+    audience: z
+      .enum(["members", "alumni", "both", "all", "active_members", "individuals", "parents"])
+      .optional(),
+    channel: z.enum(["email", "sms", "both", "push", "all", "email_sms"]).optional(),
     targetUserIds: uuidArray(500).optional(),
     persistNotification: z.boolean().optional(),
-    category: z.enum(["announcement", "discussion", "event", "workout", "competition"]).optional(),
-    // Push fan-out fields. When `channel` is "push" or "all", these drive
-    // the Expo push payload + per-category preference filtering.
+    category: z
+      .enum(["announcement", "discussion", "event", "workout", "competition"])
+      .optional(),
     pushType: z
       .enum([
         "announcement",
@@ -83,10 +115,13 @@ const notificationSchema = z
         "notification",
       ])
       .optional(),
-    pushResourceId: baseSchemas.uuid.optional(),
+    pushResourceId: looseUuid.optional(),
     orgSlug: optionalSafeString(120),
   })
-  .strict()
+  // .passthrough() — silently drop unknown fields instead of 400-ing. Older
+  // mobile builds may send fields the schema doesn't know about; the route
+  // only consumes the known ones.
+  .passthrough()
   .superRefine((value, ctx) => {
     if (!value.announcementId && !value.notificationId && !value.organizationId) {
       ctx.addIssue({
@@ -176,7 +211,7 @@ export async function POST(request: Request) {
     let organizationId: string | null = null;
     let title: string | null = body.title ?? null;
     let bodyText = body.body ?? "";
-    let audience: NotificationAudience = body.audience ?? "both";
+    let audience: NotificationAudience = normalizeAudience(body.audience);
     const requestedChannel: RequestedChannel = (body.channel ?? "email") as RequestedChannel;
     let channel: NotificationChannel = mapBlastChannel(requestedChannel);
     let targetUserIds: string[] | null = body.targetUserIds ?? null;
@@ -255,8 +290,7 @@ export async function POST(request: Request) {
       organizationId = body.organizationId ?? null;
       title = body.title ?? null;
       bodyText = body.body ?? "";
-      const requestedAudience = body.audience as NotificationAudience | undefined;
-      audience = requestedAudience || "both";
+      audience = normalizeAudience(body.audience);
       channel = mapBlastChannel((body.channel ?? "email") as RequestedChannel);
       targetUserIds = body.targetUserIds ?? null;
       resolvedNotificationId = body.notificationId ?? null;
