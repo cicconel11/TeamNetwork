@@ -178,16 +178,22 @@ function validateBuildEnv() {
     );
   }
 
-  // Reject placeholder Android App Links fingerprint on Vercel production —
-  // shipping the all-zero SHA256 means App Links won't verify and any later
-  // additions could go unnoticed. Real fingerprint comes from
-  // `eas credentials --platform android`.
+  // Android App Links are opt-in. If `public/.well-known/assetlinks.json` is
+  // present on a production build, validate it — placeholder/zero fingerprints
+  // would silently disable App Links verification. Missing file is fine:
+  // Android falls back to standard https deep links. Real fingerprint comes
+  // from `eas credentials --platform android` once Android ships.
   if (isVercelProduction) {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const assetlinksPath = join(here, "public/.well-known/assetlinks.json");
+    let assetlinksRaw = null;
     try {
-      const here = dirname(fileURLToPath(import.meta.url));
-      const assetlinks = JSON.parse(
-        readFileSync(join(here, "public/.well-known/assetlinks.json"), "utf8")
-      );
+      assetlinksRaw = readFileSync(assetlinksPath, "utf8");
+    } catch {
+      // File absent — skip validation.
+    }
+    if (assetlinksRaw) {
+      const assetlinks = JSON.parse(assetlinksRaw);
       const placeholder = "00:".repeat(31) + "00";
       const fingerprints = assetlinks
         .flatMap((entry) => entry?.target?.sha256_cert_fingerprints ?? [])
@@ -201,12 +207,6 @@ function validateBuildEnv() {
           `assetlinks.json contains placeholder SHA256 fingerprint(s) — replace before production deploy. Run: eas credentials --platform android`
         );
       }
-    } catch (err) {
-      if (err instanceof Error && err.message.startsWith("assetlinks.json")) {
-        throw err;
-      }
-      // File missing or malformed — fail loud rather than ship silently.
-      throw new Error(`assetlinks.json validation failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
