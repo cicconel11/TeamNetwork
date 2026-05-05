@@ -1,4 +1,8 @@
 {
+  "framework": "nextjs",
+  "installCommand": "bun install",
+  "buildCommand": "bun turbo build --filter=@teammeet/web",
+  "outputDirectory": "apps/web/.next",
   "crons": [
     {
       "path": "/api/cron/error-baselines",
