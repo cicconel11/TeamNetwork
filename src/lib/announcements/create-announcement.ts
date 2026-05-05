@@ -162,6 +162,9 @@ export async function sendAnnouncementNotification(
     body: JSON.stringify({
       announcementId: request.announcementId,
       category: "announcement",
+      // "all" = email + push. The route degrades to push-only if Resend is
+      // unconfigured in production, so missing email config doesn't block push.
+      channel: "all",
     }),
   });
 }

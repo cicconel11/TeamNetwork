@@ -11,7 +11,14 @@ const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 export type DeliveryChannel = "email" | "sms";
 
 export type NotificationCategory =
-  | "announcement" | "discussion" | "event" | "workout" | "competition" | "mentorship";
+  | "announcement"
+  | "discussion"
+  | "event"
+  | "event_reminder"
+  | "workout"
+  | "competition"
+  | "mentorship"
+  | "chat";
 
 export interface NotificationTarget {
   email?: string | null;
@@ -159,9 +166,11 @@ const CATEGORY_PREF_COLUMN: Record<NotificationCategory, keyof PreferenceRow> = 
   announcement: "announcement_emails_enabled",
   discussion: "discussion_emails_enabled",
   event: "event_emails_enabled",
+  event_reminder: "event_emails_enabled",
   workout: "workout_emails_enabled",
   competition: "competition_emails_enabled",
   mentorship: "mentorship_emails_enabled" as keyof PreferenceRow,
+  chat: "announcement_emails_enabled" as keyof PreferenceRow,
 };
 
 const getChannelsForContact = ({
