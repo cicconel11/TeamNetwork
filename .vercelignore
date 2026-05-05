@@ -9,3 +9,4 @@ docs/
 .turbo/
 playwright-report/
 scripts/
+!scripts/vercel-should-build.sh
