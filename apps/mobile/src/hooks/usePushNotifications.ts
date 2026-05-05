@@ -31,16 +31,24 @@ export function usePushNotifications({
   const pushTokenListener = useRef<Notifications.EventSubscription | null>(null);
   const isRegisteredRef = useRef(false);
   const lastTokenRef = useRef<string | null>(null);
+  const hasHandledColdLaunchRef = useRef(false);
+  const lastHandledNotificationIdRef = useRef<string | null>(null);
 
-  // Handle notification response (user tapped on notification)
+  // Handle notification response (user tapped on notification). De-duped by
+  // request identifier so the cold-launch path and the live response listener
+  // can't both fire for the same tap, and so effect re-runs that surface the
+  // persisted cold-launch response don't navigate twice.
   const handleNotificationResponse = useCallback(
     (response: Notifications.NotificationResponse) => {
       try {
+        const id = response.notification.request.identifier;
+        if (id && lastHandledNotificationIdRef.current === id) return;
+        lastHandledNotificationIdRef.current = id ?? null;
+
         const data = response.notification.request.content.data as unknown as NotificationData;
         const route = getNotificationRoute(data);
 
         if (route) {
-          // Navigate to the appropriate screen
           router.push(route as any);
         }
       } catch (error) {
@@ -133,12 +141,17 @@ export function usePushNotifications({
       handleNotificationResponse
     );
 
-    // Handle notification tap when app launches from a quit state
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response) {
-        handleNotificationResponse(response);
-      }
-    });
+    // Handle notification tap when app launches from a quit state. Expo
+    // persists the cold-launch response until force-quit, so guard with a ref
+    // — without this, every effect re-run re-navigates and the stack twitches.
+    if (!hasHandledColdLaunchRef.current) {
+      hasHandledColdLaunchRef.current = true;
+      Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (response) {
+          handleNotificationResponse(response);
+        }
+      });
+    }
 
     // Dismiss delivered banners from the OS center on launch and resume.
     // Badge count is left alone — useNotifications keeps it in sync with
