@@ -15,7 +15,9 @@ type TableName =
   | "schedule_events"
   | "form_submissions"
   | "notifications"
+  | "notification_jobs"
   | "notification_preferences"
+  | "user_push_tokens"
   | "google_tokens"
   | "alumni"
   | "members"
@@ -76,7 +78,9 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   schedule_events: ["external_uid"],
   form_submissions: [],
   notifications: [],
+  notification_jobs: [],
   notification_preferences: [],
+  user_push_tokens: [["user_id", "expo_push_token"]],
   google_tokens: ["user_id"],
   alumni: [],
   members: [],
@@ -129,7 +133,9 @@ export function createSupabaseStub() {
     schedule_events: [],
     form_submissions: [],
     notifications: [],
+    notification_jobs: [],
     notification_preferences: [],
+    user_push_tokens: [],
     google_tokens: [],
     alumni: [],
     members: [],

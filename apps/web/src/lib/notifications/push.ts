@@ -17,6 +17,16 @@
  */
 
 import { Expo, type ExpoPushMessage, type ExpoPushTicket } from "expo-server-sdk";
+
+/**
+ * Subset of the Expo client surface that `sendPush` actually uses. Tests can
+ * pass a stub implementing this interface via `SendPushInput.expoClient` to
+ * exercise the full fan-out path without hitting the real Expo API.
+ */
+export interface ExpoPushClient {
+  chunkPushNotifications(messages: ExpoPushMessage[]): ExpoPushMessage[][];
+  sendPushNotificationsAsync(messages: ExpoPushMessage[]): Promise<ExpoPushTicket[]>;
+}
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Database,
@@ -58,11 +68,15 @@ export interface SendPushInput {
    * row to avoid re-queuing the same job in an infinite loop.
    */
   forceInline?: boolean;
+  /** Test-only: inject an Expo client stub. Production callers omit this. */
+  expoClient?: ExpoPushClient;
 }
 
 export interface SendPushResult {
   /** Number of pushes Expo accepted (ticket.status === 'ok'). */
   sent: number;
+  /** Number of recipient tokens accepted into the async dispatch queue. */
+  queued: number;
   /** Recipients skipped because they had no token, push disabled, or category opted out. */
   skipped: number;
   /** Receipt-error messages for diagnostic surfaces. */
@@ -84,7 +98,7 @@ const CATEGORY_PUSH_COLUMN: Record<NotificationCategory, string> = {
   mentorship: "mentorship_push_enabled",
 };
 
-const expoClient = new Expo({
+const defaultExpoClient: ExpoPushClient = new Expo({
   accessToken: process.env.EXPO_ACCESS_TOKEN,
   useFcmV1: true,
 });
@@ -114,7 +128,12 @@ interface TokenRow {
  */
 async function resolvePushTargets(
   input: SendPushInput
-): Promise<{ tokens: string[]; resolvedUsers: number; skippedUsers: number }> {
+): Promise<{
+  tokens: string[];
+  resolvedUsers: number;
+  skippedUsers: number;
+  errors: string[];
+}> {
   const { supabase, organizationId, audience, targetUserIds, category } = input;
 
   const audienceRoles: readonly UserRole[] = mapAudienceToRoles(audience ?? "both");
@@ -131,11 +150,19 @@ async function resolvePushTargets(
     membershipQuery = membershipQuery.in("user_id", targetUserIds);
   }
 
-  const { data: memberships } = await membershipQuery;
+  const { data: memberships, error: membershipsError } = await membershipQuery;
+  if (membershipsError) {
+    return {
+      tokens: [],
+      resolvedUsers: 0,
+      skippedUsers: 0,
+      errors: [`membership query failed: ${membershipsError.message}`],
+    };
+  }
   const userIds = (memberships as MembershipRow[] | null)?.map((m) => m.user_id) ?? [];
 
   if (userIds.length === 0) {
-    return { tokens: [], resolvedUsers: 0, skippedUsers: 0 };
+    return { tokens: [], resolvedUsers: 0, skippedUsers: 0, errors: [] };
   }
 
   // Step 2: preferences for those users in this org.
@@ -144,14 +171,22 @@ async function resolvePushTargets(
     prefColumns.push(CATEGORY_PUSH_COLUMN[category]);
   }
 
-  const { data: prefs } = await supabase
+  const { data: prefs, error: prefsError } = await supabase
     .from("notification_preferences")
     .select(prefColumns.join(","))
     .eq("organization_id", organizationId)
     .in("user_id", userIds);
+  if (prefsError) {
+    return {
+      tokens: [],
+      resolvedUsers: userIds.length,
+      skippedUsers: 0,
+      errors: [`notification preference query failed: ${prefsError.message}`],
+    };
+  }
 
   const prefByUser = new Map<string, PreferenceRow>();
-  (prefs as PreferenceRow[] | null)?.forEach((row) => {
+  (prefs as unknown as PreferenceRow[] | null)?.forEach((row) => {
     if (row.user_id) prefByUser.set(row.user_id, row);
   });
 
@@ -171,23 +206,34 @@ async function resolvePushTargets(
   });
 
   if (allowedUserIds.length === 0) {
-    return { tokens: [], resolvedUsers: userIds.length, skippedUsers: userIds.length };
+    return { tokens: [], resolvedUsers: userIds.length, skippedUsers: userIds.length, errors: [] };
   }
 
   // Step 3: tokens for the surviving users (multi-device → multiple rows).
   // Cast: `user_push_tokens` is in the database (migration 20260425100000)
   // but not yet in the generated `Database` types. Regenerate via
   // `bun run gen:types` to remove this cast.
-  const { data: tokens } = await (supabase as unknown as {
+  const { data: tokens, error: tokensError } = await (supabase as unknown as {
     from: (table: string) => {
       select: (cols: string) => {
-        in: (col: string, vals: string[]) => Promise<{ data: TokenRow[] | null }>;
+        in: (
+          col: string,
+          vals: string[],
+        ) => Promise<{ data: TokenRow[] | null; error: { message: string } | null }>;
       };
     };
   })
     .from("user_push_tokens")
     .select("user_id, expo_push_token")
     .in("user_id", allowedUserIds);
+  if (tokensError) {
+    return {
+      tokens: [],
+      resolvedUsers: allowedUserIds.length,
+      skippedUsers: userIds.length - allowedUserIds.length,
+      errors: [`push token query failed: ${tokensError.message}`],
+    };
+  }
 
   const tokenList =
     (tokens as TokenRow[] | null)
@@ -198,6 +244,7 @@ async function resolvePushTargets(
     tokens: tokenList,
     resolvedUsers: allowedUserIds.length,
     skippedUsers: userIds.length - allowedUserIds.length,
+    errors: [],
   };
 }
 
@@ -229,10 +276,10 @@ function defaultPushEnabled(category?: NotificationCategory): boolean {
 
 /**
  * Soft cap on the inline-dispatch path. Larger broadcasts must wait for the
- * `notification_jobs` worker to drain — which is not yet implemented (P1
- * follow-up). For now we send the first `INLINE_PUSH_TOKEN_CAP` tokens and
- * return the rest as `skipped` with an error string so callers can surface a
- * useful message instead of silently dropping recipients past the timeout.
+ * `notification_jobs` worker to drain. If the queue insert fails, we send the
+ * first `INLINE_PUSH_TOKEN_CAP` tokens and return the rest as `skipped` with
+ * an error string so callers can surface a useful message instead of silently
+ * dropping recipients past the timeout.
  *
  * Why a hard cap: Vercel API routes have a 10s/15s/300s timeout depending on
  * plan and Expo's HTTP/2 push API rate-limits at ~600 req/sec; an 5000-alumni
@@ -248,10 +295,24 @@ export const INLINE_PUSH_TOKEN_CAP = 200;
  * the token row).
  */
 export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
-  const { tokens: allTokens, resolvedUsers, skippedUsers } = await resolvePushTargets(input);
+  const {
+    tokens: allTokens,
+    resolvedUsers,
+    skippedUsers,
+    errors: resolveErrors,
+  } = await resolvePushTargets(input);
+
+  if (resolveErrors.length > 0) {
+    return {
+      sent: 0,
+      queued: 0,
+      skipped: resolvedUsers + skippedUsers,
+      errors: resolveErrors,
+    };
+  }
 
   if (allTokens.length === 0) {
-    return { sent: 0, skipped: resolvedUsers + skippedUsers, errors: [] };
+    return { sent: 0, queued: 0, skipped: resolvedUsers + skippedUsers, errors: [] };
   }
 
   // Broadcasts above the inline cap are enqueued onto notification_jobs so
@@ -292,8 +353,9 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
       );
       return {
         sent: 0,
+        queued: allTokens.length,
         skipped: skippedUsers,
-        errors: [`queued: ${allTokens.length} recipients pending dispatch`],
+        errors: [],
       };
     } catch (err) {
       // Fall back to capped inline send so a queue failure doesn't lose
@@ -350,13 +412,14 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
     sound: "default",
   }));
 
-  const chunks = expoClient.chunkPushNotifications(messages);
+  const expo = input.expoClient ?? defaultExpoClient;
+  const chunks = expo.chunkPushNotifications(messages);
   const tickets: Array<{ token: string; ticket: ExpoPushTicket }> = [];
   const errors: string[] = [...capErrors];
 
   for (const chunk of chunks) {
     try {
-      const chunkTickets = await expoClient.sendPushNotificationsAsync(chunk);
+      const chunkTickets = await expo.sendPushNotificationsAsync(chunk);
       chunkTickets.forEach((ticket, i) => {
         tickets.push({ token: chunk[i].to as string, ticket });
       });
@@ -397,5 +460,5 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
       .in("expo_push_token", tokensToDrop);
   }
 
-  return { sent, skipped: skippedUsers + overflow, errors };
+  return { sent, queued: 0, skipped: skippedUsers + overflow, errors };
 }

@@ -65,3 +65,4 @@ test-results/
 
 # opencode auth tool
 opencode-auth/
+.env*.local

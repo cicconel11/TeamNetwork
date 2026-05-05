@@ -142,42 +142,37 @@ export default function NewAnnouncementPage() {
     // Send notification if enabled
     if (data.send_notification && announcement) {
       try {
-        // Map announcement audience to notification audience
-        const notifAudience = data.audience === "all" ? "both"
-          : data.audience === "active_members" ? "members"
-          : data.audience === "individuals" ? "both"
-          : data.audience;
+        const response = await fetch("/api/notifications/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            announcementId: announcement.id,
+            category: "announcement",
+            channel: "push",
+            orgSlug,
+          }),
+        });
 
-        // Create notification record. type/resource_id/data let the mobile
-        // inbox tap route to the same screen as the push tap.
-        const { data: notification } = await supabase.from("notifications").insert({
-          organization_id: org.id,
-          title: data.title,
-          body: data.body || null,
-          channel: "email",
-          audience: notifAudience,
-          target_user_ids: audienceUserIds,
-          type: "announcement",
-          resource_id: announcement.id,
-          data: { type: "announcement", id: announcement.id, orgSlug },
-        } as never).select().single();
-
-        // Trigger actual email sending via API
-        if (notification) {
-          await fetch("/api/notifications/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              announcementId: announcement.id,
-              category: "announcement",
-              channel: "all",
-              orgSlug,
-            }),
-          });
+        if (!response.ok) {
+          let message = "Notification send failed";
+          try {
+            const payload = await response.json();
+            if (payload?.error) message = payload.error;
+            if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
+              message = `${message}: ${payload.errors.join("; ")}`;
+            }
+          } catch {
+            // Keep the generic message if the response body is not JSON.
+          }
+          setError(`Announcement was published, but push notification delivery failed. ${message}`);
+          setIsLoading(false);
+          return;
         }
       } catch (notifError) {
         console.error("Failed to send notification:", notifError);
-        // Don't block on notification failure - announcement was created successfully
+        setError("Announcement was published, but push notification delivery failed. Please try sending it again from notifications.");
+        setIsLoading(false);
+        return;
       }
     }
 

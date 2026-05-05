@@ -63,6 +63,7 @@ export async function notifyNewThread(params: {
       orgSlug,
     }).catch((err) => ({
       sent: 0,
+      queued: 0,
       skipped: 0,
       errors: [err instanceof Error ? err.message : String(err)],
     })),
@@ -100,6 +101,7 @@ export async function notifyNewReply(params: {
     orgSlug,
   }).catch((err) => ({
     sent: 0,
+    queued: 0,
     skipped: 0,
     errors: [err instanceof Error ? err.message : String(err)],
   }));
