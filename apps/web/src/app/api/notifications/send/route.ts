@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendNotificationBlast, sendEmail as sendEmailStub } from "@/lib/notifications";
 import type { EmailParams, NotificationResult, NotificationCategory } from "@/lib/notifications";
@@ -198,12 +198,8 @@ async function sendEmailWithFallback(to: string, subject: string, bodyText: stri
 export async function POST(request: Request) {
   let respond: ((payload: unknown, status?: number) => ReturnType<typeof NextResponse.json>) | null = null;
   try {
-    const supabase = await createClient();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
     const service = createServiceClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
     const rateLimit = checkRateLimit(request, {
       userId: user?.id ?? null,
@@ -396,12 +392,13 @@ export async function POST(request: Request) {
     // channel="push". Resend is only required for the blast path; gating it
     // earlier would block push-only and "all"-channel sends whenever email
     // happens to be misconfigured.
+    let runBlast = shouldSendBlast(requestedChannel);
     if (
-      shouldSendBlast(requestedChannel) &&
+      runBlast &&
       !resend &&
       process.env.NODE_ENV === "production"
     ) {
-      // For "all", degrade gracefully: keep going so push still fires.
+      // For "all", degrade gracefully: skip the blast so push still fires.
       // For "email"/"sms"/"both"/"email_sms" only, the request can't
       // succeed — return a config error.
       if (!shouldSendPush(requestedChannel)) {
@@ -416,9 +413,10 @@ export async function POST(request: Request) {
       console.warn(
         "[notifications/send] Resend missing in production; degrading channel='all' to push-only",
       );
+      runBlast = false;
     }
 
-    const blastResult = shouldSendBlast(requestedChannel)
+    const blastResult = runBlast
       ? await sendNotificationBlast({
           supabase: service,
           organizationId,
@@ -474,9 +472,15 @@ export async function POST(request: Request) {
           pushResourceId,
           orgSlug,
         })
-      : { sent: 0, skipped: 0, errors: [] };
+      : { sent: 0, queued: 0, skipped: 0, errors: [] };
 
-    if (blastResult.total === 0 && pushResult.sent === 0 && shouldSendBlast(requestedChannel)) {
+    const acceptedPushCount = pushResult.sent + pushResult.queued;
+
+    if (
+      blastResult.total === 0 &&
+      acceptedPushCount === 0 &&
+      shouldSendBlast(requestedChannel)
+    ) {
       return respond(
         {
           error: "No recipients matched the selected audience",
@@ -495,21 +499,24 @@ export async function POST(request: Request) {
     }
 
     const sent = blastResult.emailCount + blastResult.smsCount + pushResult.sent;
+    const accepted = sent + pushResult.queued;
     const allErrors = [...blastResult.errors, ...pushResult.errors];
-    const success = allErrors.length === 0 && sent > 0;
+    const success = allErrors.length === 0 && accepted > 0;
 
     const payload = {
       success,
       sent,
+      accepted,
       emailSent: blastResult.emailCount,
       smsSent: blastResult.smsCount,
       pushSent: pushResult.sent,
+      pushQueued: pushResult.queued,
       total: blastResult.total,
       skipped: blastResult.skippedMissingContact + pushResult.skipped,
       errors: allErrors.length > 0 ? allErrors : undefined,
     };
 
-    const status = success ? 200 : 500;
+    const status = success && pushResult.queued > 0 && sent === 0 ? 202 : success ? 200 : 500;
     if (!success) {
       console.error("Notification send failed:", payload);
     }
@@ -535,4 +542,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
