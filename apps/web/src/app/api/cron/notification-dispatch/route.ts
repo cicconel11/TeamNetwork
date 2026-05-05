@@ -188,6 +188,10 @@ export async function GET(request: Request) {
             pushResourceId: job.push_resource_id ?? undefined,
             data: (job.data ?? {}) as Record<string, unknown>,
             orgSlug: jobOrgSlug,
+            // Worker path: never re-enqueue. Drain the full recipient list
+            // inline. Without this, jobs whose recipient count exceeds the
+            // inline cap would loop in the queue forever.
+            forceInline: true,
           });
           sentCount = result.sent;
           if (result.errors.length > 0) {

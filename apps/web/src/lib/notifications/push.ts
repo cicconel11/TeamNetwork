@@ -52,6 +52,12 @@ export interface SendPushInput {
   data?: Record<string, unknown>;
   /** Optional org slug — included in `data` so the device can route on tap. */
   orgSlug?: string;
+  /**
+   * When true, never enqueue — drain inline regardless of recipient count.
+   * The dispatch worker sets this when processing a queued `notification_jobs`
+   * row to avoid re-queuing the same job in an infinite loop.
+   */
+  forceInline?: boolean;
 }
 
 export interface SendPushResult {
@@ -250,8 +256,9 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
 
   // Broadcasts above the inline cap are enqueued onto notification_jobs so
   // the cron worker fans them out without tripping the API timeout. Smaller
-  // sends still go inline so chat DMs and reminders stay synchronous.
-  if (allTokens.length > INLINE_PUSH_TOKEN_CAP) {
+  // sends still go inline so chat DMs and reminders stay synchronous. The
+  // worker itself passes forceInline=true to avoid re-queuing the same job.
+  if (allTokens.length > INLINE_PUSH_TOKEN_CAP && !input.forceInline) {
     const audienceForQueue =
       input.audience && input.audience !== "both" ? input.audience : "all";
     try {
@@ -298,11 +305,13 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
     }
   }
 
-  // Inline path. If we got here with allTokens > cap, the queue insert
-  // failed above — preserve the historical capped-send behavior so we still
-  // deliver to as many recipients as possible.
-  const overflow = Math.max(0, allTokens.length - INLINE_PUSH_TOKEN_CAP);
-  const tokens = overflow > 0 ? allTokens.slice(0, INLINE_PUSH_TOKEN_CAP) : allTokens;
+  // Inline path. The worker (forceInline=true) drains the full token list
+  // since it is not bound by the API request timeout. Ad-hoc API callers
+  // either had ≤cap tokens to begin with, or fell through here because the
+  // queue insert failed — in that case we still cap to avoid the timeout.
+  const shouldCap = !input.forceInline && allTokens.length > INLINE_PUSH_TOKEN_CAP;
+  const overflow = shouldCap ? allTokens.length - INLINE_PUSH_TOKEN_CAP : 0;
+  const tokens = shouldCap ? allTokens.slice(0, INLINE_PUSH_TOKEN_CAP) : allTokens;
   const capErrors =
     overflow > 0
       ? [

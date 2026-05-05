@@ -96,7 +96,39 @@ const notificationSchema = z
     audience: z
       .enum(["members", "alumni", "both", "all", "active_members", "individuals", "parents"])
       .optional(),
-    channel: z.enum(["email", "sms", "both", "push", "all", "email_sms"]).optional(),
+    // Accept the discrete values plus any comma-separated combination
+    // (e.g. "email,push" or "sms,push") that the mobile event/workout/
+    // competition flows construct via `${channel},push`. Normalized below.
+    channel: z
+      .string()
+      .trim()
+      .max(64)
+      .optional()
+      .transform((raw) => {
+        if (!raw) return undefined;
+        const parts = raw
+          .split(",")
+          .map((p) => p.trim().toLowerCase())
+          .filter(Boolean);
+        const wantsPush = parts.includes("push") || parts.includes("all");
+        const blastValues = parts.filter((p) => p !== "push" && p !== "all");
+        const hasEmail = blastValues.includes("email");
+        const hasSms = blastValues.includes("sms");
+        const wantsBoth =
+          blastValues.includes("both") ||
+          blastValues.includes("email_sms") ||
+          (hasEmail && hasSms) ||
+          parts.includes("all");
+        if (wantsPush && wantsBoth) return "all";
+        if (wantsPush && hasEmail) return "all"; // email + push collapses to all
+        if (wantsPush && hasSms) return "all"; // sms + push collapses to all
+        if (wantsPush) return "push";
+        if (wantsBoth) return "both";
+        if (hasSms) return "sms";
+        if (hasEmail) return "email";
+        // Unknown shape — let downstream default it to "email".
+        return undefined;
+      }),
     targetUserIds: uuidArray(500).optional(),
     persistNotification: z.boolean().optional(),
     category: z
@@ -360,15 +392,32 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check Resend config before doing any send work
-    if (!resend && process.env.NODE_ENV === "production") {
-      return respond(
-        { error: "Notifications not configured: set RESEND_API_KEY and FROM_EMAIL" },
-        500,
+    // Email + SMS fan-out (existing path). Skipped entirely when
+    // channel="push". Resend is only required for the blast path; gating it
+    // earlier would block push-only and "all"-channel sends whenever email
+    // happens to be misconfigured.
+    if (
+      shouldSendBlast(requestedChannel) &&
+      !resend &&
+      process.env.NODE_ENV === "production"
+    ) {
+      // For "all", degrade gracefully: keep going so push still fires.
+      // For "email"/"sms"/"both"/"email_sms" only, the request can't
+      // succeed — return a config error.
+      if (!shouldSendPush(requestedChannel)) {
+        return respond(
+          {
+            error:
+              "Email/SMS not configured: set RESEND_API_KEY and FROM_EMAIL",
+          },
+          500,
+        );
+      }
+      console.warn(
+        "[notifications/send] Resend missing in production; degrading channel='all' to push-only",
       );
     }
 
-    // Email + SMS fan-out (existing path). Skipped entirely when channel="push".
     const blastResult = shouldSendBlast(requestedChannel)
       ? await sendNotificationBlast({
           supabase: service,
