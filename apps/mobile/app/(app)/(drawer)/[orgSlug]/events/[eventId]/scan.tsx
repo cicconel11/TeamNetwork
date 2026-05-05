@@ -283,6 +283,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
   },
   backButton: {
     flexDirection: "row",

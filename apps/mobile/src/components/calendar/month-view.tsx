@@ -75,6 +75,7 @@ export function MonthView({
       backgroundColor: n.surface,
       padding: SPACING.xs,
       justifyContent: "flex-start" as const,
+      overflow: "hidden" as const,
     },
     dayCellToday: {
       borderColor: s.success,
@@ -100,6 +101,7 @@ export function MonthView({
     eventsContainer: {
       gap: 1,
       flex: 1,
+      overflow: "hidden" as const,
     },
     eventPill: {
       borderRadius: RADIUS.sm,
@@ -145,6 +147,8 @@ export function MonthView({
       if (dayNum <= daysInMonth) {
         const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), dayNum);
         days.push({ date, dayNum, isCurrentMonth: true });
+      } else {
+        days.push({ date: new Date(), dayNum: 0, isCurrentMonth: false });
       }
     }
   }
