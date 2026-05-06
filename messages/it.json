@@ -164,7 +164,22 @@
     "somethingWentWrong": "Qualcosa è andato storto. Controlla la tua connessione e riprova.",
     "goHome": "Vai alla home",
     "mustBeSignedIn": "Devi effettuare l'accesso.",
-    "needSignedIn": "Devi effettuare l'accesso per gestire le notifiche."
+    "needSignedIn": "Devi effettuare l'accesso per gestire le notifiche.",
+    "claimTitle": "Rivendica il tuo account",
+    "claimSubtitle": "Inserisci l'e-mail registrata dalla tua organizzazione. Ti invieremo un codice a 6 cifre.",
+    "claimSendCode": "Invia codice",
+    "claimCodeSent": "Se la tua e-mail è registrata, riceverai un codice a 6 cifre. Inseriscilo qui sotto per continuare.",
+    "claimCodeLabel": "Codice a 8 cifre",
+    "claimCodePlaceholder": "12345678",
+    "claimVerify": "Verifica e continua",
+    "claimResend": "Usa un'altra e-mail",
+    "claimInvalidCode": "Codice non valido o scaduto. Riprova o richiedine uno nuovo.",
+    "claimRateLimited": "Troppe richieste. Riprova tra qualche minuto.",
+    "claimError": "Impossibile inviare il codice. Riprova.",
+    "claimLinkPrompt": "Invitato o importato dalla tua organizzazione?",
+    "claimLinkText": "Rivendica il tuo account",
+    "claimJoinHeading": "Completa la rivendicazione del tuo account",
+    "claimJoinDescription": "Inserisci il codice di invito della tua organizzazione per completare la rivendicazione del profilo importato."
   },
   "settings": {
     "title": "Impostazioni",

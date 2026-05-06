@@ -166,7 +166,22 @@
     "somethingWentWrong": "Something went wrong. Please check your connection and try again.",
     "goHome": "Go Home",
     "mustBeSignedIn": "You must be signed in.",
-    "needSignedIn": "You need to be signed in to manage notifications."
+    "needSignedIn": "You need to be signed in to manage notifications.",
+    "claimTitle": "Claim your account",
+    "claimSubtitle": "Enter the email your organization has on file. We'll send a 6-digit code.",
+    "claimSendCode": "Send code",
+    "claimCodeSent": "If your email is on file, a 6-digit code is on the way. Enter it below to continue.",
+    "claimCodeLabel": "8-digit code",
+    "claimCodePlaceholder": "12345678",
+    "claimVerify": "Verify and continue",
+    "claimResend": "Use a different email",
+    "claimInvalidCode": "That code is invalid or expired. Try again or request a new one.",
+    "claimRateLimited": "Too many requests. Try again in a few minutes.",
+    "claimError": "Couldn't send the code. Please try again.",
+    "claimLinkPrompt": "Been invited or imported by your organization?",
+    "claimLinkText": "Claim your account",
+    "claimJoinHeading": "Finish claiming your account",
+    "claimJoinDescription": "Enter the invite code from your organization to finish claiming your imported profile."
   },
   "settings": {
     "title": "Settings",

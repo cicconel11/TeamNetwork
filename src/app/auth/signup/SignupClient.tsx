@@ -491,6 +491,13 @@ export function SignupClient({
           {t("signIn")}
         </Link>
       </div>
+
+      <div className="mt-2 text-center text-xs text-white/40">
+        {t("claimLinkPrompt")}{" "}
+        <Link href={buildAuthLink("/auth/claim", redirectTo)} className="text-white font-medium hover:underline">
+          {t("claimLinkText")}
+        </Link>
+      </div>
     </Card>
   );
 }
