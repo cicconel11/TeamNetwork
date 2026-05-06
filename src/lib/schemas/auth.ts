@@ -34,6 +34,24 @@ export const loginSchema = z.object({
 });
 export type LoginForm = z.infer<typeof loginSchema>;
 
+// Claim account — step 1: request OTP code by email.
+export const claimEmailSchema = z.object({
+  email: baseSchemas.email,
+});
+export type ClaimEmailForm = z.infer<typeof claimEmailSchema>;
+
+// Claim account — step 2: verify the 8-digit OTP code.
+// Code-flow avoids email-link prefetch issues (Apple Mail, scanners) that
+// consume single-use magic-link tokens before the user can click them.
+// 8 digits matches the project's Auth → Email OTP Length setting.
+export const claimOtpSchema = z.object({
+  token: z
+    .string()
+    .trim()
+    .regex(/^\d{8}$/, "Enter the 8-digit code from your email"),
+});
+export type ClaimOtpForm = z.infer<typeof claimOtpSchema>;
+
 // Signup form
 export const signupSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100, "Name is too long"),
