@@ -40,7 +40,7 @@ export function normalizeConstituent(
     external_id: constituent.id,
     first_name: constituent.first ?? "",
     last_name: constituent.last ?? "",
-    email: primaryEmail?.address ?? null,
+    email: primaryEmail?.address?.trim().toLowerCase() || null,
     phone_number: primaryPhone?.number ?? null,
     address_summary: primaryAddress ? formatAddress(primaryAddress) : null,
     graduation_year: parseClassYear(constituent.class_of),
