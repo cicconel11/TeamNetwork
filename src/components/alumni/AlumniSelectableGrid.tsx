@@ -21,6 +21,10 @@ export interface AlumniRecord {
   industry: string | null;
   current_city: string | null;
   linkedin_url: string | null;
+  // Admin-only flag — derived server-side from user_id presence. Raw user_id
+  // is never shipped to the client. Note: rows sharing lower(email) may
+  // display inconsistently because the badge reflects this row's user_id.
+  is_claimed?: boolean;
 }
 
 interface AlumniSelectableGridProps {
@@ -238,6 +242,11 @@ export function AlumniSelectableGrid({ alumni, orgSlug, organizationId }: Alumni
                         {alum.industry && (
                           <Badge variant="primary">{alum.industry}</Badge>
                         )}
+                        {typeof alum.is_claimed === "boolean" && (
+                          alum.is_claimed
+                            ? <Badge variant="muted">Claimed</Badge>
+                            : <Badge variant="warning">Unclaimed</Badge>
+                        )}
                         {alum.current_city && (
                           <span className="text-xs text-muted-foreground truncate">
                             {alum.current_city}
@@ -274,6 +283,11 @@ export function AlumniSelectableGrid({ alumni, orgSlug, organizationId }: Alumni
                         )}
                         {alum.industry && (
                           <Badge variant="primary">{alum.industry}</Badge>
+                        )}
+                        {typeof alum.is_claimed === "boolean" && (
+                          alum.is_claimed
+                            ? <Badge variant="muted">Claimed</Badge>
+                            : <Badge variant="warning">Unclaimed</Badge>
                         )}
                         {alum.current_city && (
                           <span className="text-xs text-muted-foreground truncate">
