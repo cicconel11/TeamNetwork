@@ -47,6 +47,19 @@ test("gallery upload-intent route enforces storage quota", () => {
   assertWiresQuota("src/app/api/media/route.ts");
 });
 
+test("feed upload-intent and finalize accept Bearer JWT (mobile)", () => {
+  for (const rel of [
+    "src/app/api/media/upload-intent/route.ts",
+    "src/app/api/media/finalize/route.ts",
+  ]) {
+    const source = read(rel);
+    assert.ok(
+      /createAuthenticatedApiClient\s*\(/.test(source),
+      `${rel} must use createAuthenticatedApiClient() so mobile Bearer auth works`,
+    );
+  }
+});
+
 test("media page renders the admin-only storage usage bar", () => {
   const source = read("src/app/[orgSlug]/media/page.tsx");
   assert.ok(

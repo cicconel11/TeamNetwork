@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { finalizeUploadSchema } from "@/lib/schemas/media";
 import { validateJson, validationErrorResponse, ValidationError } from "@/lib/security/validation";
@@ -15,8 +15,7 @@ const MAGIC_BYTE_READ_SIZE = 16;
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
