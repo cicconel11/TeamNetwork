@@ -23,8 +23,20 @@ test("route is dynamic + nodejs runtime", () => {
 });
 
 test("route requires admin role with active status", () => {
-  assert.match(routeSource, /role\?.role !== "admin"/);
-  assert.match(routeSource, /role\?.status !== "active"/);
+  // Role + active-status check is delegated to the shared helper. Assert the
+  // helper is imported and gates the 403 branch on its return value.
+  assert.match(
+    routeSource,
+    /from\s+"@\/lib\/auth\/require-active-admin"/,
+  );
+  assert.match(
+    routeSource,
+    /requireActiveOrgAdmin\(\s*supabase\s*,\s*user\.id\s*,\s*organizationId\s*\)/,
+  );
+  assert.match(
+    routeSource,
+    /!\(await requireActiveOrgAdmin[\s\S]*?status:\s*403/,
+  );
 });
 
 test("route enforces 24h rate-limit window", () => {
