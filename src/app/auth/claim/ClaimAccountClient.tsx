@@ -149,7 +149,7 @@ function ClaimFormComponent({ captchaSiteKey }: ClaimAccountClientProps) {
     }
 
     try {
-      const { orgs } = await claimAlumniProfile(pendingEmail);
+      const { orgs } = await claimAlumniProfile();
 
       if (orgs.length === 0) {
         router.push(buildJoinFallbackUrl());
