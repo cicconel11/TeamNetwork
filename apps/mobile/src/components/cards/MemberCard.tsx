@@ -1,0 +1,302 @@
+/**
+ * MemberCard Component
+ * Member/alumni card with avatar, presence, and role indicators
+ */
+
+import React, { useCallback } from "react";
+import { View, Text, Pressable, ViewStyle } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
+import { ChevronRight } from "lucide-react-native";
+import { RADIUS, SPACING, ANIMATION } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
+import { Avatar, type PresenceStatus } from "@/components/ui/Avatar";
+import { RoleBadge, Badge } from "@/components/ui/Badge";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+export interface MemberCardMember {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
+  graduation_year?: number | null;
+  role?: "admin" | "member" | "alumni" | null;
+  presence?: PresenceStatus;
+}
+
+interface MemberCardProps {
+  member: MemberCardMember;
+  onPress?: () => void;
+  style?: ViewStyle;
+  showPresence?: boolean;
+  showChevron?: boolean;
+  showContactActions?: boolean;
+}
+
+function getDisplayName(member: MemberCardMember): string {
+  if (member.first_name && member.last_name) {
+    return `${member.first_name} ${member.last_name}`;
+  }
+  return member.first_name || member.email || "Unknown";
+}
+
+function getInitials(member: MemberCardMember): string {
+  if (member.first_name && member.last_name) {
+    return (member.first_name[0] + member.last_name[0]).toUpperCase();
+  }
+  return member.first_name?.[0]?.toUpperCase() || "?";
+}
+
+export const MemberCard = React.memo(function MemberCard({
+  member,
+  onPress,
+  style,
+  showPresence = false,
+  showChevron = true,
+  showContactActions = false,
+}: MemberCardProps) {
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n) => ({
+    container: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.sm,
+      paddingLeft: SPACING.md,
+      paddingRight: SPACING.sm,
+      gap: SPACING.md,
+    },
+    content: {
+      flex: 1,
+      minWidth: 0,
+    },
+    name: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    email: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      marginTop: 2,
+    },
+    right: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    chips: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+    },
+
+    // Compact styles
+    compactContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    compactName: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+
+    // Group header styles
+    groupHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.xs,
+    },
+    groupTitle: {
+      ...TYPOGRAPHY.overline,
+      color: n.secondary,
+    },
+    groupCount: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+  }));
+
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = useCallback(() => {
+    scale.value = withSpring(0.98, ANIMATION.spring);
+  }, [scale]);
+
+  const handlePressOut = useCallback(() => {
+    scale.value = withSpring(1, ANIMATION.spring);
+  }, [scale]);
+
+  const displayName = getDisplayName(member);
+  const initials = getInitials(member);
+  const role = member.role as "admin" | "member" | "alumni" | null;
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={[styles.container, animatedStyle, style]}
+    >
+      <Avatar
+        uri={member.photo_url}
+        name={displayName}
+        size="md"
+        presence={showPresence ? member.presence : "none"}
+      />
+
+      <View style={styles.content}>
+        <Text style={styles.name} numberOfLines={1}>
+          {displayName}
+        </Text>
+
+        {member.email && (
+          <Text style={styles.email} numberOfLines={1}>
+            {member.email}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.right}>
+        {/* Role and class chips */}
+        <View style={styles.chips}>
+          {member.graduation_year && (
+            <Badge variant="neutral" size="sm">
+              '{String(member.graduation_year).slice(-2)}
+            </Badge>
+          )}
+          {role && role !== "member" && (
+            <RoleBadge role={role} size="sm" />
+          )}
+        </View>
+
+        {showChevron && (
+          <ChevronRight size={18} color={neutral.border} />
+        )}
+      </View>
+    </AnimatedPressable>
+  );
+});
+
+// Compact member card for lists with many items
+interface MemberCardCompactProps {
+  member: MemberCardMember;
+  onPress?: () => void;
+  style?: ViewStyle;
+}
+
+export const MemberCardCompact = React.memo(function MemberCardCompact({
+  member,
+  onPress,
+  style,
+}: MemberCardCompactProps) {
+  const styles = useThemedStyles((n) => ({
+    compactContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    compactName: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+  }));
+
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = useCallback(() => {
+    scale.value = withSpring(0.98, ANIMATION.spring);
+  }, [scale]);
+
+  const handlePressOut = useCallback(() => {
+    scale.value = withSpring(1, ANIMATION.spring);
+  }, [scale]);
+
+  const displayName = getDisplayName(member);
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={[styles.compactContainer, animatedStyle, style]}
+    >
+      <Avatar
+        uri={member.photo_url}
+        name={displayName}
+        size="sm"
+      />
+
+      <Text style={styles.compactName} numberOfLines={1}>
+        {displayName}
+      </Text>
+
+      {member.role === "admin" && (
+        <RoleBadge role="admin" size="sm" />
+      )}
+    </AnimatedPressable>
+  );
+});
+
+// Group header for member sections
+interface MemberGroupHeaderProps {
+  title: string;
+  count: number;
+  style?: ViewStyle;
+}
+
+export const MemberGroupHeader = React.memo(function MemberGroupHeader({
+  title,
+  count,
+  style,
+}: MemberGroupHeaderProps) {
+  const styles = useThemedStyles((n) => ({
+    groupHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.xs,
+    },
+    groupTitle: {
+      ...TYPOGRAPHY.overline,
+      color: n.secondary,
+    },
+    groupCount: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+  }));
+
+  return (
+    <View style={[styles.groupHeader, style]}>
+      <Text style={styles.groupTitle}>{title}</Text>
+      <Text style={styles.groupCount}>({count})</Text>
+    </View>
+  );
+});

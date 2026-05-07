@@ -1,0 +1,8 @@
+.expo/
+ios/
+android/
+ios.bak-*/
+android.bak-*/
+dist/
+.env.local
+.claude/skills/

@@ -1,0 +1,27 @@
+{
+  "name": "@teammeet/core",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth": "./src/auth/index.ts",
+    "./pricing": "./src/pricing/index.ts",
+    "./pricing/per-user": "./src/pricing/per-user.ts",
+    "./navigation": "./src/navigation/index.ts",
+    "./announcements": "./src/announcements/index.ts",
+    "./formatters": "./src/formatters/index.ts",
+    "./apns": "./src/apns/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@teammeet/types": "workspace:*",
+    "jose": "^5.9.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

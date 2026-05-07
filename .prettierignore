@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+
+# Package manager
+bun.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Turborepo
+.turbo/
+
+# Coverage
+coverage/
+
+# iOS/Android build artifacts
+apps/mobile/ios/
+apps/mobile/android/
+
+# Generated files
+*.d.ts
+apps/web/src/types/database.ts
+packages/types/src/database.ts
+
+# Misc
+.DS_Store
+*.pem

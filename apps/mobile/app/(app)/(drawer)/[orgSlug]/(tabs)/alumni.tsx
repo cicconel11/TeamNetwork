@@ -1,0 +1,513 @@
+import { useMemo, useState, useCallback, useRef } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  RefreshControl,
+  Pressable,
+} from "react-native";
+import { Image } from "expo-image";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { DrawerActions } from "@react-navigation/native";
+import { useFocusEffect, useRouter, useNavigation } from "expo-router";
+import { MapPin, ArrowUpDown, Users, Search, Plus } from "lucide-react-native";
+import { useAlumni } from "@/hooks/useAlumni";
+import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { APP_CHROME } from "@/lib/chrome";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
+import {
+  DirectorySearchBar,
+  DirectoryFilterChipsRow,
+  DirectoryCard,
+  DirectorySkeleton,
+  DirectoryEmptyState,
+  DirectoryErrorState,
+} from "@/components/directory";
+
+type Alumni = ReturnType<typeof useAlumni>["alumni"][number];
+type SortOption = "name" | "year";
+
+export default function AlumniScreen() {
+  const router = useRouter();
+  const navigation = useNavigation();
+  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
+  const { isAdmin } = useOrgRole();
+  // Use orgId from context for data hook (eliminates redundant org fetch)
+  const { alumni, loading, error, refetch, refetchIfStale } = useAlumni(orgId);
+  const { neutral, semantic } = useAppColorScheme();
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>("name");
+  const isRefetchingRef = useRef(false);
+
+  // Local colors for directory components (dynamic)
+  const directoryColors = useMemo(() => ({
+    background: neutral.surface,
+    foreground: neutral.foreground,
+    card: neutral.surface,
+    border: neutral.border,
+    muted: neutral.muted,
+    mutedForeground: neutral.secondary,
+    primary: semantic.success,
+    primaryLight: semantic.successLight,
+    primaryDark: semantic.successDark,
+    primaryForeground: "#ffffff",
+    secondary: semantic.info,
+    secondaryLight: semantic.infoLight,
+    secondaryDark: semantic.infoDark,
+    secondaryForeground: "#ffffff",
+    mutedSurface: neutral.background,
+    success: semantic.success,
+    warning: semantic.warning,
+    error: semantic.error,
+  }), [neutral, semantic]);
+
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    // Gradient header styles
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {
+      // SafeAreaView handles top inset
+    },
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    addButton: {
+      padding: SPACING.xs,
+      marginRight: -SPACING.xs,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    listHeader: {
+      backgroundColor: n.surface,
+      paddingTop: SPACING.md,
+      paddingBottom: SPACING.sm,
+      gap: SPACING.md,
+    },
+    sortButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingHorizontal: SPACING.sm + 2,
+      paddingVertical: SPACING.sm,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.md,
+    },
+    sortButtonPressed: {
+      opacity: 0.7,
+    },
+    sortButtonText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.muted,
+    },
+    listContent: {
+      paddingHorizontal: SPACING.md,
+      paddingBottom: SPACING.xl,
+      flexGrow: 1,
+    },
+  }));
+
+  const hasActiveFilters = !!(searchQuery || selectedYear || selectedIndustry);
+
+  // Safe drawer toggle
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {
+      // Drawer not available - no-op
+    }
+  }, [navigation]);
+
+  const handleAddAlumni = useCallback(() => {
+    router.push(`/(app)/${orgSlug}/alumni/new`);
+  }, [router, orgSlug]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refetchIfStale();
+    }, [refetchIfStale])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefetchingRef.current) return;
+    setRefreshing(true);
+    isRefetchingRef.current = true;
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+      isRefetchingRef.current = false;
+    }
+  }, [refetch]);
+
+  const clearAllFilters = useCallback(() => {
+    setSearchQuery("");
+    setSelectedYear(null);
+    setSelectedIndustry(null);
+  }, []);
+
+  const toggleSort = useCallback(() => {
+    setSortBy((prev) => (prev === "name" ? "year" : "name"));
+  }, []);
+
+  const { years, industries } = useMemo(() => {
+    const yearSet = new Set<number>();
+    const industrySet = new Set<string>();
+    alumni.forEach((a) => {
+      if (a.graduation_year) yearSet.add(a.graduation_year);
+      if (a.industry) industrySet.add(a.industry);
+    });
+    return {
+      years: Array.from(yearSet).sort((a, b) => b - a),
+      industries: Array.from(industrySet).sort(),
+    };
+  }, [alumni]);
+
+  const filteredAlumni = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    let result = alumni.filter((a) => {
+      if (selectedYear && a.graduation_year !== selectedYear) return false;
+      if (selectedIndustry && a.industry !== selectedIndustry) return false;
+      if (!q) return true;
+      const searchable = [
+        a.first_name,
+        a.last_name,
+        a.position_title,
+        a.job_title,
+        a.current_company,
+        a.current_city,
+        a.industry,
+        a.graduation_year?.toString(),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(q);
+    });
+
+    result = [...result].sort((a, b) => {
+      if (sortBy === "year") {
+        const yearA = a.graduation_year ?? 0;
+        const yearB = b.graduation_year ?? 0;
+        return yearB - yearA;
+      }
+      const nameA = `${a.first_name || ""} ${a.last_name || ""}`.trim().toLowerCase();
+      const nameB = `${b.first_name || ""} ${b.last_name || ""}`.trim().toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    return result;
+  }, [alumni, searchQuery, selectedYear, selectedIndustry, sortBy]);
+
+  const getInitials = (alum: Alumni) => {
+    if (alum.first_name && alum.last_name) {
+      return (alum.first_name[0] + alum.last_name[0]).toUpperCase();
+    }
+    return alum.first_name?.[0]?.toUpperCase() || "?";
+  };
+
+  const getDisplayName = (alum: Alumni) => {
+    if (alum.first_name && alum.last_name) return `${alum.first_name} ${alum.last_name}`;
+    return alum.first_name || alum.email || "Unknown";
+  };
+
+  const getRoleCompany = (alum: Alumni) => {
+    const title = alum.position_title || alum.job_title;
+    if (title && alum.current_company) return `${title} at ${alum.current_company}`;
+    return title || alum.current_company || null;
+  };
+
+  const handleAlumniPress = useCallback(
+    (alum: Alumni) => {
+      router.push(`/(app)/${orgSlug}/alumni/${alum.id}`);
+    },
+    [router, orgSlug]
+  );
+
+  const renderAlumniCard = useCallback(
+    ({ item }: { item: Alumni }) => {
+      const chips: { label: string; key: string }[] = [];
+      if (item.graduation_year) chips.push({ label: `'${String(item.graduation_year).slice(-2)}`, key: "year" });
+      if (item.industry && chips.length < 2) chips.push({ label: item.industry, key: "industry" });
+
+      return (
+        <DirectoryCard
+          avatarUrl={item.photo_url}
+          initials={getInitials(item)}
+          name={getDisplayName(item)}
+          subtitle={getRoleCompany(item)}
+          locationLine={item.current_city}
+          locationIcon={item.current_city ? <MapPin size={11} color={neutral.secondary} /> : undefined}
+          chips={chips}
+          onPress={() => handleAlumniPress(item)}
+          colors={directoryColors}
+        />
+      );
+    },
+    [handleAlumniPress, directoryColors, neutral.secondary]
+  );
+
+  const renderListHeader = () => (
+    <View style={styles.listHeader}>
+      <DirectorySearchBar
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder="Search alumni..."
+        colors={directoryColors}
+        rightSlot={
+          <Pressable
+            onPress={toggleSort}
+            style={({ pressed }) => [styles.sortButton, pressed && styles.sortButtonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Sort by ${sortBy === "name" ? "year" : "name"}`}
+          >
+            <ArrowUpDown size={14} color={neutral.muted} />
+            <Text style={styles.sortButtonText}>{sortBy === "name" ? "A-Z" : "Year"}</Text>
+          </Pressable>
+        }
+      />
+      <DirectoryFilterChipsRow
+        groups={[
+          {
+            label: "Class",
+            options: years,
+            selected: selectedYear,
+            onSelect: (v) => setSelectedYear(v as number | null),
+            labelExtractor: (y) => String(y),
+          },
+          {
+            label: "Industry",
+            options: industries,
+            selected: selectedIndustry,
+            onSelect: (v) => setSelectedIndustry(v as string | null),
+          },
+        ]}
+        colors={directoryColors}
+        hasActiveFilters={hasActiveFilters}
+        onClearAll={clearAllFilters}
+      />
+    </View>
+  );
+
+  const renderEmpty = () => {
+    if (hasActiveFilters) {
+      return (
+        <DirectoryEmptyState
+          icon={<Search size={40} color={neutral.border} />}
+          title="No results found"
+          subtitle="Try adjusting your search or filters"
+          colors={directoryColors}
+          showClearButton
+          onClear={clearAllFilters}
+        />
+      );
+    }
+    return (
+      <DirectoryEmptyState
+        icon={<Users size={40} color={neutral.border} />}
+        title="No alumni yet"
+        subtitle="Alumni will appear here once added to this organization"
+        colors={directoryColors}
+      />
+    );
+  };
+
+  // Error state
+  if (error && alumni.length === 0) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable
+                onPress={handleDrawerToggle}
+                style={styles.orgLogoButton}
+                accessibilityRole="button"
+                accessibilityLabel={`Open navigation for ${orgName ?? "organization"}`}
+              >
+                {orgLogoUrl ? (
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Alumni</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <DirectoryErrorState
+            title="Unable to load alumni"
+            message={error}
+            colors={directoryColors}
+            onRetry={handleRefresh}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // Loading state
+  if (loading && alumni.length === 0) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable
+                onPress={handleDrawerToggle}
+                style={styles.orgLogoButton}
+                accessibilityRole="button"
+                accessibilityLabel={`Open navigation for ${orgName ?? "organization"}`}
+              >
+                {orgLogoUrl ? (
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Alumni</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <DirectorySkeleton colors={directoryColors} />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable
+              onPress={handleDrawerToggle}
+              style={styles.orgLogoButton}
+              accessibilityRole="button"
+              accessibilityLabel={`Open navigation for ${orgName ?? "organization"}`}
+            >
+              {orgLogoUrl ? (
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
+                </View>
+              )}
+            </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Alumni</Text>
+              <Text style={styles.headerMeta}>
+                {alumni.length} {alumni.length === 1 ? "alum" : "alumni"}
+              </Text>
+            </View>
+            {isAdmin && (
+              <Pressable
+                onPress={handleAddAlumni}
+                style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
+              >
+                <Plus size={20} color={APP_CHROME.headerTitle} />
+              </Pressable>
+            )}
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <FlatList
+          data={filteredAlumni}
+          keyExtractor={(item) => item.id}
+          renderItem={renderAlumniCard}
+          contentContainerStyle={styles.listContent}
+          stickyHeaderIndices={[0]}
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderEmpty}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={semantic.success} />
+          }
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
+          updateCellsBatchingPeriod={50}
+        />
+      </View>
+    </View>
+  );
+}
