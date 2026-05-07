@@ -7,12 +7,11 @@ import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
-import { getOrgRole } from "@/lib/auth/roles";
-import { canEditNavItem } from "@/lib/navigation/permissions";
+import { getPersonAdminContext } from "@/lib/people/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
-import { LinkedInBadge } from "@/components/shared";
+import { LinkedInBadge, formatPersonHeadline } from "@/components/shared";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 const PAGE_SIZE = 50;
@@ -75,8 +74,11 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   if (!org || orgError) return null;
 
   const navConfig = org.nav_config as NavConfig | null;
-  const { role } = await getOrgRole({ orgId: org.id });
-  const canEdit = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
+  const personCtx = await getPersonAdminContext({
+    orgId: org.id,
+    viewerUserId: user?.id ?? null,
+  });
+  const canEdit = personCtx.isAdmin;
 
   const currentPage = Math.max(1, parseInt(filters.page ?? "1", 10) || 1);
   const offset = (currentPage - 1) * PAGE_SIZE;
@@ -245,12 +247,16 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
                       <h3 className="font-semibold text-foreground truncate">
                         {alum.first_name} {alum.last_name}
                       </h3>
-                      {(alum.position_title || alum.job_title) && (
-                        <p className="text-sm text-muted-foreground truncate">
-                          {alum.position_title || alum.job_title}
-                          {alum.current_company && ` at ${alum.current_company}`}
-                        </p>
-                      )}
+                      {(() => {
+                        const headline = formatPersonHeadline({
+                          position_title: alum.position_title,
+                          job_title: alum.job_title,
+                          current_company: alum.current_company,
+                        });
+                        return headline ? (
+                          <p className="text-sm text-muted-foreground truncate">{headline}</p>
+                        ) : null;
+                      })()}
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {alum.graduation_year && (
                           <Badge variant="muted">{tMembers2("classOf", { year: alum.graduation_year })}</Badge>

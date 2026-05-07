@@ -4,13 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
-import { getOrgRole } from "@/lib/auth/roles";
-import { canEditNavItem } from "@/lib/navigation/permissions";
-import type { NavConfig } from "@/lib/navigation/nav-items";
+import { getPersonAdminContext } from "@/lib/people/permissions";
 import type { Organization, Alumni } from "@/types/database";
-import { checkOrgReadOnly } from "@/lib/subscription/read-only-guard";
 import { DeleteAlumniButton } from "@/components/alumni/DeleteAlumniButton";
-import { LinkedInProfileLink } from "@/components/shared";
+import { LinkedInProfileLink, formatPersonHeadline } from "@/components/shared";
 
 interface AlumniDetailPageProps {
   params: Promise<{ orgSlug: string; alumniId: string }>;
@@ -60,7 +57,7 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const org = orgData[0] as Organization;
   const orgId = org.id;
 
-  const [{ data: alumData }, { role, userId: currentUserId }, { isReadOnly }] = await Promise.all([
+  const [{ data: alumData }, ctx] = await Promise.all([
     dataClient
       .from("alumni")
       .select("*")
@@ -68,8 +65,7 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
       .eq("organization_id", orgId)
       .is("deleted_at", null)
       .single(),
-    getOrgRole({ orgId, userId: user?.id }),
-    checkOrgReadOnly(orgId),
+    getPersonAdminContext({ orgId, viewerUserId: user?.id ?? null }),
   ]);
 
   if (!alumData) {
@@ -79,13 +75,11 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const alum = alumData as Alumni & Record<string, any>;
 
-  const navConfig = org.nav_config as NavConfig | null;
-  const canEditPage = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
-  const alumUserId = alum.user_id;
-  const isSelf = Boolean(currentUserId && alumUserId === currentUserId);
-  const canEdit = canEditPage || isSelf;
-  const canModifyExisting = canEdit && !isReadOnly;
-  const canDelete = canEditPage && !isReadOnly;
+  const alumUserId = alum.user_id ?? null;
+  const canEdit = ctx.canEditPerson(alumUserId);
+  const canModifyExisting = canEdit && !ctx.isReadOnly;
+  const canDelete = ctx.isAdmin && !ctx.isReadOnly;
+  const isReadOnly = ctx.isReadOnly;
 
   // Extract enrichment data (may not exist if migration hasn't run)
   const rawWorkHistory = Array.isArray(alum.work_history) ? (alum.work_history as unknown[]) : [];
@@ -98,7 +92,12 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const educationHistory: EducationEntry[] = rawEducationHistory.filter(
     (entry): entry is EducationEntry => isObjectEntry<EducationEntry>(entry)
   );
-  const headline = alum.headline || alum.position_title || alum.job_title || null;
+  const headline = formatPersonHeadline({
+    headline: alum.headline,
+    position_title: alum.position_title,
+    job_title: alum.job_title,
+    current_company: alum.current_company,
+  });
   const about = alum.summary || alum.notes || null;
 
   // Build experience entries: prefer work_history JSONB, fall back to flat fields
@@ -136,7 +135,7 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
                   redirectTo={`/${orgSlug}/alumni`}
                 />
               ) : (
-                canEditPage && <Button variant="danger" disabled>Delete Disabled</Button>
+                ctx.isAdmin && <Button variant="danger" disabled>Delete Disabled</Button>
               )}
             </div>
           )
