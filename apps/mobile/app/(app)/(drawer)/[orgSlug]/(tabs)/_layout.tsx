@@ -1,0 +1,192 @@
+import { useRef, useCallback, useMemo } from "react";
+import { Alert, Share } from "react-native";
+import { Tabs, useRouter } from "expo-router";
+import Constants from "expo-constants";
+import { OrgHeaderLeft } from "@/components/org-header-left";
+import { TabBar } from "@/components/TabBar";
+import { OfflineBanner } from "@/components/ui";
+import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
+import { useUnreadAnnouncementCount } from "@/hooks/useUnreadAnnouncementCount";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { getWebPath } from "@/lib/web-api";
+import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+
+// Determine if running in Expo Go
+const isExpoGo = Constants.appOwnership === "expo";
+
+// Conditionally import BottomSheet to avoid Reanimated issues in Expo Go
+let BottomSheet: any = null;
+let ActionSheet: any = null;
+
+if (!isExpoGo) {
+  try {
+    BottomSheet = require("@gorhom/bottom-sheet").default;
+    ActionSheet = require("@/components/ActionSheet").ActionSheet;
+  } catch (e) {
+    console.warn("BottomSheet not available:", e);
+  }
+}
+
+export default function TabsLayout() {
+  const { orgSlug, orgName, orgId } = useOrg();
+  const router = useRouter();
+  const bottomSheetRef = useRef<any>(null);
+  const { isAdmin } = useOrgRole();
+  const { unreadCount } = useUnreadAnnouncementCount(orgId);
+  const { isOffline } = useNetwork();
+
+  // Memoize badges object to prevent unnecessary re-renders
+  const badges = useMemo(
+    () => ({ announcements: unreadCount }),
+    [unreadCount]
+  );
+
+  const handleActionPress = useCallback(() => {
+    if (isExpoGo || !BottomSheet) {
+      Alert.alert(
+        "Quick Actions",
+        "Action sheet is not available in Expo Go. Use a development build for full functionality.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    bottomSheetRef.current?.expand();
+  }, []);
+
+  const handleCloseSheet = useCallback(() => {
+    bottomSheetRef.current?.close();
+  }, []);
+
+  // Action handlers (navigate to respective screens)
+  const handleCreateEvent = useCallback(() => {
+    if (!orgSlug) return;
+    router.push(`/(app)/${orgSlug}/events/new`);
+  }, [orgSlug, router]);
+
+  const handlePostAnnouncement = useCallback(() => {
+    if (!orgSlug) return;
+    router.push(`/(app)/${orgSlug}/announcements/new`);
+  }, [orgSlug, router]);
+
+  const handleInviteMember = useCallback(() => {
+    if (!orgSlug) return;
+    router.push(`/(app)/${orgSlug}/members/new`);
+  }, [orgSlug, router]);
+
+  const handleRecordDonation = useCallback(() => {
+    if (!orgSlug) return;
+    router.push(`/(app)/${orgSlug}/donations/new`);
+  }, [orgSlug, router]);
+
+  const handleRsvpEvent = useCallback(() => {
+    router.push(`/(app)/${orgSlug}/(tabs)/calendar`);
+    handleCloseSheet();
+  }, [orgSlug, router, handleCloseSheet]);
+
+  const handleCheckIn = useCallback(() => {
+    if (!orgSlug) return;
+    // Navigate to the calendar tab where user can select an event to check in
+    // Check-in requires selecting a specific event first
+    router.push(`/(app)/${orgSlug}/(tabs)/calendar`);
+    handleCloseSheet();
+  }, [orgSlug, router, handleCloseSheet]);
+
+  const handleShareOrg = useCallback(async () => {
+    const orgUrl = getWebPath(orgSlug);
+    const shareMessage = orgName
+      ? `Check out ${orgName} on TeamMeet: ${orgUrl}`
+      : `Check out this organization on TeamMeet: ${orgUrl}`;
+
+    try {
+      await Share.share({
+        message: shareMessage,
+        url: orgUrl,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message !== "User did not share") {
+        Alert.alert("Error", "Unable to share. Please try again.");
+      }
+    }
+  }, [orgSlug, orgName]);
+
+  const renderTabBar = useCallback(
+    (props: any) => (
+      <TabBar {...props} onActionPress={handleActionPress} badges={badges} />
+    ),
+    [handleActionPress, badges]
+  );
+
+  return (
+    <>
+      <OfflineBanner isOffline={isOffline} />
+      <Tabs
+        tabBar={renderTabBar}
+        screenOptions={{
+          headerShown: true,
+          headerTitleAlign: "center",
+          headerLeft: (props) => <OrgHeaderLeft {...props} />,
+        }}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Home",
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="calendar"
+          options={{
+            title: "Calendar",
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="announcements"
+          options={{
+            title: "Announcements",
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="members"
+          options={{
+            title: "Members",
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="menu"
+          options={{
+            title: "More",
+            headerShown: false,
+          }}
+        />
+        {/* Hide Alumni tab - not part of core loop */}
+        <Tabs.Screen
+          name="alumni"
+          options={{
+            href: null,
+            headerShown: false,
+          }}
+        />
+      </Tabs>
+
+      {!isExpoGo && ActionSheet && (
+        <ActionSheet
+          ref={bottomSheetRef}
+          isAdmin={isAdmin}
+          onClose={handleCloseSheet}
+          onCreateEvent={handleCreateEvent}
+          onPostAnnouncement={handlePostAnnouncement}
+          onInviteMember={handleInviteMember}
+          onRecordDonation={handleRecordDonation}
+          onRsvpEvent={handleRsvpEvent}
+          onCheckIn={handleCheckIn}
+          onShareOrg={handleShareOrg}
+        />
+      )}
+    </>
+  );
+}

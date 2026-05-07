@@ -1,0 +1,172 @@
+/**
+ * OverflowMenu component for admin actions.
+ * Displays a "..." button that opens a menu with admin-only quick actions.
+ */
+
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  Modal,
+  Pressable,
+} from "react-native";
+import { MoreVertical } from "lucide-react-native";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
+
+export interface OverflowMenuItem {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  onPress: () => void;
+  destructive?: boolean;
+}
+
+interface OverflowMenuProps {
+  /** Menu items to display */
+  items: OverflowMenuItem[];
+  /** Icon size (default 20) */
+  iconSize?: number;
+  /** Icon color (defaults to muted color) */
+  iconColor?: string;
+  /** Accessibility label */
+  accessibilityLabel?: string;
+}
+
+export function OverflowMenu({
+  items,
+  iconSize = 20,
+  iconColor,
+  accessibilityLabel = "More options",
+}: OverflowMenuProps) {
+  const { neutral, semantic } = useAppColorScheme();
+  const [visible, setVisible] = useState(false);
+  const resolvedIconColor = iconColor ?? neutral.muted;
+
+  const styles = useThemedStyles((n, s) => ({
+    triggerButton: {
+      padding: 8,
+    },
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      justifyContent: "flex-end" as const,
+      paddingHorizontal: SPACING.md,
+      paddingBottom: SPACING.xl,
+    },
+    menuContainer: {
+      gap: SPACING.sm,
+    },
+    menu: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      overflow: "hidden" as const,
+    },
+    menuItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.lg,
+    },
+    menuItemBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor: n.border,
+    },
+    menuItemIcon: {
+      marginRight: SPACING.sm,
+    },
+    menuItemText: {
+      ...TYPOGRAPHY.bodyMedium,
+      fontWeight: "500" as const,
+      color: n.foreground,
+    },
+    menuItemTextDestructive: {
+      color: s.error,
+    },
+    cancelButton: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+    },
+    cancelButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: s.success,
+    },
+  }));
+
+  const handleOpen = () => setVisible(true);
+  const handleClose = () => setVisible(false);
+
+  const handleItemPress = (item: OverflowMenuItem) => {
+    handleClose();
+    // Delay slightly to allow modal to close before action
+    setTimeout(() => {
+      item.onPress();
+    }, 100);
+  };
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <Pressable
+        onPress={handleOpen}
+        style={({ pressed }) => [styles.triggerButton, pressed && { opacity: 0.7 }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+      >
+        <MoreVertical size={iconSize} color={resolvedIconColor} />
+      </Pressable>
+
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleClose}
+      >
+        <Pressable style={styles.overlay} onPress={handleClose}>
+          <View style={styles.menuContainer}>
+            <View style={styles.menu}>
+              {items.map((item, index) => (
+                <Pressable
+                  key={item.id}
+                  style={({ pressed }) => [
+                    styles.menuItem,
+                    index < items.length - 1 && styles.menuItemBorder,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => handleItemPress(item)}
+                >
+                  {item.icon && <View style={styles.menuItemIcon}>{item.icon}</View>}
+                  <Text
+                    style={[
+                      styles.menuItemText,
+                      item.destructive && styles.menuItemTextDestructive,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.7 }]}
+              onPress={handleClose}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
+export default OverflowMenu;
