@@ -298,6 +298,7 @@ export function useNotifications(
         // Annotate with read status using the server-fetched set.
         const annotated: Notification[] = filtered.map((n) => ({
           ...n,
+          data: (n.data ?? null) as Record<string, unknown> | null,
           isRead: storedReadIds.has(n.id),
         }));
         void migrateLegacyReadIds; // silence unused-in-deps lint when re-running

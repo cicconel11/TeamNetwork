@@ -15,6 +15,7 @@ export type ChatFormResponse = Tables<"chat_form_responses">;
 export type Competition = Tables<"competitions">;
 export type CompetitionPoint = Tables<"competition_points">;
 export type CompetitionTeam = Tables<"competition_teams">;
+export type DiscussionThread = Tables<"discussion_threads">;
 export type Event = Tables<"events">;
 export type Expense = Tables<"expenses">;
 export type Form = Tables<"forms">;

@@ -442,7 +442,7 @@ export default function FormDetailScreen() {
         // Update existing submission
         const { error: updateError } = await supabase
           .from("form_submissions")
-          .update({ responses: responses as Json, submitted_at: new Date().toISOString() })
+          .update({ data: responses as Json, submitted_at: new Date().toISOString() })
           .eq("id", existingSubmission.id);
 
         if (updateError) throw updateError;
@@ -454,7 +454,7 @@ export default function FormDetailScreen() {
             form_id: formId,
             organization_id: form.organization_id,
             user_id: user.id,
-            responses: responses as Json,
+            data: responses as Json,
           });
 
         if (insertError) throw insertError;

@@ -349,7 +349,6 @@ export default function ChatRoomScreen() {
       rejected_by: null,
       rejected_at: null,
       edited_at: null,
-      like_count: 0,
       created_at: new Date().toISOString(),
       deleted_at: null,
       author: currentUser ?? undefined,
