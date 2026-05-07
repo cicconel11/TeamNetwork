@@ -1,4 +1,4 @@
-import type { AlumniBucket } from "./database";
+import type { AlumniBucket } from "./aliases";
 
 export interface SubscriptionInfo {
   bucket: AlumniBucket;
