@@ -164,7 +164,22 @@
     "somethingWentWrong": "Quelque chose s'est mal passe. Veuillez verifier votre connexion et reessayer.",
     "goHome": "Aller a l'accueil",
     "mustBeSignedIn": "Vous devez etre connecte.",
-    "needSignedIn": "Vous devez etre connecte pour gerer les notifications."
+    "needSignedIn": "Vous devez etre connecte pour gerer les notifications.",
+    "claimTitle": "Reclamez votre compte",
+    "claimSubtitle": "Saisissez l'e-mail enregistre par votre organisation. Nous vous enverrons un code a 6 chiffres.",
+    "claimSendCode": "Envoyer le code",
+    "claimCodeSent": "Si votre e-mail est enregistre, un code a 6 chiffres est en route. Saisissez-le ci-dessous pour continuer.",
+    "claimCodeLabel": "Code a 8 chiffres",
+    "claimCodePlaceholder": "12345678",
+    "claimVerify": "Verifier et continuer",
+    "claimResend": "Utiliser un autre e-mail",
+    "claimInvalidCode": "Ce code est invalide ou expire. Reessayez ou demandez-en un nouveau.",
+    "claimRateLimited": "Trop de requetes. Reessayez dans quelques minutes.",
+    "claimError": "Impossible d'envoyer le code. Veuillez reessayer.",
+    "claimLinkPrompt": "Invite ou importe par votre organisation ?",
+    "claimLinkText": "Reclamez votre compte",
+    "claimJoinHeading": "Finalisez la reclamation de votre compte",
+    "claimJoinDescription": "Saisissez le code d'invitation de votre organisation pour finir de reclamer votre profil importe."
   },
   "settings": {
     "title": "Parametres",

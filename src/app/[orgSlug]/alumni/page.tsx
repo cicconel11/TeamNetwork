@@ -46,6 +46,12 @@ interface AlumniRecord {
   linkedin_url: string | null;
 }
 
+// Admin-only superset: includes derived is_claimed. Raw user_id never
+// reaches the client (admins or not). Non-admin grids never see this field.
+interface AdminAlumniRecord extends AlumniRecord {
+  is_claimed: boolean;
+}
+
 export default async function AlumniPage({ params, searchParams }: AlumniPageProps) {
   const { orgSlug } = await params;
 
@@ -75,16 +81,18 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const currentPage = Math.max(1, parseInt(filters.page ?? "1", 10) || 1);
   const offset = (currentPage - 1) * PAGE_SIZE;
 
-  // Query alumni directly — the alumni table is the source of truth
-  let query = dataClient
-    .from("alumni")
-    .select(
-      `
+  // Query alumni directly — the alumni table is the source of truth.
+  // Admins additionally need user_id to derive Claimed/Unclaimed status;
+  // non-admin viewers must never see user_id in the page payload.
+  const baseSelect = `
       id, first_name, last_name, photo_url, position_title, job_title, current_company,
       graduation_year, birth_year, industry, current_city, linkedin_url
-    `,
-      { count: "exact" },
-    )
+    `;
+  const adminSelect = `${baseSelect}, user_id`;
+
+  let query = dataClient
+    .from("alumni")
+    .select(canEdit ? adminSelect : baseSelect, { count: "exact" })
     .eq("organization_id", org.id)
     .is("deleted_at", null);
 
@@ -120,6 +128,15 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
   const { data: rawAlumni, count: totalCount } = await query;
 
+  // Project to is_claimed for admins; strip user_id before the value reaches
+  // any rendered child component.
+  type RawWithUserId = AlumniRecord & { user_id?: string | null };
+  const adminAlumni: AdminAlumniRecord[] = canEdit
+    ? ((rawAlumni as RawWithUserId[] | null) ?? []).map((row) => {
+        const { user_id, ...rest } = row;
+        return { ...rest, is_claimed: user_id != null };
+      })
+    : [];
   const alumni: AlumniRecord[] = (rawAlumni as AlumniRecord[] | null) || [];
   const total = totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -204,7 +221,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
         <>
         {canEdit ? (
           <AlumniSelectableGrid
-            alumni={alumni}
+            alumni={adminAlumni}
             orgSlug={orgSlug}
             organizationId={org.id}
           />

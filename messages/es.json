@@ -166,7 +166,22 @@
     "somethingWentWrong": "Algo salio mal. Por favor verifica tu conexion e intenta de nuevo.",
     "goHome": "Ir al inicio",
     "mustBeSignedIn": "Debes iniciar sesion.",
-    "needSignedIn": "Debes iniciar sesion para gestionar las notificaciones."
+    "needSignedIn": "Debes iniciar sesion para gestionar las notificaciones.",
+    "claimTitle": "Reclama tu cuenta",
+    "claimSubtitle": "Ingresa el correo que tu organizacion tiene registrado. Te enviaremos un codigo de 6 digitos.",
+    "claimSendCode": "Enviar codigo",
+    "claimCodeSent": "Si tu correo esta registrado, te enviaremos un codigo de 6 digitos. Ingresalo abajo para continuar.",
+    "claimCodeLabel": "Codigo de 8 digitos",
+    "claimCodePlaceholder": "12345678",
+    "claimVerify": "Verificar y continuar",
+    "claimResend": "Usar otro correo",
+    "claimInvalidCode": "Ese codigo no es valido o expiro. Intentalo de nuevo o solicita uno nuevo.",
+    "claimRateLimited": "Demasiadas solicitudes. Intentalo de nuevo en unos minutos.",
+    "claimError": "No se pudo enviar el codigo. Intentalo de nuevo.",
+    "claimLinkPrompt": "Tu organizacion te invito o importo?",
+    "claimLinkText": "Reclama tu cuenta",
+    "claimJoinHeading": "Termina de reclamar tu cuenta",
+    "claimJoinDescription": "Ingresa el codigo de invitacion de tu organizacion para terminar de reclamar tu perfil importado."
   },
   "settings": {
     "title": "Ajustes",
