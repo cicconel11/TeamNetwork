@@ -164,7 +164,22 @@
     "somethingWentWrong": "Algo deu errado. Por favor, verifique sua conexao e tente novamente.",
     "goHome": "Ir para o inicio",
     "mustBeSignedIn": "Voce precisa estar conectado.",
-    "needSignedIn": "Voce precisa estar conectado para gerenciar notificacoes."
+    "needSignedIn": "Voce precisa estar conectado para gerenciar notificacoes.",
+    "claimTitle": "Reivindique sua conta",
+    "claimSubtitle": "Informe o e-mail registrado na sua organizacao. Enviaremos um codigo de 6 digitos.",
+    "claimSendCode": "Enviar codigo",
+    "claimCodeSent": "Se o seu e-mail esta registrado, um codigo de 6 digitos esta a caminho. Digite-o abaixo para continuar.",
+    "claimCodeLabel": "Codigo de 8 digitos",
+    "claimCodePlaceholder": "12345678",
+    "claimVerify": "Verificar e continuar",
+    "claimResend": "Usar outro e-mail",
+    "claimInvalidCode": "Esse codigo e invalido ou expirou. Tente novamente ou solicite um novo.",
+    "claimRateLimited": "Muitas solicitacoes. Tente novamente em alguns minutos.",
+    "claimError": "Nao foi possivel enviar o codigo. Tente novamente.",
+    "claimLinkPrompt": "Convidado ou importado pela sua organizacao?",
+    "claimLinkText": "Reivindique sua conta",
+    "claimJoinHeading": "Conclua a reivindicacao da sua conta",
+    "claimJoinDescription": "Informe o codigo de convite da sua organizacao para terminar de reivindicar seu perfil importado."
   },
   "settings": {
     "title": "Configuracoes",

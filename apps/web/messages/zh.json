@@ -164,7 +164,22 @@
     "somethingWentWrong": "出现错误，请检查网络连接后重试。",
     "goHome": "返回首页",
     "mustBeSignedIn": "您必须先登录。",
-    "needSignedIn": "您需要登录才能管理通知。"
+    "needSignedIn": "您需要登录才能管理通知。",
+    "claimTitle": "认领您的账户",
+    "claimSubtitle": "请输入您的组织登记的邮箱，我们将发送 6 位验证码。",
+    "claimSendCode": "发送验证码",
+    "claimCodeSent": "如果您的邮箱已登记，6 位验证码将很快送达。请在下方输入以继续。",
+    "claimCodeLabel": "8 位验证码",
+    "claimCodePlaceholder": "12345678",
+    "claimVerify": "验证并继续",
+    "claimResend": "使用其他邮箱",
+    "claimInvalidCode": "验证码无效或已过期。请重试或申请新的验证码。",
+    "claimRateLimited": "请求过多，请几分钟后重试。",
+    "claimError": "无法发送验证码，请重试。",
+    "claimLinkPrompt": "被组织邀请或导入了？",
+    "claimLinkText": "认领您的账户",
+    "claimJoinHeading": "完成账户认领",
+    "claimJoinDescription": "请输入组织提供的邀请码，以完成对导入资料的认领。"
   },
   "settings": {
     "title": "设置",

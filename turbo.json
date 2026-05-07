@@ -3,6 +3,7 @@
   "ui": "tui",
   "globalPassThroughEnv": [
     "ANALYZE",
+    "NODE_OPTIONS",
     "SKIP_STRIPE_VALIDATION",
     "VERCEL",
     "VERCEL_ENV",

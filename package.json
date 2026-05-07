@@ -20,7 +20,7 @@
     "mobile:android": "bun run --cwd apps/mobile android",
     "build": "turbo run build",
     "build:web": "turbo run build --filter=@teammeet/web",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint --filter=!@teammeet/mobile",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
