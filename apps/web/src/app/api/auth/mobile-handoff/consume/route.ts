@@ -29,7 +29,16 @@ export async function POST(request: Request) {
   }
 
   const serviceClient = createServiceClient();
-  const { data, error } = await (serviceClient as any).rpc("consume_mobile_auth_handoff", {
+  // Cast: consume_mobile_auth_handoff RPC is in the database but not yet in
+  // the generated Database types. Regenerate via `bun run gen:types` to drop.
+  const { data, error } = await (
+    serviceClient as unknown as {
+      rpc: (
+        fn: string,
+        args: { p_code_hash: string }
+      ) => Promise<{ data: ConsumeMobileAuthHandoffRow[] | null; error: { message: string } | null }>;
+    }
+  ).rpc("consume_mobile_auth_handoff", {
     p_code_hash: hashMobileHandoffCode(parsed.data.code),
   });
 
