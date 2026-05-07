@@ -70,13 +70,29 @@ export async function fetchWithAuth(path: string, options: RequestInit = {}) {
     throw new Error("Not authenticated");
   }
 
-  const headers = buildAuthorizedHeaders(options.headers, accessToken);
+  const url = `${WEB_API_URL}${path}`;
 
-  try {
-    return await fetch(`${WEB_API_URL}${path}`, {
+  const send = async (token: string) => {
+    const headers = buildAuthorizedHeaders(options.headers, token);
+    return fetch(url, {
       ...options,
       headers,
     });
+  };
+
+  try {
+    let response = await send(accessToken);
+
+    // Access token can be rejected as stale (401) even when expires_at looked OK
+    // (clock skew, refresh races, or server-side revocation). Refresh once and retry.
+    if (response.status === 401) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError && refreshed.session?.access_token) {
+        response = await send(refreshed.session.access_token);
+      }
+    }
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Network request failed";
     if (/network request failed|failed to fetch/i.test(message)) {

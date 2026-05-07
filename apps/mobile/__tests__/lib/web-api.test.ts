@@ -102,4 +102,34 @@ describe("web api helpers", () => {
     await expect(fetchWithAuth("/api/test")).rejects.toThrow("Not authenticated");
     expect(mockFetch).not.toHaveBeenCalled();
   });
+
+  it("refreshes session and retries once when the web API returns 401", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 401 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await fetchWithAuth("/api/test");
+
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    const firstHeaders = mockFetch.mock.calls[0][1].headers as Headers;
+    const secondHeaders = mockFetch.mock.calls[1][1].headers as Headers;
+    expect(firstHeaders.get("Authorization")).toBe("Bearer initial-token");
+    expect(secondHeaders.get("Authorization")).toBe("Bearer refreshed-token");
+  });
+
+  it("returns the 401 response when refresh after 401 does not yield a session", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 401 });
+    mockRefreshSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: null,
+    });
+
+    const res = await fetchWithAuth("/api/test");
+
+    expect(res.status).toBe(401);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+  });
 });

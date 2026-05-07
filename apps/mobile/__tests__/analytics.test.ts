@@ -24,13 +24,18 @@ jest.mock("../src/lib/analytics/posthog", () => ({
   reset: jest.fn(),
 }));
 
-jest.mock("../src/lib/analytics/sentry", () => ({
-  init: jest.fn(),
-  setEnabled: jest.fn(),
-  setUser: jest.fn(),
-  captureException: jest.fn(),
-  captureMessage: jest.fn(),
-}));
+jest.mock("../src/lib/analytics/sentry", () => {
+  const actual = jest.requireActual("../src/lib/analytics/sentry");
+  return {
+    ...actual,
+    init: jest.fn(),
+    setEnabled: jest.fn(),
+    setUser: jest.fn(),
+    captureException: jest.fn(),
+    captureMessage: jest.fn(),
+    isInitialized: jest.fn().mockReturnValue(false),
+  };
+});
 
 const VALID_CONFIG = {
   posthogKey: "test-posthog-key",

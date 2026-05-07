@@ -160,14 +160,25 @@ jest.mock("@/lib/supabase", () => ({
   },
 }));
 
-jest.mock("@/lib/analytics/sentry", () => ({
+jest.mock("@sentry/react-native", () => ({
   init: jest.fn(),
-  setEnabled: jest.fn(),
-  setUser: jest.fn(),
   captureException: jest.fn(),
   captureMessage: jest.fn(),
-  isInitialized: jest.fn().mockReturnValue(false),
+  setUser: jest.fn(),
 }));
+
+jest.mock("@/lib/analytics/sentry", () => {
+  const actual = jest.requireActual("@/lib/analytics/sentry");
+  return {
+    ...actual,
+    init: jest.fn(),
+    setEnabled: jest.fn(),
+    setUser: jest.fn(),
+    captureException: jest.fn(),
+    captureMessage: jest.fn(),
+    isInitialized: jest.fn().mockReturnValue(false),
+  };
+});
 
 // Suppress console warnings in tests
 const originalWarn = console.warn;

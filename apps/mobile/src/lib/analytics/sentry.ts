@@ -7,6 +7,15 @@ import * as Sentry from "@sentry/react-native";
 let initialized = false;
 let telemetryEnabled = false;
 
+/** Next.js API routes return `{ error: "Unauthorized" }` for 401 — noisy when the mobile session is stale. */
+export function isBenignWebApiUnauthorizedSentryEvent(event: {
+  exception?: { values?: { value?: string | undefined; type?: string | undefined }[] };
+}): boolean {
+  const values = event.exception?.values;
+  if (!values?.length) return false;
+  return values.some((entry) => entry.value === "Unauthorized");
+}
+
 export function init(dsn: string): void {
   if (initialized) return;
   Sentry.init({
@@ -21,6 +30,7 @@ export function init(dsn: string): void {
         delete event.user.username;
         delete event.user.ip_address;
       }
+      if (isBenignWebApiUnauthorizedSentryEvent(event)) return null;
       return event;
     },
   });
