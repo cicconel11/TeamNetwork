@@ -69,8 +69,8 @@ test("claim client invokes claimAlumniProfile after OTP verify", () => {
   );
   assert.match(
     src,
-    /claimAlumniProfile\s*\(\s*pendingEmail/,
-    "Claim client must call claimAlumniProfile with the verified email after OTP verify.",
+    /claimAlumniProfile\s*\(\s*\)/,
+    "Claim client must call claimAlumniProfile after OTP verify; subject + email derived server-side from session.",
   );
 });
 
@@ -156,12 +156,12 @@ test("claim-flow rejects unauthenticated callers", () => {
   );
 });
 
-test("claim-flow validates verifiedEmail matches session user", () => {
+test("claim-flow requires verified email on session user", () => {
   const src = readClaimFlow();
   assert.match(
     src,
-    /Email does not match session user/,
-    "Server action must reject email-mismatch before invoking RPC.",
+    /Email not verified/,
+    "Server action must reject sessions whose email_confirmed_at is unset.",
   );
 });
 
