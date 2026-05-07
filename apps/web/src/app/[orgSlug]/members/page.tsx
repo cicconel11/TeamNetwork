@@ -5,13 +5,14 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getCurrentUser, getOrgContext } from "@/lib/auth/roles";
+import { getPersonAdminContext } from "@/lib/people/permissions";
 import { MembersFilter } from "@/components/members/MembersFilter";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { resolveDataClient, getDevAdminEmails } from "@/lib/auth/dev-admin";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
-import { LinkedInBadge } from "@/components/shared";
+import { LinkedInBadge, formatPersonHeadline } from "@/components/shared";
 import {
   buildMemberDirectoryEntries,
   type LinkedMemberDirectoryRow,
@@ -42,28 +43,31 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const devAdminEmails = getDevAdminEmails();
   const devAdminEmailFilter = `(${devAdminEmails.map((email) => `"${email}"`).join(",")})`;
 
-  // Step 1: Get user_ids with active_member, admin, or parent role
-  const { data: memberRoles } = await dataClient
-    .from("user_organization_roles")
-    .select("user_id, role")
-    .eq("organization_id", org.id)
-    .in("role", ["active_member", "admin", "parent"])
-    .eq("status", "active");
+  // Step 1: Get user_ids with active_member, admin, or parent role.
+  // The role lookup also feeds the unified PersonAdminContext (admin set +
+  // org-role label badges) for parity across the directory + detail pages.
+  const [{ data: memberRoles }, personCtx] = await Promise.all([
+    dataClient
+      .from("user_organization_roles")
+      .select("user_id, role")
+      .eq("organization_id", org.id)
+      .in("role", ["active_member", "admin", "parent"])
+      .eq("status", "active"),
+    getPersonAdminContext({ orgId: org.id, viewerUserId: user?.id ?? null }),
+  ]);
 
   const memberUserIds = memberRoles?.map((r) => r.user_id) || [];
   const parentUserIds = memberRoles
     ?.filter((r) => r.role === "parent")
     .map((r) => r.user_id) || [];
-  const adminUserIds = new Set(
-    memberRoles?.filter((r) => r.role === "admin").map((r) => r.user_id) || []
-  );
+  const adminUserIds = personCtx.adminUserIds;
 
   // Step 2a: Query members WITH user accounts that have correct roles
   // Note: no dev-admin email exclusion here — the user_organization_roles
   // check (memberUserIds) already ensures only real org members appear.
   let linkedMembersQuery = dataClient
     .from("members")
-    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, linkedin_url, user_id")
+    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, linkedin_url, user_id, current_company, current_city, school")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
     .not("user_id", "is", null);
@@ -79,7 +83,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   // Step 2b: Query members WITHOUT user accounts (manually added) - always show in members tab
   let manualMembersQuery = dataClient
     .from("members")
-    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, linkedin_url, user_id")
+    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, linkedin_url, user_id, current_company, current_city, school")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
     .not("email", "in", devAdminEmailFilter)
@@ -203,7 +207,9 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       {/* Members Grid */}
       {members && members.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-          {members.map((member) => (
+          {members.map((member) => {
+            const orgRoleLabel = personCtx.orgRoleLabelFor(member.user_id);
+            return (
             <Card key={member.id} interactive className="p-5">
               <div className="flex items-center gap-4">
                 <DirectoryCardLink
@@ -221,9 +227,15 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                     <h3 className="font-semibold text-foreground truncate">
                       {member.first_name} {member.last_name}
                     </h3>
-                    {member.role && (
-                      <p className="text-sm text-muted-foreground">{member.role}</p>
-                    )}
+                    {(() => {
+                      const headline = formatPersonHeadline({
+                        role: member.role,
+                        current_company: member.current_company,
+                      });
+                      return headline ? (
+                        <p className="text-sm text-muted-foreground truncate">{headline}</p>
+                      ) : null;
+                    })()}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <Badge variant={member.status === "active" ? "success" : "muted"}>
                         {member.status}
@@ -231,8 +243,10 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                       {member.isParent && (
                         <Badge variant="primary">Parent</Badge>
                       )}
-                      {member.isAdmin && (
-                        <Badge variant="warning">Admin</Badge>
+                      {orgRoleLabel && orgRoleLabel !== "Parent" && (
+                        <Badge variant={orgRoleLabel === "Admin" ? "warning" : "muted"}>
+                          {orgRoleLabel}
+                        </Badge>
                       )}
                       {member.graduation_year && (
                         <span className="text-xs text-muted-foreground">
@@ -245,7 +259,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                 <LinkedInBadge linkedinUrl={member.linkedin_url} className="shrink-0" />
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <Card>

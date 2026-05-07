@@ -1,13 +1,13 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { ReinstateCard } from "@/components/members/ReinstateCard";
-import { isOrgAdmin } from "@/lib/auth";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
+import { getPersonAdminContext } from "@/lib/people/permissions";
 import type { Member } from "@/types/database";
-import { LinkedInProfileLink } from "@/components/shared";
+import { LinkedInProfileLink, formatPersonHeadline } from "@/components/shared";
 import { ConnectedAccountsSection } from "@/components/members/ConnectedAccountsSection";
 import { sanitizeRichTextToPlainText } from "@/lib/security/rich-text";
 
@@ -43,8 +43,8 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   const member = memberData as Member;
   const memberUserId = (memberData as Member & { user_id?: string | null }).user_id || null;
 
-  // Fetch org role + LinkedIn enrichment data in parallel
-  const [orgRoleResult, enrichmentResult] = await Promise.all([
+  // Fetch org role + LinkedIn enrichment + person admin context in parallel
+  const [orgRoleResult, enrichmentResult, ctx] = await Promise.all([
     memberUserId
       ? dataClient
           .from("user_organization_roles")
@@ -61,9 +61,31 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
           .eq("user_id", memberUserId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    getPersonAdminContext({ orgId: org.id, viewerUserId: user?.id ?? null }),
   ]);
 
   const userOrgRole = orgRoleResult.data?.role || null;
+
+  // Alumni-redirect: when this member's user has org role 'alumni', send the
+  // viewer to the alumni profile so the surface matches the org-role identity.
+  // Lookup the alumni row by user_id (alumni rows have their own primary key).
+  // Skip when memberUserId is null (manual member rows have no user account, so
+  // there is no alumni row to redirect to). If no alumni row matches, fall
+  // through and render the member profile — covers the rare data state where
+  // the org role exists without a corresponding alumni row. A backfill task
+  // tracks aligning that data.
+  if (memberUserId && userOrgRole === "alumni") {
+    const { data: alumniRow } = await dataClient
+      .from("alumni")
+      .select("id")
+      .eq("organization_id", org.id)
+      .eq("user_id", memberUserId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (alumniRow?.id) {
+      redirect(`/${orgSlug}/alumni/${alumniRow.id}`);
+    }
+  }
 
   // Extract enrichment data from LinkedIn connection (stored by Bright Data sync)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,9 +117,11 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   const enrichmentExperience: EnrichmentExperience[] = Array.isArray(enrichment?.experience) ? enrichment.experience : [];
   const enrichmentEducation: EnrichmentEducation[] = Array.isArray(enrichment?.education) ? enrichment.education : [];
 
-  const isAdmin = await isOrgAdmin(org.id);
   const currentUserId = user?.id ?? null;
-  const canEdit = isAdmin || (currentUserId && memberUserId === currentUserId);
+  const isAdmin = ctx.isAdmin;
+  const canEdit = ctx.canEditPerson(memberUserId);
+  const canModifyExisting = canEdit && !ctx.isReadOnly;
+  const canDelete = ctx.isAdmin && !ctx.isReadOnly;
   const isOwnProfile = currentUserId !== null && currentUserId === memberUserId;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,14 +139,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   const hasEnrichmentExperience = enrichmentExperience.length > 0;
   const hasEnrichmentEducation = enrichmentEducation.length > 0;
 
-  // Org role label for the badge
-  const orgRoleLabels: Record<string, string> = {
-    admin: "Admin",
-    active_member: "Member",
-    alumni: "Alumni",
-    parent: "Parent",
-  };
-  const orgRoleLabel = userOrgRole ? (orgRoleLabels[userOrgRole] ?? userOrgRole) : null;
+  const orgRoleLabel = ctx.orgRoleLabelFor(memberUserId);
 
   const statusVariant = member.status === "active" ? "success" : member.status === "pending" ? "warning" : "muted";
 
@@ -134,15 +151,21 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
         actions={
           canEdit && (
             <div className="flex items-center gap-2">
-              <Link href={`/${orgSlug}/members/${memberId}/edit`}>
-                <Button variant="secondary" data-testid="member-edit-button">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                  </svg>
-                  Edit
+              {canModifyExisting ? (
+                <Link href={`/${orgSlug}/members/${memberId}/edit`}>
+                  <Button variant="secondary" data-testid="member-edit-button">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                    </svg>
+                    Edit
+                  </Button>
+                </Link>
+              ) : (
+                <Button variant="secondary" disabled data-testid="member-edit-disabled">
+                  Edit Disabled
                 </Button>
-              </Link>
-              {isAdmin && (
+              )}
+              {canDelete ? (
                 <SoftDeleteButton
                   table="members"
                   id={memberId}
@@ -152,11 +175,23 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
                   revalidatePaths={[`/${orgSlug}`, `/${orgSlug}/members`]}
                   data-testid="member-delete-button"
                 />
+              ) : (
+                isAdmin && (
+                  <Button variant="danger" disabled data-testid="member-delete-disabled">
+                    Delete Disabled
+                  </Button>
+                )
               )}
             </div>
           )
         }
       />
+
+      {ctx.isReadOnly && (
+        <div className="mb-6 rounded-xl bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+          This organization is in its billing grace period. You can still add new members, but editing and deleting existing members are disabled until billing is restored.
+        </div>
+      )}
 
       <div className="space-y-6 max-w-4xl">
 
@@ -183,11 +218,17 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
                   {member.first_name} {member.last_name}
                 </h2>
                 {/* Show job title as the headline, not the org role */}
-                {jobTitle && (
-                  <p className="text-muted-foreground text-sm mt-0.5 line-clamp-2">
-                    {jobTitle}{currentCompany ? ` at ${currentCompany}` : ""}
-                  </p>
-                )}
+                {(() => {
+                  const headlineText = formatPersonHeadline({
+                    role: jobTitle,
+                    current_company: currentCompany,
+                  });
+                  return headlineText ? (
+                    <p className="text-muted-foreground text-sm mt-0.5 line-clamp-2">
+                      {headlineText}
+                    </p>
+                  ) : null;
+                })()}
               </div>
             </div>
 

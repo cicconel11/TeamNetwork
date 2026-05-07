@@ -9,6 +9,8 @@ export interface LinkedMemberDirectoryRow {
   graduation_year: number | null;
   linkedin_url: string | null;
   user_id: string | null;
+  current_company: string | null;
+  current_city: string | null;
 }
 
 export interface ParentDirectoryRow {
@@ -33,6 +35,10 @@ export interface MemberDirectoryEntry {
   status: string | null;
   graduation_year: number | null;
   linkedin_url: string | null;
+  current_company: string | null;
+  current_city: string | null;
+  /** user_id of the underlying account, when this row maps to one. */
+  user_id: string | null;
   isAdmin: boolean;
   isParent: boolean;
   profileHref: string;
@@ -64,6 +70,9 @@ export function buildMemberDirectoryEntries(params: {
       status: member.status,
       graduation_year: member.graduation_year,
       linkedin_url: member.linkedin_url,
+      current_company: member.current_company,
+      current_city: member.current_city,
+      user_id: member.user_id,
       isAdmin: member.user_id ? adminUserIds.has(member.user_id) : false,
       isParent: false,
       profileHref: `/${orgSlug}/members/${member.id}`,
@@ -78,6 +87,9 @@ export function buildMemberDirectoryEntries(params: {
       status: member.status,
       graduation_year: member.graduation_year,
       linkedin_url: member.linkedin_url,
+      current_company: member.current_company,
+      current_city: member.current_city,
+      user_id: member.user_id,
       isAdmin: false,
       isParent: false,
       profileHref: `/${orgSlug}/members/${member.id}`,
@@ -94,6 +106,9 @@ export function buildMemberDirectoryEntries(params: {
         status: "active",
         graduation_year: null,
         linkedin_url: parent.linkedin_url,
+        current_company: null,
+        current_city: null,
+        user_id: parent.user_id,
         isAdmin: false,
         isParent: true,
         profileHref: `/${orgSlug}/parents/${parent.id}`,

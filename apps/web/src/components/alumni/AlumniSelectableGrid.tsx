@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Avatar, Button } from "@/components/ui";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
-import { LinkedInBadge } from "@/components/shared";
+import { LinkedInBadge, formatPersonHeadline } from "@/components/shared";
 import { useAlumniSelectMode } from "./AlumniActions";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -229,12 +229,16 @@ export function AlumniSelectableGrid({ alumni, orgSlug, organizationId }: Alumni
                       <h3 className="font-semibold text-foreground truncate">
                         {alum.first_name} {alum.last_name}
                       </h3>
-                      {(alum.position_title || alum.job_title) && (
-                        <p className="text-sm text-muted-foreground truncate">
-                          {alum.position_title || alum.job_title}
-                          {alum.current_company && ` at ${alum.current_company}`}
-                        </p>
-                      )}
+                      {(() => {
+                        const headline = formatPersonHeadline({
+                          position_title: alum.position_title,
+                          job_title: alum.job_title,
+                          current_company: alum.current_company,
+                        });
+                        return headline ? (
+                          <p className="text-sm text-muted-foreground truncate">{headline}</p>
+                        ) : null;
+                      })()}
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {alum.graduation_year && (
                           <Badge variant="muted">Class of {alum.graduation_year}</Badge>
@@ -271,12 +275,16 @@ export function AlumniSelectableGrid({ alumni, orgSlug, organizationId }: Alumni
                       <h3 className="font-semibold text-foreground truncate">
                         {alum.first_name} {alum.last_name}
                       </h3>
-                      {(alum.position_title || alum.job_title) && (
-                        <p className="text-sm text-muted-foreground truncate">
-                          {alum.position_title || alum.job_title}
-                          {alum.current_company && ` at ${alum.current_company}`}
-                        </p>
-                      )}
+                      {(() => {
+                        const headline = formatPersonHeadline({
+                          position_title: alum.position_title,
+                          job_title: alum.job_title,
+                          current_company: alum.current_company,
+                        });
+                        return headline ? (
+                          <p className="text-sm text-muted-foreground truncate">{headline}</p>
+                        ) : null;
+                      })()}
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {alum.graduation_year && (
                           <Badge variant="muted">Class of {alum.graduation_year}</Badge>
