@@ -13,6 +13,14 @@ const LEGACY_EXEMPTIONS: Record<string, string> = {
     "Internal admin bug triage endpoint; existing auth/admin checks predate endpoint limiter policy.",
   "src/app/api/auth/accept-terms/route.ts":
     "Low-cost authenticated account-state mutation; grandfathered pending auth-route limiter sweep.",
+  "src/app/api/auth/mobile-handoff/consume/route.ts":
+    "Mobile auth handoff consume; rate limiting handled at upstream issue endpoint and short-lived hashed code. Add limiter as follow-up.",
+  "src/app/api/live-activity/eligibility/route.ts":
+    "Authenticated read scoped to caller's RSVP; pending mobile-route limiter sweep.",
+  "src/app/api/live-activity/register/route.ts":
+    "Authenticated mutation gated by attending RSVP; pending mobile-route limiter sweep.",
+  "src/app/api/live-activity/unregister/route.ts":
+    "Authenticated mutation; revokes own token only. Pending mobile-route limiter sweep.",
   "src/app/api/blackbaud/status/route.ts":
     "Authenticated status read; grandfathered pending integrations limiter sweep.",
   "src/app/api/calendar/event-sync/route.ts":
