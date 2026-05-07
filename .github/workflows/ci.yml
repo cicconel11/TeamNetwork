@@ -250,17 +250,19 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Run bun audit
-        # Ignored advisories are all xmldom transitive deps inside the Expo
-        # toolchain (expo-modules-autolinking, expo-splash-screen,
-        # expo-dev-client). We cannot upgrade these directly; track Expo
-        # release notes for resolution and remove the ignores when they bump.
+        # Ignored advisories are all transitive deps inside the Expo toolchain
+        # (xmldom via expo-modules-autolinking/splash-screen/dev-client; postcss
+        # via expo). We cannot upgrade these directly; track Expo release notes
+        # and remove ignores when Expo bumps. Future advisories outside this
+        # list still fail the audit.
         run: |
           bun audit --audit-level=moderate \
             --ignore=GHSA-2v35-w6hq-6mfw \
             --ignore=GHSA-f6ww-3ggp-fr8h \
             --ignore=GHSA-x6wf-f3px-wcqx \
             --ignore=GHSA-j759-j44w-7fr8 \
-            --ignore=GHSA-wh4c-j3r5-mjhp
+            --ignore=GHSA-wh4c-j3r5-mjhp \
+            --ignore=GHSA-qx2v-qp2m-jg93
 
   # Aggregate status check so branch protection can require a single
   # "CI / All Checks" check instead of listing every job. Update the
