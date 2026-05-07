@@ -506,8 +506,10 @@ export type Database = {
           id: string
           organization_id: string
           payload: Json
+          previous_payload: Json | null
           result_entity_id: string | null
           result_entity_type: string | null
+          revise_count: number
           status: string
           thread_id: string
           updated_at: string
@@ -522,8 +524,10 @@ export type Database = {
           id?: string
           organization_id: string
           payload: Json
+          previous_payload?: Json | null
           result_entity_id?: string | null
           result_entity_type?: string | null
+          revise_count?: number
           status?: string
           thread_id: string
           updated_at?: string
@@ -538,8 +542,10 @@ export type Database = {
           id?: string
           organization_id?: string
           payload?: Json
+          previous_payload?: Json | null
           result_entity_id?: string | null
           result_entity_type?: string | null
+          revise_count?: number
           status?: string
           thread_id?: string
           updated_at?: string
@@ -621,6 +627,44 @@ export type Database = {
             columns: ["source_message_id"]
             isOneToOne: false
             referencedRelation: "ai_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_spend_ledger: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          period_start: string
+          request_count: number
+          spend_microusd: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          period_start: string
+          request_count?: number
+          spend_microusd?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          period_start?: string
+          request_count?: number
+          spend_microusd?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_spend_ledger_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -2268,8 +2312,6 @@ export type Database = {
           id: string
           price_per_sub_org_cents: number | null
           pricing_model: string | null
-          pricing_model_version: string
-          pricing_v2_snapshot: Json | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -2286,8 +2328,6 @@ export type Database = {
           id?: string
           price_per_sub_org_cents?: number | null
           pricing_model?: string | null
-          pricing_model_version?: string
-          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2304,8 +2344,6 @@ export type Database = {
           id?: string
           price_per_sub_org_cents?: number | null
           pricing_model?: string | null
-          pricing_model_version?: string
-          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2616,9 +2654,13 @@ export type Database = {
           description: string | null
           end_date: string | null
           event_type: Database["public"]["Enums"]["event_type"] | null
+          geofence_enabled: boolean
+          geofence_radius_m: number
           id: string
           is_philanthropy: boolean | null
+          latitude: number | null
           location: string | null
+          longitude: number | null
           organization_id: string
           recurrence_group_id: string | null
           recurrence_index: number | null
@@ -2636,9 +2678,13 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           event_type?: Database["public"]["Enums"]["event_type"] | null
+          geofence_enabled?: boolean
+          geofence_radius_m?: number
           id?: string
           is_philanthropy?: boolean | null
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
           organization_id: string
           recurrence_group_id?: string | null
           recurrence_index?: number | null
@@ -2656,9 +2702,13 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           event_type?: Database["public"]["Enums"]["event_type"] | null
+          geofence_enabled?: boolean
+          geofence_radius_m?: number
           id?: string
           is_philanthropy?: boolean | null
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
           organization_id?: string
           recurrence_group_id?: string | null
           recurrence_index?: number | null
@@ -3413,6 +3463,70 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      live_activity_tokens: {
+        Row: {
+          activity_id: string
+          created_at: string
+          device_id: string
+          ended_at: string | null
+          ends_at: string
+          event_id: string
+          organization_id: string
+          push_token: string
+          started_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          device_id: string
+          ended_at?: string | null
+          ends_at: string
+          event_id: string
+          organization_id: string
+          push_token: string
+          started_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          device_id?: string
+          ended_at?: string | null
+          ends_at?: string
+          event_id?: string
+          organization_id?: string
+          push_token?: string
+          started_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_activity_tokens_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_activity_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_activity_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mcp_resources: {
         Row: {
@@ -4349,57 +4463,194 @@ export type Database = {
           },
         ]
       }
+      mobile_auth_handoffs: {
+        Row: {
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          encrypted_access_token: string
+          encrypted_refresh_token: string
+          expires_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          encrypted_access_token: string
+          encrypted_refresh_token: string
+          expires_at: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          encrypted_access_token?: string
+          encrypted_refresh_token?: string
+          expires_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notification_jobs: {
+        Row: {
+          attempts: number
+          audience: string | null
+          body: string | null
+          category: string | null
+          created_at: string
+          data: Json
+          id: string
+          kind: string
+          last_error: string | null
+          leased_at: string | null
+          organization_id: string
+          priority: number
+          push_resource_id: string | null
+          push_type: string | null
+          scheduled_for: string
+          sent_at: string | null
+          status: string
+          target_user_ids: string[] | null
+          title: string | null
+        }
+        Insert: {
+          attempts?: number
+          audience?: string | null
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          data?: Json
+          id?: string
+          kind?: string
+          last_error?: string | null
+          leased_at?: string | null
+          organization_id: string
+          priority?: number
+          push_resource_id?: string | null
+          push_type?: string | null
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: string
+          target_user_ids?: string[] | null
+          title?: string | null
+        }
+        Update: {
+          attempts?: number
+          audience?: string | null
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          data?: Json
+          id?: string
+          kind?: string
+          last_error?: string | null
+          leased_at?: string | null
+          organization_id?: string
+          priority?: number
+          push_resource_id?: string | null
+          push_type?: string | null
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: string
+          target_user_ids?: string[] | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_preferences: {
         Row: {
           announcement_emails_enabled: boolean
+          announcement_push_enabled: boolean
+          chat_push_enabled: boolean
           competition_emails_enabled: boolean
+          competition_push_enabled: boolean
           created_at: string | null
           discussion_emails_enabled: boolean
+          discussion_push_enabled: boolean
+          donation_push_enabled: boolean
           email_address: string | null
           email_enabled: boolean | null
           event_emails_enabled: boolean
+          event_push_enabled: boolean
+          event_reminder_push_enabled: boolean
           id: string
           mentorship_emails_enabled: boolean
+          mentorship_push_enabled: boolean
           organization_id: string
           phone_number: string | null
+          push_enabled: boolean | null
           sms_enabled: boolean | null
           updated_at: string | null
           user_id: string
           workout_emails_enabled: boolean
+          workout_push_enabled: boolean
         }
         Insert: {
           announcement_emails_enabled?: boolean
+          announcement_push_enabled?: boolean
+          chat_push_enabled?: boolean
           competition_emails_enabled?: boolean
+          competition_push_enabled?: boolean
           created_at?: string | null
           discussion_emails_enabled?: boolean
+          discussion_push_enabled?: boolean
+          donation_push_enabled?: boolean
           email_address?: string | null
           email_enabled?: boolean | null
           event_emails_enabled?: boolean
+          event_push_enabled?: boolean
+          event_reminder_push_enabled?: boolean
           id?: string
           mentorship_emails_enabled?: boolean
+          mentorship_push_enabled?: boolean
           organization_id: string
           phone_number?: string | null
+          push_enabled?: boolean | null
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id: string
           workout_emails_enabled?: boolean
+          workout_push_enabled?: boolean
         }
         Update: {
           announcement_emails_enabled?: boolean
+          announcement_push_enabled?: boolean
+          chat_push_enabled?: boolean
           competition_emails_enabled?: boolean
+          competition_push_enabled?: boolean
           created_at?: string | null
           discussion_emails_enabled?: boolean
+          discussion_push_enabled?: boolean
+          donation_push_enabled?: boolean
           email_address?: string | null
           email_enabled?: boolean | null
           event_emails_enabled?: boolean
+          event_push_enabled?: boolean
+          event_reminder_push_enabled?: boolean
           id?: string
           mentorship_emails_enabled?: boolean
+          mentorship_push_enabled?: boolean
           organization_id?: string
           phone_number?: string | null
+          push_enabled?: boolean | null
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
           workout_emails_enabled?: boolean
+          workout_push_enabled?: boolean
         }
         Relationships: [
           {
@@ -4411,6 +4662,32 @@ export type Database = {
           },
         ]
       }
+      notification_reads: {
+        Row: {
+          notification_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          notification_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          notification_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_reads_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           audience: string
@@ -4418,12 +4695,15 @@ export type Database = {
           channel: string
           created_at: string | null
           created_by_user_id: string | null
+          data: Json
           deleted_at: string | null
           id: string
           organization_id: string
+          resource_id: string | null
           sent_at: string | null
           target_user_ids: string[] | null
           title: string
+          type: string | null
         }
         Insert: {
           audience?: string
@@ -4431,12 +4711,15 @@ export type Database = {
           channel: string
           created_at?: string | null
           created_by_user_id?: string | null
+          data?: Json
           deleted_at?: string | null
           id?: string
           organization_id: string
+          resource_id?: string | null
           sent_at?: string | null
           target_user_ids?: string[] | null
           title: string
+          type?: string | null
         }
         Update: {
           audience?: string
@@ -4444,12 +4727,15 @@ export type Database = {
           channel?: string
           created_at?: string | null
           created_by_user_id?: string | null
+          data?: Json
           deleted_at?: string | null
           id?: string
           organization_id?: string
+          resource_id?: string | null
           sent_at?: string | null
           target_user_ids?: string[] | null
           title?: string
+          type?: string | null
         }
         Relationships: [
           {
@@ -4858,6 +5144,7 @@ export type Database = {
       }
       organization_subscriptions: {
         Row: {
+          ai_monthly_cap_cents: number | null
           alumni_bucket: string
           alumni_plan_interval: string | null
           base_plan_interval: string
@@ -4869,14 +5156,13 @@ export type Database = {
           media_storage_quota_bytes: number | null
           organization_id: string
           parents_bucket: string
-          pricing_model_version: string
-          pricing_v2_snapshot: Json | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           updated_at: string
         }
         Insert: {
+          ai_monthly_cap_cents?: number | null
           alumni_bucket?: string
           alumni_plan_interval?: string | null
           base_plan_interval: string
@@ -4888,14 +5174,13 @@ export type Database = {
           media_storage_quota_bytes?: number | null
           organization_id: string
           parents_bucket?: string
-          pricing_model_version?: string
-          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           updated_at?: string
         }
         Update: {
+          ai_monthly_cap_cents?: number | null
           alumni_bucket?: string
           alumni_plan_interval?: string | null
           base_plan_interval?: string
@@ -4907,8 +5192,6 @@ export type Database = {
           media_storage_quota_bytes?: number | null
           organization_id?: string
           parents_bucket?: string
-          pricing_model_version?: string
-          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -6117,6 +6400,44 @@ export type Database = {
           },
         ]
       }
+      user_push_tokens: {
+        Row: {
+          created_at: string | null
+          device_id: string | null
+          expo_push_token: string
+          id: string
+          platform: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          device_id?: string | null
+          expo_push_token: string
+          id?: string
+          platform: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          device_id?: string | null
+          expo_push_token?: string
+          id?: string
+          platform?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           avatar_url: string | null
@@ -6431,6 +6752,15 @@ export type Database = {
         Args: { p_action_id: string; p_user_id: string }
         Returns: Json
       }
+      charge_and_check_ai_spend: {
+        Args: { p_cents: number; p_org_id: string }
+        Returns: {
+          allowed: boolean
+          cap_cents: number
+          period_end: string
+          spend_cents: number
+        }[]
+      }
       check_analytics_rate_limit: {
         Args: {
           p_max_events?: number
@@ -6443,6 +6773,13 @@ export type Database = {
       check_in_event_attendee: {
         Args: { p_rsvp_id: string; p_undo?: boolean }
         Returns: Json
+      }
+      claim_alumni_profiles: {
+        Args: { p_email: string; p_user_id: string }
+        Returns: {
+          out_organization_id: string
+          out_slug: string
+        }[]
       }
       claim_linkedin_resync: { Args: { p_user_id: string }; Returns: Json }
       claim_microsoft_token_refresh_lock: {
@@ -6471,6 +6808,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      cleanup_stale_push_tokens: {
+        Args: { p_max_age?: string }
+        Returns: number
+      }
       complete_enterprise_invite_redemption: {
         Args: { p_organization_id: string; p_token: string }
         Returns: Json
@@ -6482,6 +6823,14 @@ export type Database = {
       confirm_ai_pending_action: {
         Args: { p_action_id: string; p_user_id: string }
         Returns: Json
+      }
+      consume_mobile_auth_handoff: {
+        Args: { p_code_hash: string }
+        Returns: {
+          encrypted_access_token: string
+          encrypted_refresh_token: string
+          user_id: string
+        }[]
       }
       create_enterprise_invite: {
         Args: {
@@ -6636,6 +6985,36 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      dispatch_notification_jobs_lease: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          attempts: number
+          audience: string | null
+          body: string | null
+          category: string | null
+          created_at: string
+          data: Json
+          id: string
+          kind: string
+          last_error: string | null
+          leased_at: string | null
+          organization_id: string
+          priority: number
+          push_resource_id: string | null
+          push_type: string | null
+          scheduled_for: string
+          sent_at: string | null
+          status: string
+          target_user_ids: string[] | null
+          title: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notification_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       enrich_alumni_by_id: {
         Args: {
           p_alumni_id: string
@@ -6652,6 +7031,31 @@ export type Database = {
           p_work_history?: Json
         }
         Returns: Json
+      }
+      events_with_user_rsvp: {
+        Args: { p_limit?: number; p_offset?: number; p_org_id: string }
+        Returns: {
+          audience: string
+          created_at: string
+          created_by_user_id: string
+          deleted_at: string
+          description: string
+          end_date: string
+          event_type: Database["public"]["Enums"]["event_type"]
+          id: string
+          is_philanthropy: boolean
+          location: string
+          organization_id: string
+          recurrence_group_id: string
+          recurrence_index: number
+          recurrence_rule: Json
+          rsvp_count: number
+          start_date: string
+          target_user_ids: string[]
+          title: string
+          updated_at: string
+          user_rsvp_status: string
+        }[]
       }
       filter_announcement_ids_for_user: {
         Args: { p_announcement_ids: string[]; p_org_id: string }
@@ -6716,10 +7120,31 @@ export type Database = {
         }[]
       }
       get_org_context_by_slug: { Args: { p_slug: string }; Returns: Json }
+      get_org_stats_snapshot: {
+        Args: { p_org_id: string }
+        Returns: {
+          active_members: number
+          alumni: number
+          donations: Json
+          parents: number
+          upcoming_events: number
+        }[]
+      }
       get_parents_relationship_options: {
         Args: { p_org_id: string }
         Returns: {
           relationship: string
+        }[]
+      }
+      get_pending_approvals: {
+        Args: { p_organization_id: string }
+        Returns: {
+          created_at: string
+          email: string
+          name: string
+          role: Database["public"]["Enums"]["user_role"]
+          status: Database["public"]["Enums"]["membership_status"]
+          user_id: string
         }[]
       }
       get_subscription_status: {
@@ -6737,6 +7162,10 @@ export type Database = {
         Returns: boolean
       }
       has_dsr_compliance_role: { Args: never; Returns: boolean }
+      haversine_meters: {
+        Args: { lat1: number; lat2: number; lng1: number; lng2: number }
+        Returns: number
+      }
       increment_ai_queue_attempts: {
         Args: { p_error: string; p_id: string }
         Returns: undefined
@@ -6797,6 +7226,14 @@ export type Database = {
       }
       is_org_admin: { Args: { org_id: string }; Returns: boolean }
       is_org_member: { Args: { org_id: string }; Returns: boolean }
+      link_blackbaud_alumni_to_user: {
+        Args: {
+          p_org_id: string
+          p_source_alumni_id: string
+          p_target_user_id: string
+        }
+        Returns: string
+      }
       log_analytics_event: {
         Args: {
           p_app_version: string
@@ -6952,6 +7389,15 @@ export type Database = {
           title: string
           url_path: string
         }[]
+      }
+      self_check_in_event: {
+        Args: {
+          p_event_id: string
+          p_lat?: number
+          p_lng?: number
+          p_venue_confirmed?: boolean
+        }
+        Returns: Json
       }
       shift_media_album_sort_orders: {
         Args: { p_org_id: string }
