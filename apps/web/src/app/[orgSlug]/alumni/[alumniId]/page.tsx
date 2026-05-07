@@ -4,8 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
+import { getOrgRole } from "@/lib/auth/roles";
+import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getPersonAdminContext } from "@/lib/people/permissions";
 import type { Organization, Alumni } from "@/types/database";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DeleteAlumniButton } from "@/components/alumni/DeleteAlumniButton";
 import { LinkedInProfileLink, formatPersonHeadline } from "@/components/shared";
 
@@ -75,10 +78,13 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const alum = alumData as Alumni & Record<string, any>;
 
+  const navConfig = org.nav_config as NavConfig | null;
+  const { role } = await getOrgRole({ orgId, userId: user?.id });
+  const canEditPage = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
   const alumUserId = alum.user_id ?? null;
-  const canEdit = ctx.canEditPerson(alumUserId);
+  const canEdit = canEditPage || ctx.canEditPerson(alumUserId);
   const canModifyExisting = canEdit && !ctx.isReadOnly;
-  const canDelete = ctx.isAdmin && !ctx.isReadOnly;
+  const canDelete = canEditPage && !ctx.isReadOnly;
   const isReadOnly = ctx.isReadOnly;
 
   // Extract enrichment data (may not exist if migration hasn't run)
@@ -135,7 +141,7 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
                   redirectTo={`/${orgSlug}/alumni`}
                 />
               ) : (
-                ctx.isAdmin && <Button variant="danger" disabled>Delete Disabled</Button>
+                canEditPage && <Button variant="danger" disabled>Delete Disabled</Button>
               )}
             </div>
           )

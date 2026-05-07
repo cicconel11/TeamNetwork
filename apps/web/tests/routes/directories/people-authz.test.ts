@@ -105,11 +105,11 @@ test("member detail redirects alumni-role users to the alumni profile", () => {
 
 // ─── Alumni directory ─────────────────────────────────────────────────
 
-test("alumni directory imports getPersonAdminContext + drops getOrgRole/canEditNavItem", () => {
+test("alumni directory keeps nav edit roles for page-level actions", () => {
   const source = readSource("src/app/[orgSlug]/alumni/page.tsx");
-  assert.match(source, /getPersonAdminContext/);
-  assert.doesNotMatch(source, /import \{ getOrgRole \}/);
-  assert.doesNotMatch(source, /import \{ canEditNavItem \}/);
+  assert.match(source, /import \{ getOrgRole \}/);
+  assert.match(source, /import \{ canEditNavItem \}/);
+  assert.match(source, /canEditNavItem\(navConfig, "\/alumni", role, \["admin"\]\)/);
 });
 
 test("alumni directory uses formatPersonHeadline for card headline", () => {
@@ -119,23 +119,24 @@ test("alumni directory uses formatPersonHeadline for card headline", () => {
 
 // ─── Alumni detail ────────────────────────────────────────────────────
 
-test("alumni detail imports getPersonAdminContext + drops getOrgRole/canEditNavItem", () => {
+test("alumni detail keeps nav edit roles and imports getPersonAdminContext", () => {
   const source = readSource("src/app/[orgSlug]/alumni/[alumniId]/page.tsx");
   assert.match(source, /from "@\/lib\/people\/permissions"/);
   assert.match(source, /getPersonAdminContext/);
-  assert.doesNotMatch(source, /import \{ getOrgRole \}/);
-  assert.doesNotMatch(source, /import \{ canEditNavItem \}/);
+  assert.match(source, /import \{ getOrgRole \}/);
+  assert.match(source, /import \{ canEditNavItem \}/);
+  assert.match(source, /canEditNavItem\(navConfig, "\/alumni", role, \["admin"\]\)/);
 });
 
-test("alumni detail derives canEdit via ctx.canEditPerson(alumUserId)", () => {
+test("alumni detail derives canEdit from nav edit roles or ctx.canEditPerson(alumUserId)", () => {
   const source = readSource("src/app/[orgSlug]/alumni/[alumniId]/page.tsx");
-  assert.match(source, /const canEdit = ctx\.canEditPerson\(alumUserId\)/);
+  assert.match(source, /const canEdit = canEditPage \|\| ctx\.canEditPerson\(alumUserId\)/);
 });
 
 test("alumni detail preserves read-only billing gate via ctx", () => {
   const source = readSource("src/app/[orgSlug]/alumni/[alumniId]/page.tsx");
   assert.match(source, /const canModifyExisting = canEdit && !ctx\.isReadOnly/);
-  assert.match(source, /const canDelete = ctx\.isAdmin && !ctx\.isReadOnly/);
+  assert.match(source, /const canDelete = canEditPage && !ctx\.isReadOnly/);
 });
 
 test("alumni detail headline derives from formatPersonHeadline with full precedence", () => {
@@ -147,16 +148,16 @@ test("alumni detail headline derives from formatPersonHeadline with full precede
 
 // ─── Parents directory (parent detail intentionally unchanged) ────────
 
-test("parents directory imports getPersonAdminContext + drops getOrgRole/canEditNavItem", () => {
+test("parents directory keeps nav edit roles for page-level actions", () => {
   const source = readSource("src/app/[orgSlug]/parents/page.tsx");
-  assert.match(source, /getPersonAdminContext/);
-  assert.doesNotMatch(source, /import \{ getOrgRole \}/);
-  assert.doesNotMatch(source, /import \{ canEditNavItem \}/);
+  assert.match(source, /import \{ getOrgContext, getOrgRole \}/);
+  assert.match(source, /import \{ canEditNavItem \}/);
+  assert.match(source, /canEditNavItem\(navConfig, "\/parents", role, \["admin"\]\)/);
 });
 
-test("parents directory derives canEdit from personCtx.isAdmin", () => {
+test("parents directory derives canEdit from nav edit roles", () => {
   const source = readSource("src/app/[orgSlug]/parents/page.tsx");
-  assert.match(source, /canEdit = personCtx\.isAdmin/);
+  assert.match(source, /canEdit = canEditNavItem\(navConfig, "\/parents", role, \["admin"\]\)/);
 });
 
 // ─── Permission-helper invariants ─────────────────────────────────────

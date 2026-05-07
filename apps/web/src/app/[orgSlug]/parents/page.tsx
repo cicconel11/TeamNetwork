@@ -7,8 +7,8 @@ import { ParentsFilters } from "@/components/parents";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
-import { getOrgContext } from "@/lib/auth/roles";
-import { getPersonAdminContext } from "@/lib/people/permissions";
+import { getOrgContext, getOrgRole } from "@/lib/auth/roles";
+import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
@@ -64,11 +64,8 @@ export default async function ParentsPage({ params, searchParams }: ParentsPageP
   if (!org || orgError) return null;
 
   const navConfig = org.nav_config as NavConfig | null;
-  const personCtx = await getPersonAdminContext({
-    orgId: org.id,
-    viewerUserId: user?.id ?? null,
-  });
-  const canEdit = personCtx.isAdmin;
+  const { role } = await getOrgRole({ orgId: org.id, userId: user?.id });
+  const canEdit = canEditNavItem(navConfig, "/parents", role, ["admin"]);
 
   const currentPage = Math.max(1, parseInt(filters.page ?? "1", 10) || 1);
   const offset = (currentPage - 1) * PAGE_SIZE;
