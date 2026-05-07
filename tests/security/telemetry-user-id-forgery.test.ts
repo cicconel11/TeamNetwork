@@ -10,15 +10,17 @@ const routePath = join(repoRoot, "src", "app", "api", "telemetry", "error", "rou
 const schemaPath = join(repoRoot, "src", "lib", "schemas", "telemetry.ts");
 
 describe("POST /api/telemetry/error trusts session, not body", () => {
-  it("derives user_id from supabase.auth.getUser, not the request body", () => {
+  it("derives user_id from the trusted-user helper, not the request body", () => {
     const src = readFileSync(routePath, "utf8");
+    // The auth.getUser() call lives inside resolveTrustedUserId. Verify the
+    // route imports + invokes that helper rather than re-inlining the call.
     assert.ok(
-      src.includes("supabaseAuth.auth.getUser()"),
-      "Route must call supabase auth.getUser() to derive trusted user id",
+      /from\s+"@\/lib\/telemetry\/trusted-user"/.test(src),
+      "Route must import resolveTrustedUserId from the trusted-user helper",
     );
     assert.ok(
-      /const\s+trustedUserId\s*=/.test(src),
-      "Route must compute a trustedUserId",
+      /const\s+trustedUserId\s*=\s*await\s+resolveTrustedUserId\s*\(/.test(src),
+      "Route must compute trustedUserId via resolveTrustedUserId(...)",
     );
     assert.ok(
       /const\s+user_id\s*=\s*trustedUserId/.test(src),
