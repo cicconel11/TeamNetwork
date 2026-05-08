@@ -16,6 +16,8 @@ export interface LiveActivityContentState {
   isCheckedIn: boolean;
   /** 'live' | 'starting' | 'ended' | 'cancelled' */
   status: string;
+  /** Event start timestamp (Unix seconds). Drives the on-device countdown. */
+  startsAt: number;
   /** Activity end timestamp (Unix seconds). */
   endsAt: number;
 }

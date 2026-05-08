@@ -40,6 +40,7 @@ import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { StreakChip } from "@/components/profile/StreakChip";
 
 interface Organization {
   id: string;
@@ -59,7 +60,7 @@ interface MenuItem {
 const STALE_TIME_MS = 30_000; // 30 seconds
 
 export default function MenuScreen() {
-  const { orgSlug } = useOrg();
+  const { orgSlug, orgId } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -648,6 +649,9 @@ export default function MenuScreen() {
               </View>
               <ChevronRight size={20} color={neutral.secondary} />
             </Pressable>
+            <View style={{ paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm }}>
+              <StreakChip userId={user?.id ?? null} organizationId={orgId} />
+            </View>
           </View>
 
           {/* Updates Section */}

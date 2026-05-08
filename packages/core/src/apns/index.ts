@@ -11,6 +11,7 @@
 
 export {
   ApnsClient,
+  ApnsError,
   createApnsClient,
   type ApnsClientConfig,
   type ApnsPushType,

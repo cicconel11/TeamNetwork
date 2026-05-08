@@ -308,6 +308,7 @@ function buildContentState(
     totalAttending: event.totalAttending,
     isCheckedIn: event.isCheckedIn,
     status: deriveStatus(event),
+    startsAt: Math.floor(new Date(event.startDate).getTime() / 1000),
     endsAt: Math.floor(
       new Date(
         event.endDate ?? new Date(Date.now() + 60 * 60 * 1000).toISOString(),
