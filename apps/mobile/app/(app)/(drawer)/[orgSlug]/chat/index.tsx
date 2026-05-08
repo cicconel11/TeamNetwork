@@ -591,12 +591,9 @@ export default function ChatGroupsScreen() {
         // Optimistic update
         setLocalAvatarUrls((prev) => ({ ...prev, [groupId]: bustedUrl }));
 
-        // chat_groups.avatar_url column does not exist in the current schema
-        // (partial feature). Persist to storage only; in-memory optimistic
-        // update keeps the UI responsive until the column is added.
-        const { error: updateError } = await supabase
+        const { error: updateError } = await (supabase as any)
           .from("chat_groups")
-          .update({ avatar_url: bustedUrl } as never)
+          .update({ avatar_url: bustedUrl })
           .eq("id", groupId);
 
         if (updateError) throw updateError;
