@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useOrg } from "@/contexts/OrgContext";
@@ -60,17 +61,24 @@ export default function NewJobScreen() {
     sheetHeader: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
+      justifyContent: "center" as const,
       paddingHorizontal: SPACING.md,
       paddingTop: SPACING.md,
       paddingBottom: SPACING.sm,
-      minHeight: 48,
+      minHeight: 52,
       backgroundColor: n.surface,
       borderBottomWidth: 1,
       borderBottomColor: n.border,
     },
+    // Absolutely positioned so the title centers on the sheet midpoint
+    // regardless of the Cancel button's text width (which varies by locale).
     cancelButton: {
-      paddingVertical: SPACING.xs,
-      paddingRight: SPACING.sm,
+      position: "absolute" as const,
+      left: SPACING.md,
+      top: 0,
+      bottom: 0,
+      justifyContent: "center" as const,
+      paddingHorizontal: SPACING.xs,
     },
     cancelButtonText: {
       ...TYPOGRAPHY.bodyMedium,
@@ -79,12 +87,8 @@ export default function NewJobScreen() {
     headerTitle: {
       ...TYPOGRAPHY.titleMedium,
       color: n.foreground,
-      flex: 1,
       textAlign: "center" as const,
       fontWeight: "600" as const,
-    },
-    headerSpacer: {
-      width: 56,
     },
     contentSheet: {
       flex: 1,
@@ -121,13 +125,22 @@ export default function NewJobScreen() {
       borderColor: n.border,
       borderRadius: RADIUS.md,
       paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      ...TYPOGRAPHY.bodyMedium,
+      paddingVertical: 12,
+      // Don't spread TYPOGRAPHY.bodyMedium — its lineHeight collides with
+      // RN's TextInput on iOS and pushes single-line text up off-center.
+      fontSize: 14,
+      fontFamily: TYPOGRAPHY.bodyMedium.fontFamily,
       color: n.foreground,
       backgroundColor: n.surface,
     },
     textArea: {
       minHeight: 120,
+      // textAlignVertical only works on Android. On iOS we need explicit
+      // paddingTop so the placeholder/text doesn't render mid-box.
+      ...Platform.select({
+        ios: { paddingTop: 12 },
+        default: {},
+      }),
     },
     chipRow: {
       flexDirection: "row" as const,
@@ -159,9 +172,10 @@ export default function NewJobScreen() {
       borderColor: n.border,
       borderRadius: RADIUS.md,
       paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
+      paddingVertical: 12,
       backgroundColor: n.surface,
       justifyContent: "center" as const,
+      minHeight: 44,
     },
     datePickerText: {
       ...TYPOGRAPHY.bodyMedium,
@@ -288,14 +302,13 @@ export default function NewJobScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.sheetHeader}>
+        <Text style={styles.headerTitle}>Post a Job</Text>
         <Pressable onPress={() => router.back()} style={styles.cancelButton}>
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Post a Job</Text>
-        <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.contentSheet}>
+      <SafeAreaView edges={["bottom"]} style={styles.contentSheet}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -486,7 +499,7 @@ export default function NewJobScreen() {
             )}
           </Pressable>
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </View>
   );
 }
