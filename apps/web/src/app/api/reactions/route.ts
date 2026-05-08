@@ -8,6 +8,7 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 /**
  * POST /api/reactions — add an emoji reaction.
@@ -60,6 +61,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      feature: "reactions",
+      limitPerIp: 60,
+      limitPerUser: 30,
+    });
+    if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
+
     const body = await validateJson(request, schema, { maxBodyBytes: 4_000 });
     const orgId = await resolveOrgId(supabase, body.target_kind, body.target_id);
     if (!orgId) {
@@ -97,6 +106,14 @@ export async function DELETE(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      feature: "reactions",
+      limitPerIp: 60,
+      limitPerUser: 30,
+    });
+    if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
     const body = await validateJson(request, schema, { maxBodyBytes: 4_000 });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
