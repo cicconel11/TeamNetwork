@@ -80,6 +80,19 @@ export async function readBlobFromUri(
   return response.blob();
 }
 
+/**
+ * Reads a `file://` URI's bytes as an ArrayBuffer. Use this instead of
+ * `readBlobFromUri` when uploading to Supabase Storage — RN's
+ * `fetch(uri).then(r => r.blob())` returns a 0-byte Blob on iOS, which
+ * silently writes empty objects to storage. expo-file-system v19's
+ * `new File(uri).arrayBuffer()` reads the actual file contents.
+ */
+export async function readArrayBufferFromUri(uri: string): Promise<ArrayBuffer> {
+  const { File } = await import("expo-file-system");
+  const file = new File(uri);
+  return file.arrayBuffer();
+}
+
 export async function uploadToSignedUrl(
   signedUrl: string,
   blob: Blob,

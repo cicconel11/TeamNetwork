@@ -41,7 +41,7 @@ import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { formatRelativeTime } from "@/lib/date-format";
 import {
   buildCacheBustedUrl,
-  readBlobFromUri,
+  readArrayBufferFromUri,
   uploadToStorage,
 } from "@/lib/uploads";
 import {
@@ -573,12 +573,14 @@ export default function ChatGroupsScreen() {
       const path = `${orgId}/${groupId}.${ext}`;
 
       try {
-        const blob = await readBlobFromUri(asset.uri);
+        // Read actual bytes — RN fetch().blob() returns 0-byte blobs on iOS
+        // and silently writes empty objects to Supabase Storage.
+        const bytes = await readArrayBufferFromUri(asset.uri);
         await uploadToStorage({
           storage: supabase.storage,
           bucket: "chat-group-avatars",
           path,
-          body: blob,
+          body: bytes,
           contentType: asset.mimeType ?? "image/jpeg",
           upsert: true,
         });
