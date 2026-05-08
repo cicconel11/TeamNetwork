@@ -109,14 +109,14 @@ export async function readArrayBufferFromUri(uri: string): Promise<Uint8Array> {
 
 export async function uploadToSignedUrl(
   signedUrl: string,
-  blob: Blob,
+  body: Blob | Uint8Array,
   mimeType: string,
   fetchImpl: FetchLike = fetch as unknown as FetchLike
 ): Promise<void> {
   const response = await fetchImpl(signedUrl, {
     method: "PUT",
     headers: { "Content-Type": mimeType },
-    body: blob,
+    body: body as unknown as BodyInit,
   });
 
   if (response.ok === false) {
