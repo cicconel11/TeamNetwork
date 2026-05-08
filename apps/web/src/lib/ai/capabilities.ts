@@ -152,11 +152,12 @@ export function getAssistantCapabilitySnapshot(
           "list_chat_groups",
           "prepare_chat_message",
           "prepare_group_message",
+          "prepare_member_role_change",
           "suggest_connections",
           "get_org_stats",
           "find_navigation_targets",
         ],
-        ["Change member roles or send invites"],
+        ["Send member invites"],
       );
     case "events":
       return capabilitySnapshotForToolNames(
@@ -184,13 +185,14 @@ export function getAssistantCapabilitySnapshot(
           "prepare_announcement",
           "prepare_chat_message",
           "prepare_group_message",
+          "prepare_member_role_change",
           "prepare_job_posting",
           "prepare_discussion_reply",
           "prepare_discussion_thread",
           "prepare_event",
           "find_navigation_targets",
         ],
-        ["Create or edit forms from chat", "Change member roles or send invites"],
+        ["Create or edit forms from chat", "Send member invites"],
       );
   }
 }

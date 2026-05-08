@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
+import { executeMemberRoleChange, type MemberRoleChangeClient } from "@/lib/members/role-change";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -73,19 +74,29 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
   const serviceSupabase = createServiceClient();
 
-  const updatePayload: { role?: string; status?: string } = {};
-  if (body.role !== undefined) updatePayload.role = body.role;
-  if (body.status !== undefined) updatePayload.status = body.status;
+  const result = await executeMemberRoleChange(serviceSupabase as unknown as MemberRoleChangeClient, {
+    organizationId,
+    actorUserId: user.id,
+    targetUserId: userId,
+    role: body.role,
+    status: body.status,
+    source: "manual",
+  });
 
-  const { error: updateError } = await serviceSupabase
-    .from("user_organization_roles")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update(updatePayload as any)
-    .eq("organization_id", organizationId)
-    .eq("user_id", userId);
+  if (result.state === "invalid") {
+    return respond({ error: result.reason }, result.reason === "target_not_found" ? 404 : 400);
+  }
 
-  if (updateError) {
-    console.error("[members PATCH] DB error:", updateError);
+  if (result.state === "error") {
+    if (
+      result.reason === "last_admin_self_demotion" ||
+      result.reason === "last_admin_target_demotion" ||
+      result.reason === "alumni_upgrade_required" ||
+      result.reason === "parent_upgrade_required"
+    ) {
+      return respond({ error: result.message }, 400);
+    }
+    console.error("[members PATCH] Role change error:", result);
     return respond({ error: "Failed to update member" }, 500);
   }
 

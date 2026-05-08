@@ -49,6 +49,15 @@ export interface PrepareChatMessageArgs {
   body?: string;
 }
 
+export interface PrepareMemberRoleChangeArgs {
+  target_member_id?: string;
+  target_user_id?: string;
+  person_query?: string;
+  role?: "admin" | "active_member" | "alumni" | "parent";
+  status?: "active" | "revoked" | "pending";
+  reason?: string;
+}
+
 export interface ListChatGroupsArgs {
   limit?: number;
   scope?: "mine" | "all";
@@ -435,6 +444,49 @@ const TOOL_BY_NAME = {
               "Recipient name or email when the user says who to message in natural language.",
           },
           body: { type: "string" as const },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_member_role_change: {
+    type: "function" as const,
+    function: {
+      name: "prepare_member_role_change" as const,
+      description:
+        "Prepare a confirmation-gated organization member role or membership status change. Use this when an admin asks to make, change, promote, demote, revoke, reactivate, or set a member's role/status. It resolves the target member from the current page, member id, name, or email; validates final-admin and subscription gates; and creates a pending confirmation action when ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          target_member_id: {
+            type: "string" as const,
+            description:
+              "Member profile UUID from /members/<memberId> when the current page identifies the target person.",
+          },
+          target_user_id: {
+            type: "string" as const,
+            description:
+              "User UUID for the member whose organization role/status should change, when already known.",
+          },
+          person_query: {
+            type: "string" as const,
+            description: "Target member name or email from the user's request.",
+          },
+          role: {
+            type: "string" as const,
+            enum: ["admin", "active_member", "alumni", "parent"] as const,
+            description: "Target organization role.",
+          },
+          status: {
+            type: "string" as const,
+            enum: ["active", "revoked", "pending"] as const,
+            description: "Target membership status.",
+          },
+          reason: {
+            type: "string" as const,
+            description:
+              "Optional user-provided reason for the role/status change, excluding the word 'because' itself.",
+          },
         },
         additionalProperties: false as const,
       },
@@ -1190,6 +1242,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.prepare_announcement,
   TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.prepare_chat_message,
+  TOOL_BY_NAME.prepare_member_role_change,
   TOOL_BY_NAME.prepare_group_message,
   TOOL_BY_NAME.prepare_discussion_reply,
   TOOL_BY_NAME.prepare_discussion_thread,

@@ -32,6 +32,7 @@ import {
   formatPrepareDiscussionThreadResponse,
   formatPrepareDiscussionReplyResponse,
   formatPrepareChatMessageResponse,
+  formatPrepareMemberRoleChangeResponse,
   formatPrepareGroupMessageResponse,
   formatPrepareEventResponse,
   formatPrepareEventsBatchResponse,
@@ -101,6 +102,7 @@ export {
   formatPrepareDiscussionThreadResponse,
   formatPrepareDiscussionReplyResponse,
   formatPrepareChatMessageResponse,
+  formatPrepareMemberRoleChangeResponse,
   formatPrepareGroupMessageResponse,
   formatPrepareEventResponse,
   formatPrepareEventsBatchResponse,
@@ -367,6 +369,8 @@ export function formatDeterministicToolResponse(
       return formatPrepareJobPostingResponse(data);
     case "prepare_chat_message":
       return formatPrepareChatMessageResponse(data);
+    case "prepare_member_role_change":
+      return formatPrepareMemberRoleChangeResponse(data);
     case "prepare_group_message":
       return formatPrepareGroupMessageResponse(data);
     case "prepare_discussion_reply":

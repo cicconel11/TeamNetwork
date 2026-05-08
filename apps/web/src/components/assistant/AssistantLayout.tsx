@@ -415,6 +415,7 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
           await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
         }
         if (shouldRefreshCalendar) {
+          window.dispatchEvent(new CustomEvent("tn:ai-action-executed", { detail: data }));
           window.dispatchEvent(new CustomEvent("calendar:refresh"));
           router.refresh();
         }
@@ -437,6 +438,7 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
     if (activeThreadId) {
       await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
     }
+    window.dispatchEvent(new CustomEvent("tn:ai-action-executed"));
     window.dispatchEvent(new CustomEvent("calendar:refresh"));
     router.refresh();
   }, [activeThreadId, handleConfirmPendingAction, loadMessages, loadThreads, pendingActions, router]);

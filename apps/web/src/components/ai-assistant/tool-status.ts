@@ -30,6 +30,8 @@ export function formatToolStatusLabel(toolName: string): string {
       return "Preparing job posting...";
     case "prepare_chat_message":
       return "Preparing chat message...";
+    case "prepare_member_role_change":
+      return "Preparing member change...";
     case "prepare_group_message":
       return "Preparing group message...";
     case "prepare_discussion_reply":

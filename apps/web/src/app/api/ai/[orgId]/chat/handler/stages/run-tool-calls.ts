@@ -187,6 +187,21 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
       }
     }
 
+    if (toolEvent.name === "prepare_member_role_change") {
+      const currentMemberRouteId =
+        input.routeEntityContext?.kind === "member"
+          ? input.routeEntityContext.id
+          : extractCurrentMemberRouteId(input.currentPath ?? undefined);
+      if (
+        currentMemberRouteId &&
+        getNonEmptyString(parsedArgs.target_member_id) == null &&
+        getNonEmptyString(parsedArgs.target_user_id) == null &&
+        getNonEmptyString(parsedArgs.person_query) == null
+      ) {
+        parsedArgs.target_member_id = currentMemberRouteId;
+      }
+    }
+
     let syntheticToolResult: ToolExecutionResult | null = null;
     if (toolEvent.name === "prepare_discussion_reply") {
       const discussionThreadId = getNonEmptyString(parsedArgs.discussion_thread_id);

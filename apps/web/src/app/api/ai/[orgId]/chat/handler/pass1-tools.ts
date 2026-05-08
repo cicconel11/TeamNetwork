@@ -93,6 +93,8 @@ export const CREATE_EVENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,80}\b(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w))/i;
 export const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|set\s+up)(?!\w)[\s\S]{0,80}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,60}\b(?:create|add|schedule|plan|make|set\s+up)(?!\w))/i;
+export const MEMBER_ROLE_CHANGE_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:make|change|set|promote|demote|revoke|reactivate)(?!\w)[\s\S]{0,140}\b(?:admin|active[_\s-]?member|member|alumni|alumnus|alumna|parent|role|status|active|revoked|pending)\b|\b(?:role|status)\b[\s\S]{0,100}\b(?:admin|active[_\s-]?member|alumni|parent|active|revoked|pending)\b)/i;
 export const MEMBER_COUNT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:how many|count|number of|total|totals|snapshot|stats)(?!\w)[\s\S]{0,80}\b(?:member|members|active members|alumni|parents?|donors?|donations?)\b|(?<!\w)(?:member|members|active members|alumni|parents?|donors?|donations?)(?!\w)[\s\S]{0,40}\b(?:how many|count|number of|total|totals)\b)/i;
 export const MEMBER_ROSTER_PROMPT_PATTERN =
@@ -330,6 +332,10 @@ export function getPass1Tools(
     return [AI_TOOL_MAP.prepare_event];
   }
 
+  if (MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_member_role_change];
+  }
+
   if (intentType === "navigation" && DIRECT_NAVIGATION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.find_navigation_targets];
   }
@@ -450,6 +456,15 @@ export function getPass1Tools(
 
   if (
     extractCurrentMemberRouteId(currentPath) &&
+    MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(message) &&
+    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
+    !message.trim().endsWith("?")
+  ) {
+    return [AI_TOOL_MAP.prepare_member_role_change];
+  }
+
+  if (
+    extractCurrentMemberRouteId(currentPath) &&
     CHAT_MESSAGE_FALLBACK_PATTERN.test(message) &&
     !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
     !message.trim().endsWith("?")
@@ -487,6 +502,7 @@ export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<
   "prepare_discussion_reply",
   "prepare_discussion_thread",
   "prepare_event",
+  "prepare_member_role_change",
   "list_members",
   "get_org_stats",
   "get_donation_analytics",

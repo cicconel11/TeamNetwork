@@ -54,6 +54,13 @@ export function PendingActionCard({
   const existingChatGroupId = getValue(payload, "existing_chat_group_id");
   const groupName = getValue(payload, "group_name");
   const messageStatus = getValue(payload, "message_status");
+  const targetDisplayName = getValue(payload, "target_display_name");
+  const targetEmail = getValue(payload, "target_email");
+  const currentRole = getValue(payload, "current_role");
+  const newRole = getValue(payload, "new_role");
+  const currentStatus = getValue(payload, "current_status");
+  const newStatus = getValue(payload, "new_status");
+  const reason = getValue(payload, "reason");
   const mediaCount = getArrayLength(payload, "mediaIds");
 
   return (
@@ -194,6 +201,22 @@ export function PendingActionCard({
                   <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{description}</p>
                 </div>
               ) : null}
+            </>
+          ) : action.actionType === "member_role_change" ? (
+            <>
+              {targetDisplayName ? (
+                <p>
+                  <span className="font-medium">Member:</span> {targetDisplayName}
+                  {targetEmail ? <span className="text-muted-foreground"> ({targetEmail})</span> : null}
+                </p>
+              ) : null}
+              {valueChanged(newRole, currentRole) ? (
+                <p><span className="font-medium">Role:</span> {currentRole} -&gt; {newRole}</p>
+              ) : null}
+              {valueChanged(newStatus, currentStatus) ? (
+                <p><span className="font-medium">Status:</span> {currentStatus} -&gt; {newStatus}</p>
+              ) : null}
+              {reason ? <p><span className="font-medium">Reason:</span> {reason}</p> : null}
             </>
           ) : (
             <>

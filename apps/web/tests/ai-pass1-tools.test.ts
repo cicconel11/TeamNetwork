@@ -15,6 +15,7 @@ import {
   DISCUSSION_REPLY_PROMPT_PATTERN,
   CREATE_EVENT_PROMPT_PATTERN,
   EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN,
+  MEMBER_ROLE_CHANGE_PROMPT_PATTERN,
   MEMBER_COUNT_PROMPT_PATTERN,
   MEMBER_ROSTER_PROMPT_PATTERN,
   SCRAPE_SCHEDULE_PROMPT_PATTERN,
@@ -155,6 +156,15 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
       intentType: "action_request",
       expectedToolNames: ["prepare_chat_message"],
       expectedForcedTool: "prepare_chat_message",
+    },
+    {
+      name: "MEMBER_ROLE_CHANGE → prepare_member_role_change",
+      message: "make Alex an alumni",
+      surface: "members",
+      toolPolicy: "surface_read_tools",
+      intentType: "action_request",
+      expectedToolNames: ["prepare_member_role_change"],
+      expectedForcedTool: "prepare_member_role_change",
     },
     {
       name: "DISCUSSION_REPLY → prepare_discussion_reply",
@@ -614,6 +624,18 @@ describe("getPass1Tools — context-gated fallbacks", () => {
     assert.deepEqual(namesOf(tools), ["prepare_chat_message"]);
   });
 
+  it("role-change fallback on member route → prepare_member_role_change", () => {
+    const tools = getPass1Tools(
+      "change this person's role to admin",
+      "general",
+      "surface_read_tools",
+      "knowledge_query",
+      undefined,
+      "/myorg/members/abc-123",
+    );
+    assert.deepEqual(namesOf(tools), ["prepare_member_role_change"]);
+  });
+
   it("group-chat fallback on /orgSlug/messages → prepare_group_message", () => {
     const tools = getPass1Tools(
       "send to the coaches group practice is moved",
@@ -964,6 +986,7 @@ describe("pattern export coverage", () => {
       DISCUSSION_REPLY_PROMPT_PATTERN,
       CREATE_EVENT_PROMPT_PATTERN,
       EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN,
+      MEMBER_ROLE_CHANGE_PROMPT_PATTERN,
       MEMBER_COUNT_PROMPT_PATTERN,
       MEMBER_ROSTER_PROMPT_PATTERN,
       SCRAPE_SCHEDULE_PROMPT_PATTERN,
