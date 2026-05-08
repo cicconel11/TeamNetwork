@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { View, Text, Pressable, Platform, GestureResponderEvent } from "react-native";
+import { View, Text, Pressable, Platform } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { MessageCircle } from "lucide-react-native";
@@ -42,7 +42,10 @@ function PostCardInner({
       ...SHADOWS.sm,
     },
     cardPressed: {
-      transform: [{ scale: 0.98 }],
+      opacity: 0.7,
+    },
+    headerPress: {
+      // Tap target for opening the detail screen — author row + body only.
     },
     authorRow: {
       flexDirection: "row" as const,
@@ -112,52 +115,61 @@ function PostCardInner({
     }
     onPress(post.id);
   }, [onPress, post.id]);
-  const handleLike = useCallback((e?: GestureResponderEvent) => {
-    e?.stopPropagation();
+
+  const handleLike = useCallback(() => {
     onLikeToggle(post.id);
   }, [onLikeToggle, post.id]);
 
+  const handleCommentPress = useCallback(() => {
+    onPress(post.id);
+  }, [onPress, post.id]);
+
+  // Only the header + body navigate to the detail screen. Poll, media,
+  // and the actions row are siblings — interactive children inside a
+  // navigating Pressable can race with the parent and swallow taps.
   return (
-    <Pressable
-      onPress={handlePress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      accessibilityRole="none"
-      accessibilityLabel={`Post by ${post.author?.full_name || "Unknown"}`}
-    >
-      {/* Author row */}
-      <View style={styles.authorRow}>
-        {post.author?.avatar_url ? (
-          <Image
-            source={post.author.avatar_url}
-            style={styles.avatar}
-            contentFit="cover"
-            transition={200}
-          />
-        ) : (
-          <View style={styles.avatarFallback}>
-            <Text style={styles.avatarFallbackText}>
-              {(post.author?.full_name || "?")[0].toUpperCase()}
+    <View style={styles.card}>
+      <Pressable
+        onPress={handlePress}
+        style={({ pressed }) => [styles.headerPress, pressed && styles.cardPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`Open post by ${post.author?.full_name || "Unknown"}`}
+      >
+        {/* Author row */}
+        <View style={styles.authorRow}>
+          {post.author?.avatar_url ? (
+            <Image
+              source={post.author.avatar_url}
+              style={styles.avatar}
+              contentFit="cover"
+              transition={200}
+            />
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarFallbackText}>
+                {(post.author?.full_name || "?")[0].toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View style={styles.authorMeta}>
+            <Text style={styles.authorName} numberOfLines={1}>
+              {post.author?.full_name || "Unknown"}
+            </Text>
+            <Text style={styles.timestamp}>
+              {formatRelativeTime(post.created_at)}
             </Text>
           </View>
-        )}
-        <View style={styles.authorMeta}>
-          <Text style={styles.authorName} numberOfLines={1}>
-            {post.author?.full_name || "Unknown"}
-          </Text>
-          <Text style={styles.timestamp}>
-            {formatRelativeTime(post.created_at)}
-          </Text>
         </View>
-      </View>
 
-      {/* Body */}
-      {post.body ? (
-        <Text style={styles.body} numberOfLines={3}>
-          {post.body}
-        </Text>
-      ) : null}
+        {/* Body */}
+        {post.body ? (
+          <Text style={styles.body} numberOfLines={3}>
+            {post.body}
+          </Text>
+        ) : null}
+      </Pressable>
 
-      {/* Poll */}
+      {/* Poll — outside the navigating Pressable so taps reach the buttons */}
       {post.post_type === "poll" && post.poll_meta && onPollVote ? (
         <FeedPoll
           postId={post.id}
@@ -183,12 +195,12 @@ function PostCardInner({
           onPress={handleLike}
           disabled={likeDisabled}
         />
-        <View style={styles.commentAction}>
+        <Pressable onPress={handleCommentPress} style={styles.commentAction} accessibilityRole="button" accessibilityLabel="View comments">
           <MessageCircle size={18} color={neutral.muted} />
           <Text style={styles.commentCount}>{post.comment_count}</Text>
-        </View>
+        </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 

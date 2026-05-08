@@ -406,7 +406,8 @@ export function useFeed(orgId: string | null): UseFeedReturn {
           );
         setPosts(revert);
         setPendingPosts(revert);
-        showToast("Failed to record vote", "error");
+        const message = (e as Error).message || "Failed to record vote";
+        showToast(message, "error");
         sentry.captureException(e as Error, { context: "useFeed.votePoll", postId });
       }
     },
@@ -531,11 +532,23 @@ export function useFeed(orgId: string | null): UseFeedReturn {
             ? { id: authorData.id, full_name: authorData.name, avatar_url: authorData.avatar_url }
             : null;
 
+          const isPoll = (newPost as { post_type?: string | null }).post_type === "poll";
+          const meta = isPoll
+            ? (((newPost as { metadata?: unknown }).metadata as PollMetadata | null) ?? null)
+            : null;
           const enrichedPost: FeedPost = {
             ...newPost,
             author,
             liked_by_user: false,
             media: [],
+            ...(isPoll
+              ? {
+                  poll_meta: meta,
+                  user_vote: null,
+                  vote_counts: new Array(meta?.options.length ?? 0).fill(0),
+                  total_votes: 0,
+                }
+              : {}),
           };
 
           setPendingPosts((prev) => {
