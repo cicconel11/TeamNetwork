@@ -21,6 +21,8 @@ export type NotificationType =
   | "mentorship"
   | "donation"
   | "membership"
+  // Job posting broadcast — taps deep-link into the org job board.
+  | "job"
   // @-mention from any commentable surface; mention_kind selects the route.
   | "mention"
   // Generic admin-composed blast with no specific resource. Routes to the
@@ -277,6 +279,8 @@ export function getNotificationRoute(data: NotificationData): string | null {
       return `/(app)/${data.orgSlug}/donations`;
     case "membership":
       return `/(app)/${data.orgSlug}/members`;
+    case "job":
+      return `/(app)/${data.orgSlug}/jobs/${data.id}`;
     case "mention":
       switch (data.mention_kind) {
         case "chat_message":

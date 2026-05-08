@@ -96,6 +96,7 @@ const CATEGORY_PUSH_COLUMN: Record<NotificationCategory, string> = {
   workout: "workout_push_enabled",
   competition: "competition_push_enabled",
   mentorship: "mentorship_push_enabled",
+  job: "job_push_enabled",
 };
 
 const defaultExpoClient: ExpoPushClient = new Expo({
