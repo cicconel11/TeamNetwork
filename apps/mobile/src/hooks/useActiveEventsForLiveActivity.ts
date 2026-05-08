@@ -78,13 +78,27 @@ export function useActiveEventsForLiveActivity(
       // and the event window overlaps `now`. We do the join in JS so we can
       // reuse the events table types we already have; the alternative is a
       // SECURITY DEFINER RPC, which is overkill for a 1-page query.
-      const { data: rsvpRows, error: rsvpError } = await supabase
+      // Opt-in gate: only events the user explicitly chose to track on the
+      // lock screen are returned. Without this, every RSVP=attending event
+      // would silently spawn a Live Activity (PR #206 follow-up).
+      // Cast: `track_on_lock_screen` was added in a migration that hasn't
+      // regenerated Supabase types yet.
+      const { data: rsvpRows, error: rsvpError } = await (
+        supabase as unknown as {
+          from: (t: string) => {
+            select: (cols: string) => {
+              eq: (...args: [string, unknown]) => any;
+            };
+          };
+        }
+      )
         .from("event_rsvps")
         .select(
           "event_id, status, checked_in_at, events:events!inner(id, organization_id, title, start_date, end_date, organizations:organizations!inner(slug, name))",
         )
         .eq("user_id", userId)
         .eq("status", "attending")
+        .eq("track_on_lock_screen", true)
         .lte("events.start_date", upper)
         .gte("events.end_date", lower);
 

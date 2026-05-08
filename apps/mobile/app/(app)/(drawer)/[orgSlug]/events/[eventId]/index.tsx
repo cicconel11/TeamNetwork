@@ -3,7 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from "rea
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List, Share2, CalendarPlus, QrCode } from "lucide-react-native";
+import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List, Share2, CalendarPlus, QrCode, Lock } from "lucide-react-native";
 import { shareEvent } from "@/lib/share";
 import { syncEventToDevice } from "@/lib/native-calendar";
 import { useDevicePermission } from "@/lib/device-permissions";
@@ -214,6 +214,31 @@ export default function EventDetailScreen() {
       color: n.foreground,
       fontWeight: "600" as const,
     },
+    trackToggleRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: SPACING.sm,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      paddingVertical: SPACING.md,
+      marginTop: SPACING.sm,
+      marginBottom: SPACING.md,
+    },
+    trackToggleRowActive: {
+      backgroundColor: s.success,
+      borderColor: s.success,
+    },
+    trackToggleText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.foreground,
+      fontWeight: "600" as const,
+    },
+    trackToggleTextActive: {
+      color: "#ffffff",
+    },
     rsvpError: {
       ...TYPOGRAPHY.caption,
       color: s.error,
@@ -235,6 +260,8 @@ export default function EventDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [trackOnLockScreen, setTrackOnLockScreen] = useState(false);
+  const [savingTrack, setSavingTrack] = useState(false);
   const { user } = useAuth();
 
   const rsvp = useRsvp(eventId, orgId, {
@@ -257,6 +284,53 @@ export default function EventDetailScreen() {
       setRsvps(rsvpData as unknown as RSVP[]);
     }
   }, [eventId]);
+
+  // Whether THIS user has opted into Live Activity tracking for this event.
+  // Independent fetch from fetchRsvps so the toggle state survives unrelated
+  // RSVP refreshes.
+  const fetchTrackOnLockScreen = useCallback(async () => {
+    if (!eventId || !user?.id) return;
+    const { data, error: trackError } = await supabase
+      .from("event_rsvps")
+      .select("track_on_lock_screen")
+      .eq("event_id", eventId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (trackError) return;
+    setTrackOnLockScreen(
+      (data as { track_on_lock_screen?: boolean } | null)?.track_on_lock_screen ?? false,
+    );
+  }, [eventId, user?.id]);
+
+  useEffect(() => {
+    void fetchTrackOnLockScreen();
+  }, [fetchTrackOnLockScreen]);
+
+  const handleToggleTrackOnLockScreen = useCallback(async () => {
+    if (!eventId || !user?.id || savingTrack) return;
+    if (rsvp.status !== "attending") {
+      Alert.alert(
+        "RSVP first",
+        "RSVP as Going to track this event on your lock screen.",
+      );
+      return;
+    }
+    const next = !trackOnLockScreen;
+    setSavingTrack(true);
+    setTrackOnLockScreen(next);
+    // Cast: `track_on_lock_screen` was added in a recent migration; the
+    // generated Supabase types haven't been regenerated yet.
+    const { error: updateError } = await (supabase as any)
+      .from("event_rsvps")
+      .update({ track_on_lock_screen: next })
+      .eq("event_id", eventId)
+      .eq("user_id", user.id);
+    setSavingTrack(false);
+    if (updateError) {
+      setTrackOnLockScreen(!next);
+      Alert.alert("Couldn't update", updateError.message);
+    }
+  }, [eventId, user?.id, savingTrack, trackOnLockScreen, rsvp.status]);
 
   const fetchEvent = useCallback(async () => {
     if (!eventId || !orgSlug) return;
@@ -635,6 +709,40 @@ export default function EventDetailScreen() {
           >
             <QrCode size={22} color={semantic.success} />
             <Text style={styles.selfScanText}>Scan event QR to check in</Text>
+          </Pressable>
+        )}
+
+        {user && !isAdmin && rsvp.status === "attending" && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.trackToggleRow,
+              trackOnLockScreen && styles.trackToggleRowActive,
+              (savingTrack || pressed) && { opacity: 0.7 },
+            ]}
+            onPress={handleToggleTrackOnLockScreen}
+            disabled={savingTrack}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: trackOnLockScreen }}
+            accessibilityLabel={
+              trackOnLockScreen
+                ? "Stop tracking this event on lock screen"
+                : "Track this event on lock screen"
+            }
+          >
+            <Lock
+              size={22}
+              color={trackOnLockScreen ? "#ffffff" : semantic.success}
+            />
+            <Text
+              style={[
+                styles.trackToggleText,
+                trackOnLockScreen && styles.trackToggleTextActive,
+              ]}
+            >
+              {trackOnLockScreen
+                ? "Tracking on lock screen"
+                : "Track on lock screen"}
+            </Text>
           </Pressable>
         )}
       </ScrollView>
