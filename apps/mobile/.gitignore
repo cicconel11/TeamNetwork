@@ -1,8 +1,10 @@
 .expo/
-ios/
-android/
-ios.bak-*/
-android.bak-*/
+# Anchored: only ignores the prebuild output at apps/mobile/{ios,android}, not
+# `modules/<name>/ios/` source folders that ship with local Expo modules.
+/ios/
+/android/
+/ios.bak-*/
+/android.bak-*/
 dist/
 .env.local
 .claude/skills/

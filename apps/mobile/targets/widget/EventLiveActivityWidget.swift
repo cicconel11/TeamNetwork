@@ -52,16 +52,28 @@ struct EventLiveActivityWidget: Widget {
                     )
                 }
             } compactLeading: {
-                Image(systemName: "person.2.fill")
+                Image(systemName: context.state.status == "starting" ? "clock.fill" : "person.2.fill")
                     .foregroundStyle(.tint)
             } compactTrailing: {
-                Text("\(context.state.checkedInCount)/\(context.state.totalAttending)")
-                    .monospacedDigit()
-                    .font(.caption)
-                    .fontWeight(.semibold)
+                if context.state.status == "starting" {
+                    Text(timerInterval: Date()...context.state.startsAt, countsDown: true)
+                        .monospacedDigit()
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: 50)
+                } else {
+                    Text("\(context.state.checkedInCount)/\(context.state.totalAttending)")
+                        .monospacedDigit()
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                }
             } minimal: {
-                Image(systemName: context.state.isCheckedIn ? "checkmark.seal.fill" : "person.2.fill")
-                    .foregroundStyle(.tint)
+                Image(
+                    systemName: context.state.status == "starting"
+                        ? "clock.fill"
+                        : (context.state.isCheckedIn ? "checkmark.seal.fill" : "person.2.fill")
+                )
+                .foregroundStyle(.tint)
             }
             .widgetURL(URL(string: "teammeet://events/\(context.attributes.eventId)"))
             .keylineTint(Color(red: 0.145, green: 0.388, blue: 0.922))
@@ -93,22 +105,28 @@ private struct EventLockScreenView: View {
                 StatusBadge(status: context.state.status, isCheckedIn: context.state.isCheckedIn)
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("\(context.state.checkedInCount)")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-                Text("/ \(context.state.totalAttending) checked in")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
-            }
+            // Pre-event: countdown drives the card. Once the event is live or
+            // ended, swap to the check-in tally that already shipped.
+            if context.state.status == "starting" {
+                CountdownHero(startsAt: context.state.startsAt)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(context.state.checkedInCount)")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                    Text("/ \(context.state.totalAttending) checked in")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
 
-            ProgressView(
-                value: Double(context.state.checkedInCount),
-                total: Double(max(context.state.totalAttending, 1))
-            )
-            .progressViewStyle(.linear)
-            .tint(Color(red: 0.145, green: 0.388, blue: 0.922))
+                ProgressView(
+                    value: Double(context.state.checkedInCount),
+                    total: Double(max(context.state.totalAttending, 1))
+                )
+                .progressViewStyle(.linear)
+                .tint(Color(red: 0.145, green: 0.388, blue: 0.922))
+            }
 
             OpenInAppButton(
                 eventId: context.attributes.eventId,
@@ -117,6 +135,25 @@ private struct EventLockScreenView: View {
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
+    }
+}
+
+@available(iOS 17.0, *)
+private struct CountdownHero: View {
+    let startsAt: Date
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            // Text(timerInterval:) ticks per-second locally — no APNs traffic
+            // needed for the countdown itself.
+            Text(timerInterval: Date()...startsAt, countsDown: true)
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+            Text("until start")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.7))
+        }
     }
 }
 

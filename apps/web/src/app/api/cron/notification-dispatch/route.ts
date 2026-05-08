@@ -4,18 +4,19 @@ import { validateCronAuth } from "@/lib/security/cron-auth";
 import { sendPush, type PushType } from "@/lib/notifications/push";
 import type { NotificationCategory } from "@/lib/notifications";
 import type { NotificationAudience } from "@/types/database";
+import {
+  dispatchLiveActivityJob,
+  isLiveActivityKind,
+} from "@/lib/notifications/live-activity-dispatch";
 
 /**
  * Notification dispatch cron worker — drains the `notification_jobs` queue
  * every minute. For each pending row:
  *   1. Lease (set status='processing' + leased_at=now()).
- *   2. Dispatch `kind="standard"` via sendPush with forceInline=true so the
- *      worker doesn't re-enqueue the same job (the bug commit 0f38c9bb fixed).
+ *   2. Dispatch `kind="standard"` via sendPush, or
+ *      `kind="live_activity_*"` via the APNs LA dispatcher.
  *   3. Mark succeeded or increment attempts + set last_error. After
  *      MAX_ATTEMPTS we mark `failed` so the row stops re-leasing.
- *
- * Live Activity / APNs kinds are not handled here on main — those land in a
- * later port if/when the LA pipeline is brought across.
  */
 export const dynamic = "force-dynamic";
 
@@ -94,10 +95,35 @@ export async function GET(request: Request) {
 
   for (const job of (leased ?? []) as JobRow[]) {
     try {
+      if (isLiveActivityKind(job.kind)) {
+        const laResult = await dispatchLiveActivityJob({
+          supabase: service,
+          kind: job.kind,
+          data: (job.data ?? {}) as Parameters<
+            typeof dispatchLiveActivityJob
+          >[0]["data"],
+        });
+        if (laResult.errors.length > 0 && laResult.sent === 0) {
+          throw new Error(laResult.errors.join("; "));
+        }
+        await svc
+          .from("notification_jobs")
+          .update({
+            status: "succeeded",
+            sent_at: new Date().toISOString(),
+            last_error:
+              laResult.errors.length > 0
+                ? laResult.errors.join("; ").slice(0, 2000)
+                : null,
+          })
+          .eq("id", job.id);
+        dispatched += 1;
+        results.push({ id: job.id, status: "succeeded", sent: laResult.sent });
+        continue;
+      }
+
       if (job.kind !== "standard") {
-        // Live Activity / APNs not handled in this port. Mark failed so the
-        // row doesn't keep re-leasing.
-        throw new Error(`unsupported kind=${job.kind} (Live Activity not yet ported to main)`);
+        throw new Error(`unsupported kind=${job.kind}`);
       }
 
       // Resolve orgSlug for deep-link routing.

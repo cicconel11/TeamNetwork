@@ -64,6 +64,10 @@
     {
       "path": "/api/cron/notification-dispatch",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/live-activity-end-stale",
+      "schedule": "0 * * * *"
     }
   ]
 }
