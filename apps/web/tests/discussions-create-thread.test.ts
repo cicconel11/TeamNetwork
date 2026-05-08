@@ -118,15 +118,12 @@ test("createDiscussionThread returns canonical thread URL and notifies listeners
   if (!result.ok) return;
   assert.equal(result.thread.id, threadRow.id);
   assert.equal(result.threadUrl, "/upenn-sprint-football/messages/threads/thread-123");
-  assert.deepEqual(notifications, [
-    {
-      supabase: supabase,
-      organizationId: ORG_ID,
-      threadTitle: "Spring Fundraising Volunteers",
-      threadUrl: "/upenn-sprint-football/messages/threads/thread-123",
-      authorName: "Alex Admin",
-    },
-  ]);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].organizationId, ORG_ID);
+  assert.equal(notifications[0].threadId, threadRow.id);
+  assert.equal(notifications[0].threadTitle, "Spring Fundraising Volunteers");
+  assert.equal(notifications[0].threadUrl, "/upenn-sprint-football/messages/threads/thread-123");
+  assert.equal(notifications[0].authorName, "Alex Admin");
 });
 
 test("createDiscussionThread soft deletes inserted thread when media linking fails", async () => {

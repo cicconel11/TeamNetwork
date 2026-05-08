@@ -133,8 +133,9 @@ export async function createDiscussionThread(
     `/messages/threads/${thread.id}`;
 
   notifyNewThreadFn({
-    supabase: request.supabase,
+    supabase: request.serviceSupabase,
     organizationId: request.orgId,
+    threadId: thread.id,
     threadTitle: validationResult.data.title,
     threadUrl,
     authorName: authorUser?.name || "A member",

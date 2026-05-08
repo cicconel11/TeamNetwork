@@ -2,16 +2,23 @@ import { sendNotificationBlast } from "@/lib/notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
+/**
+ * Email blast for new discussion threads. Push notifications for both new
+ * threads and replies are handled in Postgres via the
+ * `enqueue_discussion_thread_push` / `enqueue_discussion_reply_push`
+ * triggers — that fires uniformly whether the row was inserted from the web
+ * server route or directly from the mobile client.
+ */
 export async function notifyNewThread(params: {
   supabase: SupabaseClient<Database>;
   organizationId: string;
+  threadId: string;
   threadTitle: string;
   threadUrl: string;
   authorName: string;
 }) {
   const { supabase, organizationId, threadTitle, threadUrl, authorName } = params;
 
-  // Fetch users who have discussion_emails_enabled
   const { data: preferences } = await supabase
     .from("notification_preferences")
     .select("user_id")
@@ -24,7 +31,6 @@ export async function notifyNewThread(params: {
 
   const targetUserIds = preferences.map((p) => p.user_id);
 
-  // Send notification blast to users with discussion emails enabled
   const result = await sendNotificationBlast({
     supabase,
     organizationId,
@@ -33,6 +39,7 @@ export async function notifyNewThread(params: {
     title: `New Discussion: ${threadTitle}`,
     body: `${authorName} started a new discussion thread.\n\nTitle: ${threadTitle}\n\nView and reply: ${threadUrl}`,
     targetUserIds,
+    category: "discussion",
   });
 
   return {
