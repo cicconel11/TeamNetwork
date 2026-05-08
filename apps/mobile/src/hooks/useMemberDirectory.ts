@@ -7,6 +7,7 @@ const DEFAULT_PAGE_SIZE = 50;
 
 export interface DirectoryMember {
   id: string;
+  user_id: string | null;
   first_name: string;
   last_name: string;
   email: string | null;
@@ -91,6 +92,7 @@ export function useMemberDirectory(
           .select(
             `
             id,
+            user_id,
             first_name,
             last_name,
             email,

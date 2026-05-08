@@ -21,6 +21,7 @@ export interface NotificationPreferences {
   discussion_push_enabled: boolean;
   mentorship_push_enabled: boolean;
   donation_push_enabled: boolean;
+  mention_push_enabled: boolean;
 }
 
 const DEFAULT_PUSH_CATEGORIES = {
@@ -33,6 +34,7 @@ const DEFAULT_PUSH_CATEGORIES = {
   discussion_push_enabled: false,
   mentorship_push_enabled: false,
   donation_push_enabled: false,
+  mention_push_enabled: true,
 } as const;
 
 interface UseNotificationPreferencesReturn {
@@ -61,6 +63,7 @@ const SELECT_COLUMNS = [
   "discussion_push_enabled",
   "mentorship_push_enabled",
   "donation_push_enabled",
+  "mention_push_enabled",
 ].join(",");
 
 type PrefRow = {
@@ -77,6 +80,7 @@ type PrefRow = {
   discussion_push_enabled: boolean | null;
   mentorship_push_enabled: boolean | null;
   donation_push_enabled: boolean | null;
+  mention_push_enabled: boolean | null;
 };
 
 function rowToPrefs(row: PrefRow): NotificationPreferences {
@@ -100,6 +104,8 @@ function rowToPrefs(row: PrefRow): NotificationPreferences {
       row.mentorship_push_enabled ?? DEFAULT_PUSH_CATEGORIES.mentorship_push_enabled,
     donation_push_enabled:
       row.donation_push_enabled ?? DEFAULT_PUSH_CATEGORIES.donation_push_enabled,
+    mention_push_enabled:
+      row.mention_push_enabled ?? DEFAULT_PUSH_CATEGORIES.mention_push_enabled,
   };
 }
 
@@ -251,6 +257,7 @@ export function useNotificationPreferences(
         "discussion_push_enabled",
         "mentorship_push_enabled",
         "donation_push_enabled",
+        "mention_push_enabled",
       ] as const;
       for (const key of pushCategoryKeys) {
         if (key in updates) {

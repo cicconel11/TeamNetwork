@@ -14,6 +14,7 @@ import { useFocusEffect, useRouter, useNavigation } from "expo-router";
 import { ArrowUpDown, Users, Search } from "lucide-react-native";
 import { useMemberDirectory, type DirectoryMember } from "@/hooks/useMemberDirectory";
 import { useOrg } from "@/contexts/OrgContext";
+import { usePresence } from "@/contexts/PresenceContext";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { useNetwork } from "@/contexts/NetworkContext";
@@ -39,6 +40,7 @@ export default function MembersScreen() {
   const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   // Use orgId from context for data hook (eliminates redundant org fetch)
   const { members, loading, error, refetch, refetchIfStale } = useMemberDirectory(orgId);
+  const { isOnline } = usePresence();
   const { neutral, semantic } = useAppColorScheme();
   const { isOffline } = useNetwork();
   const [refreshing, setRefreshing] = useState(false);
@@ -275,10 +277,11 @@ export default function MembersScreen() {
           chips={chips}
           onPress={() => handleMemberPress(item)}
           colors={directoryColors}
+          online={isOnline(item.user_id)}
         />
       );
     },
-    [handleMemberPress, directoryColors]
+    [handleMemberPress, directoryColors, isOnline]
   );
 
   const roleOptions: { value: RoleFilter; label: string }[] = [
