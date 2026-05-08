@@ -4,7 +4,7 @@ import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import {
   MAX_UPLOAD_FILE_SIZE_BYTES,
-  readBlobFromUri,
+  readArrayBufferFromUri,
   uploadToSignedUrl,
   validateFileSize,
   validateMimeType,
@@ -152,9 +152,12 @@ export function useMediaUpload(orgId: string | null) {
 
           const { mediaId, signedUrl } = await intentRes.json();
 
-          // Step 2: Upload file to storage via signed URL
-          const blob = await readBlobFromUri(image.localUri);
-          await uploadToSignedUrl(signedUrl, blob, image.mimeType);
+          // Step 2: Upload file to storage via signed URL.
+          // NOTE: must use readArrayBufferFromUri (not readBlobFromUri) — RN's
+          // fetch(file://).blob() returns a 0-byte Blob on iOS, silently
+          // uploading empty files that then fail magic-bytes validation.
+          const bytes = await readArrayBufferFromUri(image.localUri);
+          await uploadToSignedUrl(signedUrl, bytes, image.mimeType);
 
           // Step 3: Finalize upload (magic bytes validation)
           const finalizeRes = await fetchWithAuth("/api/media/finalize", {
