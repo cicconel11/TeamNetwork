@@ -34,6 +34,7 @@ interface FeedTabProps {
   onAcceptPending: () => void;
   onPostPress: (postId: string) => void;
   onLikeToggle: (postId: string) => void;
+  onPollVote?: (postId: string, optionIndex: number) => void;
   onCreatePost: () => void;
   upNextEvent?: EventCardEvent | null;
   pinnedAnnouncement?: AnnouncementCardAnnouncement | null;
@@ -58,6 +59,7 @@ export function FeedTab({
   onAcceptPending,
   onPostPress,
   onLikeToggle,
+  onPollVote,
   onCreatePost,
   upNextEvent,
   pinnedAnnouncement,
@@ -154,10 +156,12 @@ export function FeedTab({
         post={item}
         onPress={onPostPress}
         onLikeToggle={onLikeToggle}
+        onPollVote={onPollVote}
         likeDisabled={isOffline}
+        pollDisabled={isOffline}
       />
     ),
-    [isOffline, onPostPress, onLikeToggle]
+    [isOffline, onPostPress, onLikeToggle, onPollVote]
   );
 
   const keyExtractor = useCallback((item: FeedPost) => item.id, []);

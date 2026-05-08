@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { fetchWithAuth } from "@/lib/web-api";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
-import type { FeedPost, PostAuthor, MediaAttachment, UseFeedReturn } from "@/types/feed";
+import type { FeedPost, PostAuthor, MediaAttachment, PollMetadata, UseFeedReturn } from "@/types/feed";
 
 const STALE_TIME_MS = 30_000;
 const PAGE_SIZE = 20;
@@ -87,8 +87,13 @@ export function useFeed(orgId: string | null): UseFeedReturn {
         const rawPosts = postsData || [];
         const postIds = rawPosts.map((p) => p.id);
 
-        // Fetch likes and media in parallel
-        const [likesResult, mediaResult] = await Promise.all([
+        // Identify poll posts so we can hydrate their voting state alongside likes/media.
+        const pollPostIds = rawPosts
+          .filter((p) => (p as { post_type?: string | null }).post_type === "poll")
+          .map((p) => p.id);
+
+        // Fetch likes, media, and poll votes in parallel
+        const [likesResult, mediaResult, userVotesResult, allVotesResult] = await Promise.all([
           postIds.length > 0
             ? supabase
                 .from("feed_likes")
@@ -104,6 +109,19 @@ export function useFeed(orgId: string | null): UseFeedReturn {
                 .eq("status", "ready")
                 .in("entity_id", postIds)
                 .is("deleted_at", null)
+            : Promise.resolve({ data: null }),
+          pollPostIds.length > 0
+            ? supabase
+                .from("feed_poll_votes")
+                .select("post_id, option_index")
+                .eq("user_id", userId)
+                .in("post_id", pollPostIds)
+            : Promise.resolve({ data: null }),
+          pollPostIds.length > 0
+            ? supabase
+                .from("feed_poll_votes")
+                .select("post_id, option_index")
+                .in("post_id", pollPostIds)
             : Promise.resolve({ data: null }),
         ]);
 
@@ -125,15 +143,60 @@ export function useFeed(orgId: string | null): UseFeedReturn {
           mediaByPostId.set(entityId, existing);
         }
 
+        // Build per-post user_vote and counts maps from the poll vote rows.
+        const userVoteMap = new Map<string, number>();
+        for (const v of (userVotesResult.data ?? []) as { post_id: string; option_index: number }[]) {
+          userVoteMap.set(v.post_id, v.option_index);
+        }
+
+        const pollMetaByPostId = new Map<string, PollMetadata | null>();
+        for (const post of rawPosts) {
+          if ((post as { post_type?: string | null }).post_type === "poll") {
+            pollMetaByPostId.set(
+              post.id,
+              ((post as { metadata?: unknown }).metadata as PollMetadata | null) ?? null,
+            );
+          }
+        }
+
+        const voteCountsByPostId = new Map<string, number[]>();
+        const totalVotesByPostId = new Map<string, number>();
+        for (const postId of pollPostIds) {
+          const meta = pollMetaByPostId.get(postId);
+          voteCountsByPostId.set(postId, new Array(meta?.options.length ?? 0).fill(0));
+          totalVotesByPostId.set(postId, 0);
+        }
+        for (const v of (allVotesResult.data ?? []) as { post_id: string; option_index: number }[]) {
+          const counts = voteCountsByPostId.get(v.post_id);
+          if (counts && v.option_index >= 0 && v.option_index < counts.length) {
+            counts[v.option_index]++;
+            totalVotesByPostId.set(v.post_id, (totalVotesByPostId.get(v.post_id) ?? 0) + 1);
+          }
+        }
+
         if (currentGeneration !== generationRef.current) return;
 
         // Combine into FeedPost[]
-        const enrichedPosts: FeedPost[] = rawPosts.map((post) => ({
-          ...post,
-          author: (Array.isArray(post.author) ? post.author[0] : post.author) as PostAuthor | null,
-          liked_by_user: likedPostIds.has(post.id),
-          media: mediaByPostId.get(post.id) || [],
-        }));
+        const enrichedPosts: FeedPost[] = rawPosts.map((post) => {
+          const isPoll = (post as { post_type?: string | null }).post_type === "poll";
+          const base: FeedPost = {
+            ...post,
+            author: (Array.isArray(post.author) ? post.author[0] : post.author) as PostAuthor | null,
+            liked_by_user: likedPostIds.has(post.id),
+            media: mediaByPostId.get(post.id) || [],
+          };
+          if (!isPoll) return base;
+          const meta = pollMetaByPostId.get(post.id) ?? null;
+          return {
+            ...base,
+            poll_meta: meta,
+            user_vote: userVoteMap.has(post.id) ? userVoteMap.get(post.id)! : null,
+            vote_counts:
+              voteCountsByPostId.get(post.id) ??
+              new Array(meta?.options.length ?? 0).fill(0),
+            total_votes: totalVotesByPostId.get(post.id) ?? 0,
+          };
+        });
 
         if (isMountedRef.current) {
           if (append) {
@@ -264,6 +327,90 @@ export function useFeed(orgId: string | null): UseFeedReturn {
       }
     },
     [userId, orgId, posts, pendingPosts]
+  );
+
+  // Cast or change a poll vote with optimistic update.
+  // Mirrors apps/web/src/app/api/feed/[postId]/vote/route.ts: insert if no
+  // prior vote, update if `allow_change` is true, reject otherwise.
+  const votePoll = useCallback(
+    async (postId: string, optionIndex: number) => {
+      if (!userId || !orgId) return;
+
+      const target =
+        posts.find((p) => p.id === postId) ?? pendingPosts.find((p) => p.id === postId);
+      if (!target || !target.poll_meta) return;
+
+      const meta = target.poll_meta;
+      if (optionIndex < 0 || optionIndex >= meta.options.length) return;
+
+      const prevVote = target.user_vote ?? null;
+      if (prevVote === optionIndex) return;
+      if (prevVote !== null && !meta.allow_change) {
+        showToast("Vote cannot be changed on this poll", "info");
+        return;
+      }
+
+      const prevCounts = target.vote_counts ?? new Array(meta.options.length).fill(0);
+      const prevTotal = target.total_votes ?? 0;
+
+      const nextCounts = [...prevCounts];
+      while (nextCounts.length < meta.options.length) nextCounts.push(0);
+      if (prevVote !== null && prevVote < nextCounts.length) {
+        nextCounts[prevVote] = Math.max(0, nextCounts[prevVote] - 1);
+      }
+      nextCounts[optionIndex]++;
+      const nextTotal = prevVote !== null ? prevTotal : prevTotal + 1;
+
+      const applyOptimistic = (list: FeedPost[]) =>
+        list.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                user_vote: optionIndex,
+                vote_counts: nextCounts,
+                total_votes: nextTotal,
+              }
+            : p,
+        );
+      setPosts(applyOptimistic);
+      setPendingPosts(applyOptimistic);
+
+      try {
+        if (prevVote === null) {
+          const { error: insertError } = await supabase.from("feed_poll_votes").insert({
+            post_id: postId,
+            user_id: userId,
+            organization_id: orgId,
+            option_index: optionIndex,
+          });
+          if (insertError) throw insertError;
+        } else {
+          const { error: updateError } = await supabase
+            .from("feed_poll_votes")
+            .update({ option_index: optionIndex, updated_at: new Date().toISOString() })
+            .eq("post_id", postId)
+            .eq("user_id", userId);
+          if (updateError) throw updateError;
+        }
+      } catch (e) {
+        const revert = (list: FeedPost[]) =>
+          list.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  user_vote: prevVote,
+                  vote_counts: prevCounts,
+                  total_votes: prevTotal,
+                }
+              : p,
+          );
+        setPosts(revert);
+        setPendingPosts(revert);
+        showToast("Failed to record vote", "error");
+        sentry.captureException(e as Error, { context: "useFeed.votePoll", postId });
+      }
+    },
+    [userId, orgId, posts, pendingPosts],
   );
 
   // Create post
@@ -461,5 +608,6 @@ export function useFeed(orgId: string | null): UseFeedReturn {
     updatePost,
     deletePost,
     toggleLike,
+    votePoll,
   };
 }
