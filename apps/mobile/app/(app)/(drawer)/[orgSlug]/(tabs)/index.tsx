@@ -1,51 +1,31 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { View, Text, Pressable, LayoutChangeEvent } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useRouter, useFocusEffect, useNavigation } from "expo-router";
 import { Bell, Search } from "lucide-react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  Easing,
-  type SharedValue,
-} from "react-native-reanimated";
 import { useAuth } from "@/hooks/useAuth";
 import { useEvents } from "@/hooks/useEvents";
-import { promptAndSetRsvp } from "@/hooks/useRsvp";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useMembers } from "@/hooks/useMembers";
-import { useOrgStats } from "@/hooks/useOrgStats";
 import { useFeed } from "@/hooks/useFeed";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { APP_CHROME } from "@/lib/chrome";
-import { SPACING, RADIUS, SHADOWS, ANIMATION } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { ErrorState, SkeletonList } from "@/components/ui";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
 import { showToast } from "@/components/ui/Toast";
 import { FeedTab } from "@/components/home/FeedTab";
-import { OverviewTab } from "@/components/home/OverviewTab";
-import { EventsTab } from "@/components/home/EventsTab";
+import { EventStartingSoonBanner } from "@/components/home/event-starting-soon-banner";
+import { useEventCheckInCount } from "@/hooks/useEventCheckInCount";
+import { useNow } from "@/hooks/useNow";
 import type { EventCardEvent } from "@/components/cards/EventCard";
-
-type ActiveTab = "feed" | "overview" | "events";
-
-const TAB_LABELS: { key: ActiveTab; label: string }[] = [
-  { key: "feed", label: "Feed" },
-  { key: "overview", label: "Overview" },
-  { key: "events", label: "Events" },
-];
-
-const TAB_ORDER: ActiveTab[] = ["feed", "overview", "events"];
 
 function computeGreeting(hour: number): string {
   if (hour >= 5 && hour < 12) return "Good morning";
@@ -61,7 +41,6 @@ export default function HomeScreen() {
   const { user } = useAuth();
   useOrgRole(); // subscribes to role changes; triggers re-render on role updates
 
-  const { neutral, semantic } = useAppColorScheme();
   const { isOffline } = useNetwork();
 
   const handleDrawerToggle = useCallback(() => {
@@ -74,74 +53,13 @@ export default function HomeScreen() {
     }
   }, [navigation]);
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("feed");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
 
-  // Tab pill animation
-  const pillX = useSharedValue(0);
-  const tabLayouts = useRef<Record<ActiveTab, number>>({
-    feed: 0,
-    overview: 0,
-    events: 0,
-  });
-
-  // Tab crossfade shared values
-  const feedOpacity = useSharedValue(1);
-  const overviewOpacity = useSharedValue(0);
-  const eventsOpacity = useSharedValue(0);
-
-  const opacityMap: Record<ActiveTab, SharedValue<number>> = {
-    feed: feedOpacity,
-    overview: overviewOpacity,
-    events: eventsOpacity,
-  };
-
-  const handleTabChange = useCallback(
-    (tab: ActiveTab) => {
-      setActiveTab(tab);
-
-      // Animate pill to new tab — gentler spring, less overshoot
-      pillX.value = withSpring(tabLayouts.current[tab], {
-        damping: 22,
-        stiffness: 220,
-        mass: 0.8,
-        overshootClamping: false,
-      });
-
-      // Crossfade tabs — linear timing so content never overshoots into neighbor
-      TAB_ORDER.forEach((t) => {
-        opacityMap[t].value = withTiming(t === tab ? 1 : 0, {
-          duration: 180,
-          easing: Easing.out(Easing.quad),
-        });
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pillX, feedOpacity, overviewOpacity, eventsOpacity]
-  );
-
-  const handleTabLayout = useCallback(
-    (tab: ActiveTab, x: number) => {
-      tabLayouts.current[tab] = x;
-      // Initialise pill position for active tab once layout is known
-      if (tab === activeTab) {
-        pillX.value = x;
-      }
-    },
-    [activeTab, pillX]
-  );
-
   const { events, refetch: refetchEvents, refetchIfStale: refetchEventsIfStale } = useEvents(orgId);
   const { announcements, refetch: refetchAnnouncements, refetchIfStale: refetchAnnouncementsIfStale } = useAnnouncements(orgId);
   const { members, refetch: refetchMembers, refetchIfStale: refetchMembersIfStale } = useMembers(orgId);
-  const {
-    stats,
-    loading: statsLoading,
-    refetch: refetchStats,
-    refetchIfStale: refetchStatsIfStale,
-  } = useOrgStats(orgId);
   const {
     posts,
     loading: feedLoading,
@@ -170,18 +88,16 @@ export default function HomeScreen() {
       refetchEventsIfStale();
       refetchAnnouncementsIfStale();
       refetchMembersIfStale();
-      refetchStatsIfStale();
       refetchFeedIfStale();
-    }, [refetchEventsIfStale, refetchAnnouncementsIfStale, refetchMembersIfStale, refetchStatsIfStale, refetchFeedIfStale])
+    }, [refetchEventsIfStale, refetchAnnouncementsIfStale, refetchMembersIfStale, refetchFeedIfStale])
   );
 
   const reconnectRefetch = useCallback(() => {
     refetchEvents();
     refetchAnnouncements();
     refetchMembers();
-    refetchStats();
     refetchFeed();
-  }, [refetchEvents, refetchAnnouncements, refetchMembers, refetchStats, refetchFeed]);
+  }, [refetchEvents, refetchAnnouncements, refetchMembers, refetchFeed]);
   useAutoRefetchOnReconnect(reconnectRefetch);
 
   const handleRefresh = async () => {
@@ -193,7 +109,6 @@ export default function HomeScreen() {
         refetchEvents(),
         refetchAnnouncements(),
         refetchMembers(),
-        refetchStats(),
         refetchFeed(),
       ]);
     } finally {
@@ -244,21 +159,14 @@ export default function HomeScreen() {
     [router, orgSlug]
   );
 
-  const handleHomeRsvp = useCallback(
-    (eventId: string) => {
-      if (!orgId || !user?.id) return;
-      promptAndSetRsvp({
-        eventId,
-        organizationId: orgId,
-        userId: user.id,
-        onComplete: (result) => {
-          if (result.ok) {
-            void refetchEvents();
-          }
-        },
-      });
-    },
-    [orgId, user?.id, refetchEvents]
+  const handleSeeAllEvents = useCallback(
+    () => router.push(`/(app)/(drawer)/${orgSlug}/calendar` as any),
+    [router, orgSlug]
+  );
+
+  const handleSeeAllAnnouncements = useCallback(
+    () => router.push(`/(app)/(drawer)/${orgSlug}/announcements` as any),
+    [router, orgSlug]
   );
 
   // Derive user identity for child tabs
@@ -281,56 +189,77 @@ export default function HomeScreen() {
     [userName]
   );
 
-  const { transformedEvents, recentAnnouncements, eventsCount } = useMemo(() => {
-    const now = new Date();
-    const upcoming = events.filter((e) => new Date(e.start_date) >= now);
+  // Soonest upcoming start drives the banner cadence — `useNow` re-renders
+  // every second when within 15 minutes so the countdown ticks live.
+  const soonestStart = useMemo(() => {
+    if (events.length === 0) return null;
+    const future = events
+      .map((e) => e.start_date)
+      .filter((s): s is string => !!s)
+      .filter((s) => Date.parse(s) > 0);
+    if (future.length === 0) return null;
+    future.sort();
+    return future[0];
+  }, [events]);
+  const now = useNow(soonestStart);
 
-    const transformed: EventCardEvent[] = upcoming.slice(0, 5).map((event) => ({
-      id: event.id,
-      title: event.title,
-      start_date: event.start_date,
-      end_date: event.end_date,
-      location: event.location,
-      rsvp_count: event.rsvp_count,
-      user_rsvp_status: event.user_rsvp_status as EventCardEvent["user_rsvp_status"],
-    }));
+  const { upNextEvent, imminentEvent } = useMemo(() => {
+    const upcoming = events
+      .filter((e) => {
+        // Include ongoing events: use end_date if present, else start_date.
+        // An event still counts as "upcoming" until it has actually ended.
+        const cutoff = e.end_date ?? e.start_date;
+        if (!cutoff) return false;
+        return new Date(cutoff) >= now;
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+      );
 
-    const recent = announcements.slice(0, 3).map((a) => ({
-      id: a.id,
-      title: a.title,
-      body: a.body,
-      created_at: a.created_at,
-      is_pinned: a.is_pinned,
-    }));
+    const nextRaw = upcoming[0] ?? null;
+    const upNext: EventCardEvent | null = nextRaw
+      ? {
+          id: nextRaw.id,
+          title: nextRaw.title,
+          start_date: nextRaw.start_date,
+          end_date: nextRaw.end_date,
+          location: nextRaw.location,
+          rsvp_count: nextRaw.rsvp_count,
+          user_rsvp_status: nextRaw.user_rsvp_status as EventCardEvent["user_rsvp_status"],
+        }
+      : null;
+
+    // Imminent = the soonest event whose start is within the next 30 minutes,
+    // or one that has started but not ended. Drives the home pop-up banner.
+    const cutoffMs = now.getTime() + 30 * 60 * 1000;
+    const imminent =
+      upcoming.find((e) => {
+        const startMs = Date.parse(e.start_date);
+        if (!Number.isFinite(startMs)) return false;
+        return startMs <= cutoffMs;
+      }) ?? null;
 
     return {
-      transformedEvents: transformed,
-      recentAnnouncements: recent,
-      eventsCount: upcoming.length,
+      upNextEvent: upNext,
+      imminentEvent: imminent,
     };
-  }, [events, announcements]);
+  }, [events, now]);
+
+  // Hide the "Up next" card when the banner is already showing the same event.
+  const visibleUpNextEvent =
+    upNextEvent && upNextEvent.id !== imminentEvent?.id ? upNextEvent : null;
+
+  const { count: imminentCheckedInCount } = useEventCheckInCount(
+    imminentEvent?.id ?? null,
+  );
 
   const pinnedAnnouncement = useMemo(
     () => announcements.find((a) => a.is_pinned) ?? null,
     [announcements]
   );
 
-  // Animated styles
-  const pillAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: pillX.value }],
-  }));
-
-  const feedAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: feedOpacity.value,
-  }));
-  const overviewAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: overviewOpacity.value,
-  }));
-  const eventsAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: eventsOpacity.value,
-  }));
-
-  const styles = useThemedStyles((n, s) => ({
+  const styles = useThemedStyles((n) => ({
     container: {
       flex: 1,
       backgroundColor: n.background,
@@ -393,56 +322,6 @@ export default function HomeScreen() {
       borderTopRightRadius: RADIUS.xxl,
       overflow: "hidden" as const,
       marginTop: -SPACING.sm,
-    },
-    // Segmented control — lighter background, sliding pill
-    segmentedControl: {
-      flexDirection: "row" as const,
-      backgroundColor: n.divider,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.xxs,
-      marginHorizontal: SPACING.md,
-      marginTop: SPACING.sm,
-      marginBottom: SPACING.sm,
-      position: "relative" as const,
-    },
-    segmentPill: {
-      position: "absolute" as const,
-      top: SPACING.xxs,
-      bottom: SPACING.xxs,
-      // Width is set to 1/3 of the container; works because all three tabs are flex:1
-      // We rely on translateX to move the pill; actual width is computed at render time.
-      // Using percentage-like value: each tab occupies 33.33% of the container.
-      width: "33.33%",
-      borderRadius: RADIUS.md,
-      backgroundColor: s.success,
-      ...SHADOWS.sm,
-    },
-    segment: {
-      flex: 1,
-      paddingVertical: SPACING.sm,
-      alignItems: "center" as const,
-      borderRadius: RADIUS.md,
-      zIndex: 1,
-    },
-    segmentText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: n.muted,
-    },
-    segmentTextActive: {
-      color: n.surface,
-      fontWeight: "600" as const,
-    },
-    // Tab crossfade container
-    tabContentContainer: {
-      flex: 1,
-      position: "relative" as const,
-    },
-    tabPane: {
-      position: "absolute" as const,
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
     },
     centered: {
       flex: 1,
@@ -533,97 +412,49 @@ export default function HomeScreen() {
 
       {/* Content Sheet — overlaps gradient with rounded top corners */}
       <View style={styles.contentSheet}>
-        {/* Animated sliding pill tab bar */}
-        <View style={styles.segmentedControl}>
-          {/* Sliding pill indicator */}
-          <Animated.View style={[styles.segmentPill, pillAnimatedStyle]} />
+        {imminentEvent ? (
+          <EventStartingSoonBanner
+            eventId={imminentEvent.id}
+            title={imminentEvent.title}
+            location={imminentEvent.location}
+            startAt={imminentEvent.start_date}
+            attendingCount={imminentEvent.rsvp_count ?? 0}
+            checkedInCount={imminentCheckedInCount}
+            onPress={() =>
+              handleNavigate(
+                `/(app)/(drawer)/${orgSlug}/events/${imminentEvent.id}`,
+              )
+            }
+          />
+        ) : null}
 
-          {TAB_LABELS.map(({ key, label }) => (
-            <Pressable
-              key={key}
-              style={styles.segment}
-              onPress={() => handleTabChange(key)}
-              onLayout={(e: LayoutChangeEvent) => {
-                handleTabLayout(key, e.nativeEvent.layout.x);
-              }}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: activeTab === key }}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  activeTab === key && styles.segmentTextActive,
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* Tab content — all three always mounted, crossfade via opacity */}
-        <View style={styles.tabContentContainer}>
-          <Animated.View
-            style={[styles.tabPane, feedAnimatedStyle]}
-            pointerEvents={activeTab === "feed" ? "auto" : "none"}
-          >
-            <FeedTab
-              posts={posts}
-              pendingPosts={pendingPosts}
-              loading={feedLoading}
-              loadingMore={loadingMore}
-              hasMore={hasMore}
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              onLoadMore={loadMore}
-              onAcceptPending={acceptPendingPosts}
-              onPostPress={handlePostPress}
-              onLikeToggle={handleLikeToggle}
-              onCreatePost={handleCreatePost}
-              isOffline={isOffline}
-              upcomingEvents={transformedEvents}
-              pinnedAnnouncement={pinnedAnnouncement}
-              onEventPress={(id: string) =>
-                handleNavigate(`/(app)/(drawer)/${orgSlug}/events/${id}`)
-              }
-              onAnnouncementPress={(id: string) =>
-                handleNavigate(`/(app)/(drawer)/${orgSlug}/announcements/${id}`)
-              }
-              userAvatarUrl={userAvatarUrl}
-              userName={userName}
-            />
-          </Animated.View>
-
-          <Animated.View
-            style={[styles.tabPane, overviewAnimatedStyle]}
-            pointerEvents={activeTab === "overview" ? "auto" : "none"}
-          >
-            <OverviewTab
-              orgSlug={orgSlug}
-              stats={stats}
-              loading={statsLoading}
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              onNavigate={handleNavigate}
-              onCreatePost={handleCreatePost}
-            />
-          </Animated.View>
-
-          <Animated.View
-            style={[styles.tabPane, eventsAnimatedStyle]}
-            pointerEvents={activeTab === "events" ? "auto" : "none"}
-          >
-            <EventsTab
-              orgSlug={orgSlug}
-              events={transformedEvents}
-              announcements={recentAnnouncements}
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              onNavigate={handleNavigate}
-              onRsvp={handleHomeRsvp}
-            />
-          </Animated.View>
-        </View>
+        <FeedTab
+          posts={posts}
+          pendingPosts={pendingPosts}
+          loading={feedLoading}
+          loadingMore={loadingMore}
+          hasMore={hasMore}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          onLoadMore={loadMore}
+          onAcceptPending={acceptPendingPosts}
+          onPostPress={handlePostPress}
+          onLikeToggle={handleLikeToggle}
+          onCreatePost={handleCreatePost}
+          isOffline={isOffline}
+          upNextEvent={visibleUpNextEvent}
+          pinnedAnnouncement={pinnedAnnouncement}
+          onEventPress={(id: string) =>
+            handleNavigate(`/(app)/(drawer)/${orgSlug}/events/${id}`)
+          }
+          onAnnouncementPress={(id: string) =>
+            handleNavigate(`/(app)/(drawer)/${orgSlug}/announcements/${id}`)
+          }
+          onSeeAllEvents={handleSeeAllEvents}
+          onSeeAllAnnouncements={handleSeeAllAnnouncements}
+          userAvatarUrl={userAvatarUrl}
+          userName={userName}
+        />
       </View>
     </View>
   );

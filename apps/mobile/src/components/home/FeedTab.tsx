@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   Pressable,
-  ScrollView,
 } from "react-native";
 import { PenSquare, ChevronRight } from "lucide-react-native";
 import Animated, { FadeInUp, FadeOutUp } from "react-native-reanimated";
@@ -15,7 +14,7 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import { PostCard } from "@/components/feed/PostCard";
 import { NewPostsBanner } from "@/components/feed/NewPostsBanner";
 import { FeedComposerBar } from "./FeedComposerBar";
-import { EventCardCompact } from "@/components/cards/EventCard";
+import { EventCard } from "@/components/cards/EventCard";
 import { AnnouncementCardCompact } from "@/components/cards/AnnouncementCard";
 import type { FeedPost } from "@/types/feed";
 import type { EventCardEvent } from "@/components/cards/EventCard";
@@ -36,10 +35,12 @@ interface FeedTabProps {
   onPostPress: (postId: string) => void;
   onLikeToggle: (postId: string) => void;
   onCreatePost: () => void;
-  upcomingEvents?: EventCardEvent[];
+  upNextEvent?: EventCardEvent | null;
   pinnedAnnouncement?: AnnouncementCardAnnouncement | null;
   onEventPress?: (eventId: string) => void;
   onAnnouncementPress?: (announcementId: string) => void;
+  onSeeAllEvents?: () => void;
+  onSeeAllAnnouncements?: () => void;
   userAvatarUrl?: string | null;
   userName?: string | null;
   isOffline?: boolean;
@@ -58,10 +59,12 @@ export function FeedTab({
   onPostPress,
   onLikeToggle,
   onCreatePost,
-  upcomingEvents,
+  upNextEvent,
   pinnedAnnouncement,
   onEventPress,
   onAnnouncementPress,
+  onSeeAllEvents,
+  onSeeAllAnnouncements,
   userAvatarUrl,
   userName,
   isOffline = false,
@@ -98,12 +101,9 @@ export function FeedTab({
       ...TYPOGRAPHY.labelMedium,
       color: s.info,
     },
-    eventStripContent: {
-      paddingHorizontal: SPACING.md,
-    },
-    eventCard: {
-      width: 260,
-      marginRight: SPACING.sm,
+    upNextWrapper: {
+      marginHorizontal: SPACING.md,
+      marginBottom: SPACING.sm,
     },
     pinnedWrapper: {
       marginHorizontal: SPACING.md,
@@ -136,20 +136,6 @@ export function FeedTab({
       color: n.muted,
       textAlign: "center" as const,
     },
-    emptyButton: {
-      marginTop: SPACING.md,
-      backgroundColor: s.info,
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.lg,
-      borderRadius: RADIUS.lg,
-    },
-    emptyButtonPressed: {
-      opacity: 0.7,
-    },
-    emptyButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: n.surface,
-    },
     skeletonContainer: {
       flex: 1,
       gap: SPACING.sm,
@@ -179,44 +165,54 @@ export function FeedTab({
   const ListHeaderComponent = useMemo(
     () => (
       <View>
-        {upcomingEvents && upcomingEvents.length > 0 && (
+        {upNextEvent != null && (
           <View style={styles.sectionBlock}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>Coming Up</Text>
-              <Pressable
-                onPress={() => onEventPress?.(upcomingEvents[0].id)}
-                style={styles.seeAllButton}
-                accessibilityRole="button"
-                accessibilityLabel="See all events"
-              >
-                <Text style={styles.seeAllText}>See all</Text>
-                <ChevronRight size={14} color={semantic.info} />
-              </Pressable>
+              <Text style={styles.sectionLabel}>Up next</Text>
+              {onSeeAllEvents != null && (
+                <Pressable
+                  onPress={onSeeAllEvents}
+                  style={styles.seeAllButton}
+                  accessibilityRole="link"
+                  accessibilityLabel="See all events"
+                >
+                  <Text style={styles.seeAllText}>See all</Text>
+                  <ChevronRight size={14} color={semantic.info} />
+                </Pressable>
+              )}
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.eventStripContent}
-            >
-              {upcomingEvents.map((event) => (
-                <EventCardCompact
-                  key={event.id}
-                  event={event}
-                  onPress={() => onEventPress?.(event.id)}
-                  style={styles.eventCard}
-                />
-              ))}
-            </ScrollView>
+            <View style={styles.upNextWrapper}>
+              <EventCard
+                event={upNextEvent}
+                onPress={() => onEventPress?.(upNextEvent.id)}
+              />
+            </View>
           </View>
         )}
 
         {pinnedAnnouncement != null && (
-          <View style={styles.pinnedWrapper}>
-            <AnnouncementCardCompact
-              announcement={pinnedAnnouncement}
-              onPress={() => onAnnouncementPress?.(pinnedAnnouncement.id)}
-              style={styles.pinnedCard}
-            />
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionLabel}>Pinned</Text>
+              {onSeeAllAnnouncements != null && (
+                <Pressable
+                  onPress={onSeeAllAnnouncements}
+                  style={styles.seeAllButton}
+                  accessibilityRole="link"
+                  accessibilityLabel="See all announcements"
+                >
+                  <Text style={styles.seeAllText}>See all</Text>
+                  <ChevronRight size={14} color={semantic.info} />
+                </Pressable>
+              )}
+            </View>
+            <View style={styles.pinnedWrapper}>
+              <AnnouncementCardCompact
+                announcement={pinnedAnnouncement}
+                onPress={() => onAnnouncementPress?.(pinnedAnnouncement.id)}
+                style={styles.pinnedCard}
+              />
+            </View>
           </View>
         )}
 
@@ -231,10 +227,12 @@ export function FeedTab({
       </View>
     ),
     [
-      upcomingEvents,
+      upNextEvent,
       pinnedAnnouncement,
       onEventPress,
       onAnnouncementPress,
+      onSeeAllEvents,
+      onSeeAllAnnouncements,
       onCreatePost,
       isOffline,
       userAvatarUrl,
@@ -261,20 +259,9 @@ export function FeedTab({
           <Text style={styles.emptyBody}>
             Be the first to share something with the team.
           </Text>
-          <Pressable
-            onPress={onCreatePost}
-            style={({ pressed }) => [
-              styles.emptyButton,
-              pressed && styles.emptyButtonPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Create the first post"
-          >
-            <Text style={styles.emptyButtonText}>Create a Post</Text>
-          </Pressable>
         </View>
       ) : null,
-    [loading, onCreatePost, styles, neutral.disabled]
+    [loading, styles, neutral.disabled]
   );
 
   if (loading && posts.length === 0) {
