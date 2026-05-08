@@ -68,7 +68,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
           checked_in_by,
           created_at,
           updated_at,
-          users:user_id (
+          users!user_id (
             id,
             name,
             email,

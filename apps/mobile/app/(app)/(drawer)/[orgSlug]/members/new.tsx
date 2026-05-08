@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   Share,
@@ -12,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useNavigation } from "expo-router";
-import { DrawerActions } from "@react-navigation/native";
+import { ChevronLeft } from "lucide-react-native";
 import { SafeQRCode } from "@/components/SafeQRCode";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
@@ -43,7 +42,7 @@ const ROLE_OPTIONS: { value: InviteRole; label: string }[] = [
 export default function NewMemberInviteScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgId, orgSlug } = useOrg();
 
   const [role, setRole] = useState<InviteRole>("active_member");
   const [uses, setUses] = useState("");
@@ -242,13 +241,13 @@ export default function NewMemberInviteScreen() {
     },
   }));
 
-  const handleDrawerToggle = useCallback(() => {
-    try {
-      if (navigation && typeof (navigation as any).dispatch === "function") {
-        (navigation as any).dispatch(DrawerActions.toggleDrawer());
-      }
-    } catch {}
-  }, [navigation]);
+  const handleBack = useCallback(() => {
+    if ((navigation as any).canGoBack && (navigation as any).canGoBack()) {
+      router.back();
+    } else {
+      router.replace(`/(app)/${orgSlug}/(tabs)/members`);
+    }
+  }, [navigation, router, orgSlug]);
 
   const inviteLink = useMemo(() => {
     if (!invite) return null;
@@ -324,14 +323,8 @@ export default function NewMemberInviteScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
-              ) : (
-                <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
-                </View>
-              )}
+            <Pressable onPress={handleBack} style={styles.orgLogoButton} hitSlop={8}>
+              <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
             </Pressable>
             <Text style={styles.headerTitle}>Invite Member</Text>
             <View style={styles.headerSpacer} />

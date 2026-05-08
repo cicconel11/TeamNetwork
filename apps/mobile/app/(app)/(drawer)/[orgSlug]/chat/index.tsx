@@ -798,6 +798,28 @@ export default function ChatGroupsScreen() {
     [discussions.length, router, orgSlug, styles]
   );
 
+  // Chat groups header with admin "New" button
+  const chatGroupsHeader = useMemo(
+    () => (
+      <View style={styles.discussionsHeader}>
+        <Text style={styles.discussionsHeaderText}>
+          {groups.length} {groups.length === 1 ? "group" : "groups"}
+        </Text>
+        {isAdmin ? (
+          <Pressable
+            style={styles.newDiscussionButton}
+            onPress={() => router.push(`/(app)/${orgSlug}/chat/new`)}
+            accessibilityRole="button"
+            accessibilityLabel="Create new chat group"
+          >
+            <Text style={styles.newDiscussionButtonText}>New</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    ),
+    [groups.length, isAdmin, router, orgSlug, styles]
+  );
+
   const headerMeta = useMemo(() => {
     if (activeTab === "chat") {
       return `${groups.length} group${groups.length === 1 ? "" : "s"}`;
@@ -888,6 +910,7 @@ export default function ChatGroupsScreen() {
                 data={groups}
                 keyExtractor={(item) => item.id}
                 renderItem={renderGroup}
+                ListHeaderComponent={chatGroupsHeader}
                 contentContainerStyle={styles.listContent}
                 ItemSeparatorComponent={() => (
                   <View style={styles.separator} />

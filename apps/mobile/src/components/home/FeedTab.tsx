@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -6,10 +6,22 @@ import {
   ActivityIndicator,
   RefreshControl,
   Pressable,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
-import { PenSquare, ChevronRight } from "lucide-react-native";
-import Animated, { FadeInUp, FadeOutUp } from "react-native-reanimated";
-import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { PenSquare, ChevronRight, Plus } from "lucide-react-native";
+import Animated, {
+  FadeInUp,
+  FadeOutUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolate,
+  Extrapolation,
+} from "react-native-reanimated";
+import { SPACING, RADIUS, SHADOWS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { PostCard } from "@/components/feed/PostCard";
 import { NewPostsBanner } from "@/components/feed/NewPostsBanner";
@@ -72,6 +84,53 @@ export function FeedTab({
   isOffline = false,
 }: FeedTabProps) {
   const { neutral, semantic } = useAppColorScheme();
+  const composerBottomY = useRef(0);
+  const fabProgress = useSharedValue(0);
+  const fabPressScale = useSharedValue(1);
+
+  const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
+    const { y, height } = e.nativeEvent.layout;
+    composerBottomY.current = y + height;
+  }, []);
+
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const scrollY = e.nativeEvent.contentOffset.y;
+      const threshold = Math.max(composerBottomY.current - 24, 80);
+      const target = scrollY > threshold ? 1 : 0;
+      if (fabProgress.value !== target) {
+        fabProgress.value = withTiming(target, { duration: 220 });
+      }
+    },
+    [fabProgress]
+  );
+
+  const fabStyle = useAnimatedStyle(() => ({
+    opacity: fabProgress.value,
+    transform: [
+      {
+        translateY: interpolate(
+          fabProgress.value,
+          [0, 1],
+          [16, 0],
+          Extrapolation.CLAMP
+        ),
+      },
+      {
+        scale: interpolate(
+          fabProgress.value,
+          [0, 1],
+          [0.85, 1],
+          Extrapolation.CLAMP
+        ) * fabPressScale.value,
+      },
+    ],
+  }));
+
+  const handleFabPress = useCallback(() => {
+    onCreatePost();
+  }, [onCreatePost]);
+
   const styles = useThemedStyles((n, s) => ({
     container: {
       flex: 1,
@@ -148,6 +207,36 @@ export function FeedTab({
       backgroundColor: n.divider,
       borderRadius: RADIUS.lg,
     },
+    fabWrapper: {
+      position: "absolute" as const,
+      right: SPACING.lg,
+      bottom: SPACING.lg,
+    },
+    fabPill: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+      paddingLeft: SPACING.sm,
+      paddingRight: SPACING.md,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: n.foreground,
+      ...SHADOWS.lg,
+      shadowOpacity: 0.18,
+    },
+    fabIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: "rgba(255,255,255,0.14)",
+    },
+    fabLabel: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.surface,
+      letterSpacing: 0.2,
+    },
   }));
 
   const renderItem = useCallback(
@@ -220,7 +309,7 @@ export function FeedTab({
           </View>
         )}
 
-        <View style={styles.composerWrapper}>
+        <View style={styles.composerWrapper} onLayout={handleComposerLayout}>
           <FeedComposerBar
             onPress={onCreatePost}
             userAvatarUrl={userAvatarUrl}
@@ -243,6 +332,7 @@ export function FeedTab({
       userName,
       styles,
       semantic.info,
+      handleComposerLayout,
     ]
   );
 
@@ -290,6 +380,8 @@ export function FeedTab({
         ListEmptyComponent={ListEmptyComponent}
         onEndReached={hasMore ? onLoadMore : undefined}
         onEndReachedThreshold={0.4}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -308,6 +400,26 @@ export function FeedTab({
           <NewPostsBanner count={pendingPosts.length} onPress={onAcceptPending} />
         </Animated.View>
       )}
+      <Animated.View style={[styles.fabWrapper, fabStyle]}>
+        <Pressable
+          onPress={handleFabPress}
+          onPressIn={() => {
+            fabPressScale.value = withSpring(0.94, ANIMATION.spring);
+          }}
+          onPressOut={() => {
+            fabPressScale.value = withSpring(1, ANIMATION.spring);
+          }}
+          disabled={isOffline}
+          accessibilityRole="button"
+          accessibilityLabel="Create a new post"
+          style={[styles.fabPill, isOffline && { opacity: 0.6 }]}
+        >
+          <View style={styles.fabIconWrap}>
+            <Plus size={18} color={neutral.surface} strokeWidth={2.5} />
+          </View>
+          <Text style={styles.fabLabel}>Post</Text>
+        </Pressable>
+      </Animated.View>
     </View>
   );
 }

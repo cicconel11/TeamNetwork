@@ -5,6 +5,7 @@ export default function ChatLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="[groupId]" />
+      <Stack.Screen name="new" />
       <Stack.Screen name="threads/index" />
       <Stack.Screen name="threads/[threadId]" />
       <Stack.Screen name="threads/new" />

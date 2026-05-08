@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createPollSchema } from "@/lib/schemas/chat-polls";
 import { validateJson, validationErrorResponse, ValidationError, baseSchemas } from "@/lib/security/validation";
@@ -178,10 +179,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -204,7 +202,7 @@ export async function POST(request: NextRequest) {
       mediaIds: z.array(z.string().uuid()).max(10).optional(),
       poll: createPollSchema.optional(),
     }).refine(
-      (data) => data.poll || data.body.length >= 1,
+      (data) => data.poll || data.body.length >= 1 || (data.mediaIds?.length ?? 0) >= 1,
       { message: "Post body is required", path: ["body"] },
     );
 

@@ -44,6 +44,7 @@ export function SettingsNotificationsSection({ orgId }: Props) {
   const [mentorshipPush, setMentorshipPush] = useState(false);
   const [donationPush, setDonationPush] = useState(false);
   const [mentionPush, setMentionPush] = useState(true);
+  const [reactionPush, setReactionPush] = useState(true);
   const [digestPush, setDigestPush] = useState(true);
   const [reengagementPush, setReengagementPush] = useState(true);
   const [quietHoursTimezone, setQuietHoursTimezone] = useState("UTC");
@@ -65,6 +66,7 @@ export function SettingsNotificationsSection({ orgId }: Props) {
       setMentorshipPush(prefs.mentorship_push_enabled);
       setDonationPush(prefs.donation_push_enabled);
       setMentionPush(prefs.mention_push_enabled);
+      setReactionPush(prefs.reaction_push_enabled);
       setDigestPush(prefs.digest_push_enabled);
       setReengagementPush(prefs.reengagement_push_enabled);
       setQuietHoursStart(prefs.quiet_hours_start.slice(0, 5));
@@ -102,6 +104,7 @@ export function SettingsNotificationsSection({ orgId }: Props) {
       mentorship_push_enabled: mentorshipPush,
       donation_push_enabled: donationPush,
       mention_push_enabled: mentionPush,
+      reaction_push_enabled: reactionPush,
       digest_push_enabled: digestPush,
       reengagement_push_enabled: reengagementPush,
       quiet_hours_start: quietHoursStart,
@@ -438,6 +441,20 @@ export function SettingsNotificationsSection({ orgId }: Props) {
                   disabled={!pushEnabled}
                   trackColor={{ false: colors.border, true: colors.primaryLight }}
                   thumbColor={mentionPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Reactions</Text>
+                  <Text style={styles.switchHint}>When someone reacts to your chat message (👍 ❤️ etc.)</Text>
+                </View>
+                <Switch
+                  value={reactionPush}
+                  onValueChange={setReactionPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={reactionPush ? colors.primary : colors.card}
                 />
               </View>
 

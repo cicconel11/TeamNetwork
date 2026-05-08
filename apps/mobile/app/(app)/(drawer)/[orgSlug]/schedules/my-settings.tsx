@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -15,27 +14,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
-import * as WebBrowser from "expo-web-browser";
 import {
   BookOpen,
   CalendarSync,
   ExternalLink,
-  Eye,
-  FileText,
-  ImageIcon,
   Plus,
-  Trash2,
 } from "lucide-react-native";
-import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useSchedules, formatOccurrence, formatTime } from "@/hooks/useSchedules";
-import { useScheduleFiles } from "@/hooks/useScheduleFiles";
 import { useCalendarSyncPreferences } from "@/hooks/useCalendarSyncPreferences";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
 import { ErrorState } from "@/components/ui";
-import { ScheduleFileUpload } from "@/components/schedules/ScheduleFileUpload";
 import { showToast } from "@/components/ui/Toast";
 import { APP_CHROME } from "@/lib/chrome";
 import { getWebPath } from "@/lib/web-api";
@@ -46,7 +37,6 @@ import {
 import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
-import type { ScheduleFile } from "@teammeet/types";
 
 const SYNC_LABELS: Array<{
   key: keyof typeof DEFAULT_CALENDAR_SYNC_PREFERENCES;
@@ -61,13 +51,6 @@ const SYNC_LABELS: Array<{
   { key: "sync_philanthropy", label: "Philanthropy", hint: "Service and philanthropy events." },
 ];
 
-function formatFileSize(bytes: number | null) {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function formatSyncStatus(value: boolean) {
   return value ? "Included in sync" : "Skipped during sync";
 }
@@ -75,7 +58,6 @@ function formatSyncStatus(value: boolean) {
 export default function ScheduleMySettingsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { user } = useAuth();
   const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin } = useOrgRole();
   const { isOffline } = useNetwork();
@@ -87,17 +69,6 @@ export default function ScheduleMySettingsScreen() {
     refetch: refetchSchedules,
     refetchIfStale: refetchSchedulesIfStale,
   } = useSchedules(orgId, false);
-
-  const {
-    myFiles,
-    loading: filesLoading,
-    error: filesError,
-    refetch: refetchFiles,
-    refetchIfStale: refetchFilesIfStale,
-    uploadFile,
-    deleteFile,
-    getSignedUrl,
-  } = useScheduleFiles(orgSlug || "", user?.id, false);
 
   const {
     preferences,
@@ -308,39 +279,6 @@ export default function ScheduleMySettingsScreen() {
       ...TYPOGRAPHY.labelMedium,
       color: s.success,
     },
-    filesList: {
-      gap: SPACING.sm,
-      marginTop: SPACING.sm,
-    },
-    fileItem: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      gap: SPACING.sm,
-    },
-    fileInfo: {
-      flex: 1,
-      gap: 2,
-    },
-    fileName: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: n.foreground,
-    },
-    fileMeta: {
-      ...TYPOGRAPHY.caption,
-      color: n.muted,
-    },
-    fileActions: {
-      flexDirection: "row" as const,
-      gap: SPACING.xs,
-    },
-    iconButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      backgroundColor: n.background,
-    },
     emptyState: {
       alignItems: "center" as const,
       justifyContent: "center" as const,
@@ -359,8 +297,6 @@ export default function ScheduleMySettingsScreen() {
   }));
 
   const [refreshing, setRefreshing] = useState(false);
-  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
-  const [viewingFileId, setViewingFileId] = useState<string | null>(null);
   const refreshRef = useRef(false);
 
   const handleDrawerToggle = useCallback(() => {
@@ -376,17 +312,15 @@ export default function ScheduleMySettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       refetchSchedulesIfStale();
-      refetchFilesIfStale();
       refetchPrefs();
-    }, [refetchFilesIfStale, refetchPrefs, refetchSchedulesIfStale])
+    }, [refetchPrefs, refetchSchedulesIfStale])
   );
 
   useAutoRefetchOnReconnect(
     useCallback(() => {
       refetchSchedules();
-      refetchFiles();
       refetchPrefs();
-    }, [refetchFiles, refetchPrefs, refetchSchedules])
+    }, [refetchPrefs, refetchSchedules])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -394,12 +328,12 @@ export default function ScheduleMySettingsScreen() {
     refreshRef.current = true;
     setRefreshing(true);
     try {
-      await Promise.all([Promise.resolve(refetchSchedules()), refetchFiles(), refetchPrefs()]);
+      await Promise.all([Promise.resolve(refetchSchedules()), refetchPrefs()]);
     } finally {
       refreshRef.current = false;
       setRefreshing(false);
     }
-  }, [refetchFiles, refetchPrefs, refetchSchedules]);
+  }, [refetchPrefs, refetchSchedules]);
 
   const handleOpenWebSettings = useCallback(() => {
     if (!orgSlug) return;
@@ -410,48 +344,6 @@ export default function ScheduleMySettingsScreen() {
     if (!orgSlug) return;
     router.push(getScheduleSourcesPath(orgSlug));
   }, [orgSlug, router]);
-
-  const handleViewFile = useCallback(
-    async (file: ScheduleFile) => {
-      setViewingFileId(file.id);
-      try {
-        const url = await getSignedUrl(file.file_path);
-        if (!url) {
-          Alert.alert("Unable to open file", "The secure file link could not be created.");
-          return;
-        }
-        await WebBrowser.openBrowserAsync(url);
-      } catch {
-        Alert.alert("Unable to open file", "Please try again.");
-      } finally {
-        setViewingFileId(null);
-      }
-    },
-    [getSignedUrl]
-  );
-
-  const handleDeleteFile = useCallback(
-    (file: ScheduleFile) => {
-      Alert.alert("Delete File", `Delete "${file.file_name}"?`, [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setDeletingFileId(file.id);
-            const result = await deleteFile(file);
-            setDeletingFileId(null);
-            if (!result.success) {
-              Alert.alert("Unable to delete file", result.error || "Please try again.");
-              return;
-            }
-            showToast("File deleted", "success");
-          },
-        },
-      ]);
-    },
-    [deleteFile]
-  );
 
   const handleTogglePreference = useCallback(
     async (key: keyof typeof DEFAULT_CALENDAR_SYNC_PREFERENCES, value: boolean) => {
@@ -465,10 +357,10 @@ export default function ScheduleMySettingsScreen() {
     [updatePreferences]
   );
 
-  const error = schedulesError || filesError || prefsError;
-  const isInitialLoad = schedulesLoading || filesLoading || prefsLoading;
+  const error = schedulesError || prefsError;
+  const isInitialLoad = schedulesLoading || prefsLoading;
 
-  if (error && !isInitialLoad && mySchedules.length === 0 && myFiles.length === 0) {
+  if (error && !isInitialLoad && mySchedules.length === 0) {
     return (
       <View style={styles.container}>
         <LinearGradient
@@ -519,7 +411,7 @@ export default function ScheduleMySettingsScreen() {
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>My Schedule Settings</Text>
               <Text style={styles.headerMeta}>
-                {mySchedules.length} {mySchedules.length === 1 ? "schedule" : "schedules"} • {myFiles.length} {myFiles.length === 1 ? "file" : "files"}
+                {mySchedules.length} {mySchedules.length === 1 ? "schedule" : "schedules"}
               </Text>
             </View>
             {isAdmin ? (
@@ -613,69 +505,6 @@ export default function ScheduleMySettingsScreen() {
                     </Pressable>
                   </View>
                 ))
-              )}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sectionTitle}>Uploaded Schedule Files</Text>
-                <Text style={styles.sectionHint}>Keep PDFs and screenshots handy for coaches and admins.</Text>
-              </View>
-              <ScheduleFileUpload onUpload={uploadFile} />
-            </View>
-            <View style={styles.card}>
-              {myFiles.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <FileText size={28} color={APP_CHROME.headerMeta} />
-                  <Text style={styles.emptyTitle}>No uploaded files</Text>
-                  <Text style={styles.emptyText}>
-                    Upload a schedule PDF or screenshot so the team can reference it.
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.filesList}>
-                  {myFiles.map((file) => (
-                    <View key={file.id} style={styles.fileItem}>
-                      {file.mime_type?.startsWith("image/") ? (
-                        <ImageIcon size={18} color={APP_CHROME.headerMeta} />
-                      ) : (
-                        <FileText size={18} color={APP_CHROME.headerMeta} />
-                      )}
-                      <View style={styles.fileInfo}>
-                        <Text style={styles.fileName} numberOfLines={1}>
-                          {file.file_name}
-                        </Text>
-                        <Text style={styles.fileMeta}>{formatFileSize(file.file_size)}</Text>
-                      </View>
-                      <View style={styles.fileActions}>
-                        <Pressable
-                          style={styles.iconButton}
-                          onPress={() => handleViewFile(file)}
-                          disabled={viewingFileId === file.id}
-                        >
-                          {viewingFileId === file.id ? (
-                            <ActivityIndicator size="small" />
-                          ) : (
-                            <Eye size={16} color={APP_CHROME.gradientStart} />
-                          )}
-                        </Pressable>
-                        <Pressable
-                          style={styles.iconButton}
-                          onPress={() => handleDeleteFile(file)}
-                          disabled={deletingFileId === file.id}
-                        >
-                          {deletingFileId === file.id ? (
-                            <ActivityIndicator size="small" />
-                          ) : (
-                            <Trash2 size={16} color="#dc2626" />
-                          )}
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))}
-                </View>
               )}
             </View>
           </View>

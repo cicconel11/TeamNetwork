@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   Switch,
@@ -12,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useNavigation } from "expo-router";
-import { DrawerActions } from "@react-navigation/native";
+import { ChevronLeft } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
@@ -42,7 +41,7 @@ const AUDIENCE_OPTIONS: { value: Audience; label: string }[] = [
 export default function NewAnnouncementScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgId, orgSlug } = useOrg();
   const { neutral, semantic } = useAppColorScheme();
   const styles = useThemedStyles((n, s) => ({
     container: {
@@ -250,13 +249,13 @@ export default function NewAnnouncementScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleDrawerToggle = useCallback(() => {
-    try {
-      if (navigation && typeof (navigation as any).dispatch === "function") {
-        (navigation as any).dispatch(DrawerActions.toggleDrawer());
-      }
-    } catch {}
-  }, [navigation]);
+  const handleBack = useCallback(() => {
+    if ((navigation as any).canGoBack && (navigation as any).canGoBack()) {
+      router.back();
+    } else {
+      router.replace(`/(app)/${orgSlug}/(tabs)/announcements`);
+    }
+  }, [navigation, router, orgSlug]);
 
   useEffect(() => {
     let isMounted = true;
@@ -416,14 +415,8 @@ export default function NewAnnouncementScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
-              ) : (
-                <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
-                </View>
-              )}
+            <Pressable onPress={handleBack} style={styles.orgLogoButton} hitSlop={8}>
+              <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
             </Pressable>
             <Text style={styles.headerTitle}>Post Announcement</Text>
             <View style={styles.headerSpacer} />

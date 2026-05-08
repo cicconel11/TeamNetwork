@@ -12,6 +12,8 @@ import type { CalendarEventTimeframe } from "@/lib/calendar/routes";
 import { calendarNewEventPath, calendarSourcesPath } from "@/lib/calendar/routes";
 import { formatCalendarEventTime } from "@/lib/calendar/event-segments";
 import { getUnifiedEventHref } from "@/lib/calendar/navigation";
+import { EventCountdownBadge } from "@/components/calendar/EventCountdownBadge";
+import { useEventRealtime } from "@/hooks/useEventRealtime";
 
 type UnifiedEventFeedProps = {
   orgId: string;
@@ -176,6 +178,8 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone, time
     fetchEvents();
   }, [fetchEvents]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEventRealtime({ organizationId: orgId, onChange: fetchEvents });
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = () => {
@@ -242,6 +246,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone, time
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <EventCountdownBadge startAt={event.startAt} endAt={event.endAt} />
             <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${badge}`}>
               {event.sourceName}
             </span>

@@ -12,7 +12,8 @@
     "./navigation": "./src/navigation/index.ts",
     "./announcements": "./src/announcements/index.ts",
     "./formatters": "./src/formatters/index.ts",
-    "./apns": "./src/apns/index.ts"
+    "./apns": "./src/apns/index.ts",
+    "./calendar": "./src/calendar/event-status.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

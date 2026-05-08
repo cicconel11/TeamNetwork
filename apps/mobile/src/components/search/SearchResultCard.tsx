@@ -1,34 +1,36 @@
 import { Pressable, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
-import { User, Calendar, Megaphone } from "lucide-react-native";
-import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import Animated, { FadeIn } from "react-native-reanimated";
+import {
+  User,
+  Calendar,
+  Megaphone,
+  MessageCircle,
+  Briefcase,
+  GraduationCap,
+  ChevronRight,
+} from "lucide-react-native";
+import { SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
-import type { SearchResult } from "@/hooks/useGlobalSearch";
+import type { SearchResult, SearchEntityType } from "@/hooks/useGlobalSearch";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
-import { continuousBorderCurve } from "@/lib/ios-style";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 
-const TYPE_CONFIG: Record<
-  SearchResult["type"],
-  { label: string; color: string; bg: string; Icon: typeof User }
-> = {
-  member: {
-    label: "Member",
-    color: "#0369a1",
-    bg: "#e0f2fe",
-    Icon: User,
-  },
-  event: {
-    label: "Event",
-    color: "#047857",
-    bg: "#d1fae5",
-    Icon: Calendar,
-  },
-  announcement: {
-    label: "Post",
-    color: "#7c3aed",
-    bg: "#ede9fe",
-    Icon: Megaphone,
-  },
+const TYPE_ICON: Record<SearchEntityType, typeof User> = {
+  member: User,
+  alumni: GraduationCap,
+  event: Calendar,
+  announcement: Megaphone,
+  discussion_thread: MessageCircle,
+  job_posting: Briefcase,
+};
+
+const TYPE_LABEL: Record<SearchEntityType, string> = {
+  member: "Member",
+  alumni: "Alumni",
+  event: "Event",
+  announcement: "Post",
+  discussion_thread: "Chat",
+  job_posting: "Job",
 };
 
 interface SearchResultCardProps {
@@ -38,84 +40,89 @@ interface SearchResultCardProps {
 }
 
 export function SearchResultCard({ result, index, onPress }: SearchResultCardProps) {
-  const config = TYPE_CONFIG[result.type];
-  const { Icon } = config;
+  const Icon = TYPE_ICON[result.type];
+  const { neutral } = useAppColorScheme();
 
   const styles = useThemedStyles((n) => ({
-    card: {
+    row: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       backgroundColor: n.surface,
-      borderRadius: RADIUS.lg,
-      ...continuousBorderCurve,
-      padding: SPACING.md,
-      marginHorizontal: SPACING.md,
-      marginBottom: SPACING.sm,
-      borderWidth: 1,
-      borderColor: n.border,
-      gap: SPACING.sm,
-      ...SHADOWS.sm,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm + 2,
+      gap: SPACING.md,
     },
-    cardPressed: {
-      opacity: 0.75,
+    rowPressed: {
+      backgroundColor: n.background,
     },
-    iconContainer: {
-      width: 40,
-      height: 40,
-      borderRadius: RADIUS.md,
+    iconWrap: {
+      width: 28,
       alignItems: "center" as const,
       justifyContent: "center" as const,
-      flexShrink: 0,
     },
-    textContainer: {
+    textWrap: {
       flex: 1,
+      minWidth: 0,
+    },
+    titleRow: {
+      flexDirection: "row" as const,
+      alignItems: "baseline" as const,
+      gap: SPACING.sm,
     },
     title: {
-      ...TYPOGRAPHY.labelMedium,
+      ...TYPOGRAPHY.bodyMedium,
+      fontWeight: "600" as const,
       color: n.foreground,
+      flexShrink: 1,
     },
-    subtitle: {
+    label: {
       ...TYPOGRAPHY.caption,
       color: n.muted,
-      marginTop: 2,
+      letterSpacing: 0.3,
+      textTransform: "uppercase" as const,
     },
-    badge: {
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: 3,
-      borderRadius: RADIUS.full,
-      flexShrink: 0,
+    snippet: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      marginTop: 1,
     },
-    badgeText: {
-      ...TYPOGRAPHY.caption,
-      fontWeight: "600" as const,
+    divider: {
+      height: 1,
+      backgroundColor: n.border,
+      marginLeft: SPACING.md + 28 + SPACING.md,
+      opacity: 0.5,
     },
   }));
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 50)}>
+    <Animated.View entering={FadeIn.duration(180).delay(Math.min(index, 8) * 24)}>
       <Pressable
-        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
         onPress={() => onPress(result)}
         accessibilityRole="button"
-        accessibilityLabel={`${config.label}: ${result.title}`}
+        accessibilityLabel={`${TYPE_LABEL[result.type]}: ${result.title}`}
       >
-        <View style={[styles.iconContainer, { backgroundColor: config.bg }]}>
-          <Icon size={18} color={config.color} />
+        <View style={styles.iconWrap}>
+          <Icon size={20} color={neutral.muted} strokeWidth={1.75} />
         </View>
 
-        <View style={styles.textContainer}>
-          <Text style={styles.title} selectable numberOfLines={1}>
-            {result.title}
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {result.subtitle}
-          </Text>
+        <View style={styles.textWrap}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>
+              {result.title}
+            </Text>
+            <Text style={styles.label}>{TYPE_LABEL[result.type]}</Text>
+          </View>
+          {result.snippet ? (
+            <Text style={styles.snippet} numberOfLines={1}>
+              {result.snippet}
+            </Text>
+          ) : null}
         </View>
 
-        <View style={[styles.badge, { backgroundColor: config.bg }]}>
-          <Text style={[styles.badgeText, { color: config.color }]}>{config.label}</Text>
-        </View>
+        <ChevronRight size={16} color={neutral.border} strokeWidth={2} />
       </Pressable>
+      <View style={styles.divider} />
     </Animated.View>
   );
 }

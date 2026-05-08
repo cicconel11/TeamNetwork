@@ -36,6 +36,12 @@ import { getWebAppUrl } from "@/lib/web-api";
 import { spacing, fontSize, fontWeight } from "@/lib/theme";
 import { NEUTRAL, SEMANTIC, RADIUS } from "@/lib/design-tokens";
 import { Bell, Calendar, Megaphone } from "lucide-react-native";
+import { CollapsibleNavSection } from "@/navigation/CollapsibleNavSection";
+import {
+  ORG_NAV_GROUPS,
+  NAV_GROUP_BY_CONFIG_KEY,
+  type NavGroupId,
+} from "@/navigation/nav-groups";
 
 interface NavItem {
   label: string;
@@ -47,7 +53,7 @@ interface NavItem {
 
 // Pinned footer items (Settings, Navigation, Organizations, Sign Out)
 const PINNED_ITEM_HEIGHT = 48;
-const PINNED_FOOTER_COUNT = 4;
+const PINNED_FOOTER_COUNT = 2;
 const BRAND_STRIP_HEIGHT = 88;
 const FOOTER_PADDING = 32;
 const FOOTER_TOP_INSET = 8;
@@ -88,7 +94,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       { label: "Parents", href: `/(app)/${slug}/parents`, icon: Users, configKey: "/parents" },
       { label: "Alumni", href: `/(app)/${slug}/alumni`, icon: GraduationCap, configKey: "/alumni" },
       { label: "Mentorship", href: `/(app)/${slug}/mentorship`, icon: Handshake, configKey: "/mentorship" },
-      { label: "Events", href: `/(app)/${slug}/events`, icon: Calendar, configKey: "/events" },
+      { label: "Events", href: `/(app)/${slug}/calendar`, icon: Calendar, configKey: "/events" },
       { label: "Announcements", href: `/(app)/${slug}/announcements`, icon: Megaphone, configKey: "/announcements" },
       { label: "Jobs", href: `/(app)/${slug}/jobs`, icon: Briefcase, configKey: "/jobs" },
       { label: "Workouts", href: `/(app)/${slug}/workouts`, icon: Dumbbell, configKey: "/workouts" },
@@ -99,6 +105,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       { label: "Donations", href: `/(app)/${slug}/donations`, icon: DollarSign, configKey: "/donations" },
       { label: "Expenses", href: `/(app)/${slug}/expenses`, icon: Receipt, configKey: "/expenses" },
       { label: "Forms", href: `/(app)/${slug}/forms`, icon: ClipboardList, configKey: "/forms" },
+      { label: "Settings", href: `/(app)/${slug}/settings`, icon: Settings, configKey: "/settings" },
+      { label: "Navigation", href: `/(app)/${slug}/settings/navigation`, icon: SlidersHorizontal, configKey: "/settings/navigation" },
     ];
 
     const roleFiltered = all.filter((item) => {
@@ -139,12 +147,75 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     return indexed.map((x) => x.item);
   }, [slug, permissions.canViewAlumni, hasParentsAccess, role, navConfig]);
 
-  // Pinned footer items
+  // Bucket items into groups + ungrouped (Home)
+  const { ungroupedItems, groupedItems } = useMemo(() => {
+    const ungrouped: NavItem[] = [];
+    const grouped: Record<NavGroupId, NavItem[]> = {
+      people: [],
+      community: [],
+      activity: [],
+      finance: [],
+      admin: [],
+    };
+    for (const item of items) {
+      const groupId = item.configKey ? NAV_GROUP_BY_CONFIG_KEY[item.configKey] : undefined;
+      if (groupId) {
+        grouped[groupId].push(item);
+      } else {
+        ungrouped.push(item);
+      }
+    }
+    return { ungroupedItems: ungrouped, groupedItems: grouped };
+  }, [items]);
+
+  // Open-group state — initialize closed, auto-expand the group containing the active route
+  const [openGroups, setOpenGroups] = React.useState<Set<NavGroupId>>(new Set());
+
+  React.useEffect(() => {
+    const normalizedPathname = pathname;
+    for (const group of ORG_NAV_GROUPS) {
+      const items = groupedItems[group.id];
+      const hasActive = items.some((item) => {
+        const normalizedHref = item.href.replace(/^\/\(app\)/, "");
+        return (
+          normalizedHref === normalizedPathname ||
+          (normalizedHref && normalizedPathname.startsWith(normalizedHref + "/"))
+        );
+      });
+      if (hasActive) {
+        setOpenGroups((prev) => {
+          if (prev.has(group.id)) return prev;
+          const next = new Set(prev);
+          next.add(group.id);
+          return next;
+        });
+      }
+    }
+  }, [pathname, groupedItems]);
+
+  const toggleGroup = React.useCallback((id: NavGroupId) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const groupContainsActive = (id: NavGroupId) => {
+    return groupedItems[id].some((item) => {
+      const normalizedHref = item.href.replace(/^\/\(app\)/, "");
+      return (
+        normalizedHref === pathname ||
+        (normalizedHref && pathname.startsWith(normalizedHref + "/"))
+      );
+    });
+  };
+
+  // Pinned footer items (cross-org actions only)
   const pinnedItems = useMemo<NavItem[]>(() => {
     if (!slug) return [];
     return [
-      { label: "Settings", href: `/(app)/${slug}/settings`, icon: Settings },
-      { label: "Navigation", href: `/(app)/${slug}/settings/navigation`, icon: SlidersHorizontal },
       { label: "Organizations", href: "/(app)", icon: Building2 },
     ];
   }, [slug]);
@@ -290,7 +361,22 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         <View style={styles.divider} />
 
         <View style={styles.section}>
-          {items.map((item) => renderNavItem(item))}
+          {ungroupedItems.map((item) => renderNavItem(item))}
+          {ORG_NAV_GROUPS.map((group) => {
+            const groupItems = groupedItems[group.id];
+            if (groupItems.length === 0) return null;
+            return (
+              <CollapsibleNavSection
+                key={group.id}
+                label={group.label}
+                isOpen={openGroups.has(group.id)}
+                onToggle={() => toggleGroup(group.id)}
+                containsActive={groupContainsActive(group.id)}
+              >
+                {groupItems.map((item) => renderNavItem(item))}
+              </CollapsibleNavSection>
+            );
+          })}
         </View>
 
       </DrawerContentScrollView>

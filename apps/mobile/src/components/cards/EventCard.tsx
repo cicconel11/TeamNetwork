@@ -15,6 +15,7 @@ import { RADIUS, SPACING, SHADOWS, ANIMATION, RSVP_COLORS, ENERGY } from "@/lib/
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatMonth, formatDay, formatTime, formatShortWeekdayDate } from "@/lib/date-format";
 import { LiveBadge } from "@/components/ui/Badge";
+import { EventCountdownBadge } from "@/components/calendar/event-countdown-badge";
 import { AvatarGroup } from "@/components/ui/Avatar";
 import { Button, type RSVPStatus } from "@/components/ui/Button";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
@@ -257,6 +258,11 @@ export const EventCard = React.memo(function EventCard({
               </Text>
             </View>
 
+            <EventCountdownBadge
+              startAt={event.start_date}
+              endAt={event.end_date ?? null}
+            />
+
             {event.location && (
               <View style={styles.detailRow}>
                 <MapPin size={13} color={neutral.muted} />
@@ -432,6 +438,10 @@ export const EventCardCompact = React.memo(function EventCardCompact({
           {formatTime(event.start_date)}
           {event.location && ` · ${event.location}`}
         </Text>
+        <EventCountdownBadge
+          startAt={event.start_date}
+          endAt={event.end_date ?? null}
+        />
       </View>
     </AnimatedPressable>
   );

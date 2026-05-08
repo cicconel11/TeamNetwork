@@ -44,7 +44,8 @@ export type PushType =
   | "mentorship"
   | "donation"
   | "membership"
-  | "notification";
+  | "notification"
+  | "reaction";
 
 export interface SendPushInput {
   supabase: SupabaseClient<Database>;
@@ -97,6 +98,7 @@ const CATEGORY_PUSH_COLUMN: Record<NotificationCategory, string> = {
   competition: "competition_push_enabled",
   mentorship: "mentorship_push_enabled",
   job: "job_push_enabled",
+  reaction: "reaction_push_enabled",
 };
 
 const defaultExpoClient: ExpoPushClient = new Expo({
@@ -261,6 +263,7 @@ function defaultPushEnabled(category?: NotificationCategory): boolean {
     case "announcement":
     case "chat":
     case "event_reminder":
+    case "reaction":
       return true;
     case "event":
     case "workout":

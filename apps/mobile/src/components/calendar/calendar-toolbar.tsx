@@ -63,14 +63,14 @@ export function CalendarToolbar({
     },
     dateLabel: {
       ...TYPOGRAPHY.titleMedium,
-      color: n.foreground,
+      color: "#f8fafc",
       flex: 1,
       textAlign: "center" as const,
     },
     todayButton: {
       paddingHorizontal: SPACING.md,
       paddingVertical: SPACING.xs,
-      backgroundColor: n.foreground,
+      backgroundColor: "#ffffff",
       borderRadius: RADIUS.full,
     },
     todayButtonText: {

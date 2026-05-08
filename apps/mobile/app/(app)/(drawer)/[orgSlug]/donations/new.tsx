@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   Text,
@@ -10,8 +9,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "expo-router";
-import { DrawerActions } from "@react-navigation/native";
+import { useNavigation, useRouter } from "expo-router";
+import { ChevronLeft } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { getWebAppUrl } from "@/lib/web-api";
@@ -26,7 +25,8 @@ import { track } from "@/lib/analytics";
 
 export default function NewDonationScreen() {
   const navigation = useNavigation();
-  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
+  const router = useRouter();
+  const { orgId, orgSlug } = useOrg();
   const captchaRef = useRef<TurnstileRef>(null);
   const { neutral, semantic } = useAppColorScheme();
   const styles = useThemedStyles((n, s) => ({
@@ -157,13 +157,13 @@ export default function NewDonationScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleDrawerToggle = useCallback(() => {
-    try {
-      if (navigation && typeof (navigation as any).dispatch === "function") {
-        (navigation as any).dispatch(DrawerActions.toggleDrawer());
-      }
-    } catch {}
-  }, [navigation]);
+  const handleBack = useCallback(() => {
+    if ((navigation as any).canGoBack && (navigation as any).canGoBack()) {
+      router.back();
+    } else {
+      router.replace(`/(app)/${orgSlug}/donations`);
+    }
+  }, [navigation, router, orgSlug]);
 
   const handleSubmit = () => {
     setError(null);
@@ -254,14 +254,8 @@ export default function NewDonationScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
-              ) : (
-                <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
-                </View>
-              )}
+            <Pressable onPress={handleBack} style={styles.orgLogoButton} hitSlop={8}>
+              <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
             </Pressable>
             <Text style={styles.headerTitle}>Record Donation</Text>
             <View style={styles.headerSpacer} />

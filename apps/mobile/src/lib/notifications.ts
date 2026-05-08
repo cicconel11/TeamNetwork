@@ -25,6 +25,8 @@ export type NotificationType =
   | "job"
   // @-mention from any commentable surface; mention_kind selects the route.
   | "mention"
+  // Emoji reaction on the user's chat message — taps open the chat group.
+  | "reaction"
   // Generic admin-composed blast with no specific resource. Routes to the
   // inbox so the recipient can read the body in context.
   | "notification";
@@ -92,10 +94,11 @@ async function hashDeviceIdentifier(value: string): Promise<string | null> {
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
   if (Platform.OS === "web") return false;
-  if (!Device.isDevice) {
-    console.log("Push notifications only work on physical devices");
-    return false;
-  }
+
+  // Simulators can't receive real APNs pushes, but the system permission
+  // prompt itself works — and is required to unlock Live Activities (iOS
+  // gates `areActivitiesEnabled` on notification authorization). Skip only
+  // the token path, not the prompt.
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -106,7 +109,6 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 
   if (finalStatus !== "granted") {
-    console.log("Push notification permission not granted");
     return false;
   }
 
@@ -281,6 +283,10 @@ export function getNotificationRoute(data: NotificationData): string | null {
       return `/(app)/${data.orgSlug}/members`;
     case "job":
       return `/(app)/${data.orgSlug}/jobs/${data.id}`;
+    case "reaction":
+      // `id` is the chat group id (the message lives inside it). Deep-link
+      // to the group; the group screen scrolls to recent messages.
+      return `/(app)/${data.orgSlug}/chat/${data.id}`;
     case "mention":
       switch (data.mention_kind) {
         case "chat_message":

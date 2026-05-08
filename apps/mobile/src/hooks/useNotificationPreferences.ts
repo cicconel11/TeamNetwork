@@ -22,6 +22,7 @@ export interface NotificationPreferences {
   mentorship_push_enabled: boolean;
   donation_push_enabled: boolean;
   mention_push_enabled: boolean;
+  reaction_push_enabled: boolean;
   // Phase B: digest + re-engagement controls. Quiet hours window is
   // local-time per the user's selected timezone.
   digest_push_enabled: boolean;
@@ -42,6 +43,7 @@ const DEFAULT_PUSH_CATEGORIES = {
   mentorship_push_enabled: false,
   donation_push_enabled: false,
   mention_push_enabled: true,
+  reaction_push_enabled: true,
   digest_push_enabled: true,
   reengagement_push_enabled: true,
   quiet_hours_start: "21:00",
@@ -76,6 +78,7 @@ const SELECT_COLUMNS = [
   "mentorship_push_enabled",
   "donation_push_enabled",
   "mention_push_enabled",
+  "reaction_push_enabled",
   "digest_push_enabled",
   "reengagement_push_enabled",
   "quiet_hours_start",
@@ -98,6 +101,7 @@ type PrefRow = {
   mentorship_push_enabled: boolean | null;
   donation_push_enabled: boolean | null;
   mention_push_enabled: boolean | null;
+  reaction_push_enabled: boolean | null;
   digest_push_enabled: boolean | null;
   reengagement_push_enabled: boolean | null;
   quiet_hours_start: string | null;
@@ -128,6 +132,8 @@ function rowToPrefs(row: PrefRow): NotificationPreferences {
       row.donation_push_enabled ?? DEFAULT_PUSH_CATEGORIES.donation_push_enabled,
     mention_push_enabled:
       row.mention_push_enabled ?? DEFAULT_PUSH_CATEGORIES.mention_push_enabled,
+    reaction_push_enabled:
+      row.reaction_push_enabled ?? DEFAULT_PUSH_CATEGORIES.reaction_push_enabled,
     digest_push_enabled:
       row.digest_push_enabled ?? DEFAULT_PUSH_CATEGORIES.digest_push_enabled,
     reengagement_push_enabled:
@@ -289,6 +295,7 @@ export function useNotificationPreferences(
         "mentorship_push_enabled",
         "donation_push_enabled",
         "mention_push_enabled",
+        "reaction_push_enabled",
         "digest_push_enabled",
         "reengagement_push_enabled",
       ] as const;

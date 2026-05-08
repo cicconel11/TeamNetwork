@@ -5,12 +5,24 @@ import * as sentry from "@/lib/analytics/sentry";
 
 const STALE_TIME_MS = 30_000;
 /**
- * Window after `end_date` during which we keep the LA running. Mirrors the LA
- * "stale" grace period — the lock-screen card should hang around for a few
- * minutes after the event nominally ends so attendees can still see the
- * checked-in tally as they're walking out.
+ * Default window after `end_date` during which we keep the LA running. Orgs
+ * may override via `organizations.event_settings.live_activity_grace_minutes`.
+ * The SQL pre-filter uses MAX_GRACE_MINUTES so per-org values up to 4h work
+ * without a re-query; final filtering happens in JS using the org's setting.
  */
-const POST_EVENT_GRACE_MINUTES = 30;
+const DEFAULT_POST_EVENT_GRACE_MINUTES = 30;
+const MAX_GRACE_MINUTES = 240;
+
+function resolveGraceMinutes(eventSettings: unknown): number {
+  if (eventSettings && typeof eventSettings === "object") {
+    const value = (eventSettings as { live_activity_grace_minutes?: unknown })
+      .live_activity_grace_minutes;
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      return Math.min(value, MAX_GRACE_MINUTES);
+    }
+  }
+  return DEFAULT_POST_EVENT_GRACE_MINUTES;
+}
 
 export interface ActiveEventForLiveActivity {
   eventId: string;
@@ -70,7 +82,7 @@ export function useActiveEventsForLiveActivity(
 
       const now = new Date();
       const lower = new Date(
-        now.getTime() - POST_EVENT_GRACE_MINUTES * 60 * 1000,
+        now.getTime() - MAX_GRACE_MINUTES * 60 * 1000,
       ).toISOString();
       const upper = now.toISOString();
 
@@ -114,7 +126,10 @@ export function useActiveEventsForLiveActivity(
           title: string;
           start_date: string;
           end_date: string | null;
-          organizations: { slug: string; name: string } | null;
+          organizations: {
+            slug: string;
+            name: string;
+          } | null;
         } | null;
       };
 
@@ -149,8 +164,17 @@ export function useActiveEventsForLiveActivity(
         }
       }
 
+      const nowMs = now.getTime();
       const next: ActiveEventForLiveActivity[] = rows
         .filter((r) => r.events !== null && r.events.organizations !== null)
+        .filter((r) => {
+          const event = r.events as NonNullable<typeof r.events>;
+          if (!event.end_date) return true;
+          const endMs = Date.parse(event.end_date);
+          if (!Number.isFinite(endMs)) return true;
+          const grace = resolveGraceMinutes(undefined);
+          return endMs + grace * 60 * 1000 >= nowMs;
+        })
         .map((r) => {
           const event = r.events as NonNullable<typeof r.events>;
           const org = event.organizations as NonNullable<

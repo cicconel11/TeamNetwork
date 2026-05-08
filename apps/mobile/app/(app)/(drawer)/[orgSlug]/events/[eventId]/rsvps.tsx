@@ -7,6 +7,7 @@ import {
   Pressable,
   RefreshControl,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, User, Check, HelpCircle, X } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
@@ -94,7 +95,7 @@ export default function RSVPsScreen() {
       // Fetch RSVPs
       const { data: rsvpData, error: rsvpError } = await supabase
         .from("event_rsvps")
-        .select("id, user_id, status, created_at, users(name, email)")
+        .select("id, user_id, status, created_at, users!user_id(name, email)")
         .eq("event_id", eventId)
         .order("created_at", { ascending: false });
 
@@ -199,7 +200,7 @@ export default function RSVPsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
@@ -258,7 +259,7 @@ export default function RSVPsScreen() {
         windowSize={5}
         removeClippedSubviews={true}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

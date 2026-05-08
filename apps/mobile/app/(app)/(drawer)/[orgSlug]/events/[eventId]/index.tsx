@@ -23,6 +23,7 @@ import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
+import { EventCountdownBadge } from "@/components/calendar/event-countdown-badge";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import * as sentry from "@/lib/analytics/sentry";
 import type { RsvpStatus } from "@teammeet/core";
@@ -272,7 +273,7 @@ export default function EventDetailScreen() {
     if (!eventId) return;
     const { data: rsvpData, error: rsvpError } = await supabase
       .from("event_rsvps")
-      .select("id, user_id, status, users(name, email)")
+      .select("id, user_id, status, users!user_id(name, email)")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false });
 
@@ -616,6 +617,8 @@ export default function EventDetailScreen() {
               {event.end_date && ` - ${formatTime(event.end_date)}`}
             </Text>
           </View>
+
+          <EventCountdownBadge startAt={event.start_date} endAt={event.end_date ?? null} />
 
           {event.location && (
             <View style={styles.detailRow}>
