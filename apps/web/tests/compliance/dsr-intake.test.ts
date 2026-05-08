@@ -28,7 +28,7 @@ const privacyPage = readFileSync(
   "utf8",
 );
 const ferpaDoc = readFileSync(
-  join(process.cwd(), "docs/FERPA_COMPLIANCE.md"),
+  join(process.cwd(), "../../docs/FERPA_COMPLIANCE.md"),
   "utf8",
 );
 

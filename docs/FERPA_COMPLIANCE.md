@@ -159,7 +159,9 @@ See `docs/Data_Inventory.md` for documented security controls including:
 - Routing: confirm school data owner and CC them on any non-trivial action
 - Resolution notes and record of action taken
 
-Storage: `data_access_log` for inspect/export events; `user_deletion_requests` for deletion; `compliance_audit_log` for age-gate-adjacent events. A dedicated `dsr_requests` table would tighten reporting — deferred.
+Storage: `dsr_requests` is now the source of truth for intake, routing evidence, acknowledgement method, resolution method, and SLA dates. Existing execution/audit tables remain linked where relevant: `data_access_log` for inspect/export evidence, `user_deletion_requests` for deletion execution, and `compliance_audit_log` for age-gate-adjacent events.
+
+Lifecycle test coverage lives at `tests/compliance/dsr-intake.test.ts` (DSR intake schema, SLA helper, self-service export/delete logging, privacy-page FERPA routing copy).
 
 ### STEP 8 — Audit & Maintenance
 
