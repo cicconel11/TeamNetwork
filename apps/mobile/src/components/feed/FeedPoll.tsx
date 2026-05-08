@@ -5,6 +5,7 @@ import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { showToast } from "@/components/ui/Toast";
 import type { PollMetadata } from "@/types/feed";
 
 interface FeedPollProps {
@@ -31,11 +32,18 @@ function FeedPollInner({
   const showResults = hasVoted;
 
   const handlePress = useCallback(
-    (i: number, e?: { stopPropagation?: () => void }) => {
-      e?.stopPropagation?.();
-      if (disabled) return;
-      if (hasVoted && !meta.allow_change) return;
-      if (userVote === i) return;
+    (i: number) => {
+      if (disabled) {
+        showToast("Can't vote — offline or busy", "info");
+        return;
+      }
+      if (hasVoted && !meta.allow_change) {
+        showToast("This poll doesn't allow changing votes", "info");
+        return;
+      }
+      if (userVote === i) {
+        return;
+      }
       onVote(postId, i);
     },
     [disabled, hasVoted, meta.allow_change, userVote, onVote, postId],
@@ -147,7 +155,7 @@ function FeedPollInner({
             return (
               <Pressable
                 key={i}
-                onPress={(e) => handlePress(i, e as never)}
+                onPress={() => handlePress(i)}
                 disabled={disabled}
                 accessibilityRole="button"
                 accessibilityLabel={`Vote for ${opt.label}`}
@@ -167,7 +175,7 @@ function FeedPollInner({
           return (
             <Pressable
               key={i}
-              onPress={(e) => handlePress(i, e as never)}
+              onPress={() => handlePress(i)}
               disabled={!tappable}
               accessibilityRole={tappable ? "button" : undefined}
               accessibilityLabel={`${opt.label}, ${pct}%`}
