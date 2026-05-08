@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 37 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 37);
+test("AI_TOOLS exports 38 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 38);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -34,6 +34,7 @@ test("TOOL_NAMES contains all tool names", () => {
     "prepare_announcement",
     "prepare_job_posting",
     "prepare_chat_message",
+    "prepare_member_role_change",
     "list_chat_groups",
     "prepare_group_message",
     "prepare_discussion_reply",
@@ -129,6 +130,19 @@ test("prepare_chat_message supports member-id, query, and body fields", () => {
   assert.ok(props.recipient_member_id);
   assert.ok(props.person_query);
   assert.ok(props.body);
+});
+
+test("prepare_member_role_change supports target, role, status, and reason fields", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "prepare_member_role_change")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.target_member_id);
+  assert.ok(props.target_user_id);
+  assert.ok(props.person_query);
+  assert.ok(props.role);
+  assert.ok(props.status);
+  assert.ok(props.reason);
 });
 
 test("get_org_stats has no required parameters", () => {

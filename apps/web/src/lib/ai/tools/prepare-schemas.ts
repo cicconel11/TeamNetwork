@@ -55,6 +55,21 @@ export const prepareChatMessageSchema = z
   })
   .strict();
 
+export const prepareMemberRoleChangeSchema = z
+  .object({
+    target_member_id: z.string().uuid().optional(),
+    target_user_id: z.string().uuid().optional(),
+    person_query: z.string().trim().min(1).optional(),
+    role: z.enum(["admin", "active_member", "alumni", "parent"]).optional(),
+    status: z.enum(["active", "revoked", "pending"]).optional(),
+    reason: z.string().trim().min(1).optional(),
+  })
+  .refine((value) => value.role !== undefined || value.status !== undefined, {
+    message: "At least one of role or status is required",
+    path: ["role"],
+  })
+  .strict();
+
 export const prepareGroupMessageSchema = z
   .object({
     chat_group_id: z.string().uuid().optional(),

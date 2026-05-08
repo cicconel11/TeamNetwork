@@ -4,6 +4,7 @@ import type { AssistantPreparedDiscussionReply } from "@/lib/schemas/discussion"
 import type { AssistantPreparedEvent } from "@/lib/schemas/events-ai";
 import type { AssistantPreparedAnnouncement, EditAnnouncementForm } from "@/lib/schemas/content";
 import type { AssistantPreparedChatMessage, AssistantPreparedGroupMessage } from "@/lib/schemas/chat-ai";
+import type { MemberRole, MemberStatus } from "@/lib/members/role-change";
 
 export const AI_PENDING_ACTION_EXPIRY_MS = 15 * 60 * 1000;
 
@@ -17,6 +18,7 @@ export type PendingActionType =
   | "create_discussion_reply"
   | "create_discussion_thread"
   | "create_event"
+  | "member_role_change"
   | "create_enterprise_invite"
   | "revoke_enterprise_invite";
 export type PendingActionStatus =
@@ -69,6 +71,21 @@ export interface CreateEventPendingPayload extends AssistantPreparedEvent {
   orgSlug?: string | null;
 }
 
+export interface MemberRoleChangePendingPayload {
+  orgSlug?: string | null;
+  target_member_id: string;
+  target_user_id: string;
+  target_display_name: string;
+  target_email?: string | null;
+  current_role: MemberRole;
+  new_role: MemberRole;
+  current_status: MemberStatus;
+  new_status: MemberStatus;
+  role_changed: boolean;
+  status_changed: boolean;
+  reason?: string | null;
+}
+
 export interface CreateEnterpriseInvitePendingPayload {
   enterpriseId: string;
   enterpriseSlug: string;
@@ -98,6 +115,7 @@ export interface PendingActionPayloadByType {
   create_discussion_reply: CreateDiscussionReplyPendingPayload;
   create_discussion_thread: CreateDiscussionThreadPendingPayload;
   create_event: CreateEventPendingPayload;
+  member_role_change: MemberRoleChangePendingPayload;
   create_enterprise_invite: CreateEnterpriseInvitePendingPayload;
   revoke_enterprise_invite: RevokeEnterpriseInvitePendingPayload;
 }
@@ -525,6 +543,11 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       return {
         title: "Review event",
         description: "Confirm the drafted event before it is added to the calendar.",
+      };
+    case "member_role_change":
+      return {
+        title: "Review member change",
+        description: "Confirm the member role or status change before it is applied.",
       };
     case "create_enterprise_invite":
       return {

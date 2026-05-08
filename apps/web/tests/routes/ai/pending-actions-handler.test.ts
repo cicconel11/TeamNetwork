@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createSupabaseStub } from "../../utils/supabaseStub.ts";
 
 const ORG_ID = "org-uuid-1";
 const THREAD_ID = "11111111-1111-4111-8111-111111111111";
@@ -206,6 +207,109 @@ test("confirm executes send_chat_message and appends assistant message", async (
   assert.equal(insertedMessages[0].org_id, ORG_ID);
   assert.match(String(insertedMessages[0].content), /Sent chat message to/);
   assert.match(String(insertedMessages[0].content), /upenn-sprint-football\/messages\/chat\/chat-123/);
+});
+
+test("confirm executes member_role_change and writes audit-linked assistant message", async () => {
+  const supabase = createSupabaseStub();
+  const updatedStatuses: any[] = [];
+  supabase.seed("organization_subscriptions", [
+    {
+      organization_id: ORG_ID,
+      status: "active",
+      alumni_bucket: "0-250",
+      parents_bucket: "0-250",
+    },
+  ]);
+  supabase.seed("user_organization_roles", [
+    { organization_id: ORG_ID, user_id: ADMIN_USER.id, role: "admin", status: "active" },
+    { organization_id: ORG_ID, user_id: "target-user", role: "active_member", status: "active" },
+  ]);
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: supabase,
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "member_role_change",
+        payload: {
+          orgSlug: "upenn-sprint-football",
+          target_member_id: "member-1",
+          target_user_id: "target-user",
+          target_display_name: "Alex Smith",
+          target_email: "alex@example.com",
+          current_role: "active_member",
+          new_role: "alumni",
+          current_status: "active",
+          new_status: "active",
+          role_changed: true,
+          status_changed: false,
+          reason: "they stepped down from board",
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    clearDraftSession: async () => {},
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.equal(updatedStatuses[1].resultEntityType, "member");
+  assert.equal(updatedStatuses[1].resultEntityId, "target-user");
+  assert.equal(
+    supabase.getRows("user_organization_roles").find((row) => row.user_id === "target-user")?.role,
+    "alumni",
+  );
+  assert.deepEqual(
+    supabase.getRows("org_member_role_audit").map((row) => ({
+      source: row.source,
+      pending_action_id: row.pending_action_id,
+      actor_user_id: row.actor_user_id,
+      new_role: row.new_role,
+    })),
+    [
+      {
+        source: "ai_pending_action",
+        pending_action_id: ACTION_ID,
+        actor_user_id: ADMIN_USER.id,
+        new_role: "alumni",
+      },
+    ],
+  );
+  assert.match(
+    String(supabase.getRows("ai_messages")[0]?.content),
+    /Changed role for Alex Smith: active_member -> alumni\./,
+  );
 });
 
 test("confirm executes create_discussion_thread and appends assistant message", async () => {

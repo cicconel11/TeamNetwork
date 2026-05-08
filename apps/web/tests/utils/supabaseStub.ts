@@ -8,6 +8,7 @@ type TableName =
   | "user_organization_roles"
   | "organization_subscriptions"
   | "organization_donations"
+  | "org_member_role_audit"
   | "calendar_feeds"
   | "calendar_events"
   | "schedule_allowed_domains"
@@ -45,7 +46,8 @@ type TableName =
   | "chat_form_responses"
   | "enterprise_subscriptions"
   | "enterprise_adoption_requests"
-  | "user_enterprise_roles";
+  | "user_enterprise_roles"
+  | "ai_messages";
 
 type Row = Record<string, unknown>;
 
@@ -69,6 +71,7 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   user_organization_roles: [],
   organization_subscriptions: ["organization_id"],
   organization_donations: ["stripe_payment_intent_id", "stripe_checkout_session_id"],
+  org_member_role_audit: [],
   calendar_feeds: [],
   calendar_events: [],
   schedule_allowed_domains: ["hostname"],
@@ -107,6 +110,7 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   enterprise_subscriptions: ["enterprise_id"],
   enterprise_adoption_requests: [],
   user_enterprise_roles: [["user_id", "enterprise_id"]],
+  ai_messages: [],
 };
 
 function nowIso() {
@@ -122,6 +126,7 @@ export function createSupabaseStub() {
     user_organization_roles: [],
     organization_subscriptions: [],
     organization_donations: [],
+    org_member_role_audit: [],
     calendar_feeds: [],
     calendar_events: [],
     schedule_allowed_domains: [],
@@ -160,6 +165,7 @@ export function createSupabaseStub() {
     enterprise_subscriptions: [],
     enterprise_adoption_requests: [],
     user_enterprise_roles: [],
+    ai_messages: [],
   };
 
   // RPC handler registry

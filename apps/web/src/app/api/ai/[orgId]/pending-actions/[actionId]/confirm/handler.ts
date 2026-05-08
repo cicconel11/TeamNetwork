@@ -10,6 +10,7 @@ import {
   isPendingActionExpired,
   type SendChatMessagePendingPayload,
   type SendGroupChatMessagePendingPayload,
+  type MemberRoleChangePendingPayload,
   type UpdateAnnouncementPendingPayload,
   updatePendingActionStatus,
   type CreateDiscussionThreadPendingPayload,
@@ -49,6 +50,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { aiLog } from "@/lib/ai/logger";
 import { syncEventToUsers } from "@/lib/google/calendar-sync";
 import { sendNotificationBlast } from "@/lib/notifications";
+import { executeMemberRoleChange, type MemberRoleChangeClient } from "@/lib/members/role-change";
 
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
@@ -925,6 +927,85 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           return NextResponse.json({ ok: true, event: result.event, actionId: action.id });
+        }
+        case "member_role_change": {
+          const payload = action.payload as MemberRoleChangePendingPayload;
+          const result = await executeMemberRoleChange(ctx.serviceSupabase as unknown as MemberRoleChangeClient, {
+            organizationId: ctx.orgId,
+            actorUserId: ctx.userId,
+            targetUserId: payload.target_user_id,
+            role: payload.new_role,
+            status: payload.new_status,
+            reason: payload.reason,
+            source: "ai_pending_action",
+            pendingActionId: action.id,
+          });
+
+          if (result.state !== "executed") {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            const message =
+              result.state === "error"
+                ? result.message
+                : result.reason === "no_change"
+                  ? "No member role or status change is needed."
+                  : "Member not found.";
+            return NextResponse.json({ error: message }, { status: result.state === "invalid" ? 400 : 409 });
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "member",
+            resultEntityId: payload.target_user_id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const roleLine = result.roleChanged
+            ? `${result.currentRole} -> ${result.nextRole}`
+            : null;
+          const statusLine = result.statusChanged
+            ? `status ${result.currentStatus} -> ${result.nextStatus}`
+            : null;
+          const changeText = [roleLine, statusLine].filter(Boolean).join("; ");
+          const content = `Changed role for ${payload.target_display_name}: ${changeText}.`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            user_id: ctx.userId,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({
+            ok: true,
+            actionId: action.id,
+            memberUserId: payload.target_user_id,
+          });
         }
         case "create_enterprise_invite": {
           const payload = action.payload as CreateEnterpriseInvitePendingPayload;

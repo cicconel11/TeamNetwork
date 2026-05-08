@@ -24,6 +24,8 @@ interface PendingActionToolPayload {
   unavailable_reason?: unknown;
   candidate_groups?: unknown;
   requested_group?: unknown;
+  candidate_targets?: unknown;
+  requested_target?: unknown;
   candidate_thread_titles?: unknown;
   requested_thread_title?: unknown;
 }
@@ -303,6 +305,77 @@ export function formatPrepareChatMessageResponse(data: unknown): string | null {
 
   if (payload.state === "needs_confirmation") {
     return "I drafted the chat message. Review the details below and confirm when you're ready to send it.";
+  }
+
+  return null;
+}
+
+export function formatPrepareMemberRoleChangeResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const clarificationKind = getNonEmptyString(payload.clarification_kind);
+    const requestedTarget = getNonEmptyString(payload.requested_target);
+    const candidateTargets = Array.isArray(payload.candidate_targets)
+      ? payload.candidate_targets
+          .map((value) => {
+            if (!value || typeof value !== "object") return null;
+            const target = value as { name?: unknown; email?: unknown };
+            const name = getNonEmptyString(target.name);
+            const email = getNonEmptyString(target.email);
+            if (!name) return null;
+            return email ? `${name} <${email}>` : name;
+          })
+          .filter((value): value is string => Boolean(value))
+      : [];
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+
+    if (clarificationKind === "target_required") {
+      return "I can prepare that member change, but I still need to know which member.";
+    }
+
+    if (clarificationKind === "target_ambiguous") {
+      const options =
+        candidateTargets.length > 0 ? candidateTargets.join("; ") : "the matching members";
+      return `I found a few members that match${
+        requestedTarget ? ` "${requestedTarget}"` : ""
+      }. Tell me which one you mean: ${options}.`;
+    }
+
+    if (missingFields.length === 0) {
+      return "I still need the member change details before I can prepare it.";
+    }
+
+    const displayFields = missingFields.map((field) =>
+      field === "person_query" ? "member" : field
+    );
+    return `I can prepare that member change, but I still need: ${displayFields.join(", ")}.`;
+  }
+
+  if (payload.state === "invalid") {
+    const reason = getNonEmptyString((payload as { reason?: unknown }).reason);
+    if (reason === "target_not_found") {
+      const requestedTarget = getNonEmptyString(payload.requested_target);
+      return requestedTarget
+        ? `I couldn't find a linked member matching "${requestedTarget}".`
+        : "I couldn't find that linked member.";
+    }
+    if (reason === "target_unlinked") {
+      return "That member does not have a linked user account, so I can't change their organization role.";
+    }
+    if (reason === "no_change") {
+      return "That member already has the requested role and status.";
+    }
+    return "I can't prepare that member change.";
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I prepared the member change. Review the details below and confirm when you're ready to apply it.";
   }
 
   return null;

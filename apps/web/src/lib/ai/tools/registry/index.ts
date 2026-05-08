@@ -31,6 +31,7 @@ import { prepareDiscussionReplyModule } from "./prepare-discussion-reply";
 import { prepareDiscussionThreadModule } from "./prepare-discussion-thread";
 import { prepareEventModule } from "./prepare-event";
 import { prepareEventsBatchModule } from "./prepare-events-batch";
+import { prepareMemberRoleChangeModule } from "./prepare-member-role-change";
 import { prepareEnterpriseInviteModule } from "./prepare-enterprise-invite";
 import { revokeEnterpriseInviteModule } from "./revoke-enterprise-invite";
 import { scrapeScheduleWebsiteModule } from "./scrape-schedule-website";
@@ -71,6 +72,7 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   prepareDiscussionThreadModule,
   prepareEventModule,
   prepareEventsBatchModule,
+  prepareMemberRoleChangeModule,
   prepareEnterpriseInviteModule,
   revokeEnterpriseInviteModule,
   scrapeScheduleWebsiteModule,
