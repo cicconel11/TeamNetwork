@@ -8,7 +8,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+// SafeAreaView is unnecessary here — iOS formSheet presentation handles
+// bottom inset via its own sheet chrome. Wrapping the ScrollView in
+// SafeAreaView from react-native-safe-area-context interferes with the
+// scroll measurement on iOS (broken scroll). Use a plain View.
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useOrg } from "@/contexts/OrgContext";
@@ -308,7 +311,7 @@ export default function NewJobScreen() {
         </Pressable>
       </View>
 
-      <SafeAreaView edges={["bottom"]} style={styles.contentSheet}>
+      <View style={styles.contentSheet}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -499,7 +502,7 @@ export default function NewJobScreen() {
             )}
           </Pressable>
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
