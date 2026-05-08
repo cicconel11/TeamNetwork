@@ -26,6 +26,7 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { PostMediaGrid } from "@/components/feed/PostMediaGrid";
 import { LikeButton } from "@/components/feed/LikeButton";
+import { FeedPoll } from "@/components/feed/FeedPoll";
 import { CommentItem } from "@/components/feed/CommentItem";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { showToast } from "@/components/ui/Toast";
@@ -49,7 +50,18 @@ export default function PostDetailScreen() {
   const { isOffline } = useNetwork();
   const userId = user?.id ?? null;
 
-  const { post, loading: postLoading } = usePost(postId);
+  const { post, loading: postLoading, votePoll } = usePost(postId);
+
+  const handlePollVote = useCallback(
+    (_postId: string, optionIndex: number) => {
+      if (isOffline) {
+        showToast("You're offline. Try again when connected.", "info");
+        return;
+      }
+      void votePoll(optionIndex);
+    },
+    [isOffline, votePoll],
+  );
   const { comments, createComment, deleteComment } = useComments(postId, orgId);
 
   const [liked, setLiked] = useState(false);
@@ -479,7 +491,20 @@ export default function PostDetailScreen() {
               </View>
 
               {/* Full body */}
-              <Text style={styles.body}>{post.body}</Text>
+              {post.body ? <Text style={styles.body}>{post.body}</Text> : null}
+
+              {/* Poll */}
+              {post.post_type === "poll" && post.poll_meta ? (
+                <FeedPoll
+                  postId={post.id}
+                  meta={post.poll_meta}
+                  userVote={post.user_vote ?? null}
+                  voteCounts={post.vote_counts ?? []}
+                  totalVotes={post.total_votes ?? 0}
+                  onVote={handlePollVote}
+                  disabled={isOffline}
+                />
+              ) : null}
 
               {/* Media */}
               {post.media.length > 0 && <PostMediaGrid media={post.media} />}

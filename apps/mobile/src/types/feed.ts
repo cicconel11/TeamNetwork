@@ -76,6 +76,7 @@ export interface UsePostReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  votePoll: (optionIndex: number) => Promise<void>;
 }
 
 /** Return type for useComments hook */
