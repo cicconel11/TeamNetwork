@@ -14,7 +14,7 @@ type StorageUploadResult = {
 type StorageBucket = {
   upload: (
     path: string,
-    body: BodyInit,
+    body: BodyInit | ArrayBuffer | Uint8Array,
     options: { contentType: string; upsert?: boolean }
   ) => Promise<StorageUploadResult>;
 };
@@ -81,16 +81,33 @@ export async function readBlobFromUri(
 }
 
 /**
- * Reads a `file://` URI's bytes as an ArrayBuffer. Use this instead of
+ * Reads a `file://` URI's bytes as a Uint8Array. Use this instead of
  * `readBlobFromUri` when uploading to Supabase Storage — RN's
  * `fetch(uri).then(r => r.blob())` returns a 0-byte Blob on iOS, which
- * silently writes empty objects to storage. expo-file-system v19's
- * `new File(uri).arrayBuffer()` reads the actual file contents.
+ * silently writes empty objects to storage.
+ *
+ * Implementation: read the file as base64 via expo-file-system's legacy
+ * (battle-tested) API, then decode base64 to bytes via the global atob
+ * (RN ≥0.72 polyfills it). Returns Uint8Array because that's what
+ * Supabase Storage's `upload()` accepts as a binary BodyInit on RN.
  */
-export async function readArrayBufferFromUri(uri: string): Promise<ArrayBuffer> {
-  const { File } = await import("expo-file-system");
-  const file = new File(uri);
-  return file.arrayBuffer();
+export async function readArrayBufferFromUri(uri: string): Promise<Uint8Array> {
+  // Lazy require so unit tests (node env, no Expo) aren't forced to mock it.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { readAsStringAsync } = require("expo-file-system/legacy") as {
+    readAsStringAsync: (
+      uri: string,
+      options: { encoding: "base64" },
+    ) => Promise<string>;
+  };
+  const base64 = await readAsStringAsync(uri, { encoding: "base64" });
+  // atob() is provided by RN's global polyfill (>=0.72).
+  const binary = globalThis.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 export async function uploadToSignedUrl(
@@ -114,7 +131,7 @@ export async function uploadToStorage(params: {
   storage: StorageClient;
   bucket: string;
   path: string;
-  body: BodyInit;
+  body: BodyInit | ArrayBuffer | Uint8Array;
   contentType: string;
   upsert?: boolean;
 }): Promise<void> {
