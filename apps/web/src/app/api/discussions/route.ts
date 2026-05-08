@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createThreadSchema } from "@/lib/schemas/discussion";
 import { validateJson, validationErrorResponse, ValidationError, baseSchemas } from "@/lib/security/validation";
@@ -115,10 +116,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
