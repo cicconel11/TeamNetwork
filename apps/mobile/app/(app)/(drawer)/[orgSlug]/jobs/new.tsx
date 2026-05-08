@@ -330,6 +330,10 @@ export default function NewJobScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          // Without this, iOS auto-applies a top inset that scrolls the
+          // first field up behind the sheet header.
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
         >
 
           {error != null && (
