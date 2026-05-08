@@ -2,13 +2,15 @@ import { useState, useRef, useCallback } from "react";
 import { fetchWithAuth } from "@/lib/web-api";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
+import { supabase } from "@/lib/supabase";
 import {
   MAX_UPLOAD_FILE_SIZE_BYTES,
   readArrayBufferFromUri,
-  uploadToSignedUrl,
   validateFileSize,
   validateMimeType,
 } from "@/lib/uploads";
+
+const STORAGE_BUCKET = "org-media";
 
 export type UploadStatus = "idle" | "uploading" | "done" | "error";
 
@@ -150,14 +152,23 @@ export function useMediaUpload(orgId: string | null) {
             throw new Error(data.error || "Failed to prepare upload");
           }
 
-          const { mediaId, signedUrl } = await intentRes.json();
+          const { mediaId, path, token } = await intentRes.json();
 
-          // Step 2: Upload file to storage via signed URL.
-          // NOTE: must use readArrayBufferFromUri (not readBlobFromUri) — RN's
-          // fetch(file://).blob() returns a 0-byte Blob on iOS, silently
-          // uploading empty files that then fail magic-bytes validation.
+          // Step 2: Upload file bytes to storage via the signed upload URL.
+          // Use supabase-js's uploadToSignedUrl (not raw PUT) so the required
+          // x-upsert header and content-type are set correctly. Read bytes
+          // via readArrayBufferFromUri because RN's fetch(file://).blob()
+          // returns a 0-byte Blob on iOS.
           const bytes = await readArrayBufferFromUri(image.localUri);
-          await uploadToSignedUrl(signedUrl, bytes, image.mimeType);
+          const { error: uploadError } = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .uploadToSignedUrl(path, token, bytes, {
+              contentType: image.mimeType,
+              upsert: false,
+            });
+          if (uploadError) {
+            throw new Error(uploadError.message || "Failed to upload file to storage");
+          }
 
           // Step 3: Finalize upload (magic bytes validation)
           const finalizeRes = await fetchWithAuth("/api/media/finalize", {
