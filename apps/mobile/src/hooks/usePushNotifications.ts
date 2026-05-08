@@ -12,6 +12,7 @@ import {
   type NotificationData,
 } from "@/lib/notifications";
 import { captureException } from "@/lib/analytics";
+import { useBiometricLock } from "@/contexts/BiometricLockContext";
 
 interface UsePushNotificationsOptions {
   userId: string | null;
@@ -33,31 +34,49 @@ export function usePushNotifications({
   const lastTokenRef = useRef<string | null>(null);
   const hasHandledColdLaunchRef = useRef(false);
   const lastHandledNotificationIdRef = useRef<string | null>(null);
+  const pendingRouteRef = useRef<string | null>(null);
 
-  // Handle notification response (user tapped on notification). De-duped by
-  // request identifier so the cold-launch path and the live response listener
-  // can't both fire for the same tap, and so effect re-runs that surface the
-  // persisted cold-launch response don't navigate twice.
-  const handleNotificationResponse = useCallback(
-    (response: Notifications.NotificationResponse) => {
-      try {
-        const id = response.notification.request.identifier;
-        if (id && lastHandledNotificationIdRef.current === id) return;
-        lastHandledNotificationIdRef.current = id ?? null;
+  const { isLocked } = useBiometricLock();
+  const isLockedRef = useRef(isLocked);
+  isLockedRef.current = isLocked;
 
-        const data = response.notification.request.content.data as unknown as NotificationData;
-        const route = getNotificationRoute(data);
+  // Stable handler: subscribed once, reads `isLocked` via ref so router
+  // identity changes don't tear down + re-subscribe the listener (which on
+  // rapid auth/nav re-renders caused duplicate response handling).
+  const handlerRef = useRef<(response: Notifications.NotificationResponse) => void>(() => {});
+  handlerRef.current = (response: Notifications.NotificationResponse) => {
+    try {
+      const id = response.notification.request.identifier;
+      if (id && lastHandledNotificationIdRef.current === id) return;
+      lastHandledNotificationIdRef.current = id ?? null;
 
-        if (route) {
-          router.push(route as any);
-        }
-      } catch (error) {
-        console.error("Error handling notification response:", error);
-        captureException(error as Error, { context: "handleNotificationResponse" });
+      const data = response.notification.request.content.data as unknown as NotificationData;
+      const route = getNotificationRoute(data);
+      if (!route) return;
+
+      // Defer routing while the biometric lock screen is up. Navigating
+      // behind the LockScreen overlay caused the underlying screen to mount
+      // mid-Face-ID prompt, producing the visible flicker. We replay the
+      // route once the lock clears.
+      if (isLockedRef.current) {
+        pendingRouteRef.current = route;
+        return;
       }
-    },
-    [router]
-  );
+      router.push(route as any);
+    } catch (error) {
+      console.error("Error handling notification response:", error);
+      captureException(error as Error, { context: "handleNotificationResponse" });
+    }
+  };
+
+  // Flush any pending notification route once the lock clears.
+  useEffect(() => {
+    if (isLocked) return;
+    const pending = pendingRouteRef.current;
+    if (!pending) return;
+    pendingRouteRef.current = null;
+    router.push(pending as any);
+  }, [isLocked, router]);
 
   // Register for push notifications
   const register = useCallback(async () => {
@@ -136,9 +155,12 @@ export function usePushNotifications({
       });
     });
 
-    // Listen for user interaction with notifications
+    // Listen for user interaction with notifications. Subscribe with a stable
+    // wrapper that reads the latest handler via ref — otherwise router
+    // identity changes would re-subscribe per render and cause duplicate
+    // response handling on rapid nav.
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
-      handleNotificationResponse
+      (response) => handlerRef.current(response)
     );
 
     // Handle notification tap when app launches from a quit state. Expo
@@ -148,7 +170,7 @@ export function usePushNotifications({
       hasHandledColdLaunchRef.current = true;
       Notifications.getLastNotificationResponseAsync().then((response) => {
         if (response) {
-          handleNotificationResponse(response);
+          handlerRef.current(response);
         }
       });
     }
@@ -169,7 +191,7 @@ export function usePushNotifications({
       pushTokenListener.current?.remove();
       appStateSubscription.remove();
     };
-  }, [userId, enabled, register, handleNotificationResponse]);
+  }, [userId, enabled, register]);
 
   // Handle logout - unregister token
   useEffect(() => {
