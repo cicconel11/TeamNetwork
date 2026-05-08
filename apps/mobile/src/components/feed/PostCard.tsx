@@ -8,6 +8,7 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import { formatRelativeTime } from "@/lib/date-format";
 import { LikeButton } from "./LikeButton";
 import { PostMediaGrid } from "./PostMediaGrid";
+import { FeedPoll } from "./FeedPoll";
 import type { FeedPost } from "@/types/feed";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
@@ -16,10 +17,19 @@ interface PostCardProps {
   post: FeedPost;
   onPress: (postId: string) => void;
   onLikeToggle: (postId: string) => void;
+  onPollVote?: (postId: string, optionIndex: number) => void;
   likeDisabled?: boolean;
+  pollDisabled?: boolean;
 }
 
-function PostCardInner({ post, onPress, onLikeToggle, likeDisabled = false }: PostCardProps) {
+function PostCardInner({
+  post,
+  onPress,
+  onLikeToggle,
+  onPollVote,
+  likeDisabled = false,
+  pollDisabled = false,
+}: PostCardProps) {
   const { neutral } = useAppColorScheme();
   const styles = useThemedStyles((n) => ({
     card: {
@@ -141,9 +151,24 @@ function PostCardInner({ post, onPress, onLikeToggle, likeDisabled = false }: Po
       </View>
 
       {/* Body */}
-      <Text style={styles.body} numberOfLines={3}>
-        {post.body}
-      </Text>
+      {post.body ? (
+        <Text style={styles.body} numberOfLines={3}>
+          {post.body}
+        </Text>
+      ) : null}
+
+      {/* Poll */}
+      {post.post_type === "poll" && post.poll_meta && onPollVote ? (
+        <FeedPoll
+          postId={post.id}
+          meta={post.poll_meta}
+          userVote={post.user_vote ?? null}
+          voteCounts={post.vote_counts ?? []}
+          totalVotes={post.total_votes ?? 0}
+          onVote={onPollVote}
+          disabled={pollDisabled}
+        />
+      ) : null}
 
       {/* Media */}
       {post.media.length > 0 && (
@@ -174,6 +199,10 @@ export const PostCard = React.memo(PostCardInner, (prev, next) => {
     prev.post.like_count === next.post.like_count &&
     prev.post.liked_by_user === next.post.liked_by_user &&
     prev.post.comment_count === next.post.comment_count &&
-    prev.likeDisabled === next.likeDisabled
+    prev.post.user_vote === next.post.user_vote &&
+    prev.post.total_votes === next.post.total_votes &&
+    prev.post.vote_counts === next.post.vote_counts &&
+    prev.likeDisabled === next.likeDisabled &&
+    prev.pollDisabled === next.pollDisabled
   );
 });

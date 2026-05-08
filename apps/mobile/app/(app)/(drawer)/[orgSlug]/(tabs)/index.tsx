@@ -72,6 +72,7 @@ export default function HomeScreen() {
     refetchIfStale: refetchFeedIfStale,
     acceptPendingPosts,
     toggleLike,
+    votePoll,
   } = useFeed(orgId);
 
   // Transition from loading → ready once org and user context are available.
@@ -142,6 +143,17 @@ export default function HomeScreen() {
       toggleLike(postId);
     },
     [isOffline, toggleLike]
+  );
+
+  const handlePollVote = useCallback(
+    (postId: string, optionIndex: number) => {
+      if (isOffline) {
+        showToast("You're offline. Try again when connected.", "info");
+        return;
+      }
+      void votePoll(postId, optionIndex);
+    },
+    [isOffline, votePoll]
   );
 
   const handleNavigate = useCallback(
@@ -440,6 +452,7 @@ export default function HomeScreen() {
           onAcceptPending={acceptPendingPosts}
           onPostPress={handlePostPress}
           onLikeToggle={handleLikeToggle}
+          onPollVote={handlePollVote}
           onCreatePost={handleCreatePost}
           isOffline={isOffline}
           upNextEvent={visibleUpNextEvent}

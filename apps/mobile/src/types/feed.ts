@@ -24,11 +24,22 @@ export interface MediaAttachment {
   signedUrl?: string;
 }
 
-/** Post with author, like status, and media — the hook's return type */
+/** Poll metadata stored in feed_posts.metadata for post_type === "poll" */
+export interface PollMetadata {
+  question: string;
+  options: { label: string }[];
+  allow_change: boolean;
+}
+
+/** Post with author, like status, media, and (for polls) hydrated voting state */
 export interface FeedPost extends FeedPostRow {
   author: PostAuthor | null;
   liked_by_user: boolean;
   media: MediaAttachment[];
+  poll_meta?: PollMetadata | null;
+  user_vote?: number | null;
+  vote_counts?: number[];
+  total_votes?: number;
 }
 
 /** Raw feed_comments row from Supabase */
@@ -56,6 +67,7 @@ export interface UseFeedReturn {
   updatePost: (postId: string, body: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
   toggleLike: (postId: string) => Promise<void>;
+  votePoll: (postId: string, optionIndex: number) => Promise<void>;
 }
 
 /** Return type for usePost hook */
