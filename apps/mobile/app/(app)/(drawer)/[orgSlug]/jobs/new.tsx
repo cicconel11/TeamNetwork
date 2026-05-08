@@ -61,10 +61,13 @@ export default function NewJobScreen() {
       flex: 1,
       backgroundColor: n.background,
     },
+    // 3-column row: Cancel (flex 1, left-aligned) | Title (flex 1.6,
+    // center-aligned) | Spacer (flex 1, mirrors Cancel for true centering).
+    // Equal-flex side regions guarantee the title centers regardless of
+    // Cancel's text width and the regions can never overlap.
     sheetHeader: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
-      justifyContent: "center" as const,
       paddingHorizontal: SPACING.md,
       paddingTop: SPACING.md,
       paddingBottom: SPACING.sm,
@@ -73,15 +76,20 @@ export default function NewJobScreen() {
       borderBottomWidth: 1,
       borderBottomColor: n.border,
     },
-    // Absolutely positioned so the title centers on the sheet midpoint
-    // regardless of the Cancel button's text width (which varies by locale).
+    headerSide: {
+      flex: 1,
+    },
+    headerSideRight: {
+      flex: 1,
+      alignItems: "flex-end" as const,
+    },
+    headerCenter: {
+      flex: 1.6,
+      alignItems: "center" as const,
+    },
     cancelButton: {
-      position: "absolute" as const,
-      left: SPACING.md,
-      top: 0,
-      bottom: 0,
-      justifyContent: "center" as const,
-      paddingHorizontal: SPACING.xs,
+      paddingVertical: SPACING.xs,
+      paddingRight: SPACING.sm,
     },
     cancelButtonText: {
       ...TYPOGRAPHY.bodyMedium,
@@ -90,7 +98,6 @@ export default function NewJobScreen() {
     headerTitle: {
       ...TYPOGRAPHY.titleMedium,
       color: n.foreground,
-      textAlign: "center" as const,
       fontWeight: "600" as const,
     },
     contentSheet: {
@@ -305,10 +312,17 @@ export default function NewJobScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.sheetHeader}>
-        <Text style={styles.headerTitle}>Post a Job</Text>
-        <Pressable onPress={() => router.back()} style={styles.cancelButton}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </Pressable>
+        <View style={styles.headerSide}>
+          <Pressable onPress={() => router.back()} style={styles.cancelButton}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </Pressable>
+        </View>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            Post a Job
+          </Text>
+        </View>
+        <View style={styles.headerSideRight} />
       </View>
 
       <View style={styles.contentSheet}>
