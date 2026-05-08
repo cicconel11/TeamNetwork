@@ -35,8 +35,13 @@ public struct EventActivityAttributes: ActivityAttributes {
         /// this so cancellations look distinct from a live event ending.
         public var status: String
 
-        /// Activity end timestamp (Unix seconds). The widget uses this for
-        /// the on-card progress bar; APNs uses `apns-expiration` separately.
+        /// Event start timestamp. Drives the lock-screen countdown via
+        /// SwiftUI's `Text(timerInterval:)`, which ticks per-second on the
+        /// device with no APNs traffic.
+        public var startsAt: Date
+
+        /// Activity end timestamp. Used for the on-card progress bar and as
+        /// the upper bound of the countdown timer interval.
         public var endsAt: Date
 
         public init(
@@ -44,12 +49,14 @@ public struct EventActivityAttributes: ActivityAttributes {
             totalAttending: Int,
             isCheckedIn: Bool,
             status: String,
+            startsAt: Date,
             endsAt: Date
         ) {
             self.checkedInCount = checkedInCount
             self.totalAttending = totalAttending
             self.isCheckedIn = isCheckedIn
             self.status = status
+            self.startsAt = startsAt
             self.endsAt = endsAt
         }
     }
