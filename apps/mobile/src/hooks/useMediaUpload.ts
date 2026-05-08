@@ -195,6 +195,8 @@ export function useMediaUpload(orgId: string | null) {
           }
         } catch (e) {
           const message = (e as Error).message || "Upload failed";
+          console.warn("[useMediaUpload] upload failed", { imageIndex: i, message, error: e });
+          showToast(`Upload failed: ${message}`, "error");
           if (isMountedRef.current) {
             setImages((prev) =>
               prev.map((img, idx) =>
