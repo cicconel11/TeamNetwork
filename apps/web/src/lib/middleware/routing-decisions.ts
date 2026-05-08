@@ -44,6 +44,12 @@ const NON_ORG_TOP_LEVEL_SEGMENTS = [
 
 /** Returns true for API routes that bypass auth middleware entirely. */
 export function shouldBypassAuth(pathname: string): boolean {
+  // Vercel cron jobs send `Authorization: Bearer <CRON_SECRET>` which is not a
+  // Supabase JWT (no `eyJ`/`sb_` prefix), so the middleware Bearer branch falls
+  // through to cookie auth and rejects with 401 before the route runs. Each
+  // cron route validates CRON_SECRET itself via validateCronAuth, so bypass
+  // middleware entirely for /api/cron/*.
+  if (pathname.startsWith("/api/cron/")) return true;
   return PUBLIC_API_ROUTES.includes(pathname);
 }
 
