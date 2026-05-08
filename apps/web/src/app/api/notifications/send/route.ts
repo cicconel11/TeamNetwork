@@ -113,7 +113,7 @@ const notificationSchema = z
       }),
     targetUserIds: uuidArray(500).optional(),
     persistNotification: z.boolean().optional(),
-    category: z.enum(["announcement", "discussion", "event", "workout", "competition"]).optional(),
+    category: z.enum(["announcement", "discussion", "event", "workout", "competition", "job"]).optional(),
     pushType: z
       .enum([
         "announcement",

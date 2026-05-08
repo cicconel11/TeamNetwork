@@ -18,7 +18,8 @@ export type NotificationCategory =
   | "workout"
   | "competition"
   | "mentorship"
-  | "chat";
+  | "chat"
+  | "job";
 
 export interface NotificationTarget {
   email?: string | null;
@@ -171,6 +172,9 @@ const CATEGORY_PREF_COLUMN: Record<NotificationCategory, keyof PreferenceRow> = 
   competition: "competition_emails_enabled",
   mentorship: "mentorship_emails_enabled" as keyof PreferenceRow,
   chat: "announcement_emails_enabled" as keyof PreferenceRow,
+  // Jobs are admin-composed broadcasts; reuse the announcement email gate
+  // so users who opted out of admin emails don't get jobs by email either.
+  job: "announcement_emails_enabled" as keyof PreferenceRow,
 };
 
 const getChannelsForContact = ({
