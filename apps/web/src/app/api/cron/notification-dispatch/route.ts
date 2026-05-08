@@ -4,6 +4,7 @@ import { validateCronAuth } from "@/lib/security/cron-auth";
 import { sendPush, type PushType } from "@/lib/notifications/push";
 import type { NotificationCategory } from "@/lib/notifications";
 import type { NotificationAudience } from "@/types/database";
+import { maybeDeferForQuietHours } from "@/lib/notifications/quiet-hours";
 
 /**
  * Notification dispatch cron worker — drains the `notification_jobs` queue
@@ -98,6 +99,27 @@ export async function GET(request: Request) {
         // Live Activity / APNs not handled in this port. Mark failed so the
         // row doesn't keep re-leasing.
         throw new Error(`unsupported kind=${job.kind} (Live Activity not yet ported to main)`);
+      }
+
+      // Quiet-hours gate for digest/reengagement single-target pushes.
+      const deferTo = await maybeDeferForQuietHours({
+        supabase: service,
+        category: job.category,
+        organizationId: job.organization_id,
+        targetUserIds: job.target_user_ids,
+      });
+      if (deferTo) {
+        await svc
+          .from("notification_jobs")
+          .update({
+            status: "pending",
+            scheduled_for: deferTo,
+            leased_at: null,
+            last_error: "deferred for quiet hours",
+          })
+          .eq("id", job.id);
+        results.push({ id: job.id, status: "deferred" });
+        continue;
       }
 
       // Resolve orgSlug for deep-link routing.

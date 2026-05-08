@@ -21,6 +21,13 @@ export interface NotificationPreferences {
   discussion_push_enabled: boolean;
   mentorship_push_enabled: boolean;
   donation_push_enabled: boolean;
+  // Phase B: digest + re-engagement controls. Quiet hours window is
+  // local-time per the user's selected timezone.
+  digest_push_enabled: boolean;
+  reengagement_push_enabled: boolean;
+  quiet_hours_start: string; // 'HH:MM' or 'HH:MM:SS'
+  quiet_hours_end: string;
+  quiet_hours_timezone: string;
 }
 
 const DEFAULT_PUSH_CATEGORIES = {
@@ -33,6 +40,11 @@ const DEFAULT_PUSH_CATEGORIES = {
   discussion_push_enabled: false,
   mentorship_push_enabled: false,
   donation_push_enabled: false,
+  digest_push_enabled: true,
+  reengagement_push_enabled: true,
+  quiet_hours_start: "21:00",
+  quiet_hours_end: "07:00",
+  quiet_hours_timezone: "UTC",
 } as const;
 
 interface UseNotificationPreferencesReturn {
@@ -61,6 +73,11 @@ const SELECT_COLUMNS = [
   "discussion_push_enabled",
   "mentorship_push_enabled",
   "donation_push_enabled",
+  "digest_push_enabled",
+  "reengagement_push_enabled",
+  "quiet_hours_start",
+  "quiet_hours_end",
+  "quiet_hours_timezone",
 ].join(",");
 
 type PrefRow = {
@@ -77,6 +94,11 @@ type PrefRow = {
   discussion_push_enabled: boolean | null;
   mentorship_push_enabled: boolean | null;
   donation_push_enabled: boolean | null;
+  digest_push_enabled: boolean | null;
+  reengagement_push_enabled: boolean | null;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+  quiet_hours_timezone: string | null;
 };
 
 function rowToPrefs(row: PrefRow): NotificationPreferences {
@@ -100,6 +122,15 @@ function rowToPrefs(row: PrefRow): NotificationPreferences {
       row.mentorship_push_enabled ?? DEFAULT_PUSH_CATEGORIES.mentorship_push_enabled,
     donation_push_enabled:
       row.donation_push_enabled ?? DEFAULT_PUSH_CATEGORIES.donation_push_enabled,
+    digest_push_enabled:
+      row.digest_push_enabled ?? DEFAULT_PUSH_CATEGORIES.digest_push_enabled,
+    reengagement_push_enabled:
+      row.reengagement_push_enabled ?? DEFAULT_PUSH_CATEGORIES.reengagement_push_enabled,
+    quiet_hours_start:
+      row.quiet_hours_start ?? DEFAULT_PUSH_CATEGORIES.quiet_hours_start,
+    quiet_hours_end: row.quiet_hours_end ?? DEFAULT_PUSH_CATEGORIES.quiet_hours_end,
+    quiet_hours_timezone:
+      row.quiet_hours_timezone ?? DEFAULT_PUSH_CATEGORIES.quiet_hours_timezone,
   };
 }
 
@@ -251,8 +282,20 @@ export function useNotificationPreferences(
         "discussion_push_enabled",
         "mentorship_push_enabled",
         "donation_push_enabled",
+        "digest_push_enabled",
+        "reengagement_push_enabled",
       ] as const;
       for (const key of pushCategoryKeys) {
+        if (key in updates) {
+          writePayload[key] = updates[key] ?? prefs?.[key] ?? DEFAULT_PUSH_CATEGORIES[key];
+        }
+      }
+      const quietHoursKeys = [
+        "quiet_hours_start",
+        "quiet_hours_end",
+        "quiet_hours_timezone",
+      ] as const;
+      for (const key of quietHoursKeys) {
         if (key in updates) {
           writePayload[key] = updates[key] ?? prefs?.[key] ?? DEFAULT_PUSH_CATEGORIES[key];
         }
