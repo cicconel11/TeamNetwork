@@ -1,8 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { ArrowLeft } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { QRScanner } from "@/components/QRScanner";
 import { useOrg } from "@/contexts/OrgContext";
@@ -32,6 +32,24 @@ export default function ScanCheckInScreen() {
     useEventRSVPs(eventId);
 
   const mode: ScanMode = modeParam === "self" ? "self" : "admin";
+
+  // Safe-area inset with a defensive iOS minimum so the Done button never
+  // lands behind the status-bar clock when SafeAreaProvider isn't mounted.
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === "ios" ? 50 : 24);
+
+  const handleClose = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (orgSlug && eventId) {
+      // Modal presented without a parent in the stack (deep link / cold
+      // start straight into scan). Replace with the event detail so Done
+      // isn't a dead button.
+      router.replace(`/(app)/${orgSlug}/events/${eventId}` as never);
+    } else {
+      router.replace("/" as never);
+    }
+  }, [router, orgSlug, eventId]);
 
   const [geofenceEnabled, setGeofenceEnabled] = useState(false);
   const [eventLocation, setEventLocation] = useState("");
@@ -223,12 +241,17 @@ export default function ScanCheckInScreen() {
 
   if (!roleLoading && mode === "admin" && !isAdmin) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: neutral.background }]}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: neutral.background, paddingTop: topInset },
+        ]}
+      >
         <Text style={[styles.title, { color: neutral.foreground }]}>Admins only</Text>
         <Text style={[styles.body, { color: neutral.muted }]}>
           Only admins can scan member QR codes for check-in.
         </Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -253,19 +276,24 @@ export default function ScanCheckInScreen() {
               : `${attendingCount} attending · ${rsvps.length} total RSVPs`
         }
       />
-      <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.headerOverlay}>
+      <View
+        pointerEvents="box-none"
+        style={[styles.headerOverlay, { paddingTop: topInset }]}
+      >
         <Pressable
-          onPress={() => router.back()}
+          onPress={handleClose}
           style={({ pressed }) => [
             styles.backButton,
             { opacity: pressed ? 0.7 : 1 },
           ]}
-          hitSlop={12}
+          hitSlop={16}
+          accessibilityRole="button"
+          accessibilityLabel="Done — close scanner"
         >
           <ArrowLeft size={22} color="#fff" />
           <Text style={styles.backText}>Done</Text>
         </Pressable>
-      </SafeAreaView>
+      </View>
       {toast && (
         <View pointerEvents="none" style={[styles.toast, { backgroundColor: toastBg }]}>
           <Text style={styles.toastText}>{toast.text}</Text>
@@ -283,7 +311,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
+    // paddingTop applied inline from useSafeAreaInsets so Done is always
+    // below the status bar / clock on every device.
   },
   backButton: {
     flexDirection: "row",
