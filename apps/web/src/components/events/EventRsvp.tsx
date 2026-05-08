@@ -11,6 +11,7 @@ interface EventRsvpProps {
   organizationId: string;
   userId: string;
   initialStatus?: RsvpStatus | null;
+  initialTrackOnLockScreen?: boolean;
 }
 
 const statusConfig: Record<RsvpStatus, { label: string; icon: string; activeClass: string }> = {
@@ -31,9 +32,19 @@ const statusConfig: Record<RsvpStatus, { label: string; icon: string; activeClas
   },
 };
 
-export function EventRsvp({ eventId, organizationId, userId, initialStatus }: EventRsvpProps) {
+export function EventRsvp({
+  eventId,
+  organizationId,
+  userId,
+  initialStatus,
+  initialTrackOnLockScreen,
+}: EventRsvpProps) {
   const [status, setStatus] = useState<RsvpStatus | null>(initialStatus ?? null);
+  const [trackOnLockScreen, setTrackOnLockScreen] = useState<boolean>(
+    initialTrackOnLockScreen ?? false,
+  );
   const [saving, setSaving] = useState(false);
+  const [savingTrack, setSavingTrack] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const router = useRouter();
@@ -54,6 +65,7 @@ export function EventRsvp({ eventId, organizationId, userId, initialStatus }: Ev
         user_id: userId,
         organization_id: organizationId,
         status: newStatus,
+        track_on_lock_screen: trackOnLockScreen,
       }, {
         onConflict: "event_id,user_id",
       });
@@ -75,6 +87,24 @@ export function EventRsvp({ eventId, organizationId, userId, initialStatus }: Ev
     }
 
     setSaving(false);
+  };
+
+  const handleTrackToggle = async (next: boolean) => {
+    if (savingTrack) return;
+    const previous = trackOnLockScreen;
+    setTrackOnLockScreen(next);
+    setSavingTrack(true);
+    const { error: updateError } = await supabase
+      .from("event_rsvps")
+      .update({ track_on_lock_screen: next })
+      .eq("event_id", eventId)
+      .eq("user_id", userId);
+    if (updateError) {
+      setTrackOnLockScreen(previous);
+      setError("Failed to update lock screen preference");
+      console.error("Lock screen toggle error:", updateError);
+    }
+    setSavingTrack(false);
   };
 
   const statuses: RsvpStatus[] = ["attending", "maybe", "not_attending"];
@@ -123,6 +153,23 @@ export function EventRsvp({ eventId, organizationId, userId, initialStatus }: Ev
           );
         })}
       </div>
+      {status === "attending" && (
+        <label className="flex items-start gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={trackOnLockScreen}
+            disabled={savingTrack}
+            onChange={(e) => handleTrackToggle(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-border accent-foreground"
+          />
+          <span>
+            Show on iPhone lock screen
+            <span className="block text-xs text-muted-foreground/80">
+              We&apos;ll surface this event on your lock screen as it starts.
+            </span>
+          </span>
+        </label>
+      )}
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}

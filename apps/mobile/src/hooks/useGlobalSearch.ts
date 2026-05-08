@@ -3,11 +3,39 @@ import { supabase } from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 
+export type SearchEntityType =
+  | "member"
+  | "alumni"
+  | "event"
+  | "announcement"
+  | "discussion_thread"
+  | "job_posting";
+
+const SUPPORTED_TYPES: ReadonlySet<SearchEntityType> = new Set([
+  "member",
+  "alumni",
+  "event",
+  "announcement",
+  "discussion_thread",
+  "job_posting",
+]);
+
 export interface SearchResult {
   id: string;
-  type: "member" | "event" | "announcement";
+  type: SearchEntityType;
   title: string;
-  subtitle: string;
+  snippet: string | null;
+  rank: number;
+}
+
+interface RpcRow {
+  entity_type: string;
+  entity_id: string;
+  title: string | null;
+  snippet: string | null;
+  url_path: string | null;
+  rank: number | null;
+  metadata: Record<string, unknown> | null;
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -26,7 +54,10 @@ interface UseGlobalSearchReturn {
   loading: boolean;
 }
 
-export function useGlobalSearch(orgId: string | null): UseGlobalSearchReturn {
+export function useGlobalSearch(
+  orgId: string | null,
+  orgSlug: string | null,
+): UseGlobalSearchReturn {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,8 +76,9 @@ export function useGlobalSearch(orgId: string | null): UseGlobalSearchReturn {
   const search = useCallback(
     async (q: string) => {
       const callId = beginRequest();
+      const trimmed = q.trim();
 
-      if (!orgId || q.length < 2) {
+      if (!orgId || !orgSlug || trimmed.length < 2) {
         if (isMountedRef.current) {
           setResults([]);
           setLoading(false);
@@ -59,76 +91,31 @@ export function useGlobalSearch(orgId: string | null): UseGlobalSearchReturn {
       }
 
       try {
-        const [membersRes, eventsRes, announcementsRes] = await Promise.all([
-          supabase
-            .from("members")
-            .select("id, first_name, last_name, email")
-            .eq("organization_id", orgId)
-            .eq("status", "active")
-            .is("deleted_at", null)
-            .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`)
-            .limit(5),
-
-          supabase
-            .from("events")
-            .select("id, title, start_date")
-            .eq("organization_id", orgId)
-            .is("deleted_at", null)
-            .ilike("title", `%${q}%`)
-            .limit(5),
-
-          supabase
-            .from("announcements")
-            .select("id, title, created_at")
-            .eq("organization_id", orgId)
-            .is("deleted_at", null)
-            .ilike("title", `%${q}%`)
-            .limit(5),
-        ]);
-
-        if (!isMountedRef.current || !isCurrentRequest(callId)) return;
-
-        if (membersRes.error) throw membersRes.error;
-        if (eventsRes.error) throw eventsRes.error;
-        if (announcementsRes.error) throw announcementsRes.error;
-
-        const memberResults: SearchResult[] = (membersRes.data ?? []).map((member) => {
-          const name = [member.first_name, member.last_name].filter(Boolean).join(" ").trim();
-          return {
-            id: member.id,
-            type: "member" as const,
-            title: name || member.email || "Unknown member",
-            subtitle: member.email || "",
-          };
+        const { data, error } = await supabase.rpc("search_org_content", {
+          p_org_id: orgId,
+          p_org_slug: orgSlug,
+          p_query: trimmed,
+          p_limit: 20,
         });
 
-        const eventResults: SearchResult[] = (eventsRes.data ?? []).map((event) => ({
-          id: event.id,
-          type: "event" as const,
-          title: event.title,
-          subtitle: new Date(event.start_date).toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          }),
-        }));
+        if (!isMountedRef.current || !isCurrentRequest(callId)) return;
+        if (error) throw error;
 
-        const announcementResults: SearchResult[] = (announcementsRes.data ?? []).map((a) => ({
-          id: a.id,
-          type: "announcement" as const,
-          title: a.title,
-          subtitle: a.created_at
-            ? new Date(a.created_at).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })
-            : "",
-        }));
+        const rows = (data ?? []) as RpcRow[];
+        const mapped: SearchResult[] = rows
+          .filter(
+            (row): row is RpcRow & { entity_type: SearchEntityType } =>
+              SUPPORTED_TYPES.has(row.entity_type as SearchEntityType),
+          )
+          .map((row) => ({
+            id: row.entity_id,
+            type: row.entity_type,
+            title: row.title ?? "Untitled",
+            snippet: row.snippet,
+            rank: row.rank ?? 0,
+          }));
 
-        if (isMountedRef.current && isCurrentRequest(callId)) {
-          setResults([...memberResults, ...eventResults, ...announcementResults]);
-        }
+        setResults(mapped);
       } catch (e) {
         if (isMountedRef.current && isCurrentRequest(callId)) {
           setResults([]);
@@ -144,7 +131,7 @@ export function useGlobalSearch(orgId: string | null): UseGlobalSearchReturn {
         }
       }
     },
-    [orgId]
+    [orgId, orgSlug, beginRequest, isCurrentRequest],
   );
 
   useEffect(() => {

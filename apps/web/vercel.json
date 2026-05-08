@@ -66,6 +66,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/event-reminders",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/live-activity-end-stale",
       "schedule": "0 * * * *"
     },

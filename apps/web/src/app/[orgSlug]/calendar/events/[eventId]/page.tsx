@@ -10,6 +10,7 @@ import { EventOpenTracker } from "@/components/analytics/EventsViewTracker";
 import { LocalDate, LocalTime } from "@/components/ui";
 import { calendarEventEditPath, calendarEventsPath } from "@/lib/calendar/routes";
 import { resolveOrgTimezone } from "@/lib/utils/timezone";
+import { EventCountdownBadge } from "@/components/calendar/EventCountdownBadge";
 
 interface EventDetailPageProps {
   params: Promise<{ orgSlug: string; eventId: string }>;
@@ -57,14 +58,18 @@ export default async function CalendarEventDetailPage({ params, searchParams }: 
   const { data: { user } } = await supabase.auth.getUser();
 
   let userRsvpStatus: RsvpStatus | null = null;
+  let userTrackOnLockScreen = false;
   if (user) {
     const { data: userRsvp } = await supabase
       .from("event_rsvps")
-      .select("status")
+      .select("status, track_on_lock_screen")
       .eq("event_id", eventId)
       .eq("user_id", user.id)
       .maybeSingle();
     userRsvpStatus = (userRsvp?.status as RsvpStatus) ?? null;
+    userTrackOnLockScreen =
+      (userRsvp as { track_on_lock_screen?: boolean } | null)
+        ?.track_on_lock_screen ?? false;
   }
 
   const { data: rsvps } = await supabase
@@ -119,9 +124,17 @@ export default async function CalendarEventDetailPage({ params, searchParams }: 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="p-6 lg:col-span-2">
           <div className="flex flex-wrap gap-2 mb-4">
-            <Badge variant={isPast ? "muted" : "success"}>
-              {isPast ? "Past Event" : "Upcoming"}
-            </Badge>
+            {isPast ? (
+              <Badge variant="muted">Past Event</Badge>
+            ) : (
+              <>
+                <Badge variant="success">Upcoming</Badge>
+                <EventCountdownBadge
+                  startAt={event.start_date}
+                  endAt={event.end_date}
+                />
+              </>
+            )}
             <Badge variant="muted" className="capitalize">{event.event_type}</Badge>
             {event.is_philanthropy && (
               <Badge variant="primary">Philanthropy</Badge>
@@ -211,6 +224,7 @@ export default async function CalendarEventDetailPage({ params, searchParams }: 
                 organizationId={org.id}
                 userId={user.id}
                 initialStatus={userRsvpStatus}
+                initialTrackOnLockScreen={userTrackOnLockScreen}
               />
             </div>
           )}

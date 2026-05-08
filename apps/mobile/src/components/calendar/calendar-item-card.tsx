@@ -9,6 +9,7 @@ import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { RADIUS, SHADOWS, SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { getEventColor } from "./event-type-colors";
+import { EventCountdownBadge } from "./event-countdown-badge";
 import type { UnifiedCalendarItem } from "@/hooks/useUnifiedCalendar";
 
 interface CalendarItemCardProps {
@@ -126,6 +127,8 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
               {formatTimeRange(item.startAt, item.endAt)}
             </Text>
           </View>
+
+          <EventCountdownBadge startAt={item.startAt} endAt={item.endAt} />
 
           {item.location && (
             <View style={styles.detailRow}>

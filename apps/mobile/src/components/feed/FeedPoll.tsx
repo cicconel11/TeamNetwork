@@ -171,13 +171,11 @@ function FeedPollInner({
             );
           }
 
-          const tappable = meta.allow_change && !disabled;
           return (
             <Pressable
               key={i}
               onPress={() => handlePress(i)}
-              disabled={!tappable}
-              accessibilityRole={tappable ? "button" : undefined}
+              accessibilityRole="button"
               accessibilityLabel={`${opt.label}, ${pct}%`}
               style={[styles.resultRow, isSelected && styles.resultRowSelected]}
             >

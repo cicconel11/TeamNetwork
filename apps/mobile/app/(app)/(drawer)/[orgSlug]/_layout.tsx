@@ -234,9 +234,10 @@ function OrgLayoutInner() {
       <Stack.Screen
         name="search"
         options={{
-          headerShown: true,
+          headerShown: false,
           title: "Search",
-          presentation: "card",
+          presentation: "modal",
+          animation: "slide_from_bottom",
         }}
       />
     </Stack>

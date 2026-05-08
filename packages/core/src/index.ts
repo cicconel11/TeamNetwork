@@ -97,3 +97,12 @@ export {
 
 // APNs client lives at "@teammeet/core/apns" — server-only (uses node:buffer/jose).
 // Do not re-export from this barrel; mobile bundler cannot resolve node:buffer.
+
+// Calendar - Event status + countdown helpers
+export {
+  DEFAULT_GRACE_PERIOD_MINUTES,
+  describeEventStatus,
+  formatCountdown,
+  getEventStatus,
+  type EventStatus,
+} from "./calendar/event-status";

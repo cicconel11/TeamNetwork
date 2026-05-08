@@ -10,9 +10,7 @@ import {
   TextInput,
   Modal,
 } from "react-native";
-import { Image } from "expo-image";
 import { useRouter, useNavigation } from "expo-router";
-import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SafeQRCode } from "@/components/SafeQRCode";
@@ -27,6 +25,7 @@ import {
   ShieldX,
   Clock,
   Users,
+  ChevronLeft,
 } from "lucide-react-native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
@@ -54,7 +53,7 @@ import { shareInvite } from "@/lib/share";
 export default function InvitesScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
+  const { orgSlug, orgId, orgName } = useOrg();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
   const {
     invites,
@@ -420,15 +419,13 @@ export default function InvitesScreen() {
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [showQRCode, setShowQRCode] = useState<string | null>(null);
 
-  const handleDrawerToggle = useCallback(() => {
-    try {
-      if (navigation && typeof (navigation as any).dispatch === "function") {
-        (navigation as any).dispatch(DrawerActions.toggleDrawer());
-      }
-    } catch {
-      // Drawer not available - no-op
+  const handleBack = useCallback(() => {
+    if ((navigation as any).canGoBack && (navigation as any).canGoBack()) {
+      router.back();
+    } else {
+      router.replace(`/(app)/${orgSlug}/(tabs)/menu`);
     }
-  }, [navigation]);
+  }, [navigation, router, orgSlug]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -667,14 +664,8 @@ export default function InvitesScreen() {
         >
           <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
             <View style={styles.headerContent}>
-              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-                {orgLogoUrl ? (
-                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-                ) : (
-                  <View style={styles.orgAvatar}>
-                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
-                  </View>
-                )}
+              <Pressable onPress={handleBack} style={styles.orgLogoButton} hitSlop={8}>
+                <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
               </Pressable>
               <View style={styles.headerTextContainer}>
                 <Text style={styles.headerTitle}>Invites</Text>
@@ -713,14 +704,8 @@ export default function InvitesScreen() {
         >
           <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
             <View style={styles.headerContent}>
-              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-                {orgLogoUrl ? (
-                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-                ) : (
-                  <View style={styles.orgAvatar}>
-                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
-                  </View>
-                )}
+              <Pressable onPress={handleBack} style={styles.orgLogoButton} hitSlop={8}>
+                <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
               </Pressable>
               <View style={styles.headerTextContainer}>
                 <Text style={styles.headerTitle}>Invites</Text>
@@ -750,14 +735,8 @@ export default function InvitesScreen() {
         >
           <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
             <View style={styles.headerContent}>
-              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-                {orgLogoUrl ? (
-                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-                ) : (
-                  <View style={styles.orgAvatar}>
-                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
-                  </View>
-                )}
+              <Pressable onPress={handleBack} style={styles.orgLogoButton} hitSlop={8}>
+                <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
               </Pressable>
               <View style={styles.headerTextContainer}>
                 <Text style={styles.headerTitle}>Invites</Text>
@@ -795,14 +774,8 @@ export default function InvitesScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {orgLogoUrl ? (
-                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-              ) : (
-                <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
-                </View>
-              )}
+            <Pressable onPress={handleBack} style={styles.orgLogoButton} hitSlop={8}>
+              <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
             </Pressable>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Invites</Text>
