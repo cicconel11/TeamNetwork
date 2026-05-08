@@ -338,10 +338,20 @@ export function useFeed(orgId: string | null): UseFeedReturn {
 
       const target =
         posts.find((p) => p.id === postId) ?? pendingPosts.find((p) => p.id === postId);
-      if (!target || !target.poll_meta) return;
+      if (!target) {
+        showToast("Vote failed: post not found", "error");
+        return;
+      }
+      if (!target.poll_meta) {
+        showToast("Vote failed: poll metadata missing", "error");
+        return;
+      }
 
       const meta = target.poll_meta;
-      if (optionIndex < 0 || optionIndex >= meta.options.length) return;
+      if (optionIndex < 0 || optionIndex >= meta.options.length) {
+        showToast("Vote failed: invalid option", "error");
+        return;
+      }
 
       const prevVote = target.user_vote ?? null;
       if (prevVote === optionIndex) return;
@@ -392,6 +402,7 @@ export function useFeed(orgId: string | null): UseFeedReturn {
             .eq("user_id", userId);
           if (updateError) throw updateError;
         }
+        showToast("Vote recorded", "success");
       } catch (e) {
         const revert = (list: FeedPost[]) =>
           list.map((p) =>
