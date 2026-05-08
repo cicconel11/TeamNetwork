@@ -19,6 +19,8 @@ interface DirectoryCardProps {
   chips?: Chip[];
   onPress?: () => void;
   colors: ThemeColors;
+  /** Renders a green dot over the avatar when true. */
+  online?: boolean;
 }
 
 export const DirectoryCard = React.memo(function DirectoryCard({
@@ -31,6 +33,7 @@ export const DirectoryCard = React.memo(function DirectoryCard({
   chips = [],
   onPress,
   colors,
+  online,
 }: DirectoryCardProps) {
   return (
     <Pressable
@@ -41,13 +44,18 @@ export const DirectoryCard = React.memo(function DirectoryCard({
         pressed && styles.cardPressed,
       ]}
     >
-      {avatarUrl ? (
-        <Image source={avatarUrl} style={styles.avatar} contentFit="cover" transition={200} />
-      ) : (
-        <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primaryLight }]}>
-          <Text style={[styles.avatarText, { color: colors.primaryDark }]}>{initials}</Text>
-        </View>
-      )}
+      <View style={styles.avatarWrap}>
+        {avatarUrl ? (
+          <Image source={avatarUrl} style={styles.avatar} contentFit="cover" transition={200} />
+        ) : (
+          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primaryLight }]}>
+            <Text style={[styles.avatarText, { color: colors.primaryDark }]}>{initials}</Text>
+          </View>
+        )}
+        {online ? (
+          <View style={[styles.onlineDot, { borderColor: colors.card }]} />
+        ) : null}
+      </View>
       <View style={styles.cardContent}>
         <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
           {name}
@@ -98,11 +106,14 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     transform: [{ scale: 0.995 }],
   },
+  avatarWrap: {
+    position: "relative",
+    marginRight: spacing.md,
+  },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: spacing.md,
   },
   avatarPlaceholder: {
     width: 40,
@@ -110,7 +121,16 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: spacing.md,
+  },
+  onlineDot: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#22c55e",
+    borderWidth: 2,
   },
   avatarText: {
     fontSize: fontSize.sm,

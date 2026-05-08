@@ -1,9 +1,11 @@
 /**
  * Quiet-hours gate for the notification dispatcher.
  *
- * Categories that respect quiet hours: digest, reengagement. Transactional
- * categories (chat, event_reminder, announcement, mention) bypass — if you
- * @-mention me at 11pm I'd rather be pinged than wait until morning.
+ * Categories that respect quiet hours: digest, reengagement, mention.
+ * Other transactional categories (chat, event_reminder, announcement) bypass
+ * — they're tied to time-sensitive activity. Mentions are kept inside the
+ * gate because most mentions can wait until morning, and the priority comes
+ * from bypassing per-category mute, not from ignoring the user's DND.
  *
  * Logic:
  *   1. For single-target pushes in a respecting category, look up the
@@ -17,7 +19,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const RESPECTING_CATEGORIES = new Set(["digest", "reengagement"]);
+const RESPECTING_CATEGORIES = new Set(["digest", "reengagement", "mention"]);
 
 interface QuietHoursPref {
   quiet_hours_start: string; // 'HH:MM:SS' or 'HH:MM'
