@@ -21,9 +21,13 @@ export type NotificationType =
   | "mentorship"
   | "donation"
   | "membership"
+  // @-mention from any commentable surface; mention_kind selects the route.
+  | "mention"
   // Generic admin-composed blast with no specific resource. Routes to the
   // inbox so the recipient can read the body in context.
   | "notification";
+
+export type MentionKind = "chat_message" | "discussion_reply" | "announcement";
 
 export interface NotificationData {
   type: NotificationType;
@@ -31,6 +35,9 @@ export interface NotificationData {
   id: string;
   title?: string;
   body?: string;
+  // Set on type='mention' pushes by the trigger fan-out so the tap can route
+  // to the right surface (chat group / discussion thread / announcement).
+  mention_kind?: MentionKind;
 }
 
 // Configure how notifications appear when app is in foreground (native only)
@@ -270,6 +277,17 @@ export function getNotificationRoute(data: NotificationData): string | null {
       return `/(app)/${data.orgSlug}/donations`;
     case "membership":
       return `/(app)/${data.orgSlug}/members`;
+    case "mention":
+      switch (data.mention_kind) {
+        case "chat_message":
+          return `/(app)/${data.orgSlug}/chat/${data.id}`;
+        case "discussion_reply":
+          return buildMobileDiscussionThreadRoute(data.orgSlug, data.id);
+        case "announcement":
+          return `/(app)/${data.orgSlug}/announcements/${data.id}`;
+        default:
+          return null;
+      }
     case "notification":
       // Generic blast — open the inbox; the row carries body/title.
       return `/(app)/${data.orgSlug}/notifications`;

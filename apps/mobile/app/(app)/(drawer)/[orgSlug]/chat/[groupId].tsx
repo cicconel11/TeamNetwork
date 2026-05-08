@@ -20,6 +20,11 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { Avatar } from "@/components/ui/Avatar";
+import { ReactionRow } from "@/components/reactions/ReactionRow";
+import {
+  MentionAutocomplete,
+  type MentionCandidate,
+} from "@/components/mentions/MentionAutocomplete";
 import { showToast } from "@/components/ui/Toast";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import { APP_CHROME } from "@/lib/chrome";
@@ -92,6 +97,14 @@ export default function ChatRoomScreen() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<MessageWithAuthor[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  // Mentions chosen via the autocomplete picker for the current draft. Names
+  // are kept here so the trigger fan-out gets exact UUIDs even when two
+  // members share a display name. Pruned each keystroke against newMessage
+  // so deleting a mention from the text drops it from the recipient list.
+  const [draftMentions, setDraftMentions] = useState<
+    Array<{ userId: string; displayName: string }>
+  >([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -327,11 +340,60 @@ export default function ChatRoomScreen() {
     if (!showPendingQueue) setTimeout(scrollToBottom, 80);
   }, [groupedMessages.length, showPendingQueue, scrollToBottom]);
 
+  // Resolve the @-query at the end of the input. Returns the start index of
+  // the "@" so we can splice the picked mention back in. Picker stays open
+  // while the user types after "@" until they hit space or commit a pick.
+  const handleMessageChange = useCallback(
+    (text: string) => {
+      setNewMessage(text);
+      const tail = text.match(/(^|\s)@([^\s@]*)$/);
+      setMentionQuery(tail ? tail[2] : null);
+      // Drop any draft mentions whose display name no longer appears in text.
+      setDraftMentions((prev) =>
+        prev.filter((m) => text.includes(`@${m.displayName}`)),
+      );
+    },
+    [],
+  );
+
+  const handlePickMention = useCallback(
+    (candidate: MentionCandidate) => {
+      setNewMessage((prev) => {
+        const replaced = prev.replace(/(^|\s)@([^\s@]*)$/, (_m, lead) => {
+          return `${lead}@${candidate.name} `;
+        });
+        return replaced;
+      });
+      setDraftMentions((prev) => {
+        if (prev.some((m) => m.userId === candidate.id)) return prev;
+        return [...prev, { userId: candidate.id, displayName: candidate.name }];
+      });
+      setMentionQuery(null);
+    },
+    [],
+  );
+
+  const mentionCandidates = useMemo<MentionCandidate[]>(
+    () =>
+      members.map((m) => ({
+        id: m.user_id,
+        name: m.users?.name || m.users?.email || "Unknown",
+        email: m.users?.email,
+        avatar_url: m.users?.avatar_url,
+      })),
+    [members],
+  );
+
   const handleSend = useCallback(async () => {
     if (!newMessage.trim() || sending || !group || !orgId || !currentUserId) return;
     setSending(true);
     const messageBody = newMessage.trim();
+    const mentionedUserIds = draftMentions
+      .filter((m) => messageBody.includes(`@${m.displayName}`))
+      .map((m) => m.userId);
     setNewMessage("");
+    setDraftMentions([]);
+    setMentionQuery(null);
     const initialStatus: ChatMessageStatus =
       requiresApproval && !canModerate ? "pending" : "approved";
     const tempId = `temp-${Date.now()}`;
@@ -355,7 +417,9 @@ export default function ChatRoomScreen() {
     };
     setMessages((prev) => [...prev, optimisticMessage]);
     setTimeout(scrollToBottom, 60);
-    const { data, error } = await supabase
+    // Cast: `mentioned_user_ids` was added in a recent migration; the
+    // generated Supabase types haven't been regenerated yet.
+    const { data, error } = await (supabase as any)
       .from("chat_messages")
       .insert({
         chat_group_id: group.id,
@@ -363,6 +427,7 @@ export default function ChatRoomScreen() {
         author_id: currentUserId,
         body: messageBody,
         status: initialStatus,
+        mentioned_user_ids: mentionedUserIds,
       })
       .select()
       .single();
@@ -375,7 +440,7 @@ export default function ChatRoomScreen() {
       );
     }
     setSending(false);
-  }, [newMessage, sending, group, orgId, currentUserId, requiresApproval, canModerate, currentUser, scrollToBottom]);
+  }, [newMessage, draftMentions, sending, group, orgId, currentUserId, requiresApproval, canModerate, currentUser, scrollToBottom]);
 
   const handleModeration = useCallback(
     async (messageId: string, action: "approved" | "rejected") => {
@@ -584,6 +649,13 @@ export default function ChatRoomScreen() {
             <View style={[styles.messageBubble, bubbleRadius, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther, isPending && styles.messageBubblePending]}>
               <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>{item.body}</Text>
             </View>
+            {!isPending && !isRejected && (
+              <ReactionRow
+                targetKind="chat_message"
+                targetId={item.id}
+                currentUserId={currentUserId}
+              />
+            )}
             {isPending && <Text style={styles.pendingLabel}>Pending</Text>}
             {isRejected && <Text style={styles.rejectedLabel}>Rejected</Text>}
             {canModerate && isPending && !isOwn && (
@@ -772,10 +844,16 @@ export default function ChatRoomScreen() {
 
         {!showPendingQueue && (
           <SafeAreaView edges={["bottom"]} style={styles.composerContainer}>
+            <MentionAutocomplete
+              query={mentionQuery}
+              candidates={mentionCandidates}
+              excludeId={currentUserId}
+              onPick={handlePickMention}
+            />
             <View style={styles.composer}>
               <TextInput
                 value={newMessage}
-                onChangeText={setNewMessage}
+                onChangeText={handleMessageChange}
                 placeholder={requiresApproval && !canModerate ? "Type a message (requires approval)..." : "Type a message..."}
                 style={styles.input}
                 editable={!sending}
