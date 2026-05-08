@@ -43,6 +43,11 @@ export function SettingsNotificationsSection({ orgId }: Props) {
   const [discussionPush, setDiscussionPush] = useState(false);
   const [mentorshipPush, setMentorshipPush] = useState(false);
   const [donationPush, setDonationPush] = useState(false);
+  const [digestPush, setDigestPush] = useState(true);
+  const [reengagementPush, setReengagementPush] = useState(true);
+  const [quietHoursTimezone, setQuietHoursTimezone] = useState("UTC");
+  const [quietHoursStart, setQuietHoursStart] = useState("21:00");
+  const [quietHoursEnd, setQuietHoursEnd] = useState("07:00");
 
   useEffect(() => {
     if (prefs) {
@@ -58,8 +63,27 @@ export function SettingsNotificationsSection({ orgId }: Props) {
       setDiscussionPush(prefs.discussion_push_enabled);
       setMentorshipPush(prefs.mentorship_push_enabled);
       setDonationPush(prefs.donation_push_enabled);
+      setDigestPush(prefs.digest_push_enabled);
+      setReengagementPush(prefs.reengagement_push_enabled);
+      setQuietHoursStart(prefs.quiet_hours_start.slice(0, 5));
+      setQuietHoursEnd(prefs.quiet_hours_end.slice(0, 5));
+      setQuietHoursTimezone(prefs.quiet_hours_timezone);
+
+      // First-launch timezone capture: when the saved timezone is the UTC
+      // default but the device knows better, persist the device tz so quiet
+      // hours apply to the user's actual local time.
+      if (prefs.quiet_hours_timezone === "UTC") {
+        try {
+          const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          if (deviceTz && deviceTz !== "UTC") {
+            void updatePrefs({ quiet_hours_timezone: deviceTz });
+          }
+        } catch {
+          // Older RN runtimes may not expose Intl — skip silently.
+        }
+      }
     }
-  }, [prefs]);
+  }, [prefs, updatePrefs]);
 
   const handleSaveNotifications = async () => {
     await updatePrefs({
@@ -75,6 +99,11 @@ export function SettingsNotificationsSection({ orgId }: Props) {
       discussion_push_enabled: discussionPush,
       mentorship_push_enabled: mentorshipPush,
       donation_push_enabled: donationPush,
+      digest_push_enabled: digestPush,
+      reengagement_push_enabled: reengagementPush,
+      quiet_hours_start: quietHoursStart,
+      quiet_hours_end: quietHoursEnd,
+      quiet_hours_timezone: quietHoursTimezone,
     });
   };
 
@@ -407,6 +436,43 @@ export function SettingsNotificationsSection({ orgId }: Props) {
                   trackColor={{ false: colors.border, true: colors.primaryLight }}
                   thumbColor={donationPush ? colors.primary : colors.card}
                 />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Weekly digest</Text>
+                  <Text style={styles.switchHint}>Sunday recap of the week's activity</Text>
+                </View>
+                <Switch
+                  value={digestPush}
+                  onValueChange={setDigestPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={digestPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Re-engagement</Text>
+                  <Text style={styles.switchHint}>Occasional nudge if you've been away</Text>
+                </View>
+                <Switch
+                  value={reengagementPush}
+                  onValueChange={setReengagementPush}
+                  disabled={!pushEnabled}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={reengagementPush ? colors.primary : colors.card}
+                />
+              </View>
+
+              <View style={[styles.switchRow, !pushEnabled && { opacity: 0.5 }]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Quiet hours</Text>
+                  <Text style={styles.switchHint}>
+                    Digest + re-engagement pushes deferred {quietHoursStart}–{quietHoursEnd} ({quietHoursTimezone})
+                  </Text>
+                </View>
               </View>
 
               <Pressable

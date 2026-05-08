@@ -23,6 +23,7 @@ import { setGlobalShowToast } from "@/components/ui/Toast";
 import AuthLoadingScreen from "@/components/AuthLoadingScreen";
 import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled } from "@/lib/analytics";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
 import { useSupabaseAppState } from "@/hooks/useSupabaseAppState";
 import { parseTeammeetUrl, routeIntent } from "@/lib/deep-link";
@@ -141,6 +142,9 @@ function RootLayoutInner() {
     userId: session?.user?.id ?? null,
     enabled: true,
   });
+
+  // Bump users.last_active_at on sign-in + every foreground.
+  useActivityHeartbeat(session?.user?.id ?? null);
 
   // Hide splash screen once fonts are loaded
   useEffect(() => {
