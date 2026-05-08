@@ -58,7 +58,14 @@ export function BiometricLockProvider({ children }: PropsWithChildren) {
   const [enabled, setEnabled] = useState(false);
   const [isResolving, setIsResolving] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
-  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+  // Backgrounded state drives the privacy overlay. We only setState when the
+  // boolean actually flips (active <-> not-active), so the Face ID system
+  // dialog's rapid inactive↔active churn doesn't re-render the entire
+  // children tree mid-prompt — that re-render was the source of the lock
+  // screen flicker on notification tap.
+  const [isBackgrounded, setIsBackgrounded] = useState(
+    AppState.currentState !== "active",
+  );
   const lastBackgroundedAtRef = useRef<number | null>(null);
   // Read inside the AppState handler so the listener can stay stable across
   // enable/disable toggles. Avoids a race where re-subscribing drops the
@@ -87,10 +94,18 @@ export function BiometricLockProvider({ children }: PropsWithChildren) {
   // deps; reads `enabled` via a ref to stay stable across toggles.
   useEffect(() => {
     const handler = (next: AppStateStatus) => {
-      setAppState(next);
+      const nextBackgrounded = next !== "active";
+      // Only setState on a transition, not on every event. iOS fires
+      // inactive→inactive duplicates around system prompts.
+      setIsBackgrounded((prev) => (prev === nextBackgrounded ? prev : nextBackgrounded));
       if (!enabledRef.current) return;
       if (next === "background" || next === "inactive") {
-        lastBackgroundedAtRef.current = Date.now();
+        // Don't overwrite an existing timestamp — the system biometric
+        // prompt cycles inactive→active→inactive and we want the original
+        // background time, not the prompt's transient inactive.
+        if (lastBackgroundedAtRef.current == null) {
+          lastBackgroundedAtRef.current = Date.now();
+        }
         return;
       }
       if (next === "active") {
@@ -105,7 +120,7 @@ export function BiometricLockProvider({ children }: PropsWithChildren) {
     return () => sub.remove();
   }, []);
 
-  const showPrivacyOverlay = enabled && appState !== "active";
+  const showPrivacyOverlay = enabled && isBackgrounded;
 
   const lock = useCallback(() => setIsLocked(true), []);
 
