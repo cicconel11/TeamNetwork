@@ -86,21 +86,18 @@ export async function readBlobFromUri(
  * `fetch(uri).then(r => r.blob())` returns a 0-byte Blob on iOS, which
  * silently writes empty objects to storage.
  *
- * Implementation: read the file as base64 via expo-file-system's legacy
- * (battle-tested) API, then decode base64 to bytes via the global atob
- * (RN ≥0.72 polyfills it). Returns Uint8Array because that's what
- * Supabase Storage's `upload()` accepts as a binary BodyInit on RN.
+ * Implementation: expo-file-system v19's `File(uri).base64()` reads the
+ * actual bytes; decode base64 via the global atob polyfill (RN ≥0.72)
+ * to a Uint8Array, which Supabase Storage's `upload()` accepts as a
+ * binary BodyInit on RN.
  */
 export async function readArrayBufferFromUri(uri: string): Promise<Uint8Array> {
   // Lazy require so unit tests (node env, no Expo) aren't forced to mock it.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { readAsStringAsync } = require("expo-file-system/legacy") as {
-    readAsStringAsync: (
-      uri: string,
-      options: { encoding: "base64" },
-    ) => Promise<string>;
+  const { File } = require("expo-file-system") as {
+    File: new (uri: string) => { base64: () => Promise<string> };
   };
-  const base64 = await readAsStringAsync(uri, { encoding: "base64" });
+  const base64 = await new File(uri).base64();
   // atob() is provided by RN's global polyfill (>=0.72).
   const binary = globalThis.atob(base64);
   const bytes = new Uint8Array(binary.length);
