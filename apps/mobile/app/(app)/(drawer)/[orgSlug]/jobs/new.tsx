@@ -57,9 +57,9 @@ export default function NewJobScreen() {
 
   const { neutral } = useAppColorScheme();
   const styles = useThemedStyles((n, s) => ({
-    container: {
+    scrollView: {
       flex: 1,
-      backgroundColor: n.background,
+      backgroundColor: n.surface,
     },
     // 3-column row: Cancel (flex 1, left-aligned) | Title (flex 1.6,
     // center-aligned) | Spacer (flex 1, mirrors Cancel for true centering).
@@ -99,10 +99,6 @@ export default function NewJobScreen() {
       ...TYPOGRAPHY.titleMedium,
       color: n.foreground,
       fontWeight: "600" as const,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: n.surface,
     },
     scrollContent: {
       padding: SPACING.md,
@@ -309,9 +305,15 @@ export default function NewJobScreen() {
     router,
   ]);
 
+  // RNScreens' formSheet presentation requires AT MOST 2 direct subviews,
+  // with any non-ScrollView siblings marked collapsable={false} so React
+  // Native doesn't optimize them away. Returning a Fragment with exactly
+  // two children — header View (collapsable=false) and ScrollView — avoids
+  // the "Got N subviews" layout warning that was causing form fields to
+  // render under the sheet header.
   return (
-    <View style={styles.container}>
-      <View style={styles.sheetHeader}>
+    <>
+      <View style={styles.sheetHeader} collapsable={false}>
         <View style={styles.headerSide}>
           <Pressable onPress={() => router.back()} style={styles.cancelButton}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -325,16 +327,12 @@ export default function NewJobScreen() {
         <View style={styles.headerSideRight} />
       </View>
 
-      <View style={styles.contentSheet}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          // Without this, iOS auto-applies a top inset that scrolls the
-          // first field up behind the sheet header.
-          contentInsetAdjustmentBehavior="never"
-          automaticallyAdjustContentInsets={false}
-        >
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
 
           {error != null && (
             <View style={styles.errorCard}>
@@ -519,8 +517,7 @@ export default function NewJobScreen() {
               <Text style={styles.primaryButtonText}>Post Job</Text>
             )}
           </Pressable>
-        </ScrollView>
-      </View>
-    </View>
+      </ScrollView>
+    </>
   );
 }
