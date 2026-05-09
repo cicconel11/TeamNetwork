@@ -90,11 +90,11 @@ describe("member role changes", () => {
     });
   });
 
-  it("blocks demoting the final active admin", async () => {
+  it("allows demoting an admin when another active admin remains", async () => {
     const supabase = client();
     seedEnabledOrg(supabase);
     supabase.seed("user_organization_roles", [
-      { organization_id: ORG_ID, user_id: ACTOR_ID, role: "active_member", status: "active" },
+      { organization_id: ORG_ID, user_id: ACTOR_ID, role: "admin", status: "active" },
       { organization_id: ORG_ID, user_id: TARGET_ID, role: "admin", status: "active" },
     ]);
 
@@ -105,11 +105,7 @@ describe("member role changes", () => {
       role: "alumni",
     });
 
-    assert.deepEqual(prepared, {
-      state: "error",
-      reason: "last_admin_target_demotion",
-      message: "Cannot demote the only admin.",
-    });
+    assert.equal(prepared.state, "valid");
   });
 
   it("blocks alumni and parent roles when the subscription does not include them", async () => {
@@ -145,6 +141,66 @@ describe("member role changes", () => {
       reason: "parent_upgrade_required",
       message: "Upgrade required for parent role.",
     });
+  });
+
+  it("rejects non-admin actors before any membership lookup", async () => {
+    const supabase = client();
+    seedEnabledOrg(supabase);
+    supabase.seed("user_organization_roles", [
+      { organization_id: ORG_ID, user_id: ACTOR_ID, role: "active_member", status: "active" },
+      { organization_id: ORG_ID, user_id: TARGET_ID, role: "active_member", status: "active" },
+    ]);
+
+    const prepared = await prepareMemberRoleChange(supabase, {
+      organizationId: ORG_ID,
+      actorUserId: ACTOR_ID,
+      targetUserId: TARGET_ID,
+      role: "admin",
+    });
+
+    assert.equal(prepared.state, "error");
+    if (prepared.state === "error") {
+      assert.equal(prepared.reason, "actor_not_admin");
+    }
+
+    const executed = await executeMemberRoleChange(supabase, {
+      organizationId: ORG_ID,
+      actorUserId: ACTOR_ID,
+      targetUserId: TARGET_ID,
+      role: "admin",
+      source: "manual",
+    });
+
+    assert.equal(executed.state, "error");
+    if (executed.state === "error") {
+      assert.equal(executed.reason, "actor_not_admin");
+    }
+    assert.equal(
+      supabase.getRows("user_organization_roles").find((row) => row.user_id === TARGET_ID)?.role,
+      "active_member",
+    );
+    assert.equal(supabase.getRows("org_member_role_audit").length, 0);
+  });
+
+  it("rejects revoked admin actors", async () => {
+    const supabase = client();
+    seedEnabledOrg(supabase);
+    supabase.seed("user_organization_roles", [
+      { organization_id: ORG_ID, user_id: ACTOR_ID, role: "admin", status: "revoked" },
+      { organization_id: ORG_ID, user_id: TARGET_ID, role: "active_member", status: "active" },
+    ]);
+
+    const prepared = await prepareMemberRoleChange(supabase, {
+      organizationId: ORG_ID,
+      actorUserId: ACTOR_ID,
+      targetUserId: TARGET_ID,
+      role: "alumni",
+    });
+
+    assert.equal(prepared.state, "error");
+    if (prepared.state === "error") {
+      assert.equal(prepared.reason, "actor_not_admin");
+    }
   });
 
   it("executes a valid change and records the AI pending-action audit link", async () => {

@@ -61,6 +61,7 @@ export type PreparedMemberRoleChange =
         | "last_admin_target_demotion"
         | "alumni_upgrade_required"
         | "parent_upgrade_required"
+        | "actor_not_admin"
         | "lookup_failed"
         | "update_failed"
         | "audit_failed";
@@ -179,14 +180,8 @@ export async function resolveMemberRoleChangeTarget(
       .maybeSingle();
 
     if (error) return { state: "error", message: error.message };
-    if (!data) {
-      return {
-        state: "resolved",
-        memberId: input.targetUserId,
-        userId: input.targetUserId,
-        displayName: "Member",
-        email: null,
-      };
+    if (!data || !data.id) {
+      return { state: "target_not_found", requestedTarget: input.targetUserId };
     }
 
     const member = data as MemberDirectoryRow;
@@ -277,18 +272,26 @@ export async function resolveMemberRoleChangeTarget(
   };
 }
 
-async function loadTargetMembership(
+async function loadMembership(
   supabase: MemberRoleChangeClient,
-  input: MemberRoleChangeRequest,
+  organizationId: string,
+  userId: string,
 ): Promise<{ row: MembershipRow | null; error: SupabaseError | null }> {
   const { data, error } = await supabase
     .from("user_organization_roles")
     .select("role,status")
-    .eq("organization_id", input.organizationId)
-    .eq("user_id", input.targetUserId)
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
     .maybeSingle();
 
   return { row: data as MembershipRow | null, error };
+}
+
+async function loadTargetMembership(
+  supabase: MemberRoleChangeClient,
+  input: MemberRoleChangeRequest,
+): Promise<{ row: MembershipRow | null; error: SupabaseError | null }> {
+  return loadMembership(supabase, input.organizationId, input.targetUserId);
 }
 
 async function loadSubscription(
@@ -322,6 +325,22 @@ export async function prepareMemberRoleChange(
   supabase: MemberRoleChangeClient,
   input: MemberRoleChangeRequest,
 ): Promise<PreparedMemberRoleChange> {
+  const { row: actorRow, error: actorError } = await loadMembership(
+    supabase,
+    input.organizationId,
+    input.actorUserId,
+  );
+  if (actorError) {
+    return { state: "error", reason: "lookup_failed", message: actorError.message };
+  }
+  if (!actorRow || asRole(actorRow.role) !== "admin" || asStatus(actorRow.status) !== "active") {
+    return {
+      state: "error",
+      reason: "actor_not_admin",
+      message: "Only active admins can change member roles.",
+    };
+  }
+
   const { row, error } = await loadTargetMembership(supabase, input);
   if (error) {
     return { state: "error", reason: "lookup_failed", message: error.message };
