@@ -1020,6 +1020,55 @@ describe("pattern export coverage", () => {
   });
 });
 
+describe("MEMBER_ROLE_CHANGE_PROMPT_PATTERN — precision", () => {
+  const positives = [
+    "make Alex an alumni",
+    "promote Jane to admin",
+    "demote Bob to active member",
+    "change Sarah's role to alumni",
+    "set John as an admin",
+    "update role to active_member",
+    "revoke Sarah's access",
+    "reactivate Bob's membership",
+  ];
+  const negatives = [
+    "make a member feel welcome",
+    "I want an active role on this team",
+    "change the status of the event",
+    "set up admin training next week",
+    "promote our group to the school",
+    "revoke the discount code",
+    "reactivate the parent newsletter",
+    "what admin roles exist?",
+    "show me active members",
+    "who is the parent contact",
+    "how do I become a member",
+  ];
+
+  for (const m of positives) {
+    it(`matches: ${m}`, () => {
+      assert.ok(MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(m), `expected match: ${m}`);
+    });
+  }
+  for (const m of negatives) {
+    it(`does not match: ${m}`, () => {
+      assert.ok(!MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(m), `unexpected match: ${m}`);
+    });
+  }
+
+  it("question phrasing skipped by getPass1Tools even if pattern hits", () => {
+    const tools = getPass1Tools(
+      "what does it take to make Jane an admin?",
+      "members",
+      "surface_read_tools",
+      "knowledge_query",
+      undefined,
+      "/myorg/members",
+    );
+    assert.ok(!tools.some((t) => t.function.name === "prepare_member_role_change"));
+  });
+});
+
 describe("deriveOrgStatsScope", () => {
   const cases: Array<[string, string]> = [
     ["how many active members", "members"],

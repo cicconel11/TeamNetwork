@@ -88,6 +88,9 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 
   if (result.state === "error") {
+    if (result.reason === "actor_not_admin") {
+      return respond({ error: "Forbidden" }, 403);
+    }
     if (
       result.reason === "last_admin_self_demotion" ||
       result.reason === "last_admin_target_demotion" ||
