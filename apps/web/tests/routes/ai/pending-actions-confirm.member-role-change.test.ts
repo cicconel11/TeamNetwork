@@ -170,6 +170,100 @@ const TERMINAL_CASES: ConfirmCase[] = [
   },
 ];
 
+type TransientCase = {
+  name: string;
+  /** raw rpc error that the executor must NOT leak through */
+  rawError: { code?: string; message: string };
+  expectedSanitizedMessage: string;
+};
+
+const TRANSIENT_CASES: TransientCase[] = [
+  {
+    name: "deadlock detected",
+    rawError: { code: "40P01", message: "deadlock detected; database table user_organization_roles" },
+    expectedSanitizedMessage: "Could not update member role. Please try again.",
+  },
+  {
+    name: "syntax error leaks schema",
+    rawError: { message: 'syntax error at or near "FROM" while updating user_organization_roles' },
+    expectedSanitizedMessage: "Could not update member role. Please try again.",
+  },
+];
+
+for (const c of TRANSIENT_CASES) {
+  test(`confirm member_role_change: transient (${c.name}) → status=pending with sanitized error`, async () => {
+    const stub = createSupabaseStub();
+    seedSubscriptionEnabled(stub);
+    stub.seed("user_organization_roles", [
+      { organization_id: ORG_ID, user_id: ADMIN_USER.id, role: "admin", status: "active" },
+      { organization_id: ORG_ID, user_id: TARGET_USER, role: "active_member", status: "active" },
+    ]);
+    stub.registerRpc("execute_member_role_change", () => {
+      const err = new Error(c.rawError.message) as Error & { code?: string };
+      if (c.rawError.code) err.code = c.rawError.code;
+      throw err;
+    });
+
+    const recorded = { messages: [] as any[] };
+    const updatedStatuses: any[] = [];
+
+    const handler = createAiPendingActionConfirmHandler({
+      createClient: async () =>
+        ({ auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) } }) as any,
+      getAiOrgContext: async () =>
+        ({
+          ok: true,
+          orgId: ORG_ID,
+          userId: ADMIN_USER.id,
+          role: "admin",
+          supabase: null,
+          serviceSupabase: buildServiceSupabase(stub, recorded),
+        }) as any,
+      getPendingAction: async () =>
+        ({
+          id: ACTION_ID,
+          organization_id: ORG_ID,
+          user_id: ADMIN_USER.id,
+          thread_id: THREAD_ID,
+          action_type: "member_role_change",
+          payload: {
+            target_user_id: TARGET_USER,
+            target_display_name: "Target User",
+            new_role: "alumni",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        }) as any,
+      updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+        updatedStatuses.push(payload);
+        return { updated: true };
+      },
+      clearDraftSession: async () => {},
+    });
+
+    const response = await handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 409);
+    assert.equal(body.error, c.expectedSanitizedMessage);
+    assert.notEqual(body.error, c.rawError.message, "raw DB message must not leak to response");
+
+    const final = updatedStatuses[updatedStatuses.length - 1];
+    assert.equal(final.status, "pending", "transient failures must remain retryable");
+    assert.equal(final.errorMessage, null);
+
+    const target = stub.getRows("user_organization_roles").find((r) => r.user_id === TARGET_USER);
+    assert.equal(target?.role, "active_member");
+  });
+}
+
 for (const c of TERMINAL_CASES) {
   test(`confirm member_role_change: ${c.name} → status=failed with sanitized error`, async () => {
     const stub = createSupabaseStub();
