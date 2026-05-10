@@ -24,6 +24,10 @@ type QueryBuilder<T> = {
 
 export type MemberRoleChangeClient = {
   from(table: string): QueryBuilder<Record<string, unknown>>;
+  rpc(
+    fn: string,
+    args: Record<string, unknown>,
+  ): Promise<{ data: unknown; error: SupabaseError | null }>;
 };
 
 export type MemberRoleChangeRequest = {
