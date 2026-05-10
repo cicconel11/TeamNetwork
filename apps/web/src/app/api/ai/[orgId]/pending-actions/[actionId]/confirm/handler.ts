@@ -50,7 +50,13 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { aiLog } from "@/lib/ai/logger";
 import { syncEventToUsers } from "@/lib/google/calendar-sync";
 import { sendNotificationBlast } from "@/lib/notifications";
-import { executeMemberRoleChange, type MemberRoleChangeClient } from "@/lib/members/role-change";
+import {
+  executeMemberRoleChange,
+  isTerminalRoleChangeError,
+  toUserSafeRoleChangeMessage,
+  type ExecuteFailureReason,
+  type MemberRoleChangeClient,
+} from "@/lib/members/role-change";
 
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
@@ -942,17 +948,19 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (result.state !== "executed") {
+            const reason = result.reason as ExecuteFailureReason;
+            const userSafeMessage = toUserSafeRoleChangeMessage(reason);
+            const terminal = isTerminalRoleChangeError(reason);
+
             await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
-              status: "pending",
+              status: terminal ? "failed" : "pending",
               expectedStatus: "confirmed",
+              errorMessage: terminal ? userSafeMessage : null,
             });
-            const message =
-              result.state === "error"
-                ? result.message
-                : result.reason === "no_change"
-                  ? "No member role or status change is needed."
-                  : "Member not found.";
-            return NextResponse.json({ error: message }, { status: result.state === "invalid" ? 400 : 409 });
+            return NextResponse.json(
+              { error: userSafeMessage },
+              { status: result.state === "invalid" ? 400 : 409 },
+            );
           }
 
           await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
