@@ -7060,6 +7060,21 @@ export type Database = {
           user_rsvp_status: string
         }[]
       }
+      execute_member_role_change: {
+        Args: {
+          p_organization_id: string
+          p_target_user_id: string
+          p_actor_user_id: string
+          p_pending_action_id: string | null
+          p_source: string
+          p_previous_role: Database["public"]["Enums"]["user_role"]
+          p_new_role: Database["public"]["Enums"]["user_role"]
+          p_previous_status: Database["public"]["Enums"]["membership_status"]
+          p_new_status: Database["public"]["Enums"]["membership_status"]
+          p_reason: string | null
+        }
+        Returns: string
+      }
       filter_announcement_ids_for_user: {
         Args: { p_announcement_ids: string[]; p_org_id: string }
         Returns: string[]
