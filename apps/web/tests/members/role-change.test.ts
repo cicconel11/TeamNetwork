@@ -286,4 +286,112 @@ describe("member role changes", () => {
       ],
     );
   });
+
+  it("calls execute_member_role_change rpc once with the prepared values", async () => {
+    const supabase = client();
+    seedEnabledOrg(supabase);
+    supabase.seed("user_organization_roles", [
+      { organization_id: ORG_ID, user_id: ACTOR_ID, role: "admin", status: "active" },
+      { organization_id: ORG_ID, user_id: TARGET_ID, role: "active_member", status: "active" },
+    ]);
+
+    const calls: Array<{ name: string; params: Record<string, unknown> }> = [];
+    const wrapped: MemberRoleChangeClient = {
+      from: (table: string) => supabase.from(table),
+      rpc: async (name, params) => {
+        calls.push({ name, params });
+        return supabase.rpc(name, params);
+      },
+    };
+
+    const result = await executeMemberRoleChange(wrapped, {
+      organizationId: ORG_ID,
+      actorUserId: ACTOR_ID,
+      targetUserId: TARGET_ID,
+      role: "alumni",
+      source: "ai_pending_action",
+      pendingActionId: "pending-99",
+      reason: "test reason",
+    });
+
+    assert.equal(result.state, "executed");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].name, "execute_member_role_change");
+    assert.deepEqual(calls[0].params, {
+      p_organization_id: ORG_ID,
+      p_target_user_id: TARGET_ID,
+      p_actor_user_id: ACTOR_ID,
+      p_pending_action_id: "pending-99",
+      p_source: "ai_pending_action",
+      p_previous_role: "active_member",
+      p_new_role: "alumni",
+      p_previous_status: "active",
+      p_new_status: "active",
+      p_reason: "test reason",
+    });
+  });
+
+  it("maps rpc P0002 to a terminal target_not_found with sanitized message", async () => {
+    const supabase = client();
+    seedEnabledOrg(supabase);
+    supabase.seed("user_organization_roles", [
+      { organization_id: ORG_ID, user_id: ACTOR_ID, role: "admin", status: "active" },
+      { organization_id: ORG_ID, user_id: TARGET_ID, role: "active_member", status: "active" },
+    ]);
+
+    const wrapped: MemberRoleChangeClient = {
+      from: (table: string) => supabase.from(table),
+      rpc: async () => ({
+        data: null,
+        error: { code: "P0002", message: "member_not_found leaks schema" },
+      }),
+    };
+
+    const result = await executeMemberRoleChange(wrapped, {
+      organizationId: ORG_ID,
+      actorUserId: ACTOR_ID,
+      targetUserId: TARGET_ID,
+      role: "alumni",
+      source: "manual",
+    });
+
+    assert.equal(result.state, "error");
+    if (result.state === "error") {
+      assert.equal(result.reason, "target_not_found");
+      assert.equal(result.message, "Member not found in this organization.");
+      assert.notEqual(result.message, "member_not_found leaks schema");
+    }
+  });
+
+  it("maps generic rpc errors to update_failed with sanitized message", async () => {
+    const supabase = client();
+    seedEnabledOrg(supabase);
+    supabase.seed("user_organization_roles", [
+      { organization_id: ORG_ID, user_id: ACTOR_ID, role: "admin", status: "active" },
+      { organization_id: ORG_ID, user_id: TARGET_ID, role: "active_member", status: "active" },
+    ]);
+
+    const wrapped: MemberRoleChangeClient = {
+      from: (table: string) => supabase.from(table),
+      rpc: async () => ({
+        data: null,
+        error: { code: "40001", message: "deadlock detected on user_organization_roles" },
+      }),
+    };
+
+    const result = await executeMemberRoleChange(wrapped, {
+      organizationId: ORG_ID,
+      actorUserId: ACTOR_ID,
+      targetUserId: TARGET_ID,
+      role: "alumni",
+      source: "manual",
+    });
+
+    assert.equal(result.state, "error");
+    if (result.state === "error") {
+      assert.equal(result.reason, "update_failed");
+      assert.equal(result.message, "Could not update member role. Please try again.");
+      assert.notEqual(result.message, "deadlock detected on user_organization_roles");
+    }
+  });
 });
