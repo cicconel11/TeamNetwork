@@ -12,7 +12,46 @@ const ACTOR_ID = "22222222-2222-4222-8222-222222222222";
 const TARGET_ID = "33333333-3333-4333-8333-333333333333";
 
 function client() {
-  return createSupabaseStub() as unknown as ReturnType<typeof createSupabaseStub> & MemberRoleChangeClient;
+  const stub = createSupabaseStub() as ReturnType<typeof createSupabaseStub>;
+  // Mirror execute_member_role_change RPC: update the membership row, raise
+  // P0002 on no match, then insert the audit row. Mirrors the Postgres
+  // function so executor tests exercise the same shape as production.
+  stub.registerRpc("execute_member_role_change", async (params: Record<string, unknown>) => {
+    const orgId = params.p_organization_id as string;
+    const targetUserId = params.p_target_user_id as string;
+    const newRole = params.p_new_role as string;
+    const newStatus = params.p_new_status as string;
+
+    const existing = stub.getRows("user_organization_roles").find(
+      (r) => r.organization_id === orgId && r.user_id === targetUserId,
+    );
+    if (!existing) {
+      const err = new Error("member_not_found") as Error & { code?: string };
+      err.code = "P0002";
+      throw err;
+    }
+
+    await stub
+      .from("user_organization_roles")
+      .update({ role: newRole, status: newStatus })
+      .eq("organization_id", orgId)
+      .eq("user_id", targetUserId);
+
+    await stub.from("org_member_role_audit").insert({
+      organization_id: orgId,
+      target_user_id: targetUserId,
+      actor_user_id: params.p_actor_user_id,
+      pending_action_id: params.p_pending_action_id,
+      source: params.p_source,
+      previous_role: params.p_previous_role,
+      new_role: newRole,
+      previous_status: params.p_previous_status,
+      new_status: newStatus,
+      reason: params.p_reason,
+    });
+    return "audit-id";
+  });
+  return stub as unknown as ReturnType<typeof createSupabaseStub> & MemberRoleChangeClient;
 }
 
 function seedEnabledOrg(supabase: ReturnType<typeof client>) {

@@ -457,35 +457,39 @@ export async function executeMemberRoleChange(
     return prepared;
   }
 
-  const updatePayload: Record<string, unknown> = {};
-  if (prepared.roleChanged) updatePayload.role = prepared.nextRole;
-  if (prepared.statusChanged) updatePayload.status = prepared.nextStatus;
-
-  const { error: updateError } = await supabase
-    .from("user_organization_roles")
-    .update(updatePayload)
-    .eq("organization_id", input.organizationId)
-    .eq("user_id", input.targetUserId);
-
-  if (updateError) {
-    return { state: "error", reason: "update_failed", message: updateError.message };
-  }
-
-  const { error: auditError } = await supabase.from("org_member_role_audit").insert({
-    organization_id: input.organizationId,
-    target_user_id: input.targetUserId,
-    actor_user_id: input.actorUserId,
-    pending_action_id: input.pendingActionId ?? null,
-    source: input.source,
-    previous_role: prepared.currentRole,
-    new_role: prepared.nextRole,
-    previous_status: prepared.currentStatus,
-    new_status: prepared.nextStatus,
-    reason: input.reason ?? null,
+  const { error: rpcError } = await supabase.rpc("execute_member_role_change", {
+    p_organization_id: input.organizationId,
+    p_target_user_id: input.targetUserId,
+    p_actor_user_id: input.actorUserId,
+    p_pending_action_id: input.pendingActionId ?? null,
+    p_source: input.source,
+    p_previous_role: prepared.currentRole,
+    p_new_role: prepared.nextRole,
+    p_previous_status: prepared.currentStatus,
+    p_new_status: prepared.nextStatus,
+    p_reason: input.reason ?? null,
   });
 
-  if (auditError) {
-    return { state: "error", reason: "audit_failed", message: auditError.message };
+  if (rpcError) {
+    // Log raw DB error server-side; never persist or return raw text.
+    console.error("execute_member_role_change rpc failed", {
+      organizationId: input.organizationId,
+      targetUserId: input.targetUserId,
+      code: rpcError.code,
+      message: rpcError.message,
+    });
+    if (rpcError.code === "P0002") {
+      return {
+        state: "error",
+        reason: "target_not_found",
+        message: toUserSafeRoleChangeMessage("target_not_found"),
+      };
+    }
+    return {
+      state: "error",
+      reason: "update_failed",
+      message: toUserSafeRoleChangeMessage("update_failed"),
+    };
   }
 
   return { ...prepared, state: "executed" };
