@@ -607,9 +607,20 @@ export function AIPanel({ orgId }: AIPanelProps) {
       );
       const data = await response.json().catch(() => ({ error: "Request failed" }));
       if (!response.ok) {
+        const message = getPendingActionErrorMessage(data);
+        if (data && typeof data === "object" && (data as { terminal?: unknown }).terminal === true) {
+          setPendingActions((prev) =>
+            prev.map((a) =>
+              a.actionId === actionId
+                ? { ...a, status: "failed", errorMessage: message }
+                : a
+            )
+          );
+          return;
+        }
         setPendingActionErrors((prev) => ({
           ...prev,
-          [actionId]: getPendingActionErrorMessage(data),
+          [actionId]: message,
         }));
         return;
       }

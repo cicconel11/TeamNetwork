@@ -297,13 +297,15 @@ export function useAIStream({ orgId, onNavigate }: UseAIStreamOptions): UseAIStr
                 previousPayload: event.previousPayload ?? null,
                 reviseCount: event.reviseCount ?? 0,
                 expiresAt: event.expiresAt,
+                status: "pending",
+                errorMessage: null,
               },
             ],
           }));
         },
         onPendingActionUpdated: (event) => {
           setState((prev) => {
-            const updatedAction = {
+            const updatedAction: PendingActionState = {
               actionId: event.actionId,
               actionType: event.actionType,
               summary: event.summary,
@@ -311,6 +313,8 @@ export function useAIStream({ orgId, onNavigate }: UseAIStreamOptions): UseAIStr
               previousPayload: event.previousPayload,
               reviseCount: event.reviseCount,
               expiresAt: event.expiresAt,
+              status: "pending",
+              errorMessage: null,
             };
             const idx = prev.pendingActions.findIndex(
               (action) => action.actionId === event.actionId
@@ -336,6 +340,8 @@ export function useAIStream({ orgId, onNavigate }: UseAIStreamOptions): UseAIStr
               previousPayload: null,
               reviseCount: 0,
               expiresAt: a.expiresAt,
+              status: "pending",
+              errorMessage: null,
             })),
           }));
         },

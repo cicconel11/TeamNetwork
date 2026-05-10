@@ -958,7 +958,11 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               errorMessage: terminal ? userSafeMessage : null,
             });
             return NextResponse.json(
-              { error: userSafeMessage },
+              {
+                error: userSafeMessage,
+                terminal,
+                actionStatus: terminal ? "failed" : "pending",
+              },
               { status: result.state === "invalid" ? 400 : 409 },
             );
           }
