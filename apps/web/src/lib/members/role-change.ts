@@ -68,9 +68,39 @@ export type PreparedMemberRoleChange =
         | "actor_not_admin"
         | "lookup_failed"
         | "update_failed"
-        | "audit_failed";
+        | "audit_failed"
+        | "target_not_found";
       message: string;
     };
+
+export type ExecuteFailureReason =
+  | "target_not_found"
+  | "no_change"
+  | "last_admin_self_demotion"
+  | "last_admin_target_demotion"
+  | "alumni_upgrade_required"
+  | "parent_upgrade_required"
+  | "actor_not_admin"
+  | "lookup_failed"
+  | "update_failed"
+  | "audit_failed";
+
+const USER_SAFE_FAILURE_MESSAGES: Record<ExecuteFailureReason, string> = {
+  target_not_found: "Member not found in this organization.",
+  no_change: "No member role or status change is needed.",
+  last_admin_self_demotion: "You are the only admin in this organization.",
+  last_admin_target_demotion: "Cannot demote the only admin.",
+  alumni_upgrade_required: "Upgrade required for alumni role.",
+  parent_upgrade_required: "Upgrade required for parent role.",
+  actor_not_admin: "Only active admins can change member roles.",
+  lookup_failed: "Could not look up member role. Please try again.",
+  update_failed: "Could not update member role. Please try again.",
+  audit_failed: "Could not record member role change. Please try again.",
+};
+
+export function toUserSafeRoleChangeMessage(reason: ExecuteFailureReason): string {
+  return USER_SAFE_FAILURE_MESSAGES[reason];
+}
 
 export type ExecutedMemberRoleChange =
   | (Extract<PreparedMemberRoleChange, { state: "error" | "invalid" }>)
