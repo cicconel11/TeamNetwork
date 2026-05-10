@@ -600,7 +600,8 @@ export function createSupabaseStub() {
       return { data: result, error: null };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      return { data: null, error: { message } };
+      const code = err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+      return { data: null, error: code ? { code, message } : { message } };
     }
   };
 
