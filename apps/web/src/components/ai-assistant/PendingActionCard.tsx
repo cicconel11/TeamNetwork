@@ -32,6 +32,7 @@ export function PendingActionCard({
   onCancel,
 }: PendingActionCardProps) {
   const { payload } = action;
+  const isFailed = action.status === "failed";
   const title = getValue(payload, "title");
   const company = getValue(payload, "company");
   const location = getValue(payload, "location");
@@ -70,6 +71,19 @@ export function PendingActionCard({
           <p className="text-sm font-semibold text-foreground">{action.summary.title}</p>
           <p className="text-xs text-muted-foreground">{action.summary.description}</p>
         </div>
+
+        {isFailed ? (
+          <div
+            role="alert"
+            data-testid="pending-action-failed-banner"
+            className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          >
+            <p className="font-medium">This action could not be completed.</p>
+            {action.errorMessage ? (
+              <p className="mt-1 text-xs">{action.errorMessage}</p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-4 space-y-2 text-sm">
           {action.actionType === "create_discussion_thread" ? (
@@ -237,29 +251,31 @@ export function PendingActionCard({
           )}
         </div>
 
-        {error ? <p className="mt-3 text-xs text-red-600">{error}</p> : null}
+        {!isFailed && error ? <p className="mt-3 text-xs text-red-600">{error}</p> : null}
 
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={() => void onConfirm()}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy ? (
-              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            ) : null}
-            Confirm
-          </button>
-          <button
-            type="button"
-            onClick={() => void onCancel()}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Cancel
-          </button>
-        </div>
+        {isFailed ? null : (
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => void onConfirm()}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? (
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              ) : null}
+              Confirm
+            </button>
+            <button
+              type="button"
+              onClick={() => void onCancel()}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

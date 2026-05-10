@@ -19,6 +19,8 @@ export interface PendingActionSummary {
   description: string;
 }
 
+export type PendingActionStatus = "pending" | "failed";
+
 export interface PendingActionState {
   actionId: string;
   actionType: string;
@@ -27,6 +29,8 @@ export interface PendingActionState {
   previousPayload: Record<string, unknown> | null;
   reviseCount: number;
   expiresAt: string;
+  status: PendingActionStatus;
+  errorMessage: string | null;
 }
 
 export interface RetryRequestIdentity {
