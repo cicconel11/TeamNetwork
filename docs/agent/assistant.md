@@ -95,6 +95,7 @@ AI-related migrations create the assistant tables, cache, audit telemetry, pendi
 | `20260727000000_ai_pending_actions.sql` | `ai_pending_actions` + RLS + indexes for confirmation-gated assistant writes |
 | `20260728000000_ai_draft_sessions.sql` | `ai_draft_sessions` for persisted multi-turn job/discussion draft continuation |
 | `20261203000000_create_org_member_role_audit.sql` | `org_member_role_audit` for manual and AI-confirmed member role/status changes |
+| `20261204000000_create_execute_member_role_change_rpc.sql` | `execute_member_role_change()` `SECURITY DEFINER` RPC: atomic role/status update + audit insert with CAS guard on prior role/status; raises `P0002` (`member_not_found`) and `P0003` (`stale_member_role`); pinned `search_path`; granted to `service_role` only |
 | `20260402120000_ai_schedule_uploads_bucket.sql` | Private `ai-schedule-uploads` storage bucket + INSERT/SELECT RLS policies |
 | `20260402123000_ai_schedule_uploads_allow_images.sql` | Backfills image MIME types on existing buckets |
 | `20260403120000_ai_schedule_uploads_auth_delete.sql` | Authenticated DELETE RLS policy for schedule uploads |
@@ -137,7 +138,7 @@ Negative AI feedback can now be exported into reviewable eval candidates with `n
 | Method | Route | Purpose |
 |---|---|---|
 | POST | `/api/ai/[orgId]/chat` | Send message, receive SSE stream |
-| POST | `/api/ai/[orgId]/pending-actions/[actionId]/confirm` | Confirm a structured assistant action and execute the server-owned write |
+| POST | `/api/ai/[orgId]/pending-actions/[actionId]/confirm` | Confirm a structured assistant action and execute the server-owned write. On failure the response body is `{ error, terminal, actionStatus }` where `terminal: true` instructs the panel to flip the action to `failed` and hide the retry buttons; `terminal: false` keeps the action pending so it can be re-confirmed. See `isTerminalRoleChangeError` in `src/lib/members/role-change.ts` for the member role-change classification. |
 | POST | `/api/ai/[orgId]/pending-actions/[actionId]/cancel` | Cancel a structured assistant action before execution |
 | GET | `/api/ai/[orgId]/threads` | List threads (cursor-paginated) |
 | DELETE | `/api/ai/[orgId]/threads/[threadId]` | Soft-delete a thread |
@@ -171,6 +172,11 @@ The panel now derives `surface` from the current route instead of hardcoding `"g
 
 ### 4. Write-action parity is partial
 The assistant now supports confirmation-gated write paths for announcement create/update/delete, jobs, direct and group chat messages, top-level discussion threads, discussion replies, calendar events, and member role/status changes. Member changes route through `prepare_member_role_change`, resolve by current member route or member name/email, preflight no-op/final-admin/subscription gates, and execute through the shared `src/lib/members/role-change.ts` domain with an `org_member_role_audit` row linked to the pending action. Broader write parity for forms, settings, exports, billing, and other admin mutations is still not implemented.
+
+#### Member role-change atomicity and failure routing
+The role/status update and the audit insert are executed as a single `execute_member_role_change()` RPC (migration `20261204000000`) so a partial write cannot leave the audit log out of sync with the membership row. The RPC is `SECURITY DEFINER`, pins `search_path`, revokes `PUBLIC`/`anon`/`authenticated`, and grants `EXECUTE` only to `service_role`. The UPDATE includes a compare-and-set guard on the previously observed role/status: if another writer mutated the row after the prepare step, the RPC raises `P0003` (`stale_member_role`) instead of overwriting the new state. A missing membership row raises `P0002` (`member_not_found`).
+
+Executor failures are classified as terminal or transient via `ExecuteFailureReason` and `isTerminalRoleChangeError` in `src/lib/members/role-change.ts`. Terminal reasons (`actor_not_admin`, `last_admin_self_demotion`, `last_admin_target_demotion`, `no_change`, `alumni_upgrade_required`, `parent_upgrade_required`, `target_not_found`) flip the pending action to `failed` with a sanitized user-safe message from `USER_SAFE_FAILURE_MESSAGES` and surface a banner in the panel; the confirm/cancel buttons are removed so the action cannot be retried. Transient reasons (`update_failed`, `lookup_failed`, `audit_failed`, `stale_member_role`) keep the action in `pending` state with no persisted error message so the caller can re-confirm. Raw database error text is never returned to the client. The manual `PATCH /api/organizations/[orgId]/members/[memberId]` endpoint maps the same RPC errors to `404` (target missing) and `409` (stale or terminal-policy reasons) so the UI behaves consistently across the manual and AI paths.
 
 ### 5. Route-entity context and navigation guidance are richer
 The assistant now resolves a compact trusted route entity for core detail pages (`members`, `discussion threads`, `events`, `jobs`, and announcement edit pages) and injects that normalized snapshot into the untrusted prompt message. This remains org-filtered and RLS-scoped, so cross-org pasted URLs, soft-deleted rows, and inaccessible entities are omitted instead of leaking into prompt context. Deterministic navigation answers also return a concrete `Next:` step and `I can help:` line alongside the best accessible page so unsupported actions still feel guided instead of dead-ending on a link.
@@ -217,7 +223,7 @@ The following features are deferred from v1 tool calling. Each is mapped to the 
 
 ### Write Actions + Safety Gates
 - **Paper:** ILION — Deterministic Pre-Execution Safety Gates (`2603.13247`)
-- **What:** Extend the shipped pending-action write tools beyond announcements, jobs, chat messages, discussions, and events into higher-risk admin operations such as member role changes, forms, settings, exports, and billing handoffs.
+- **What:** Extend the shipped pending-action write tools beyond announcements, jobs, chat messages, discussions, events, and member role/status changes into the remaining higher-risk admin operations such as forms, settings, exports, and billing handoffs.
 - **Design:** Rule-based gate over action metadata (table, operation, scope). Any destructive, broadcast, or permission-changing action requires explicit user confirmation via SSE `pending_action` event. Full audit trail for every BLOCK/ALLOW decision.
 
 ### Parallel Tool Execution
