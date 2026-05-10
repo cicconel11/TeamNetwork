@@ -102,6 +102,35 @@ export function toUserSafeRoleChangeMessage(reason: ExecuteFailureReason): strin
   return USER_SAFE_FAILURE_MESSAGES[reason];
 }
 
+/**
+ * Returns true when the failure reason will not change on retry.
+ * Terminal reasons should land the pending action on `failed`; transient ones
+ * stay on `pending` so the user (or the AI) can try again.
+ *
+ * - actor_not_admin / last_admin_*  → guard violations, won't change on retry
+ * - alumni/parent_upgrade_required  → subscription gate, won't change on retry
+ * - no_change                       → input matched current state, retry is a no-op
+ * - target_not_found                → membership row missing, retry won't materialize it
+ * - update_failed / lookup_failed   → generic DB errors, often transient
+ * - audit_failed                    → unreachable post-rpc; classed transient defensively
+ */
+export function isTerminalRoleChangeError(reason: ExecuteFailureReason): boolean {
+  switch (reason) {
+    case "actor_not_admin":
+    case "last_admin_self_demotion":
+    case "last_admin_target_demotion":
+    case "no_change":
+    case "alumni_upgrade_required":
+    case "parent_upgrade_required":
+    case "target_not_found":
+      return true;
+    case "update_failed":
+    case "lookup_failed":
+    case "audit_failed":
+      return false;
+  }
+}
+
 export type ExecutedMemberRoleChange =
   | (Extract<PreparedMemberRoleChange, { state: "error" | "invalid" }>)
   | (Omit<Extract<PreparedMemberRoleChange, { state: "valid" }>, "state"> & { state: "executed" });
