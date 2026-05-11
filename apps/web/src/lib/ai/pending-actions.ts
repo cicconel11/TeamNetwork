@@ -1,4 +1,5 @@
 import type { AssistantPreparedJob } from "@/lib/schemas/jobs";
+import type { UpdateJobForm } from "@/lib/schemas/jobs";
 import type { AssistantPreparedDiscussion } from "@/lib/schemas/discussion";
 import type { AssistantPreparedDiscussionReply } from "@/lib/schemas/discussion";
 import type { AssistantPreparedEvent } from "@/lib/schemas/events-ai";
@@ -13,11 +14,15 @@ export type PendingActionType =
   | "update_announcement"
   | "delete_announcement"
   | "create_job_posting"
+  | "update_job_posting"
+  | "delete_job_posting"
   | "send_chat_message"
   | "send_group_chat_message"
   | "create_discussion_reply"
   | "create_discussion_thread"
   | "create_event"
+  | "update_event"
+  | "delete_event"
   | "member_role_change"
   | "create_enterprise_invite"
   | "revoke_enterprise_invite";
@@ -30,6 +35,23 @@ export type PendingActionStatus =
   | "expired";
 
 export interface CreateJobPostingPendingPayload extends AssistantPreparedJob {
+  orgSlug?: string | null;
+}
+
+export interface UpdateJobPostingPendingPayload extends UpdateJobForm {
+  job_id: string;
+  orgSlug?: string | null;
+  previous_title?: string | null;
+  previous_company?: string | null;
+  previous_location?: string | null;
+  previous_description?: string | null;
+  previous_is_active?: boolean | null;
+}
+
+export interface DeleteJobPostingPendingPayload {
+  job_id: string;
+  title: string;
+  company?: string | null;
   orgSlug?: string | null;
 }
 
@@ -68,6 +90,34 @@ export interface SendGroupChatMessagePendingPayload extends AssistantPreparedGro
 }
 
 export interface CreateEventPendingPayload extends AssistantPreparedEvent {
+  orgSlug?: string | null;
+}
+
+export type EventMutationScope = "this_only" | "this_and_future" | "all_in_series";
+
+export interface UpdateEventPendingPayload extends AssistantPreparedEvent {
+  event_id: string;
+  update_scope: Exclude<EventMutationScope, "all_in_series">;
+  orgSlug?: string | null;
+  previous_title?: string | null;
+  previous_description?: string | null;
+  previous_start_date?: string | null;
+  previous_start_time?: string | null;
+  previous_end_date?: string | null;
+  previous_end_time?: string | null;
+  previous_location?: string | null;
+  previous_event_type?: string | null;
+  previous_is_philanthropy?: boolean | null;
+}
+
+export interface DeleteEventPendingPayload {
+  event_id: string;
+  title: string;
+  start_date: string;
+  end_date?: string | null;
+  location?: string | null;
+  recurrence_group_id?: string | null;
+  delete_scope: EventMutationScope;
   orgSlug?: string | null;
 }
 
@@ -110,11 +160,15 @@ export interface PendingActionPayloadByType {
   update_announcement: UpdateAnnouncementPendingPayload;
   delete_announcement: DeleteAnnouncementPendingPayload;
   create_job_posting: CreateJobPostingPendingPayload;
+  update_job_posting: UpdateJobPostingPendingPayload;
+  delete_job_posting: DeleteJobPostingPendingPayload;
   send_chat_message: SendChatMessagePendingPayload;
   send_group_chat_message: SendGroupChatMessagePendingPayload;
   create_discussion_reply: CreateDiscussionReplyPendingPayload;
   create_discussion_thread: CreateDiscussionThreadPendingPayload;
   create_event: CreateEventPendingPayload;
+  update_event: UpdateEventPendingPayload;
+  delete_event: DeleteEventPendingPayload;
   member_role_change: MemberRoleChangePendingPayload;
   create_enterprise_invite: CreateEnterpriseInvitePendingPayload;
   revoke_enterprise_invite: RevokeEnterpriseInvitePendingPayload;
@@ -519,6 +573,16 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
         title: "Review job posting",
         description: "Confirm the drafted job before it is added to the jobs board.",
       };
+    case "update_job_posting":
+      return {
+        title: "Review job posting edits",
+        description: "Confirm the job posting edits before they replace the current version.",
+      };
+    case "delete_job_posting":
+      return {
+        title: "Delete job posting",
+        description: "Confirm that this job posting should be removed from the jobs board.",
+      };
     case "send_chat_message":
       return {
         title: "Review chat message",
@@ -543,6 +607,16 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       return {
         title: "Review event",
         description: "Confirm the drafted event before it is added to the calendar.",
+      };
+    case "update_event":
+      return {
+        title: "Review event edits",
+        description: "Confirm the event edits before they update the calendar.",
+      };
+    case "delete_event":
+      return {
+        title: "Delete event",
+        description: "Confirm that this event should be removed from the calendar.",
       };
     case "member_role_change":
       return {

@@ -31,6 +31,21 @@ export const prepareJobPostingSchema = z
   })
   .strict();
 
+export const prepareUpdateJobPostingSchema = prepareJobPostingSchema
+  .extend({
+    job_id: z.string().trim().min(1).max(200).optional(),
+    job_query: z.string().trim().min(1).optional(),
+    is_active: z.boolean().optional(),
+  })
+  .strict();
+
+export const prepareDeleteJobPostingSchema = z
+  .object({
+    job_id: z.string().trim().min(1).max(200).optional(),
+    job_query: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
 export const prepareDiscussionThreadSchema = z
   .object({
     title: z.string().trim().min(1).optional(),
@@ -101,6 +116,28 @@ export const prepareEventSchema = z
       ])
       .optional(),
     is_philanthropy: z.boolean().optional(),
+  })
+  .strict();
+
+export const eventMutationScopeSchema = z.enum([
+  "this_only",
+  "this_and_future",
+  "all_in_series",
+]);
+
+export const prepareUpdateEventSchema = prepareEventSchema
+  .extend({
+    event_id: z.string().trim().min(1).max(200).optional(),
+    event_query: z.string().trim().min(1).optional(),
+    update_scope: z.enum(["this_only", "this_and_future", "all_in_series"]).optional(),
+  })
+  .strict();
+
+export const prepareDeleteEventSchema = z
+  .object({
+    event_id: z.string().trim().min(1).max(200).optional(),
+    event_query: z.string().trim().min(1).optional(),
+    delete_scope: eventMutationScopeSchema.optional(),
   })
   .strict();
 
