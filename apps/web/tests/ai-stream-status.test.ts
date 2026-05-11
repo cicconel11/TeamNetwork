@@ -366,8 +366,13 @@ test("AI panel uses generic schedule file defaults and shares capability disclos
   );
   assert.match(
     panelSource,
-    /for \(const id of ids\) \{\s*await handleConfirmPendingAction\(id, \{ reloadCollections: false, refreshCalendar: false \}\);/s,
-    "AIPanel should confirm pending batches sequentially and suppress per-action refreshes"
+    /for \(const id of ids\) \{\s*const result = await handleConfirmPendingAction\(id, \{ reloadCollections: false, refreshCalendar: false \}\);\s*if \(result\) results\.push\(result\);/s,
+    "AIPanel should confirm pending batches sequentially, collect successes, and suppress per-action refreshes"
+  );
+  assert.match(
+    panelSource,
+    /dispatchConfirmRefreshEvents\(results\)/,
+    "AIPanel should dispatch one batch of targeted refresh events after confirm-all"
   );
   assert.doesNotMatch(
     panelSource,

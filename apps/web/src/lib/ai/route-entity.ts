@@ -95,6 +95,16 @@ export function extractCurrentDiscussionThreadRouteId(pathname: string | undefin
   return ref?.kind === "discussion_thread" ? ref.id : null;
 }
 
+export function extractCurrentEventRouteId(pathname: string | undefined): string | null {
+  const ref = extractRouteEntity(pathname);
+  return ref?.kind === "event" ? ref.id : null;
+}
+
+export function extractCurrentJobPostingRouteId(pathname: string | undefined): string | null {
+  const ref = extractRouteEntity(pathname);
+  return ref?.kind === "job_posting" ? ref.id : null;
+}
+
 function buildRef(
   kind: RouteEntityKind,
   id: string | undefined,

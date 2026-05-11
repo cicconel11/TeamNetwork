@@ -94,7 +94,7 @@ AI-related migrations create the assistant tables, cache, audit telemetry, pendi
 | `20260322000000_ai_threads_updated_at_trigger.sql` | `ai_threads_updated_at` trigger (reuses existing `update_updated_at_column()`) |
 | `20260727000000_ai_pending_actions.sql` | `ai_pending_actions` + RLS + indexes for confirmation-gated assistant writes |
 | `20260728000000_ai_draft_sessions.sql` | `ai_draft_sessions` for persisted multi-turn job/discussion draft continuation |
-| `20261203000000_create_org_member_role_audit.sql` | `org_member_role_audit` for manual and AI-confirmed member role/status changes |
+| `20261203000003_create_org_member_role_audit.sql` | `org_member_role_audit` for manual and AI-confirmed member role/status changes |
 | `20261204000000_create_execute_member_role_change_rpc.sql` | `execute_member_role_change()` `SECURITY DEFINER` RPC: atomic role/status update + audit insert with CAS guard on prior role/status; raises `P0002` (`member_not_found`) and `P0003` (`stale_member_role`); pinned `search_path`; granted to `service_role` only |
 | `20260402120000_ai_schedule_uploads_bucket.sql` | Private `ai-schedule-uploads` storage bucket + INSERT/SELECT RLS policies |
 | `20260402123000_ai_schedule_uploads_allow_images.sql` | Backfills image MIME types on existing buckets |

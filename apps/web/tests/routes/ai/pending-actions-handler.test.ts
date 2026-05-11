@@ -25,6 +25,52 @@ function buildRequest() {
   });
 }
 
+function registerExecuteMemberRoleChangeRpc(supabase: ReturnType<typeof createSupabaseStub>) {
+  supabase.registerRpc("execute_member_role_change", async (params: Record<string, unknown>) => {
+    const orgId = params.p_organization_id as string;
+    const targetUserId = params.p_target_user_id as string;
+    const previousRole = params.p_previous_role as string;
+    const previousStatus = params.p_previous_status as string;
+    const newRole = params.p_new_role as string;
+    const newStatus = params.p_new_status as string;
+
+    const existing = supabase.getRows("user_organization_roles").find(
+      (row) => row.organization_id === orgId && row.user_id === targetUserId,
+    );
+    if (!existing) {
+      const err = new Error("member_not_found") as Error & { code?: string };
+      err.code = "P0002";
+      throw err;
+    }
+    if (existing.role !== previousRole || existing.status !== previousStatus) {
+      const err = new Error("stale_member_role") as Error & { code?: string };
+      err.code = "P0003";
+      throw err;
+    }
+
+    await supabase
+      .from("user_organization_roles")
+      .update({ role: newRole, status: newStatus })
+      .eq("organization_id", orgId)
+      .eq("user_id", targetUserId);
+
+    await supabase.from("org_member_role_audit").insert({
+      organization_id: orgId,
+      target_user_id: targetUserId,
+      actor_user_id: params.p_actor_user_id,
+      pending_action_id: params.p_pending_action_id,
+      source: params.p_source,
+      previous_role: previousRole,
+      new_role: newRole,
+      previous_status: previousStatus,
+      new_status: newStatus,
+      reason: params.p_reason,
+    });
+
+    return "audit-id";
+  });
+}
+
 test("confirm executes create_job_posting and appends assistant message", async () => {
   const insertedMessages: any[] = [];
   const updatedStatuses: any[] = [];
@@ -224,6 +270,7 @@ test("confirm executes member_role_change and writes audit-linked assistant mess
     { organization_id: ORG_ID, user_id: ADMIN_USER.id, role: "admin", status: "active" },
     { organization_id: ORG_ID, user_id: "target-user", role: "active_member", status: "active" },
   ]);
+  registerExecuteMemberRoleChangeRpc(supabase);
 
   const handler = createAiPendingActionConfirmHandler({
     createClient: async () =>

@@ -5,6 +5,8 @@ import {
 } from "@/lib/ai/tools/definitions";
 import {
   extractCurrentDiscussionThreadRouteId,
+  extractCurrentEventRouteId,
+  extractCurrentJobPostingRouteId,
   extractCurrentMemberRouteId,
   getCurrentPathFeatureSegment,
 } from "@/lib/ai/route-entity";
@@ -80,9 +82,13 @@ export const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
 export const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 export const UPDATE_JOB_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:edit|update|change|revise|close|deactivate|reactivate)(?!\w)[\s\S]{0,120}\b(?:job|job posting|posting|listing|opening|role|position|this)(?!\w)|(?<!\w)(?:job|job posting|posting|listing|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:edit|update|change|revise|close|deactivate|reactivate)(?!\w))/i;
+  /(?:(?<!\w)(?:edit|update|change|revise|close|deactivate|reactivate)(?!\w)[\s\S]{0,120}\b(?:job|job posting|posting|listing|opening)(?!\w)|(?<!\w)(?:job|job posting|posting|listing|opening)(?!\w)[\s\S]{0,80}\b(?:edit|update|change|revise|close|deactivate|reactivate)(?!\w))/i;
 export const DELETE_JOB_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:delete|remove|take\s+down)(?!\w)[\s\S]{0,120}\b(?:job|job posting|posting|listing|opening|role|position|this)(?!\w)|(?<!\w)(?:job|job posting|posting|listing|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:delete|remove|take\s+down)(?!\w))/i;
+  /(?:(?<!\w)(?:delete|remove|take\s+down)(?!\w)[\s\S]{0,120}\b(?:job|job posting|posting|listing|opening)(?!\w)|(?<!\w)(?:job|job posting|posting|listing|opening)(?!\w)[\s\S]{0,80}\b(?:delete|remove|take\s+down)(?!\w))/i;
+export const UPDATE_CURRENT_JOB_PROMPT_PATTERN =
+  /(?<!\w)(?:edit|update|change|revise|close|deactivate|reactivate)(?!\w)[\s\S]{0,80}\b(?:this|it|this\s+(?:posting|listing|opening))(?!\w)/i;
+export const DELETE_CURRENT_JOB_PROMPT_PATTERN =
+  /(?<!\w)(?:delete|remove|take\s+down)(?!\w)[\s\S]{0,80}\b(?:this|it|this\s+(?:posting|listing|opening))(?!\w)/i;
 export const SEND_CHAT_MESSAGE_PROMPT_PATTERN =
   /(?:(?<!\w)(?:message|dm|direct\s+message|chat\s+message|write\s+to)(?!\w)[\s\S]{0,140}\b(?:someone|somebody|them|him|her|this person|that person|member|[a-z][\w.'-]*(?:\s+[a-z][\w.'-]*){0,3})(?!\w)|(?<!\w)send(?!\w)[\s\S]{0,80}\b(?:a\s+)?(?:dm|direct\s+message|chat\s+message)\b[\s\S]{0,80}\b(?:to|for)\b[\s\S]{0,80}\b(?:someone|somebody|them|him|her|this person|that person|member|[a-z][\w.'-]*(?:\s+[a-z][\w.'-]*){0,3})(?!\w))/i;
 export const LIST_CHAT_GROUPS_PROMPT_PATTERN =
@@ -96,9 +102,13 @@ export const DISCUSSION_REPLY_PROMPT_PATTERN =
 export const CREATE_EVENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,80}\b(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w))/i;
 export const UPDATE_EVENT_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:edit|update|change|revise|move|rename|reschedule)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts|this)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts)(?!\w)[\s\S]{0,80}\b(?:edit|update|change|revise|move|rename|reschedule)(?!\w))/i;
+  /(?:(?<!\w)(?:edit|update|change|revise|move|rename|reschedule)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts)(?!\w)[\s\S]{0,80}\b(?:edit|update|change|revise|move|rename|reschedule)(?!\w))/i;
 export const DELETE_EVENT_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:delete|remove|cancel)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts|this)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts)(?!\w)[\s\S]{0,80}\b(?:delete|remove|cancel)(?!\w))/i;
+  /(?:(?<!\w)(?:delete|remove|cancel)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts)(?!\w)[\s\S]{0,80}\b(?:delete|remove|cancel)(?!\w))/i;
+export const UPDATE_CURRENT_EVENT_PROMPT_PATTERN =
+  /(?<!\w)(?:edit|update|change|revise|move|rename|reschedule)(?!\w)[\s\S]{0,80}\b(?:this|it|this\s+event)(?!\w)/i;
+export const DELETE_CURRENT_EVENT_PROMPT_PATTERN =
+  /(?<!\w)(?:delete|remove|cancel)(?!\w)[\s\S]{0,80}\b(?:this|it|this\s+event)(?!\w)/i;
 export const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|set\s+up)(?!\w)[\s\S]{0,80}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,60}\b(?:create|add|schedule|plan|make|set\s+up)(?!\w))/i;
 // Match explicit member-role-change intent. Requires either:
@@ -301,6 +311,32 @@ export function getPass1Tools(
     return [AI_TOOL_MAP.prepare_job_posting];
   }
 
+  const currentEventId = extractCurrentEventRouteId(currentPath);
+  if (currentEventId && DELETE_CURRENT_EVENT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_delete_event];
+  }
+
+  if (currentEventId && UPDATE_CURRENT_EVENT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_update_event];
+  }
+
+  const currentJobPostingId = extractCurrentJobPostingRouteId(currentPath);
+  if (currentJobPostingId && DELETE_CURRENT_JOB_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_delete_job_posting];
+  }
+
+  if (currentJobPostingId && UPDATE_CURRENT_JOB_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_update_job_posting];
+  }
+
+  if (
+    MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(message) &&
+    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
+    !message.trim().endsWith("?")
+  ) {
+    return [AI_TOOL_MAP.prepare_member_role_change];
+  }
+
   if (DELETE_JOB_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.prepare_delete_job_posting];
   }
@@ -363,14 +399,6 @@ export function getPass1Tools(
 
   if (UPDATE_EVENT_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.prepare_update_event];
-  }
-
-  if (
-    MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(message) &&
-    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
-    !message.trim().endsWith("?")
-  ) {
-    return [AI_TOOL_MAP.prepare_member_role_change];
   }
 
   if (intentType === "navigation" && DIRECT_NAVIGATION_PROMPT_PATTERN.test(message)) {
