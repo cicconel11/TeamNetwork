@@ -51,6 +51,45 @@ function getPendingActionErrorMessage(data: { error?: unknown; code?: unknown })
     : "Failed to confirm";
 }
 
+function dispatchConfirmRefreshEvents(results: unknown[]) {
+  const eventNames = new Set<string>();
+  let shouldRefresh = false;
+
+  for (const result of results) {
+    if (!result || typeof result !== "object") continue;
+    const data = result as { affectedEvents?: unknown; actionType?: unknown };
+    if (Array.isArray(data.affectedEvents)) {
+      for (const eventName of data.affectedEvents) {
+        if (typeof eventName === "string" && eventName.length > 0) {
+          eventNames.add(eventName);
+        }
+      }
+    }
+
+    if (typeof data.actionType === "string") {
+      const fallback = {
+        update_event: "tn:ai-event-updated",
+        delete_event: "tn:ai-event-deleted",
+        update_job_posting: "tn:ai-job-posting-updated",
+        delete_job_posting: "tn:ai-job-posting-deleted",
+      }[data.actionType];
+      if (fallback) eventNames.add(fallback);
+    }
+
+    shouldRefresh = true;
+  }
+
+  eventNames.add("tn:ai-action-executed");
+  for (const eventName of eventNames) {
+    window.dispatchEvent(new CustomEvent(eventName, { detail: results }));
+  }
+  if (eventNames.has("tn:ai-event-updated") || eventNames.has("tn:ai-event-deleted")) {
+    window.dispatchEvent(new CustomEvent("calendar:refresh", { detail: results }));
+  }
+
+  return shouldRefresh;
+}
+
 function getFeatureSegment(pathname: string): string {
   return (
     pathname.match(/^\/enterprise\/[^/]+\/([^/?#]+)/)?.[1] ??
@@ -630,10 +669,10 @@ export function AIPanel({ orgId }: AIPanelProps) {
         await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
       }
       if (shouldRefreshCalendar) {
-        window.dispatchEvent(new CustomEvent("tn:ai-action-executed", { detail: data }));
-        window.dispatchEvent(new CustomEvent("calendar:refresh"));
+        dispatchConfirmRefreshEvents([data]);
         router.refresh();
       }
+      return data;
     } finally {
       setPendingActionBusyIds((prev) => {
         const next = new Set(prev);
@@ -644,16 +683,20 @@ export function AIPanel({ orgId }: AIPanelProps) {
   }, [activeThreadId, loadMessages, loadThreads, orgId, router]);
 
   const handleConfirmAllPendingActions = useCallback(async () => {
-    const ids = pendingActions.map((a) => a.actionId);
+    const ids = pendingActions
+      .filter((action) => action.status === "pending")
+      .map((a) => a.actionId);
+    const results: unknown[] = [];
     for (const id of ids) {
-      await handleConfirmPendingAction(id, { reloadCollections: false, refreshCalendar: false });
+      const result = await handleConfirmPendingAction(id, { reloadCollections: false, refreshCalendar: false });
+      if (result) results.push(result);
     }
     if (activeThreadId) {
       await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
     }
-    window.dispatchEvent(new CustomEvent("tn:ai-action-executed"));
-    window.dispatchEvent(new CustomEvent("calendar:refresh"));
-    router.refresh();
+    if (dispatchConfirmRefreshEvents(results)) {
+      router.refresh();
+    }
   }, [activeThreadId, handleConfirmPendingAction, loadMessages, loadThreads, pendingActions, router]);
 
   const handleCancelPendingAction = useCallback(async (actionId: string) => {
@@ -688,7 +731,9 @@ export function AIPanel({ orgId }: AIPanelProps) {
   }, [activeThreadId, loadMessages, loadThreads, orgId]);
 
   const handleCancelAllPendingActions = useCallback(async () => {
-    const ids = pendingActions.map((a) => a.actionId);
+    const ids = pendingActions
+      .filter((action) => action.status === "pending")
+      .map((a) => a.actionId);
     await Promise.allSettled(ids.map((id) => handleCancelPendingAction(id)));
   }, [pendingActions, handleCancelPendingAction]);
 

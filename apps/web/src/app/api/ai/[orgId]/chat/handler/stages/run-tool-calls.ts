@@ -202,6 +202,32 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
       }
     }
 
+    if (
+      toolEvent.name === "prepare_update_job_posting" ||
+      toolEvent.name === "prepare_delete_job_posting"
+    ) {
+      if (
+        input.routeEntityContext?.kind === "job_posting" &&
+        getNonEmptyString(parsedArgs.job_id) == null &&
+        getNonEmptyString(parsedArgs.job_query) == null
+      ) {
+        parsedArgs.job_id = input.routeEntityContext.id;
+      }
+    }
+
+    if (
+      toolEvent.name === "prepare_update_event" ||
+      toolEvent.name === "prepare_delete_event"
+    ) {
+      if (
+        input.routeEntityContext?.kind === "event" &&
+        getNonEmptyString(parsedArgs.event_id) == null &&
+        getNonEmptyString(parsedArgs.event_query) == null
+      ) {
+        parsedArgs.event_id = input.routeEntityContext.id;
+      }
+    }
+
     let syntheticToolResult: ToolExecutionResult | null = null;
     if (toolEvent.name === "prepare_discussion_reply") {
       const discussionThreadId = getNonEmptyString(parsedArgs.discussion_thread_id);
@@ -318,11 +344,15 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
             toolEvent.name === "prepare_update_announcement" ||
             toolEvent.name === "prepare_delete_announcement" ||
             toolEvent.name === "prepare_job_posting" ||
+            toolEvent.name === "prepare_update_job_posting" ||
+            toolEvent.name === "prepare_delete_job_posting" ||
             toolEvent.name === "prepare_chat_message" ||
             toolEvent.name === "prepare_group_message" ||
             toolEvent.name === "prepare_discussion_reply" ||
             toolEvent.name === "prepare_discussion_thread" ||
-            toolEvent.name === "prepare_event") &&
+            toolEvent.name === "prepare_event" ||
+            toolEvent.name === "prepare_update_event" ||
+            toolEvent.name === "prepare_delete_event") &&
           result.data &&
           typeof result.data === "object"
         ) {
@@ -360,6 +390,10 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
                   ? "delete_announcement"
                   : toolEvent.name === "prepare_job_posting"
                   ? "create_job_posting"
+                  : toolEvent.name === "prepare_update_job_posting"
+                  ? "update_job_posting"
+                  : toolEvent.name === "prepare_delete_job_posting"
+                  ? "delete_job_posting"
                   : toolEvent.name === "prepare_chat_message"
                   ? "send_chat_message"
                   : toolEvent.name === "prepare_group_message"
@@ -368,7 +402,11 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
                   ? "create_discussion_reply"
                   : toolEvent.name === "prepare_discussion_thread"
                   ? "create_discussion_thread"
-                  : "create_event";
+                  : toolEvent.name === "prepare_event"
+                  ? "create_event"
+                  : toolEvent.name === "prepare_update_event"
+                  ? "update_event"
+                  : "delete_event";
               const next = await input.saveDraftSessionFn(
                 input.ctx.serviceSupabase as unknown as DraftSessionSupabase,
                 {
