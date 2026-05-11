@@ -21,6 +21,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_audit_id uuid;
+  v_member_exists boolean;
 BEGIN
   IF p_source NOT IN ('manual', 'ai_pending_action') THEN
     RAISE EXCEPTION 'invalid_source' USING ERRCODE = '22023';
@@ -30,9 +31,22 @@ BEGIN
   SET role = p_new_role,
       status = p_new_status
   WHERE organization_id = p_organization_id
-    AND user_id = p_target_user_id;
+    AND user_id = p_target_user_id
+    AND role = p_previous_role
+    AND status = p_previous_status;
 
   IF NOT FOUND THEN
+    SELECT EXISTS (
+      SELECT 1
+      FROM public.user_organization_roles
+      WHERE organization_id = p_organization_id
+        AND user_id = p_target_user_id
+    ) INTO v_member_exists;
+
+    IF v_member_exists THEN
+      RAISE EXCEPTION 'stale_member_role' USING ERRCODE = 'P0003';
+    END IF;
+
     RAISE EXCEPTION 'member_not_found' USING ERRCODE = 'P0002';
   END IF;
 
