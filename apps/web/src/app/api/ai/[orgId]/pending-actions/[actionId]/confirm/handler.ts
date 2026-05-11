@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import {
@@ -16,6 +17,10 @@ import {
   type CreateDiscussionThreadPendingPayload,
   type CreateEventPendingPayload,
   type CreateJobPostingPendingPayload,
+  type UpdateJobPostingPendingPayload,
+  type DeleteJobPostingPendingPayload,
+  type UpdateEventPendingPayload,
+  type DeleteEventPendingPayload,
   type CreateEnterpriseInvitePendingPayload,
   type RevokeEnterpriseInvitePendingPayload,
   type PendingActionSupabase,
@@ -26,7 +31,11 @@ import {
   type DraftSessionSupabase,
 } from "@/lib/ai/draft-sessions";
 import { createEvent } from "@/lib/events/create-event";
+import { updateEvent } from "@/lib/events/update-event";
+import { deleteEvent } from "@/lib/events/delete-event";
 import { createJobPosting } from "@/lib/jobs/create-job";
+import { updateJobPosting } from "@/lib/jobs/update-job";
+import { deleteJobPosting } from "@/lib/jobs/delete-job";
 import { createDiscussionThread } from "@/lib/discussions/create-thread";
 import { createDiscussionReply } from "@/lib/discussions/create-reply";
 import {
@@ -45,7 +54,7 @@ import {
   sendAiAssistedGroupChatMessage,
   type GroupChatSupabase,
 } from "@/lib/chat/group-chat";
-import { calendarEventDetailPath } from "@/lib/calendar/routes";
+import { calendarEventDetailPath, calendarListPath } from "@/lib/calendar/routes";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
 import { syncEventToUsers } from "@/lib/google/calendar-sync";
@@ -58,6 +67,22 @@ import {
   type MemberRoleChangeClient,
 } from "@/lib/members/role-change";
 
+function normalizedConfirmMetadata(input: {
+  actionType: string;
+  resultEntityType: string;
+  resultEntityId: string;
+  affectedPaths?: string[];
+  affectedEvents?: string[];
+}) {
+  return {
+    actionType: input.actionType,
+    resultEntityType: input.resultEntityType,
+    resultEntityId: input.resultEntityId,
+    affectedPaths: Array.from(new Set(input.affectedPaths ?? [])),
+    affectedEvents: Array.from(new Set(input.affectedEvents ?? [])),
+  };
+}
+
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
   getAiOrgContext?: typeof getAiOrgContext;
@@ -67,9 +92,13 @@ export interface AiPendingActionConfirmRouteDeps {
   updateAnnouncement?: typeof updateAnnouncement;
   deleteAnnouncement?: typeof deleteAnnouncement;
   createJobPosting?: typeof createJobPosting;
+  updateJobPosting?: typeof updateJobPosting;
+  deleteJobPosting?: typeof deleteJobPosting;
   createDiscussionReply?: typeof createDiscussionReply;
   createDiscussionThread?: typeof createDiscussionThread;
   createEvent?: typeof createEvent;
+  updateEvent?: typeof updateEvent;
+  deleteEvent?: typeof deleteEvent;
   sendAnnouncementNotification?: typeof sendAnnouncementNotification;
   sendAiAssistedDirectChatMessage?: typeof sendAiAssistedDirectChatMessage;
   sendAiAssistedGroupChatMessage?: typeof sendAiAssistedGroupChatMessage;
@@ -93,9 +122,13 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const updateAnnouncementFn = deps.updateAnnouncement ?? updateAnnouncement;
   const deleteAnnouncementFn = deps.deleteAnnouncement ?? deleteAnnouncement;
   const createJobPostingFn = deps.createJobPosting ?? createJobPosting;
+  const updateJobPostingFn = deps.updateJobPosting ?? updateJobPosting;
+  const deleteJobPostingFn = deps.deleteJobPosting ?? deleteJobPosting;
   const createDiscussionReplyFn = deps.createDiscussionReply ?? createDiscussionReply;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
   const createEventFn = deps.createEvent ?? createEvent;
+  const updateEventFn = deps.updateEvent ?? updateEvent;
+  const deleteEventFn = deps.deleteEvent ?? deleteEvent;
   const sendAnnouncementNotificationFn =
     deps.sendAnnouncementNotification ?? sendAnnouncementNotification;
   const sendAiAssistedDirectChatMessageFn =
@@ -503,6 +536,144 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           return NextResponse.json({ ok: true, job: result.job, actionId: action.id });
         }
+        case "update_job_posting": {
+          const payload = action.payload as UpdateJobPostingPendingPayload;
+          const result = await updateJobPostingFn({
+            supabase: ctx.serviceSupabase,
+            jobId: payload.job_id,
+            actorUserId: ctx.userId,
+            data: payload,
+            requireAdmin: true,
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+              status: result.status === 404 || result.status === 403 || result.status === 400 ? "failed" : "pending",
+              expectedStatus: "confirmed",
+              errorMessage: result.status === 404 || result.status === 403 || result.status === 400 ? result.error : null,
+            });
+            return NextResponse.json(
+              {
+                error: result.error,
+                terminal: result.status === 404 || result.status === 403 || result.status === 400,
+                actionStatus: result.status === 404 || result.status === 403 || result.status === 400 ? "failed" : "pending",
+                ...(result.details ? { details: result.details } : {}),
+              },
+              { status: result.status },
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "job_posting",
+            resultEntityId: payload.job_id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const orgSlug = typeof payload.orgSlug === "string" && payload.orgSlug.length > 0 ? payload.orgSlug : null;
+          const jobPath = orgSlug ? `/${orgSlug}/jobs/${payload.job_id}` : null;
+          const title = typeof result.job.title === "string" ? result.job.title : payload.title ?? "Job posting";
+          const content = jobPath
+            ? `Updated job posting: [${title}](${jobPath})`
+            : `Updated job posting: ${title}`;
+
+          await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            user_id: ctx.userId,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          return NextResponse.json({
+            ok: true,
+            job: result.job,
+            actionId: action.id,
+            ...normalizedConfirmMetadata({
+              actionType: "update_job_posting",
+              resultEntityType: "job_posting",
+              resultEntityId: payload.job_id,
+              affectedPaths: orgSlug ? [`/${orgSlug}/jobs`, `/${orgSlug}/jobs/${payload.job_id}`] : [],
+              affectedEvents: ["tn:ai-job-posting-updated"],
+            }),
+          });
+        }
+        case "delete_job_posting": {
+          const payload = action.payload as DeleteJobPostingPendingPayload;
+          const result = await deleteJobPostingFn({
+            supabase: ctx.serviceSupabase,
+            jobId: payload.job_id,
+            actorUserId: ctx.userId,
+            requireAdmin: true,
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+              status: result.status === 404 || result.status === 403 ? "failed" : "pending",
+              expectedStatus: "confirmed",
+              errorMessage: result.status === 404 || result.status === 403 ? result.error : null,
+            });
+            return NextResponse.json(
+              {
+                error: result.error,
+                terminal: result.status === 404 || result.status === 403,
+                actionStatus: result.status === 404 || result.status === 403 ? "failed" : "pending",
+              },
+              { status: result.status },
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "job_posting",
+            resultEntityId: payload.job_id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const orgSlug = typeof payload.orgSlug === "string" && payload.orgSlug.length > 0 ? payload.orgSlug : null;
+          await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            user_id: ctx.userId,
+            role: "assistant",
+            content: `Deleted job posting: ${payload.title}`,
+            status: "complete",
+          });
+
+          return NextResponse.json({
+            ok: true,
+            jobId: payload.job_id,
+            actionId: action.id,
+            ...normalizedConfirmMetadata({
+              actionType: "delete_job_posting",
+              resultEntityType: "job_posting",
+              resultEntityId: payload.job_id,
+              affectedPaths: orgSlug ? [`/${orgSlug}/jobs`] : [],
+              affectedEvents: ["tn:ai-job-posting-deleted"],
+            }),
+          });
+        }
         case "send_chat_message": {
           const payload = action.payload as SendChatMessagePendingPayload;
           const result = await sendAiAssistedDirectChatMessageFn(ctx.serviceSupabase as DirectChatSupabase, {
@@ -648,6 +819,20 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               actionId: action.id,
               error: msgError,
             });
+          }
+
+          const { data: orgSlugRow } = await ctx.serviceSupabase
+            .from("organizations")
+            .select("slug")
+            .eq("id", ctx.orgId)
+            .single();
+
+          if (orgSlugRow?.slug) {
+            const slug = orgSlugRow.slug;
+            revalidatePath(`/${slug}`);
+            revalidatePath(`/${slug}/members`, "layout");
+            revalidatePath(`/${slug}/parents`, "layout");
+            revalidatePath(`/${slug}/settings/invites`);
           }
 
           return NextResponse.json({
@@ -933,6 +1118,182 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           return NextResponse.json({ ok: true, event: result.event, actionId: action.id });
+        }
+        case "update_event": {
+          const payload = action.payload as UpdateEventPendingPayload;
+          const result = await updateEventFn({
+            supabase: ctx.serviceSupabase,
+            orgId: ctx.orgId,
+            actorUserId: ctx.userId,
+            eventId: payload.event_id,
+            data: payload,
+            scope: payload.update_scope,
+          });
+
+          if (!result.ok) {
+            const terminal = result.status === 400 || result.status === 403 || result.status === 404;
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+              status: terminal ? "failed" : "pending",
+              expectedStatus: "confirmed",
+              errorMessage: terminal ? result.error : null,
+            });
+            return NextResponse.json(
+              {
+                error: result.error,
+                terminal,
+                actionStatus: terminal ? "failed" : "pending",
+                ...(result.details ? { details: result.details } : {}),
+              },
+              { status: result.status },
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "event",
+            resultEntityId: payload.event_id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          for (const eventId of result.affectedEventIds) {
+            try {
+              await syncEventToUsersFn(ctx.serviceSupabase, ctx.orgId, eventId, "update");
+            } catch (syncErr) {
+              aiLog("error", "ai-confirm", "google calendar sync failed", {
+                ...logContext,
+                userId: ctx.userId,
+                threadId: action.thread_id,
+              }, { actionId: action.id, eventId, error: syncErr });
+            }
+            try {
+              await syncOutlookEventToUsersFn(ctx.serviceSupabase, ctx.orgId, eventId, "update");
+            } catch (outlookErr) {
+              aiLog("error", "ai-confirm", "outlook calendar sync failed", {
+                ...logContext,
+                userId: ctx.userId,
+                threadId: action.thread_id,
+              }, { actionId: action.id, eventId, error: outlookErr });
+            }
+          }
+
+          const orgSlug = typeof payload.orgSlug === "string" && payload.orgSlug.length > 0 ? payload.orgSlug : null;
+          const eventPath = orgSlug ? calendarEventDetailPath(orgSlug, payload.event_id) : null;
+          const eventTitle = typeof result.event.title === "string" ? result.event.title : payload.title;
+          await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            user_id: ctx.userId,
+            role: "assistant",
+            content: eventPath ? `Updated event: [${eventTitle}](${eventPath})` : `Updated event: ${eventTitle}`,
+            status: "complete",
+          });
+
+          return NextResponse.json({
+            ok: true,
+            event: result.event,
+            actionId: action.id,
+            ...normalizedConfirmMetadata({
+              actionType: "update_event",
+              resultEntityType: "event",
+              resultEntityId: payload.event_id,
+              affectedPaths: orgSlug ? [calendarListPath(orgSlug), calendarEventDetailPath(orgSlug, payload.event_id)] : [],
+              affectedEvents: ["tn:ai-event-updated"],
+            }),
+          });
+        }
+        case "delete_event": {
+          const payload = action.payload as DeleteEventPendingPayload;
+          const result = await deleteEventFn({
+            supabase: ctx.serviceSupabase,
+            orgId: ctx.orgId,
+            actorUserId: ctx.userId,
+            eventId: payload.event_id,
+            scope: payload.delete_scope,
+          });
+
+          if (!result.ok) {
+            const terminal = result.status === 403 || result.status === 404;
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+              status: terminal ? "failed" : "pending",
+              expectedStatus: "confirmed",
+              errorMessage: terminal ? result.error : null,
+            });
+            return NextResponse.json(
+              { error: result.error, terminal, actionStatus: terminal ? "failed" : "pending" },
+              { status: result.status },
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "event",
+            resultEntityId: payload.event_id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          for (const eventId of result.affectedEventIds) {
+            try {
+              await syncEventToUsersFn(ctx.serviceSupabase, ctx.orgId, eventId, "delete");
+            } catch (syncErr) {
+              aiLog("error", "ai-confirm", "google calendar sync failed", {
+                ...logContext,
+                userId: ctx.userId,
+                threadId: action.thread_id,
+              }, { actionId: action.id, eventId, error: syncErr });
+            }
+            try {
+              await syncOutlookEventToUsersFn(ctx.serviceSupabase, ctx.orgId, eventId, "delete");
+            } catch (outlookErr) {
+              aiLog("error", "ai-confirm", "outlook calendar sync failed", {
+                ...logContext,
+                userId: ctx.userId,
+                threadId: action.thread_id,
+              }, { actionId: action.id, eventId, error: outlookErr });
+            }
+          }
+
+          const orgSlug = typeof payload.orgSlug === "string" && payload.orgSlug.length > 0 ? payload.orgSlug : null;
+          await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            user_id: ctx.userId,
+            role: "assistant",
+            content: `Deleted event: ${payload.title}`,
+            status: "complete",
+          });
+
+          return NextResponse.json({
+            ok: true,
+            eventId: payload.event_id,
+            actionId: action.id,
+            ...normalizedConfirmMetadata({
+              actionType: "delete_event",
+              resultEntityType: "event",
+              resultEntityId: payload.event_id,
+              affectedPaths: orgSlug ? [calendarListPath(orgSlug)] : [],
+              affectedEvents: ["tn:ai-event-deleted"],
+            }),
+          });
         }
         case "member_role_change": {
           const payload = action.payload as MemberRoleChangePendingPayload;
