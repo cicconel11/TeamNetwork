@@ -12,6 +12,9 @@ const STALE_TIME_MS = 30_000;
  */
 const DEFAULT_POST_EVENT_GRACE_MINUTES = 30;
 const MAX_GRACE_MINUTES = 240;
+// Mirror /api/cron/event-reminders: the lock-screen activity should appear
+// at the same moment the 30-min reminder push fires, not only after kickoff.
+const PRE_EVENT_MINUTES = 30;
 
 function resolveGraceMinutes(eventSettings: unknown): number {
   if (eventSettings && typeof eventSettings === "object") {
@@ -84,7 +87,9 @@ export function useActiveEventsForLiveActivity(
       const lower = new Date(
         now.getTime() - MAX_GRACE_MINUTES * 60 * 1000,
       ).toISOString();
-      const upper = now.toISOString();
+      const upper = new Date(
+        now.getTime() + PRE_EVENT_MINUTES * 60 * 1000,
+      ).toISOString();
 
       // 1. Find every event_rsvps row for this user where status='attending'
       // and the event window overlaps `now`. We do the join in JS so we can

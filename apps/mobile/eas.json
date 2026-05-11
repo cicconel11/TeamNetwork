@@ -19,12 +19,18 @@
     },
     "preview": {
       "distribution": "internal",
-      "environment": "preview"
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_MOBILE_LIVE_ACTIVITIES_ENABLED": "true"
+      }
     },
     "production": {
       "autoIncrement": true,
       "distribution": "store",
-      "environment": "production"
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_MOBILE_LIVE_ACTIVITIES_ENABLED": "true"
+      }
     }
   },
   "submit": {
