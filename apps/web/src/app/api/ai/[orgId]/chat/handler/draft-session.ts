@@ -32,6 +32,10 @@ export function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
       return "prepare_delete_announcement";
     case "create_job_posting":
       return "prepare_job_posting";
+    case "update_job_posting":
+      return "prepare_update_job_posting";
+    case "delete_job_posting":
+      return "prepare_delete_job_posting";
     case "send_chat_message":
       return "prepare_chat_message";
     case "send_group_chat_message":
@@ -42,6 +46,10 @@ export function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
       return "prepare_discussion_thread";
     case "create_event":
       return "prepare_event";
+    case "update_event":
+      return "prepare_update_event";
+    case "delete_event":
+      return "prepare_delete_event";
   }
 }
 
@@ -656,6 +664,11 @@ export function inferDraftSessionFromHistory(input: {
           ),
         ];
         break;
+      case "update_job_posting":
+      case "delete_job_posting":
+        draftPayload = {};
+        missingFields = [];
+        break;
       case "create_discussion_thread":
         draftPayload = extractDiscussionDraftFromHistory(relevantMessages);
         missingFields = (["title", "body"] as const).filter(
@@ -667,6 +680,11 @@ export function inferDraftSessionFromHistory(input: {
         missingFields = (["title", "start_date", "start_time"] as const).filter(
           (field) => getNonEmptyString(draftPayload[field]) == null
         );
+        break;
+      case "update_event":
+      case "delete_event":
+        draftPayload = {};
+        missingFields = [];
         break;
     }
 

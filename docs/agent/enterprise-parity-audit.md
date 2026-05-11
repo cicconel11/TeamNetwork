@@ -4,6 +4,8 @@ Tracks UI mutations in the enterprise surface against AI tool coverage. The goal
 
 Related read capability landed this round: `list_enterprise_audit_events` surfaces `enterprise_audit_logs` + `enterprise_adoption_requests` to any enterprise role. That tool is a read, not a mutation, so it does not appear in the table below.
 
+Org-surface CRUD parity for jobs and calendar events is now handled outside this enterprise table via `prepare_update_job_posting`, `prepare_delete_job_posting`, `prepare_update_event`, and `prepare_delete_event`. Enterprise settings, billing, and managed-org mutations remain tracked below.
+
 ## Tracked gaps
 
 | UI action | Handler route | Priority | Status | Notes |
