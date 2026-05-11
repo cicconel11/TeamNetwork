@@ -29,8 +29,6 @@ Run from repo root unless noted. Turbo handles task orchestration and caching.
 ### Top-level
 ```bash
 bun install              # Install all workspaces
-bun dev                  # Dev server for @teammeet/web (alias: bun run dev:web)
-bun run dev:mobile       # Start Expo for @teammeet/mobile
 bun run build            # Build all packages/apps
 bun run build:web        # Build only @teammeet/web
 bun run lint             # Lint all workspaces except mobile
@@ -41,6 +39,69 @@ bun run format           # Prettier write
 bun run format:check     # Prettier check
 ```
 
+### Running the web app (`@teammeet/web`)
+
+Next.js 15 App Router on `localhost:3000`. Always run via Bun + Turbo from repo root so Turbo's `globalPassThroughEnv` (in `turbo.json`) injects `.env.local`. Do NOT invoke `next dev` directly — env vars validated in `apps/web/next.config.mjs` will be missing.
+
+```bash
+bun dev                  # Primary — turbo run dev --filter=@teammeet/web
+bun run dev:web          # Identical alias
+# Or from apps/web/:
+cd apps/web && bun run dev
+```
+
+Stripe webhook listeners (separate terminals, requires `stripe` CLI logged in):
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+stripe listen --forward-connect-to localhost:3000/api/stripe/webhook-connect
+```
+
+Production-style local run:
+```bash
+bun run build:web && bun run --cwd apps/web start
+```
+
+Per-suite test commands, Supabase wrappers, and middleware flow live in `apps/web/CLAUDE.md`.
+
+### Running the mobile app (`@teammeet/mobile`)
+
+Expo SDK 54 with a **custom dev client** — Expo Go does NOT work (native modules: Stripe, Apple auth, Google sign-in, lucide). A dev-client build must be installed on the simulator/device before Metro will attach. Rebuild the dev client only when native config (`app.json`, native deps) changes.
+
+Daily dev loop:
+```bash
+bun run mobile:start:dev-client   # Metro bundler for dev client (primary)
+bun run mobile:ios                # Boot iOS Simulator + dev client
+bun run mobile:android            # Boot Android emulator (auto-detects SDK/Java)
+# Legacy alias — Expo default port, NOT dev-client mode:
+bun run dev:mobile                # bun run --cwd apps/mobile start
+```
+
+Regenerate native projects (after native config change):
+```bash
+bun run mobile:prebuild           # Generate ios/ + android/
+bun run mobile:prebuild:clean     # Wipe + regenerate from scratch
+```
+
+EAS cloud builds + store submission (from `apps/mobile/`, requires `eas` CLI logged in as org `teamnetwork`):
+```bash
+cd apps/mobile
+eas build --platform ios --profile preview        # Internal dogfood (no store)
+bun run eas:ios:production                        # Store-ready iOS build
+eas build --platform android --profile production # Store-ready Android
+bun run eas:submit:ios                            # Upload latest iOS build → ASC
+eas submit --platform android --latest            # Upload latest Android → Play
+```
+
+Diagnostics:
+```bash
+bun run --cwd apps/mobile config           # Print resolved Expo config
+bun run --cwd apps/mobile android:doctor   # Verify Android SDK / Java / adb
+```
+
+Mobile is excluded from root `bun run lint` (`--filter=!@teammeet/mobile`). Mobile gates: `bun run --cwd apps/mobile typecheck` and `bun --cwd apps/mobile test`.
+
+Apple Developer / ASC release flow, TestFlight steps, drawer + tab routing, and styling tokens live in `apps/mobile/CLAUDE.md`.
+
 ### Per-workspace
 Use `--filter`:
 ```bash
@@ -48,7 +109,7 @@ turbo run build --filter=@teammeet/web
 turbo run typecheck --filter=@teammeet/core
 ```
 
-Or `cd` into the workspace and use its scripts. See `apps/web/CLAUDE.md` and `apps/mobile/CLAUDE.md` for app-specific commands (single-test invocations, Stripe webhook listeners, Expo prebuild, etc.).
+Or `cd` into the workspace and use its scripts.
 
 ## Environment Variables
 
