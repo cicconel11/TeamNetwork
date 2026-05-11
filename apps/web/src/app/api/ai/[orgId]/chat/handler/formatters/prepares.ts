@@ -28,6 +28,17 @@ interface PendingActionToolPayload {
   requested_target?: unknown;
   candidate_thread_titles?: unknown;
   requested_thread_title?: unknown;
+  candidates?: unknown;
+}
+
+function formatCandidateLabels(
+  candidates: unknown,
+  formatter: (row: Record<string, unknown>) => string | null,
+): string[] {
+  if (!Array.isArray(candidates)) return [];
+  return candidates
+    .map((row) => (row && typeof row === "object" ? formatter(row as Record<string, unknown>) : null))
+    .filter((value): value is string => Boolean(value));
 }
 
 export function formatPrepareJobPostingResponse(data: unknown): string | null {
@@ -66,6 +77,45 @@ export function formatPrepareJobPostingResponse(data: unknown): string | null {
     return "I drafted the job posting. Review the details below and confirm when you're ready to create it.";
   }
 
+  return null;
+}
+
+function formatJobCandidateLabel(row: Record<string, unknown>): string | null {
+  const title = getNonEmptyString(row.title);
+  if (!title) return null;
+  const company = getNonEmptyString(row.company);
+  return company ? `${title} at ${company}` : title;
+}
+
+export function formatPrepareUpdateJobPostingResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const candidates = formatCandidateLabels(payload.candidates, formatJobCandidateLabel);
+    if (candidates.length > 0) {
+      return `I found a few job postings that might match. Tell me which one you mean: ${candidates.join("; ")}.`;
+    }
+    return "Which job posting should I update? Share the title (or part of it) and what you'd like to change.";
+  }
+  if (payload.state === "needs_confirmation") {
+    return "I prepared the job posting edits. Review the changes below and confirm when you're ready to update it.";
+  }
+  return null;
+}
+
+export function formatPrepareDeleteJobPostingResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const candidates = formatCandidateLabels(payload.candidates, formatJobCandidateLabel);
+    if (candidates.length > 0) {
+      return `I found a few job postings that might match. Tell me which one you mean: ${candidates.join("; ")}.`;
+    }
+    return "Which job posting should I delete? Share the title (or part of it).";
+  }
+  if (payload.state === "needs_confirmation") {
+    return "I found the job posting. Confirm below to delete it.";
+  }
   return null;
 }
 
@@ -466,6 +516,57 @@ export function formatPrepareEventResponse(data: unknown): string | null {
     return "I drafted the event. Review the details below and confirm when you're ready to add it to the calendar.";
   }
 
+  return null;
+}
+
+function formatEventCandidateLabel(row: Record<string, unknown>): string | null {
+  const title = getNonEmptyString(row.title);
+  if (!title) return null;
+  const startDate = getNonEmptyString(row.start_date);
+  return startDate ? `${title} (${startDate.slice(0, 10)})` : title;
+}
+
+export function formatPrepareUpdateEventResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+    if (missingFields.includes("update_scope")) {
+      return "I can update one event or this and future events, but I can't update all events in a series from chat yet. Tell me which supported scope to use.";
+    }
+    const candidates = formatCandidateLabels(payload.candidates, formatEventCandidateLabel);
+    if (candidates.length > 0) {
+      return `I found a few events that might match. Tell me which one you mean: ${candidates.join("; ")}.`;
+    }
+    return "Which event should I update? Share the title or date and what you'd like to change.";
+  }
+  if (payload.state === "needs_confirmation") {
+    return "I prepared the event edits. Review the changes below and confirm when you're ready to update the calendar.";
+  }
+  return null;
+}
+
+export function formatPrepareDeleteEventResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+    if (missingFields.includes("delete_scope")) {
+      return "This looks like a recurring event. Tell me whether to delete only this event, this and future events, or the whole series.";
+    }
+    const candidates = formatCandidateLabels(payload.candidates, formatEventCandidateLabel);
+    if (candidates.length > 0) {
+      return `I found a few events that might match. Tell me which one you mean: ${candidates.join("; ")}.`;
+    }
+    return "Which event should I delete? Share the title or date.";
+  }
+  if (payload.state === "needs_confirmation") {
+    return "I found the event. Confirm below to delete it.";
+  }
   return null;
 }
 

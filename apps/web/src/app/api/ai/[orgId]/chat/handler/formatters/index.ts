@@ -26,6 +26,8 @@ import {
 } from "./reads";
 import {
   formatPrepareJobPostingResponse,
+  formatPrepareUpdateJobPostingResponse,
+  formatPrepareDeleteJobPostingResponse,
   formatPrepareAnnouncementResponse,
   formatPrepareEnterpriseInviteResponse,
   formatRevokeEnterpriseInviteResponse,
@@ -35,6 +37,8 @@ import {
   formatPrepareMemberRoleChangeResponse,
   formatPrepareGroupMessageResponse,
   formatPrepareEventResponse,
+  formatPrepareUpdateEventResponse,
+  formatPrepareDeleteEventResponse,
   formatPrepareEventsBatchResponse,
   formatPrepareUpdateAnnouncementResponse,
   formatPrepareDeleteAnnouncementResponse,
@@ -367,6 +371,10 @@ export function formatDeterministicToolResponse(
       return formatPrepareDeleteAnnouncementResponse(data);
     case "prepare_job_posting":
       return formatPrepareJobPostingResponse(data);
+    case "prepare_update_job_posting":
+      return formatPrepareUpdateJobPostingResponse(data);
+    case "prepare_delete_job_posting":
+      return formatPrepareDeleteJobPostingResponse(data);
     case "prepare_chat_message":
       return formatPrepareChatMessageResponse(data);
     case "prepare_member_role_change":
@@ -379,6 +387,10 @@ export function formatDeterministicToolResponse(
       return formatPrepareDiscussionThreadResponse(data);
     case "prepare_event":
       return formatPrepareEventResponse(data);
+    case "prepare_update_event":
+      return formatPrepareUpdateEventResponse(data);
+    case "prepare_delete_event":
+      return formatPrepareDeleteEventResponse(data);
     case "prepare_events_batch":
       return formatPrepareEventsBatchResponse(data);
     case "extract_schedule_pdf":

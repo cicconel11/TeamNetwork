@@ -79,6 +79,10 @@ export const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|send|draft|write|compose)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|send|draft|write|compose)(?!\w))/i;
 export const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
+export const UPDATE_JOB_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:edit|update|change|revise|close|deactivate|reactivate)(?!\w)[\s\S]{0,120}\b(?:job|job posting|posting|listing|opening|role|position|this)(?!\w)|(?<!\w)(?:job|job posting|posting|listing|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:edit|update|change|revise|close|deactivate|reactivate)(?!\w))/i;
+export const DELETE_JOB_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:delete|remove|take\s+down)(?!\w)[\s\S]{0,120}\b(?:job|job posting|posting|listing|opening|role|position|this)(?!\w)|(?<!\w)(?:job|job posting|posting|listing|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:delete|remove|take\s+down)(?!\w))/i;
 export const SEND_CHAT_MESSAGE_PROMPT_PATTERN =
   /(?:(?<!\w)(?:message|dm|direct\s+message|chat\s+message|write\s+to)(?!\w)[\s\S]{0,140}\b(?:someone|somebody|them|him|her|this person|that person|member|[a-z][\w.'-]*(?:\s+[a-z][\w.'-]*){0,3})(?!\w)|(?<!\w)send(?!\w)[\s\S]{0,80}\b(?:a\s+)?(?:dm|direct\s+message|chat\s+message)\b[\s\S]{0,80}\b(?:to|for)\b[\s\S]{0,80}\b(?:someone|somebody|them|him|her|this person|that person|member|[a-z][\w.'-]*(?:\s+[a-z][\w.'-]*){0,3})(?!\w))/i;
 export const LIST_CHAT_GROUPS_PROMPT_PATTERN =
@@ -91,6 +95,10 @@ export const DISCUSSION_REPLY_PROMPT_PATTERN =
   /(?:(?<!\w)(?:reply|respond|answer|comment|draft|write)(?!\w)[\s\S]{0,120}\b(?:discussion reply|reply|response|discussion|thread|post|message|conversation)(?!\w)|(?<!\w)(?:discussion reply|reply|response|discussion|thread|post|message|conversation)(?!\w)[\s\S]{0,80}\b(?:reply|respond|answer|comment|draft|write)(?!\w))/i;
 export const CREATE_EVENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,80}\b(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w))/i;
+export const UPDATE_EVENT_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:edit|update|change|revise|move|rename|reschedule)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts|this)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts)(?!\w)[\s\S]{0,80}\b(?:edit|update|change|revise|move|rename|reschedule)(?!\w))/i;
+export const DELETE_EVENT_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:delete|remove|cancel)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts|this)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event|practice|practices|game|games|match|matches|workout|workouts|training|trainings|rehearsal|rehearsals|lesson|lessons|session|sessions|tournament|tryout|tryouts)(?!\w)[\s\S]{0,80}\b(?:delete|remove|cancel)(?!\w))/i;
 export const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|set\s+up)(?!\w)[\s\S]{0,80}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,60}\b(?:create|add|schedule|plan|make|set\s+up)(?!\w))/i;
 // Match explicit member-role-change intent. Requires either:
@@ -293,6 +301,14 @@ export function getPass1Tools(
     return [AI_TOOL_MAP.prepare_job_posting];
   }
 
+  if (DELETE_JOB_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_delete_job_posting];
+  }
+
+  if (UPDATE_JOB_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_update_job_posting];
+  }
+
   if (LIST_CHAT_GROUPS_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.list_chat_groups];
   }
@@ -339,6 +355,14 @@ export function getPass1Tools(
       return [AI_TOOL_MAP.prepare_events_batch, AI_TOOL_MAP.prepare_event];
     }
     return [AI_TOOL_MAP.prepare_event];
+  }
+
+  if (DELETE_EVENT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_delete_event];
+  }
+
+  if (UPDATE_EVENT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_update_event];
   }
 
   if (
@@ -509,12 +533,16 @@ export function getPass1Tools(
 export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<ToolName>([
   "prepare_announcement",
   "prepare_job_posting",
+  "prepare_update_job_posting",
+  "prepare_delete_job_posting",
   "prepare_chat_message",
   "list_chat_groups",
   "prepare_group_message",
   "prepare_discussion_reply",
   "prepare_discussion_thread",
   "prepare_event",
+  "prepare_update_event",
+  "prepare_delete_event",
   "prepare_member_role_change",
   "list_members",
   "get_org_stats",

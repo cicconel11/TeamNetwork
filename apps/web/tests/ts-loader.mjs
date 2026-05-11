@@ -14,6 +14,11 @@ export async function resolve(specifier, context, defaultResolve) {
     return { ...result, shortCircuit: true };
   }
 
+  if (specifier === "next/cache") {
+    const result = await defaultResolve("next/cache.js", context, defaultResolve);
+    return { ...result, shortCircuit: true };
+  }
+
   if (specifier === "next/link") {
     const result = await defaultResolve("next/link.js", context, defaultResolve);
     return { ...result, shortCircuit: true };

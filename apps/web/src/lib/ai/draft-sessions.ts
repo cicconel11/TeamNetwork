@@ -1,7 +1,11 @@
 import type { AssistantAnnouncementDraft } from "@/lib/schemas/content";
 import type {
   DeleteAnnouncementPendingPayload,
+  DeleteEventPendingPayload,
+  DeleteJobPostingPendingPayload,
+  UpdateEventPendingPayload,
   UpdateAnnouncementPendingPayload,
+  UpdateJobPostingPendingPayload,
 } from "@/lib/ai/pending-actions";
 import type {
   AssistantDiscussionDraft,
@@ -19,11 +23,15 @@ export interface DraftSessionPayloadByType {
   update_announcement: UpdateAnnouncementPendingPayload;
   delete_announcement: DeleteAnnouncementPendingPayload;
   create_job_posting: AssistantJobDraft;
+  update_job_posting: UpdateJobPostingPendingPayload;
+  delete_job_posting: DeleteJobPostingPendingPayload;
   send_chat_message: AssistantChatMessageDraft;
   send_group_chat_message: AssistantGroupMessageDraft;
   create_discussion_reply: AssistantDiscussionReplyDraft;
   create_discussion_thread: AssistantDiscussionDraft;
   create_event: AssistantEventDraft;
+  update_event: UpdateEventPendingPayload;
+  delete_event: DeleteEventPendingPayload;
 }
 
 export type DraftSessionType = keyof DraftSessionPayloadByType;

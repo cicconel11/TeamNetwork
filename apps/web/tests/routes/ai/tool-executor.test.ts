@@ -1912,6 +1912,164 @@ test("prepare_job_posting fails closed when organization slug lookup errors", as
   });
 });
 
+test("prepare_update_job_posting creates a pending action from current job context without mutating", async () => {
+  const jobStub = createToolSupabaseStub({
+    job_postings: {
+      select: {
+        data: [{
+          id: "11111111-1111-4111-8111-111111111111",
+          organization_id: ORG_ID,
+          title: "Assistant Coach",
+          company: "Team Network",
+          location: "Philadelphia",
+          location_type: "onsite",
+          description: "Coach the team during practices and games.",
+          application_url: "https://example.com/apply",
+          contact_email: null,
+          industry: "Sports",
+          experience_level: "mid",
+          expires_at: null,
+          is_active: true,
+          deleted_at: null,
+        }],
+        error: null,
+      },
+    },
+    organizations: { maybeSingle: { data: { slug: "acme" }, error: null } },
+    ai_pending_actions: {
+      single: {
+        data: {
+          id: "pending-job-update-1",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "thread-job",
+          action_type: "update_job_posting",
+          payload: {},
+          previous_payload: null,
+          revise_count: 0,
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+  const jobCtx = { ...makeCtx(jobStub as any), threadId: "thread-job" };
+
+  const result = expectOk(
+    await executeToolCall(jobCtx, {
+      name: "prepare_update_job_posting",
+      args: { job_id: "11111111-1111-4111-8111-111111111111", title: "Lead Assistant Coach" },
+    }),
+  );
+
+  assert.equal((result.data as any).state, "needs_confirmation");
+  assert.equal((result.data as any).pending_action.action_type, "update_job_posting");
+  assert.equal((result.data as any).pending_action.payload.previous_title, "Assistant Coach");
+  assert.equal((result.data as any).pending_action.payload.title, "Lead Assistant Coach");
+  assert.equal(jobStub.queries.some((query) => query.table === "job_postings" && query.method === "update"), false);
+});
+
+test("prepare_delete_job_posting returns candidates for ambiguous named jobs", async () => {
+  const jobStub = createToolSupabaseStub({
+    job_postings: {
+      select: {
+        data: [
+          { id: "11111111-1111-4111-8111-111111111111", organization_id: ORG_ID, title: "Coach", company: "A", deleted_at: null },
+          { id: "22222222-2222-4222-8222-222222222222", organization_id: ORG_ID, title: "Coach Assistant", company: "B", deleted_at: null },
+        ],
+        error: null,
+      },
+    },
+  });
+  const jobCtx = { ...makeCtx(jobStub as any), threadId: "thread-job" };
+
+  const result = expectOk(
+    await executeToolCall(jobCtx, {
+      name: "prepare_delete_job_posting",
+      args: { job_query: "Coach" },
+    }),
+  );
+
+  assert.equal((result.data as any).state, "missing_fields");
+  assert.deepEqual((result.data as any).missing_fields, ["job_id"]);
+  assert.equal((result.data as any).candidates.length, 2);
+  assert.equal(jobStub.queries.some((query) => query.table === "job_postings" && query.method === "update"), false);
+});
+
+test("prepare_update_event resolves before clarifying unsupported all-in-series scope", async () => {
+  const eventStub = createToolSupabaseStub({
+    events: {
+      select: {
+        data: [{
+          id: "33333333-3333-4333-8333-333333333333",
+          organization_id: ORG_ID,
+          title: "Practice",
+          description: null,
+          start_date: "2026-05-01T18:00:00.000Z",
+          end_date: "2026-05-01T19:00:00.000Z",
+          location: "Gym",
+          event_type: "practice",
+          is_philanthropy: false,
+          recurrence_group_id: "series-1",
+          deleted_at: null,
+        }],
+        error: null,
+      },
+    },
+  });
+  const eventCtx = { ...makeCtx(eventStub as any), threadId: "thread-event" };
+
+  const result = expectOk(
+    await executeToolCall(eventCtx, {
+      name: "prepare_update_event",
+      args: { event_id: "33333333-3333-4333-8333-333333333333", update_scope: "all_in_series", title: "Team Practice" },
+    }),
+  );
+
+  assert.equal((result.data as any).state, "missing_fields");
+  assert.deepEqual((result.data as any).missing_fields, ["update_scope"]);
+  assert.equal((result.data as any).draft.event_id, "33333333-3333-4333-8333-333333333333");
+  assert.equal((result.data as any).draft.title, "Practice");
+});
+
+test("prepare_delete_event requires scope for recurring event delete", async () => {
+  const eventStub = createToolSupabaseStub({
+    events: {
+      select: {
+        data: [{
+          id: "33333333-3333-4333-8333-333333333333",
+          organization_id: ORG_ID,
+          title: "Practice",
+          start_date: "2026-05-01T18:00:00.000Z",
+          end_date: null,
+          location: "Gym",
+          recurrence_group_id: "series-1",
+          deleted_at: null,
+        }],
+        error: null,
+      },
+    },
+  });
+  const eventCtx = { ...makeCtx(eventStub as any), threadId: "thread-event" };
+
+  const result = expectOk(
+    await executeToolCall(eventCtx, {
+      name: "prepare_delete_event",
+      args: { event_id: "33333333-3333-4333-8333-333333333333" },
+    }),
+  );
+
+  assert.equal((result.data as any).state, "missing_fields");
+  assert.deepEqual((result.data as any).missing_fields, ["delete_scope"]);
+  assert.equal(eventStub.queries.some((query) => query.table === "events" && query.method === "update"), false);
+});
+
 test("find_navigation_targets returns org-scoped page matches", async () => {
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -2813,7 +2971,7 @@ test("extract_schedule_pdf returns needs_batch_confirmation for image uploads wi
     ai_pending_actions: {
       single: {
         data: {
-          id: "pending-event-1",
+          id: "pending-33333333-3333-4333-8333-333333333333",
           organization_id: ORG_ID,
           user_id: USER_ID,
           thread_id: "thread-image-success",
