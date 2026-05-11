@@ -78,13 +78,25 @@ export function getAssistantCapabilitySnapshot(
       break;
     case "announcements":
       return capabilitySnapshotForToolNames(
-        ["list_announcements", "prepare_announcement", "find_navigation_targets"],
-        ["Edit or delete existing announcements"],
+        [
+          "list_announcements",
+          "prepare_announcement",
+          "prepare_update_announcement",
+          "prepare_delete_announcement",
+          "find_navigation_targets",
+        ],
+        [],
       );
     case "jobs":
       return capabilitySnapshotForToolNames(
-        ["list_job_postings", "prepare_job_posting", "find_navigation_targets"],
-        ["Edit or close existing job postings"],
+        [
+          "list_job_postings",
+          "prepare_job_posting",
+          "prepare_update_job_posting",
+          "prepare_delete_job_posting",
+          "find_navigation_targets",
+        ],
+        [],
       );
     case "discussions":
     case "messages":
@@ -113,11 +125,13 @@ export function getAssistantCapabilitySnapshot(
           "list_events",
           "prepare_event",
           "prepare_events_batch",
+          "prepare_update_event",
+          "prepare_delete_event",
           "extract_schedule_pdf",
           "scrape_schedule_website",
           "find_navigation_targets",
         ],
-        ["Edit or delete existing calendar events"],
+        [],
       );
     case "philanthropy":
     case "donations":
@@ -165,10 +179,12 @@ export function getAssistantCapabilitySnapshot(
           "list_events",
           "prepare_event",
           "prepare_events_batch",
+          "prepare_update_event",
+          "prepare_delete_event",
           "extract_schedule_pdf",
           "scrape_schedule_website",
         ],
-        ["Edit or delete existing calendar events"],
+        [],
       );
     case "analytics":
       return capabilitySnapshotForToolNames(
@@ -187,9 +203,13 @@ export function getAssistantCapabilitySnapshot(
           "prepare_group_message",
           "prepare_member_role_change",
           "prepare_job_posting",
+          "prepare_update_job_posting",
+          "prepare_delete_job_posting",
           "prepare_discussion_reply",
           "prepare_discussion_thread",
           "prepare_event",
+          "prepare_update_event",
+          "prepare_delete_event",
           "find_navigation_targets",
         ],
         ["Create or edit forms from chat", "Send member invites"],

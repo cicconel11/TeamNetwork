@@ -251,6 +251,26 @@ test("buildTurnExecutionPolicy refuses paraphrased trivia via allowlist gate", (
   );
 });
 
+test("mobile app availability questions are in scope", () => {
+  const policy = buildPolicy("Do you have a mobile app?");
+  assert.notEqual(policy.profile, "out_of_scope_unrelated");
+  assert.equal(
+    classifyUnrelatedRequest(
+      "Where do I download the app?",
+      "general",
+      "general_query",
+      "knowledge_query",
+      false,
+    ),
+    null,
+  );
+});
+
+test("unrelated mobile app implementation requests are still refused", () => {
+  const policy = buildPolicy("Help me build an Android app");
+  assert.equal(policy.profile, "out_of_scope_unrelated");
+});
+
 // Confirm legit org-scope queries bypass the allowlist gate
 const ON_TOPIC_ALLOWED = [
   "How many active members do we have?",
