@@ -69,7 +69,8 @@ export type PreparedMemberRoleChange =
         | "lookup_failed"
         | "update_failed"
         | "audit_failed"
-        | "target_not_found";
+        | "target_not_found"
+        | "stale_member_role";
       message: string;
     };
 
@@ -83,7 +84,8 @@ export type ExecuteFailureReason =
   | "actor_not_admin"
   | "lookup_failed"
   | "update_failed"
-  | "audit_failed";
+  | "audit_failed"
+  | "stale_member_role";
 
 const USER_SAFE_FAILURE_MESSAGES: Record<ExecuteFailureReason, string> = {
   target_not_found: "Member not found in this organization.",
@@ -96,6 +98,7 @@ const USER_SAFE_FAILURE_MESSAGES: Record<ExecuteFailureReason, string> = {
   lookup_failed: "Could not look up member role. Please try again.",
   update_failed: "Could not update member role. Please try again.",
   audit_failed: "Could not record member role change. Please try again.",
+  stale_member_role: "Member role changed while this request was being confirmed. Please try again.",
 };
 
 export function toUserSafeRoleChangeMessage(reason: ExecuteFailureReason): string {
@@ -113,6 +116,7 @@ export function toUserSafeRoleChangeMessage(reason: ExecuteFailureReason): strin
  * - target_not_found                → membership row missing, retry won't materialize it
  * - update_failed / lookup_failed   → generic DB errors, often transient
  * - audit_failed                    → unreachable post-rpc; classed transient defensively
+ * - stale_member_role               → membership changed after prepare; retry re-prepares
  */
 export function isTerminalRoleChangeError(reason: ExecuteFailureReason): boolean {
   switch (reason) {
@@ -127,6 +131,7 @@ export function isTerminalRoleChangeError(reason: ExecuteFailureReason): boolean
     case "update_failed":
     case "lookup_failed":
     case "audit_failed":
+    case "stale_member_role":
       return false;
   }
 }
@@ -512,6 +517,13 @@ export async function executeMemberRoleChange(
         state: "error",
         reason: "target_not_found",
         message: toUserSafeRoleChangeMessage("target_not_found"),
+      };
+    }
+    if (rpcError.code === "P0003") {
+      return {
+        state: "error",
+        reason: "stale_member_role",
+        message: toUserSafeRoleChangeMessage("stale_member_role"),
       };
     }
     return {

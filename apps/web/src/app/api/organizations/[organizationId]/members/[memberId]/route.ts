@@ -91,6 +91,12 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     if (result.reason === "actor_not_admin") {
       return respond({ error: "Forbidden" }, 403);
     }
+    if (result.reason === "target_not_found") {
+      return respond({ error: "target_not_found" }, 404);
+    }
+    if (result.reason === "stale_member_role") {
+      return respond({ error: result.message }, 409);
+    }
     if (
       result.reason === "last_admin_self_demotion" ||
       result.reason === "last_admin_target_demotion" ||
