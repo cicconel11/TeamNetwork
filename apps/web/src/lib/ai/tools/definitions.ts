@@ -37,6 +37,20 @@ export interface PrepareAnnouncementArgs {
   audience_user_ids?: string[];
 }
 
+export interface PrepareJobPostingArgs {
+  title?: string;
+  company?: string;
+  location?: string;
+  location_type?: "remote" | "hybrid" | "onsite";
+  description?: string;
+  application_url?: string;
+  contact_email?: string;
+  industry?: string;
+  experience_level?: "entry" | "mid" | "senior" | "lead" | "executive";
+  expires_at?: string | null;
+  mediaIds?: string[];
+}
+
 export interface PrepareDiscussionReplyArgs {
   discussion_thread_id?: string;
   thread_title?: string;
@@ -83,6 +97,18 @@ export interface PrepareEventArgs {
 
 export interface PrepareEventsBatchArgs {
   events: PrepareEventArgs[];
+}
+
+export interface PrepareUpdateEventArgs extends PrepareEventArgs {
+  event_id?: string;
+  event_query?: string;
+  update_scope?: "this_only" | "this_and_future" | "all_in_series";
+}
+
+export interface PrepareDeleteEventArgs {
+  event_id?: string;
+  event_query?: string;
+  delete_scope?: "this_only" | "this_and_future" | "all_in_series";
 }
 
 export interface ScrapeScheduleWebsiteArgs {
@@ -162,6 +188,17 @@ export interface PrepareUpdateAnnouncementArgs {
 
 export interface PrepareDeleteAnnouncementArgs {
   announcement_id: string;
+}
+
+export interface PrepareUpdateJobPostingArgs extends PrepareJobPostingArgs {
+  job_id?: string;
+  job_query?: string;
+  is_active?: boolean;
+}
+
+export interface PrepareDeleteJobPostingArgs {
+  job_id?: string;
+  job_query?: string;
 }
 
 export interface ListEnterpriseAlumniArgs {
@@ -375,6 +412,53 @@ const TOOL_BY_NAME = {
             type: "array" as const,
             items: { type: "string" as const },
           },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_update_job_posting: {
+    type: "function" as const,
+    function: {
+      name: "prepare_update_job_posting" as const,
+      description:
+        "Prepare edits to an existing job posting. Use when the user wants to edit, update, change, close, deactivate, or reactivate a job. Pass job_id from the current job page when available, or job_query when resolving by title. Creates a pending confirmation action; execution only happens after confirmation.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          job_id: { type: "string" as const },
+          job_query: { type: "string" as const },
+          title: { type: "string" as const },
+          company: { type: "string" as const },
+          location: { type: "string" as const },
+          location_type: { type: "string" as const, enum: ["remote", "hybrid", "onsite"] },
+          description: { type: "string" as const },
+          application_url: { type: "string" as const },
+          contact_email: { type: "string" as const },
+          industry: { type: "string" as const },
+          experience_level: {
+            type: "string" as const,
+            enum: ["entry", "mid", "senior", "lead", "executive"],
+          },
+          expires_at: { type: "string" as const },
+          is_active: { type: "boolean" as const },
+          mediaIds: { type: "array" as const, items: { type: "string" as const } },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_delete_job_posting: {
+    type: "function" as const,
+    function: {
+      name: "prepare_delete_job_posting" as const,
+      description:
+        "Prepare deletion of an existing job posting. Use when the user says delete, remove, or take down a job posting. For close/deactivate without deletion, use prepare_update_job_posting with is_active false. Creates a pending confirmation action.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          job_id: { type: "string" as const },
+          job_query: { type: "string" as const },
         },
         additionalProperties: false as const,
       },
@@ -1068,6 +1152,58 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_update_event: {
+    type: "function" as const,
+    function: {
+      name: "prepare_update_event" as const,
+      description:
+        "Prepare edits to an existing calendar event. Use when the user wants to edit, update, move, rename, or change an event. Pass event_id from the current event page when available, or event_query when resolving by title. Supports update_scope this_only and this_and_future; all_in_series updates are not supported and require clarification.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          event_id: { type: "string" as const },
+          event_query: { type: "string" as const },
+          title: { type: "string" as const },
+          description: { type: "string" as const },
+          start_date: { type: "string" as const },
+          start_time: { type: "string" as const },
+          end_date: { type: "string" as const },
+          end_time: { type: "string" as const },
+          location: { type: "string" as const },
+          event_type: {
+            type: "string" as const,
+            enum: ["general", "philanthropy", "game", "practice", "meeting", "social", "workout", "fundraiser", "class"],
+          },
+          is_philanthropy: { type: "boolean" as const },
+          update_scope: {
+            type: "string" as const,
+            enum: ["this_only", "this_and_future", "all_in_series"],
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_delete_event: {
+    type: "function" as const,
+    function: {
+      name: "prepare_delete_event" as const,
+      description:
+        "Prepare deletion of an existing calendar event. Use when the user wants to delete, remove, or cancel an event. Pass event_id from the current event page when available, or event_query when resolving by title. For recurring events, broad scopes this_and_future or all_in_series must be explicit.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          event_id: { type: "string" as const },
+          event_query: { type: "string" as const },
+          delete_scope: {
+            type: "string" as const,
+            enum: ["this_only", "this_and_future", "all_in_series"],
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   prepare_update_announcement: {
     type: "function" as const,
     function: {
@@ -1241,6 +1377,8 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.revoke_enterprise_invite,
   TOOL_BY_NAME.prepare_announcement,
   TOOL_BY_NAME.prepare_job_posting,
+  TOOL_BY_NAME.prepare_update_job_posting,
+  TOOL_BY_NAME.prepare_delete_job_posting,
   TOOL_BY_NAME.prepare_chat_message,
   TOOL_BY_NAME.prepare_member_role_change,
   TOOL_BY_NAME.prepare_group_message,
@@ -1248,6 +1386,8 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.prepare_discussion_thread,
   TOOL_BY_NAME.prepare_event,
   TOOL_BY_NAME.prepare_events_batch,
+  TOOL_BY_NAME.prepare_update_event,
+  TOOL_BY_NAME.prepare_delete_event,
   TOOL_BY_NAME.scrape_schedule_website,
   TOOL_BY_NAME.extract_schedule_pdf,
   TOOL_BY_NAME.get_org_stats,

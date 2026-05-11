@@ -25,11 +25,15 @@ import { suggestMentorsModule } from "./suggest-mentors";
 import { listAvailableMentorsModule } from "./list-available-mentors";
 import { prepareAnnouncementModule } from "./prepare-announcement";
 import { prepareJobPostingModule } from "./prepare-job-posting";
+import { prepareUpdateJobPostingModule } from "./prepare-update-job-posting";
+import { prepareDeleteJobPostingModule } from "./prepare-delete-job-posting";
 import { prepareChatMessageModule } from "./prepare-chat-message";
 import { prepareGroupMessageModule } from "./prepare-group-message";
 import { prepareDiscussionReplyModule } from "./prepare-discussion-reply";
 import { prepareDiscussionThreadModule } from "./prepare-discussion-thread";
 import { prepareEventModule } from "./prepare-event";
+import { prepareUpdateEventModule } from "./prepare-update-event";
+import { prepareDeleteEventModule } from "./prepare-delete-event";
 import { prepareEventsBatchModule } from "./prepare-events-batch";
 import { prepareMemberRoleChangeModule } from "./prepare-member-role-change";
 import { prepareEnterpriseInviteModule } from "./prepare-enterprise-invite";
@@ -66,11 +70,15 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   listAvailableMentorsModule,
   prepareAnnouncementModule,
   prepareJobPostingModule,
+  prepareUpdateJobPostingModule,
+  prepareDeleteJobPostingModule,
   prepareChatMessageModule,
   prepareGroupMessageModule,
   prepareDiscussionReplyModule,
   prepareDiscussionThreadModule,
   prepareEventModule,
+  prepareUpdateEventModule,
+  prepareDeleteEventModule,
   prepareEventsBatchModule,
   prepareMemberRoleChangeModule,
   prepareEnterpriseInviteModule,
