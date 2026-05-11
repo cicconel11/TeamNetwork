@@ -58,6 +58,7 @@ export function MessageList({
   const shouldRenderPreviewAssistant =
     Boolean(previewAssistantContent) &&
     lastAssistantMessage?.content !== previewAssistantContent;
+  const actionablePendingActions = pendingActions?.filter((action) => action.status === "pending") ?? [];
 
   // Fetch feedback for complete assistant messages
   useEffect(() => {
@@ -248,10 +249,10 @@ export function MessageList({
       )}
       {pendingActions && pendingActions.length > 0 && (
         <div className="space-y-2">
-          {pendingActions.length > 1 && (
+          {actionablePendingActions.length > 1 && (
             <div className="flex items-center justify-between rounded-xl border border-org-secondary/30 bg-org-secondary/5 px-4 py-2.5">
               <span className="text-sm font-medium text-org-secondary">
-                Review {pendingActions.length} events
+                Review {actionablePendingActions.length} events
               </span>
               <div className="flex gap-2">
                 <button

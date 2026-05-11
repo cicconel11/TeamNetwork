@@ -20,6 +20,11 @@ function getArrayLength(payload: Record<string, unknown>, key: string): number {
   return Array.isArray(value) ? value.length : 0;
 }
 
+function getBooleanLabel(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === "boolean" ? (value ? "Yes" : "No") : null;
+}
+
 function valueChanged(current: string | null, previous: string | null): boolean {
   return (current ?? "") !== (previous ?? "");
 }
@@ -50,6 +55,18 @@ export function PendingActionCard({
   const body = getValue(payload, "body");
   const previousTitle = getValue(payload, "previous_title");
   const previousBody = getValue(payload, "previous_body");
+  const previousCompany = getValue(payload, "previous_company");
+  const previousLocation = getValue(payload, "previous_location");
+  const previousDescription = getValue(payload, "previous_description");
+  const previousStartDate = getValue(payload, "previous_start_date");
+  const previousStartTime = getValue(payload, "previous_start_time");
+  const previousEndDate = getValue(payload, "previous_end_date");
+  const previousEndTime = getValue(payload, "previous_end_time");
+  const previousEventType = getValue(payload, "previous_event_type");
+  const previousActive = getBooleanLabel(payload, "previous_is_active");
+  const nextActive = getBooleanLabel(payload, "is_active");
+  const deleteScope = getValue(payload, "delete_scope");
+  const updateScope = getValue(payload, "update_scope");
   const threadTitle = getValue(payload, "thread_title");
   const recipientDisplayName = getValue(payload, "recipient_display_name");
   const existingChatGroupId = getValue(payload, "existing_chat_group_id");
@@ -192,6 +209,40 @@ export function PendingActionCard({
               {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
               <p className="text-red-600">This will remove the announcement from organization feeds.</p>
             </>
+          ) : action.actionType === "update_event" ? (
+            <>
+              {updateScope ? <p><span className="font-medium">Scope:</span> {updateScope}</p> : null}
+              {valueChanged(title, previousTitle) ? (
+                <p><span className="font-medium">Title:</span> {previousTitle} -&gt; {title}</p>
+              ) : title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              {valueChanged(eventType, previousEventType) ? (
+                <p><span className="font-medium">Type:</span> {previousEventType} -&gt; {eventType}</p>
+              ) : eventType ? <p><span className="font-medium">Type:</span> {eventType}</p> : null}
+              {valueChanged([startDate, startTime].filter(Boolean).join(" "), [previousStartDate, previousStartTime].filter(Boolean).join(" ")) ? (
+                <p><span className="font-medium">Starts:</span> {[previousStartDate, previousStartTime].filter(Boolean).join(" ")} -&gt; {[startDate, startTime].filter(Boolean).join(" ")}</p>
+              ) : null}
+              {valueChanged([endDate, endTime].filter(Boolean).join(" "), [previousEndDate, previousEndTime].filter(Boolean).join(" ")) ? (
+                <p><span className="font-medium">Ends:</span> {[previousEndDate, previousEndTime].filter(Boolean).join(" ") || "No end"} -&gt; {[endDate, endTime].filter(Boolean).join(" ") || "No end"}</p>
+              ) : null}
+              {valueChanged(location, previousLocation) ? (
+                <p><span className="font-medium">Location:</span> {previousLocation || "None"} -&gt; {location || "None"}</p>
+              ) : location ? <p><span className="font-medium">Location:</span> {location}</p> : null}
+              {valueChanged(description, previousDescription) ? (
+                <div>
+                  <p className="font-medium text-foreground">Description</p>
+                  {previousDescription ? <p className="mt-1 whitespace-pre-wrap text-muted-foreground">Before: {previousDescription}</p> : null}
+                  {description ? <p className="mt-1 whitespace-pre-wrap text-foreground">After: {description}</p> : <p className="mt-1 text-foreground">After: No description</p>}
+                </div>
+              ) : null}
+            </>
+          ) : action.actionType === "delete_event" ? (
+            <>
+              {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              {startDate ? <p><span className="font-medium">Starts:</span> {startDate}</p> : null}
+              {location ? <p><span className="font-medium">Location:</span> {location}</p> : null}
+              {deleteScope ? <p><span className="font-medium">Scope:</span> {deleteScope}</p> : null}
+              <p className="text-red-600">This will remove the event from the calendar.</p>
+            </>
           ) : action.actionType === "create_event" ? (
             <>
               {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
@@ -231,6 +282,38 @@ export function PendingActionCard({
                 <p><span className="font-medium">Status:</span> {currentStatus} -&gt; {newStatus}</p>
               ) : null}
               {reason ? <p><span className="font-medium">Reason:</span> {reason}</p> : null}
+            </>
+          ) : action.actionType === "update_job_posting" ? (
+            <>
+              {valueChanged(title, previousTitle) ? (
+                <p><span className="font-medium">Title:</span> {previousTitle} -&gt; {title}</p>
+              ) : title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              {valueChanged(company, previousCompany) ? (
+                <p><span className="font-medium">Company:</span> {previousCompany} -&gt; {company}</p>
+              ) : company ? <p><span className="font-medium">Company:</span> {company}</p> : null}
+              {valueChanged(location, previousLocation) ? (
+                <p><span className="font-medium">Location:</span> {previousLocation || "None"} -&gt; {location || "None"}</p>
+              ) : location ? <p><span className="font-medium">Location:</span> {location}</p> : null}
+              {nextActive && valueChanged(nextActive, previousActive) ? (
+                <p><span className="font-medium">Active:</span> {previousActive} -&gt; {nextActive}</p>
+              ) : null}
+              {industry ? <p><span className="font-medium">Industry:</span> {industry}</p> : null}
+              {experienceLevel ? <p><span className="font-medium">Experience:</span> {experienceLevel}</p> : null}
+              {applicationUrl ? <p><span className="font-medium">Apply URL:</span> {applicationUrl}</p> : null}
+              {contactEmail ? <p><span className="font-medium">Contact:</span> {contactEmail}</p> : null}
+              {valueChanged(description, previousDescription) ? (
+                <div>
+                  <p className="font-medium text-foreground">Description</p>
+                  {previousDescription ? <p className="mt-1 whitespace-pre-wrap text-muted-foreground">Before: {previousDescription}</p> : null}
+                  {description ? <p className="mt-1 whitespace-pre-wrap text-foreground">After: {description}</p> : null}
+                </div>
+              ) : null}
+            </>
+          ) : action.actionType === "delete_job_posting" ? (
+            <>
+              {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              {company ? <p><span className="font-medium">Company:</span> {company}</p> : null}
+              <p className="text-red-600">This will remove the job posting from the jobs board.</p>
             </>
           ) : (
             <>
