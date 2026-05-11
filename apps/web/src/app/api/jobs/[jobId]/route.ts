@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { updateJobSchema } from "@/lib/schemas/jobs";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { updateJobPosting } from "@/lib/jobs/update-job";
+import { deleteJobPosting } from "@/lib/jobs/delete-job";
 
 export async function GET(
   request: NextRequest,
@@ -83,69 +84,20 @@ export async function PATCH(
     const { jobId } = await params;
     const body = await request.json();
 
-    // Validate job fields
-    const validationResult = updateJobSchema.safeParse(body);
-    if (!validationResult.success) {
-      const details = validationResult.error.issues.map(
-        (issue) => `${issue.path.join(".") || "body"}: ${issue.message}`
-      );
+    const result = await updateJobPosting({
+      supabase,
+      jobId,
+      actorUserId: user.id,
+      data: body,
+    });
+    if (!result.ok) {
       return NextResponse.json(
-        { error: "Validation failed", details },
-        { status: 400 }
+        result.details ? { error: result.error, details: result.details } : { error: result.error },
+        { status: result.status },
       );
     }
 
-    // Fetch existing job
-    const { data: existingJob, error: fetchError } = await supabase
-      .from("job_postings")
-      .select("organization_id, posted_by")
-      .eq("id", jobId)
-      .is("deleted_at", null)
-      .maybeSingle();
-
-    if (fetchError) {
-
-      return NextResponse.json({ error: "Failed to fetch job" }, { status: 500 });
-    }
-
-    if (!existingJob) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
-
-    // Check user is the author or an admin
-    const isAuthor = existingJob.posted_by === user.id;
-    const membership = await getOrgMembership(supabase, user.id, existingJob.organization_id);
-    if (!membership) {
-      return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
-    }
-
-    const isAdmin = membership.role === "admin";
-
-    if (!isAuthor && !isAdmin) {
-      return NextResponse.json(
-        { error: "Only the job author or admins can edit this job" },
-        { status: 403 }
-      );
-    }
-
-    // Update job (strip mediaIds — not a DB column, handled via media linking)
-    const { mediaIds: _mediaIds, ...jobUpdateData } = validationResult.data;
-    const { data: job, error } = await supabase
-      .from("job_postings")
-      .update({
-        ...jobUpdateData,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", jobId)
-      .select("*")
-      .single();
-
-    if (error) {
-      console.error("PATCH /api/jobs update error:", JSON.stringify(error));
-      return NextResponse.json({ error: "Failed to update job" }, { status: 500 });
-    }
-
-    return NextResponse.json({ job }, { headers: rateLimit.headers });
+    return NextResponse.json({ job: result.job }, { headers: rateLimit.headers });
   } catch (error) {
     console.error("PATCH /api/jobs uncaught error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -177,48 +129,8 @@ export async function DELETE(
 
     const { jobId } = await params;
 
-    // Fetch existing job
-    const { data: existingJob, error: fetchError } = await supabase
-      .from("job_postings")
-      .select("organization_id, posted_by")
-      .eq("id", jobId)
-      .is("deleted_at", null)
-      .maybeSingle();
-
-    if (fetchError) {
-
-      return NextResponse.json({ error: "Failed to fetch job" }, { status: 500 });
-    }
-
-    if (!existingJob) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
-
-    // Check user is the author or an admin
-    const isAuthor = existingJob.posted_by === user.id;
-    const membership = await getOrgMembership(supabase, user.id, existingJob.organization_id);
-    if (!membership) {
-      return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
-    }
-
-    const isAdmin = membership.role === "admin";
-
-    if (!isAuthor && !isAdmin) {
-      return NextResponse.json(
-        { error: "Only the job author or admins can delete this job" },
-        { status: 403 }
-      );
-    }
-
-    // Soft delete
-    const { error } = await supabase
-      .from("job_postings")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", jobId);
-
-    if (error) {
-      return NextResponse.json({ error: "Failed to delete job" }, { status: 500 });
-    }
+    const result = await deleteJobPosting({ supabase, jobId, actorUserId: user.id });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
     return NextResponse.json({ success: true }, { headers: rateLimit.headers });
   } catch (error) {
