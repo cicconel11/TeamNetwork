@@ -46,6 +46,15 @@ describe("execute_member_role_change migration", () => {
     assert.match(sql, /IF\s+NOT\s+FOUND\s+THEN[^$]*RAISE\s+EXCEPTION[^$]*ERRCODE\s*=\s*'P0002'/i);
   });
 
+  it("uses compare-and-swap predicates for the prepared role and status", () => {
+    assert.match(sql, /AND\s+role\s*=\s*p_previous_role/i);
+    assert.match(sql, /AND\s+status\s*=\s*p_previous_status/i);
+  });
+
+  it("raises P0003 when the membership changed after prepare", () => {
+    assert.match(sql, /RAISE\s+EXCEPTION\s+'stale_member_role'\s+USING\s+ERRCODE\s*=\s*'P0003'/i);
+  });
+
   it("guards p_source against unexpected values", () => {
     assert.match(sql, /p_source\s+NOT IN\s*\(\s*'manual'\s*,\s*'ai_pending_action'\s*\)/i);
   });

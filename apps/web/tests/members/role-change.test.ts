@@ -394,4 +394,39 @@ describe("member role changes", () => {
       assert.notEqual(result.message, "deadlock detected on user_organization_roles");
     }
   });
+
+  it("maps rpc P0003 to retryable stale_member_role with sanitized message", async () => {
+    const supabase = client();
+    seedEnabledOrg(supabase);
+    supabase.seed("user_organization_roles", [
+      { organization_id: ORG_ID, user_id: ACTOR_ID, role: "admin", status: "active" },
+      { organization_id: ORG_ID, user_id: TARGET_ID, role: "active_member", status: "active" },
+    ]);
+
+    const wrapped: MemberRoleChangeClient = {
+      from: (table: string) => supabase.from(table),
+      rpc: async () => ({
+        data: null,
+        error: { code: "P0003", message: "stale_member_role leaks table details" },
+      }),
+    };
+
+    const result = await executeMemberRoleChange(wrapped, {
+      organizationId: ORG_ID,
+      actorUserId: ACTOR_ID,
+      targetUserId: TARGET_ID,
+      role: "alumni",
+      source: "manual",
+    });
+
+    assert.equal(result.state, "error");
+    if (result.state === "error") {
+      assert.equal(result.reason, "stale_member_role");
+      assert.equal(
+        result.message,
+        "Member role changed while this request was being confirmed. Please try again.",
+      );
+      assert.notEqual(result.message, "stale_member_role leaks table details");
+    }
+  });
 });

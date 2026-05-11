@@ -17,6 +17,7 @@ const ALL_REASONS: ExecuteFailureReason[] = [
   "lookup_failed",
   "update_failed",
   "audit_failed",
+  "stale_member_role",
 ];
 
 const TERMINAL: ExecuteFailureReason[] = [
@@ -29,7 +30,12 @@ const TERMINAL: ExecuteFailureReason[] = [
   "target_not_found",
 ];
 
-const TRANSIENT: ExecuteFailureReason[] = ["update_failed", "lookup_failed", "audit_failed"];
+const TRANSIENT: ExecuteFailureReason[] = [
+  "update_failed",
+  "lookup_failed",
+  "audit_failed",
+  "stale_member_role",
+];
 
 describe("isTerminalRoleChangeError", () => {
   it("classifies every terminal reason as terminal", () => {
