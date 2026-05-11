@@ -145,6 +145,13 @@ function hasContextDependentLanguage(normalized: string): boolean {
   );
 }
 
+function isMobileAppAvailabilityQuestion(normalized: string): boolean {
+  return (
+    /\b(?:mobile app|app store|download (?:the )?app|ios app|android app|iphone app)\b/i.test(normalized) &&
+    /\b(?:do you have|is there|where|how|download|available|get|coming|when)\b/i.test(normalized)
+  );
+}
+
 function isStructuredToolIntent(
   intent: AiIntent,
   intentType: AiIntentType
@@ -195,6 +202,10 @@ export function classifyUnrelatedRequest(
   }
 
   const normalized = normalizeAiMessage(message);
+
+  if (isMobileAppAvailabilityQuestion(normalized)) {
+    return null;
+  }
 
   if (HARM_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return "harm_pattern";
