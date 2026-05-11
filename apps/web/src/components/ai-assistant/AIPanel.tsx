@@ -51,9 +51,19 @@ function getPendingActionErrorMessage(data: { error?: unknown; code?: unknown })
     : "Failed to confirm";
 }
 
+const ACTION_REFRESH_EVENT_BY_TYPE: Record<string, string> = {
+  update_event: "tn:ai-event-updated",
+  delete_event: "tn:ai-event-deleted",
+  update_job_posting: "tn:ai-job-posting-updated",
+  delete_job_posting: "tn:ai-job-posting-deleted",
+};
+
 function dispatchConfirmRefreshEvents(results: unknown[]) {
+  if (results.length === 0) {
+    return false;
+  }
+
   const eventNames = new Set<string>();
-  let shouldRefresh = false;
 
   for (const result of results) {
     if (!result || typeof result !== "object") continue;
@@ -67,16 +77,9 @@ function dispatchConfirmRefreshEvents(results: unknown[]) {
     }
 
     if (typeof data.actionType === "string") {
-      const fallback = {
-        update_event: "tn:ai-event-updated",
-        delete_event: "tn:ai-event-deleted",
-        update_job_posting: "tn:ai-job-posting-updated",
-        delete_job_posting: "tn:ai-job-posting-deleted",
-      }[data.actionType];
+      const fallback = ACTION_REFRESH_EVENT_BY_TYPE[data.actionType];
       if (fallback) eventNames.add(fallback);
     }
-
-    shouldRefresh = true;
   }
 
   eventNames.add("tn:ai-action-executed");
@@ -87,7 +90,7 @@ function dispatchConfirmRefreshEvents(results: unknown[]) {
     window.dispatchEvent(new CustomEvent("calendar:refresh", { detail: results }));
   }
 
-  return shouldRefresh;
+  return true;
 }
 
 function getFeatureSegment(pathname: string): string {
