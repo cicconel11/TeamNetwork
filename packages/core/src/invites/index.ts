@@ -2,9 +2,9 @@ export {
   redeemInviteWithFallback,
   completeEnterpriseInviteRedemption,
   normalizeRedeemResult,
-} from "@teammeet/core/invites";
+} from "./redeemInvite";
 export type {
   AvailableOrg,
   RedeemResult,
   InviteFlow,
-} from "@teammeet/core/invites";
+} from "./redeemInvite";
