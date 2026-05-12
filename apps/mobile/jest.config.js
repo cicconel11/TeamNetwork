@@ -55,7 +55,7 @@ module.exports = {
   moduleNameMapper: {
     "^react-native$": "<rootDir>/__mocks__/react-native.js",
     "^@/(.*)$": "<rootDir>/src/$1",
-    "^@babel/runtime/(.*)$": "<rootDir>/node_modules/@babel/runtime/$1",
+    "^@babel/runtime/(.*)$": "<rootDir>/../../node_modules/@babel/runtime/$1",
     "^@teammeet/core$": "<rootDir>/../../packages/core/src",
     "^@teammeet/core/(.*)$": "<rootDir>/../../packages/core/src/$1",
     "^@teammeet/types$": "<rootDir>/../../packages/types/src",
