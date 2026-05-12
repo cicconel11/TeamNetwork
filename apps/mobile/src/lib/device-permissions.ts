@@ -54,25 +54,25 @@ export interface PermissionCopy {
 const COPY: Record<PermissionKind, PermissionCopy> = {
   notifications: {
     title: "Stay in the loop",
-    body: "TeamMeet sends pushes for new announcements, chat mentions, and event reminders. You can pick which categories in Settings later.",
+    body: "TeamNetwork sends pushes for new announcements, chat mentions, and event reminders. You can pick which categories in Settings later.",
     primaryCta: "Turn on notifications",
-    deniedHint: "Open Settings to enable notifications for TeamMeet.",
+    deniedHint: "Open Settings to enable notifications for TeamNetwork.",
   },
   camera: {
     title: "Scan to join or check in",
-    body: "Use the camera to scan a TeamMeet QR code — to join your organization or to check members in at events.",
+    body: "Use the camera to scan a TeamNetwork QR code — to join your organization or to check members in at events.",
     primaryCta: "Allow camera",
     deniedHint: "Camera access is off. Open Settings to enable it.",
   },
   calendar: {
     title: "Add events to your calendar",
-    body: "TeamMeet writes practices, games, and events into your device calendar so you see them alongside your other commitments.",
+    body: "TeamNetwork writes practices, games, and events into your device calendar so you see them alongside your other commitments.",
     primaryCta: "Allow calendar",
     deniedHint: "Calendar access is off. Open Settings to enable it.",
   },
   biometric: {
     title: "Faster sign-in",
-    body: "Use Face ID or Touch ID to unlock TeamMeet without typing your password each time.",
+    body: "Use Face ID or Touch ID to unlock TeamNetwork without typing your password each time.",
     primaryCta: "Enable biometrics",
     deniedHint: "Set up Face ID, Touch ID, or a fingerprint in your device settings to use this.",
   },

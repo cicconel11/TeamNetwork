@@ -39,7 +39,7 @@ export async function shareInvite(invite: Invite): Promise<ShareResult> {
   return shareSafely(
     {
       url,
-      message: `Join my organization on TeamMeet: ${url}`,
+      message: `Join my organization on TeamNetwork: ${url}`,
     },
     "invite"
   );

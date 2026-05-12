@@ -42,7 +42,7 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
         <View style={styles.iconWrap}>
           <Lock size={28} color="#fff" />
         </View>
-        <Text style={styles.title}>TeamMeet locked</Text>
+        <Text style={styles.title}>TeamNetwork locked</Text>
         <Text style={styles.body}>
           {failures === 0
             ? "Use Face ID, Touch ID, or your device passcode to unlock."

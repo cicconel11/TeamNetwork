@@ -22,6 +22,7 @@ export interface Event {
   longitude?: number | null;
   geofence_radius_m?: number | null;
   geofence_enabled?: boolean | null;
+  check_in_mode?: "qr" | "rsvp" | null;
 }
 
 interface UseEventsOptions {

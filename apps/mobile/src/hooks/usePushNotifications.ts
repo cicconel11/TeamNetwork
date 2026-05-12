@@ -14,6 +14,8 @@ import {
 import { captureException } from "@/lib/analytics";
 import { useBiometricLock } from "@/contexts/BiometricLockContext";
 
+const DEDUPE_TTL_MS = 60_000;
+
 interface UsePushNotificationsOptions {
   userId: string | null;
   enabled?: boolean;
@@ -33,7 +35,11 @@ export function usePushNotifications({
   const isRegisteredRef = useRef(false);
   const lastTokenRef = useRef<string | null>(null);
   const hasHandledColdLaunchRef = useRef(false);
-  const lastHandledNotificationIdRef = useRef<string | null>(null);
+  // Short-TTL dedupe: iOS can deliver the same response twice (cold-launch +
+  // listener for the same payload, or rapid double-taps). A lifetime-scoped
+  // ref silently swallowed legitimate re-taps after the user navigated away,
+  // so we expire entries after DEDUPE_TTL_MS.
+  const handledNotificationsRef = useRef<Map<string, number>>(new Map());
   const pendingRouteRef = useRef<string | null>(null);
 
   const { isLocked } = useBiometricLock();
@@ -47,8 +53,16 @@ export function usePushNotifications({
   handlerRef.current = (response: Notifications.NotificationResponse) => {
     try {
       const id = response.notification.request.identifier;
-      if (id && lastHandledNotificationIdRef.current === id) return;
-      lastHandledNotificationIdRef.current = id ?? null;
+      if (id) {
+        const now = Date.now();
+        // Sweep expired entries so the map can't grow unbounded.
+        for (const [key, ts] of handledNotificationsRef.current) {
+          if (now - ts > DEDUPE_TTL_MS) handledNotificationsRef.current.delete(key);
+        }
+        const seen = handledNotificationsRef.current.get(id);
+        if (seen && now - seen <= DEDUPE_TTL_MS) return;
+        handledNotificationsRef.current.set(id, now);
+      }
 
       const data = response.notification.request.content.data as unknown as NotificationData;
       const route = getNotificationRoute(data);

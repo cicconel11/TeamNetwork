@@ -106,6 +106,9 @@ export const recurrenceRuleSchema = z.discriminatedUnion("occurrence_type", [
 ]);
 export type RecurrenceRuleForm = z.infer<typeof recurrenceRuleSchema>;
 
+export const checkInModeSchema = z.enum(["qr", "rsvp"]);
+export type CheckInMode = z.infer<typeof checkInModeSchema>;
+
 export const editScopeSchema = z.enum(["this_only", "this_and_future"]);
 export type EditScope = z.infer<typeof editScopeSchema>;
 
@@ -125,6 +128,7 @@ export const newEventSchema = z
     event_type: eventTypeSchema,
     is_philanthropy: z.boolean(),
     audience: audienceSchema,
+    check_in_mode: checkInModeSchema,
     send_notification: z.boolean(),
     channel: channelSchema,
     is_recurring: z.boolean(),
@@ -170,6 +174,7 @@ export const editEventSchema = z
     location: optionalSafeString(500),
     event_type: eventTypeSchema,
     is_philanthropy: z.boolean(),
+    check_in_mode: checkInModeSchema,
   })
   .refine(
     (data) => {

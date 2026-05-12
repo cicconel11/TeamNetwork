@@ -5,6 +5,7 @@ import { expandRecurrence, type RecurrenceRule } from "./recurrence";
 type EventInsert = Database["public"]["Tables"]["events"]["Insert"];
 type EventUpdate = Database["public"]["Tables"]["events"]["Update"];
 type EventType = Database["public"]["Enums"]["event_type"];
+type CheckInMode = Database["public"]["Enums"]["event_check_in_mode"];
 
 interface BaseEventData {
   organization_id: string;
@@ -18,6 +19,7 @@ interface BaseEventData {
   audience?: string | null;
   target_user_ids?: string[] | null;
   created_by_user_id?: string | null;
+  check_in_mode?: CheckInMode;
 }
 
 /**
@@ -50,6 +52,7 @@ export async function createRecurringEvents(
     audience: baseEvent.audience ?? null,
     target_user_ids: baseEvent.target_user_ids ?? null,
     created_by_user_id: baseEvent.created_by_user_id ?? null,
+    check_in_mode: baseEvent.check_in_mode ?? "rsvp",
     recurrence_group_id: groupId,
     recurrence_index: inst.recurrence_index,
     recurrence_rule: inst.recurrence_index === 0 ? (rule as unknown as Database["public"]["Tables"]["events"]["Insert"]["recurrence_rule"]) : null,
@@ -76,7 +79,7 @@ export async function updateFutureEvents(
   supabase: SupabaseClient<Database>,
   eventId: string,
   orgId: string,
-  updates: Pick<EventUpdate, "title" | "description" | "location" | "event_type" | "is_philanthropy">,
+  updates: Pick<EventUpdate, "title" | "description" | "location" | "event_type" | "is_philanthropy" | "check_in_mode">,
 ): Promise<{ updatedIds: string[]; error: string | null }> {
   // First, get the event to find its group and index
   const { data: event, error: fetchError } = await supabase

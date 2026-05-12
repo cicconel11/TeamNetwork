@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import { useGlobalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { setUserProperties, captureException } from "@/lib/analytics";
@@ -36,6 +36,29 @@ interface OrgContextValue {
 
 const OrgContext = createContext<OrgContextValue | null>(null);
 
+// Cold launch from a notification tap can race the Supabase session
+// rehydration in AsyncStorage. Wait up to `timeoutMs` for the first
+// non-null user emitted by onAuthStateChange or a follow-up getUser().
+export async function waitForAuthUser(timeoutMs: number) {
+  return new Promise<Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"]>((resolve) => {
+    let settled = false;
+    const finish = (user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"]) => {
+      if (settled) return;
+      settled = true;
+      subscription?.unsubscribe();
+      clearTimeout(timer);
+      resolve(user);
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) finish(session.user);
+    });
+    const timer = setTimeout(() => {
+      // Last-chance retry before giving up.
+      supabase.auth.getUser().then(({ data }) => finish(data?.user ?? null)).catch(() => finish(null));
+    }, timeoutMs);
+  });
+}
+
 export function OrgProvider({ children }: { children: ReactNode }) {
   const { orgSlug } = useGlobalSearchParams<{ orgSlug: string }>();
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -49,8 +72,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const runIdRef = useRef(0);
+
   useEffect(() => {
     let isMounted = true;
+    const runId = ++runIdRef.current;
+    const isStale = () => !isMounted || runIdRef.current !== runId;
 
     async function fetchOrgData() {
       if (!orgSlug) {
@@ -70,7 +97,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           supabase.auth.getUser(),
         ]);
 
-        if (!isMounted) return;
+        if (isStale()) return;
 
         if (orgResult.error) {
           const nextStatus = orgResult.error.code === "PGRST116" ? "not_found" : "error";
@@ -79,7 +106,16 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const currentUser = userResult.data?.user;
+        // Cold-launch from a notification can land here before AsyncStorage
+        // has finished rehydrating the Supabase session. getUser() momentarily
+        // returns null; falling straight through to `unauthorized` would
+        // bounce the user out of their deep link. Wait briefly for the
+        // session to materialize before giving up.
+        let currentUser = userResult.data?.user ?? null;
+        if (!currentUser) {
+          currentUser = await waitForAuthUser(2000);
+          if (isStale()) return;
+        }
         if (!currentUser) {
           setStatus("unauthorized");
           return;
@@ -104,14 +140,10 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             .maybeSingle(),
         ]);
 
-        if (!isMounted) return;
+        if (isStale()) return;
 
         if (roleResult.error) {
           throw roleResult.error;
-        }
-
-        if (subscriptionResult.error && subscriptionResult.error.code !== "PGRST116") {
-          throw subscriptionResult.error;
         }
 
         if (!roleResult.data?.role) {
@@ -119,7 +151,19 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const subscriptionData = subscriptionResult.data;
+        // Subscription metadata is informational (controls parents bucket
+        // visibility). A flaky RPC must not gate org access — fall back to
+        // disabled-parents and continue.
+        const subscriptionData =
+          subscriptionResult.error && subscriptionResult.error.code !== "PGRST116"
+            ? null
+            : subscriptionResult.data;
+        if (subscriptionResult.error && subscriptionResult.error.code !== "PGRST116") {
+          captureException(
+            new Error(subscriptionResult.error.message),
+            { context: "OrgContext.get_subscription_status", orgSlug },
+          );
+        }
         const parentsEnabled =
           subscriptionData?.status === "enterprise_managed" ||
           (subscriptionData?.parents_bucket != null && subscriptionData.parents_bucket !== "none");
@@ -133,7 +177,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setUserRole(normalizeRole(roleResult.data.role));
         setStatus("ready");
       } catch (err) {
-        if (isMounted) {
+        if (!isStale()) {
           const message = err instanceof Error ? err.message : String(err);
           captureException(
             err instanceof Error ? err : new Error(message),
@@ -143,7 +187,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           setError(message);
         }
       } finally {
-        if (isMounted) {
+        if (!isStale()) {
           setIsLoading(false);
         }
       }

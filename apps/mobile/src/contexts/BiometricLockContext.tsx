@@ -125,7 +125,7 @@ export function BiometricLockProvider({ children }: PropsWithChildren) {
   const lock = useCallback(() => setIsLocked(true), []);
 
   const unlock = useCallback(async (): Promise<{ success: boolean }> => {
-    const result = await authenticate("Unlock TeamMeet");
+    const result = await authenticate("Unlock TeamNetwork");
     if (result.success) {
       setIsLocked(false);
       return { success: true };

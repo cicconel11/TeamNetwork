@@ -223,7 +223,7 @@ private struct OpenInAppButton: View {
         Link(destination: URL(string: "teammeet://events/\(eventId)")!) {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.up.forward.app")
-                Text("Open in TeamMeet")
+                Text("Open in TeamNetwork")
                     .fontWeight(.semibold)
             }
             .font(.footnote)

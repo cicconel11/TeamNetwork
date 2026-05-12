@@ -95,8 +95,8 @@ export default function TabsLayout() {
   const handleShareOrg = useCallback(async () => {
     const orgUrl = getWebPath(orgSlug);
     const shareMessage = orgName
-      ? `Check out ${orgName} on TeamMeet: ${orgUrl}`
-      : `Check out this organization on TeamMeet: ${orgUrl}`;
+      ? `Check out ${orgName} on TeamNetwork: ${orgUrl}`
+      : `Check out this organization on TeamNetwork: ${orgUrl}`;
 
     try {
       await Share.share({

@@ -92,18 +92,38 @@ export function LiveActivityProvider({ children }: LiveActivityProviderProps) {
         const supported = await LiveActivityNative.isSupported();
         if (cancelled) return;
         if (!supported) {
+          if (__DEV__) {
+            console.warn(
+              "[LiveActivity] ActivityKit reports unsupported (iOS <16.1 or Live Activities disabled in Settings). No LA will start.",
+            );
+          }
           setEligible(false);
           return;
         }
         const res = await fetchWithAuth("/api/live-activity/eligibility");
         if (!res.ok) {
+          if (__DEV__) {
+            console.warn(
+              `[LiveActivity] eligibility endpoint returned ${res.status}. No LA will start. Check that the web app is running and APNs env vars are set.`,
+            );
+          }
           setEligible(false);
           return;
         }
-        const body = (await res.json()) as { enabled?: boolean };
+        const body = (await res.json()) as { enabled?: boolean; reason?: string };
+        if (__DEV__ && body.enabled !== true) {
+          console.warn(
+            `[LiveActivity] eligibility disabled by server (reason=${body.reason ?? "unknown"}). No LA will start.`,
+          );
+        }
         if (!cancelled) setEligible(body.enabled === true);
       } catch (err) {
         if (!cancelled) setEligible(false);
+        if (__DEV__) {
+          console.warn(
+            `[LiveActivity] eligibility check threw (${(err as Error).message}). Web dev server unreachable? No LA will start.`,
+          );
+        }
         sentry.captureException(err as Error, {
           context: "LiveActivityContext.eligibility",
         });
@@ -113,6 +133,27 @@ export function LiveActivityProvider({ children }: LiveActivityProviderProps) {
       cancelled = true;
     };
   }, [userId, platformOk, buildFlagOn]);
+
+  // Sign-out / kill-switch cleanup. When `userId` becomes null (or eligibility
+  // is revoked while activities are running) ActivityKit otherwise keeps the
+  // lockscreen card alive — exposing the previous session's event to the next
+  // person to wake the device. End every known activity immediately.
+  useEffect(() => {
+    if (userId) return;
+    const running = knownActivitiesRef.current;
+    if (running.size === 0) return;
+    void (async () => {
+      try {
+        await LiveActivityNative.endAll("immediate");
+      } catch (err) {
+        sentry.captureException(err as Error, {
+          context: "LiveActivityContext.endAll.signout",
+        });
+      }
+      running.clear();
+      setActivityIds({});
+    })();
+  }, [userId]);
 
   // Hydrate `knownActivitiesRef` with anything ActivityKit already has running
   // (e.g., from a prior session). Without this we'd request a duplicate LA

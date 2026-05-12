@@ -88,8 +88,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
         const timeoutId = setTimeout(() => settle(false), 30_000);
         Alert.alert(
-          "Remove TeamMeet calendars?",
-          `You have ${syncedOrgIds.length} TeamMeet calendar${
+          "Remove TeamNetwork calendars?",
+          `You have ${syncedOrgIds.length} TeamNetwork calendar${
             syncedOrgIds.length === 1 ? "" : "s"
           } on this device. Remove them when signing out?`,
           [

@@ -44,13 +44,18 @@ export async function setEventRsvp(args: {
   status: RsvpStatus;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
+    // `track_on_lock_screen` intentionally omitted. The DB column defaults
+    // to true (migration 20261203000002), so new "attending" RSVPs opt in
+    // automatically. Updates preserve whatever the user set via the per-event
+    // toggle — clobbering it here would silently undo their opt-out the next
+    // time they re-tapped RSVP=Going.
     const { error } = await supabase.from("event_rsvps").upsert(
       {
         event_id: args.eventId,
         user_id: args.userId,
         organization_id: args.organizationId,
         status: args.status,
-      },
+      } as never,
       { onConflict: "event_id,user_id" },
     );
 
@@ -136,6 +141,12 @@ export function useRsvp(
   const initial = normalizeRsvpStatus(options?.initialStatus ?? null);
   const [status, setStatus] = useState<RsvpStatus | null>(initial);
   const [saving, setSaving] = useState(false);
+  // Stable handle on the latest status so `setRsvp` doesn't have to
+  // re-create on every status change (which would defeat consumer memoization).
+  const statusRef = useRef<RsvpStatus | null>(initial);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -161,7 +172,7 @@ export function useRsvp(
         return { ok: false, error: "Already saving" };
       }
 
-      const previous = status;
+      const previous = statusRef.current;
       inFlightRef.current = true;
       if (isMountedRef.current) {
         setStatus(next);
@@ -184,7 +195,7 @@ export function useRsvp(
       if (isMountedRef.current) setSaving(false);
       return result;
     },
-    [eventId, organizationId, userId, status],
+    [eventId, organizationId, userId],
   );
 
   const promptRsvp = useCallback(() => {

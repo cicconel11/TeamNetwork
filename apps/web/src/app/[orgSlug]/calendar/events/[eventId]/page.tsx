@@ -147,6 +147,9 @@ export default async function CalendarEventDetailPage({ params, searchParams }: 
                 Recurring
               </Badge>
             )}
+            {event.check_in_mode === "qr" && (
+              <Badge variant="primary">QR check-in</Badge>
+            )}
           </div>
 
           <h2 className="text-2xl font-bold text-foreground mb-4">{event.title}</h2>

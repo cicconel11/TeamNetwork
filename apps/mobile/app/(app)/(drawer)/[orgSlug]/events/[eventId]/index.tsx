@@ -14,6 +14,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useRsvp } from "@/hooks/useRsvp";
+import type { EventRSVP } from "@/hooks/useEventRSVPs";
 import { ErrorState } from "@/components/ui";
 import type { Event } from "@/hooks/useEvents";
 import { getWebPath } from "@/lib/web-api";
@@ -26,11 +27,10 @@ import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 import { EventCountdownBadge } from "@/components/calendar/event-countdown-badge";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import * as sentry from "@/lib/analytics/sentry";
-import type { RsvpStatus } from "@teammeet/core";
+import { normalizeRsvpStatus, type RsvpStatus } from "@teammeet/core";
 import { useAuth } from "@/hooks/useAuth";
+import { useNow } from "@/hooks/useNow";
 
-
-type RSVPStatus = RsvpStatus;
 
 function rsvpButtonLabel(status: RsvpStatus): string {
   switch (status) {
@@ -47,16 +47,6 @@ function sentryCaptureRsvpRefetchError(err: unknown): void {
   sentry.captureException(err as Error, {
     context: "EventDetailScreen.fetchRsvps",
   });
-}
-
-interface RSVP {
-  id: string;
-  user_id: string;
-  status: RSVPStatus;
-  users: {
-    name: string | null;
-    email: string | null;
-  } | null;
 }
 
 export default function EventDetailScreen() {
@@ -257,7 +247,11 @@ export default function EventDetailScreen() {
     },
   }));
   const [event, setEvent] = useState<Event | null>(null);
-  const [rsvps, setRsvps] = useState<RSVP[]>([]);
+  // Only the fields this screen reads. Keeps the type local to what we
+  // actually project from the query without redeclaring the full row shape.
+  const [rsvps, setRsvps] = useState<
+    Pick<EventRSVP, "id" | "user_id" | "status" | "checked_in_at">[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -270,11 +264,12 @@ export default function EventDetailScreen() {
   });
 
   const fetchRsvps = useCallback(async () => {
-    if (!eventId) return;
+    if (!eventId || !orgId) return;
     const { data: rsvpData, error: rsvpError } = await supabase
       .from("event_rsvps")
-      .select("id, user_id, status, users!user_id(name, email)")
+      .select("id, user_id, status, checked_in_at")
       .eq("event_id", eventId)
+      .eq("organization_id", orgId)
       .order("created_at", { ascending: false });
 
     if (rsvpError) {
@@ -282,9 +277,16 @@ export default function EventDetailScreen() {
       return;
     }
     if (rsvpData) {
-      setRsvps(rsvpData as unknown as RSVP[]);
+      setRsvps(
+        rsvpData.map((r) => ({
+          id: r.id,
+          user_id: r.user_id,
+          status: normalizeRsvpStatus(r.status) ?? "maybe",
+          checked_in_at: r.checked_in_at,
+        })),
+      );
     }
-  }, [eventId]);
+  }, [eventId, orgId]);
 
   // Whether THIS user has opted into Live Activity tracking for this event.
   // Independent fetch from fetchRsvps so the toggle state survives unrelated
@@ -319,11 +321,12 @@ export default function EventDetailScreen() {
     const next = !trackOnLockScreen;
     setSavingTrack(true);
     setTrackOnLockScreen(next);
-    // Cast: `track_on_lock_screen` was added in a recent migration; the
-    // generated Supabase types haven't been regenerated yet.
-    const { error: updateError } = await (supabase as any)
+    // `track_on_lock_screen` is missing from the generated Supabase types
+    // until the next gen:types run; cast the payload (not the client) to
+    // keep the rest of the chain type-checked.
+    const { error: updateError } = await supabase
       .from("event_rsvps")
-      .update({ track_on_lock_screen: next })
+      .update({ track_on_lock_screen: next } as never)
       .eq("event_id", eventId)
       .eq("user_id", user.id);
     setSavingTrack(false);
@@ -454,7 +457,7 @@ export default function EventDetailScreen() {
         if (calendarPermission.status === "denied" && !calendarPermission.canAskAgain) {
           Alert.alert(
             "Calendar access needed",
-            "Open Settings to allow TeamMeet to add events to your calendar.",
+            "Open Settings to allow TeamNetwork to add events to your calendar.",
             [
               { text: "Cancel", style: "cancel" },
               { text: "Open Settings", onPress: () => void calendarPermission.openSettings() },
@@ -467,7 +470,7 @@ export default function EventDetailScreen() {
     try {
       await syncEventToDevice({
         orgId,
-        orgName: orgName ?? "TeamMeet",
+        orgName: orgName ?? "TeamNetwork",
         event,
       });
       Alert.alert("Added to calendar", `${event.title} is now in your device calendar.`);
@@ -495,6 +498,8 @@ export default function EventDetailScreen() {
     };
     if (!permissions.canUseAdminActions) return [shareItem, calendarItem];
 
+    const qrEnabled = (event?.check_in_mode ?? "rsvp") === "qr";
+
     return [
       shareItem,
       calendarItem,
@@ -510,12 +515,16 @@ export default function EventDetailScreen() {
         icon: <List size={20} color={neutral.foreground} />,
         onPress: handleViewRsvps,
       },
-      {
-        id: "event-qr",
-        label: "Show Event QR",
-        icon: <QrCode size={20} color={neutral.foreground} />,
-        onPress: handleShowEventQr,
-      },
+      ...(qrEnabled
+        ? [
+            {
+              id: "event-qr",
+              label: "Show Event QR",
+              icon: <QrCode size={20} color={neutral.foreground} />,
+              onPress: handleShowEventQr,
+            } as OverflowMenuItem,
+          ]
+        : []),
       {
         id: "open-web",
         label: "Open in Web",
@@ -532,6 +541,7 @@ export default function EventDetailScreen() {
     ];
   }, [
     permissions.canUseAdminActions,
+    event?.check_in_mode,
     handleEditEvent,
     handleViewRsvps,
     handleShowEventQr,
@@ -548,14 +558,36 @@ export default function EventDetailScreen() {
     const attending = rsvps.filter((r) => r.status === "attending").length;
     const maybe = rsvps.filter((r) => r.status === "maybe").length;
     const notAttending = rsvps.filter((r) => r.status === "not_attending").length;
-    return { attending, maybe, notAttending, total: rsvps.length };
-  }, [rsvps]);
+    const checkedIn = rsvps.filter((r) => r.checked_in_at != null).length;
+    const myRow = user?.id ? rsvps.find((r) => r.user_id === user.id) : undefined;
+    return {
+      attending,
+      maybe,
+      notAttending,
+      checkedIn,
+      total: rsvps.length,
+      myCheckedInAt: myRow?.checked_in_at ?? null,
+    };
+  }, [rsvps, user?.id]);
 
   const handleCheckInPress = () => {
     router.push(`/(app)/${orgSlug}/events/check-in?eventId=${eventId}`);
   };
 
   const isAdmin = permissions.canUseAdminActions;
+  const qrCheckInEnabled = (event?.check_in_mode ?? "rsvp") === "qr";
+
+  // Live window: now is within [start_date, end_date]. Used to flip the
+  // header counter from RSVP/attending to actual check-in counts at kickoff.
+  const now = useNow(event?.start_date ?? undefined);
+  const isLive = useMemo(() => {
+    if (!event?.start_date) return false;
+    const start = Date.parse(event.start_date);
+    if (Number.isNaN(start) || now.getTime() < start) return false;
+    if (!event.end_date) return true;
+    const end = Date.parse(event.end_date);
+    return Number.isNaN(end) ? true : now.getTime() <= end;
+  }, [event?.start_date, event?.end_date, now]);
 
   if (loading) {
     return (
@@ -630,7 +662,11 @@ export default function EventDetailScreen() {
           {event.rsvp_count !== undefined && (
             <View style={styles.detailRow}>
               <Users size={18} color={neutral.muted} />
-              <Text style={styles.detailText}>{event.rsvp_count} attending</Text>
+              <Text style={styles.detailText}>
+                {isLive
+                  ? `${rsvpCounts.checkedIn} checked in of ${rsvpCounts.attending} going`
+                  : `${rsvpCounts.attending} going`}
+              </Text>
             </View>
           )}
         </View>
@@ -665,45 +701,53 @@ export default function EventDetailScreen() {
                   </Text>
                 </View>
               )}
+              {rsvpCounts.checkedIn > 0 && (
+                <View style={[styles.rsvpCountBadge, { backgroundColor: semantic.successLight ?? RSVP_COLORS.attending.background }]}>
+                  <Text style={[styles.rsvpCountText, { color: semantic.success }]}>
+                    {rsvpCounts.checkedIn} Checked In
+                  </Text>
+                </View>
+              )}
             </View>
             <Text style={styles.rsvpTapHint}>Tap to view all RSVPs</Text>
           </Pressable>
         )}
 
-        {/* Admin Check-In Button */}
-        {isAdmin && (
+        {/* Admin Check-In Button — orthogonal to RSVP. Admins can RSVP for themselves AND check others in. */}
+        {isAdmin && qrCheckInEnabled && (
           <Pressable style={styles.checkInButton} onPress={handleCheckInPress}>
             <UserCheck size={20} color="#ffffff" />
             <Text style={styles.checkInButtonText}>Check In Attendees</Text>
           </Pressable>
         )}
 
-        {!isAdmin && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.rsvpButton,
-              (rsvp.saving || pressed) && { opacity: 0.7 },
-            ]}
-            onPress={rsvp.promptRsvp}
-            disabled={rsvp.saving}
-            accessibilityRole="button"
-            accessibilityLabel={
-              rsvp.status
-                ? `Update RSVP, currently ${rsvpButtonLabel(rsvp.status)}`
-                : "RSVP to event"
-            }
-          >
-            <Text style={styles.rsvpButtonText}>
-              {rsvp.saving
-                ? "Saving…"
+        {/* RSVP button is always available regardless of check-in mode. */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.rsvpButton,
+            (rsvp.saving || pressed) && { opacity: 0.7 },
+          ]}
+          onPress={rsvp.promptRsvp}
+          disabled={rsvp.saving}
+          accessibilityRole="button"
+          accessibilityLabel={
+            rsvp.status
+              ? `Update RSVP, currently ${rsvpButtonLabel(rsvp.status)}`
+              : "RSVP to event"
+          }
+        >
+          <Text style={styles.rsvpButtonText}>
+            {rsvp.saving
+              ? "Saving…"
+              : rsvpCounts.myCheckedInAt
+                ? `Checked In · ${rsvpButtonLabel(rsvp.status ?? "attending")}`
                 : rsvp.status
                   ? `RSVP: ${rsvpButtonLabel(rsvp.status)}`
                   : "RSVP"}
-            </Text>
-          </Pressable>
-        )}
+          </Text>
+        </Pressable>
 
-        {user && !isAdmin && (
+        {user && qrCheckInEnabled && (
           <Pressable
             style={({ pressed }) => [styles.selfScanRow, pressed && { opacity: 0.85 }]}
             onPress={() =>
