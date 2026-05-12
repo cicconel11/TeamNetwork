@@ -9,7 +9,7 @@ export function friendlyAuthError(err: unknown): string {
   }
 
   const message = err instanceof Error ? err.message : "";
-  if (message && /network request failed/i.test(message)) {
+  if (message && /network request failed|failed to fetch|network unreachable/i.test(message)) {
     return FRIENDLY_UNREACHABLE;
   }
 

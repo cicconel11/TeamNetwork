@@ -3,6 +3,7 @@
  */
 
 import * as Sentry from "@sentry/react-native";
+import { shouldDropBenignClientTransportEvent } from "./sentry-transport-filter";
 
 let initialized = false;
 let telemetryEnabled = false;
@@ -16,6 +17,9 @@ export function init(dsn: string): void {
     environment: __DEV__ ? "development" : "production",
     sendDefaultPii: false,
     beforeSend(event) {
+      if (shouldDropBenignClientTransportEvent(event)) {
+        return null;
+      }
       if (event.user) {
         delete event.user.email;
         delete event.user.username;
@@ -45,6 +49,9 @@ export function captureException(
   context?: Record<string, unknown>
 ): void {
   if (!initialized || !telemetryEnabled) return;
+  if (error.name === "NetworkUnreachableError") {
+    return;
+  }
   Sentry.captureException(error, { extra: context });
 }
 

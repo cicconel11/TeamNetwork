@@ -79,7 +79,12 @@ export async function fetchWithAuth(path: string, options: RequestInit = {}) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Network request failed";
-    if (/network request failed|failed to fetch/i.test(message)) {
+    // RN / iOS surface several transport strings; normalize so callers can handle offline uniformly.
+    if (
+      /network request failed|failed to fetch|network unreachable|internet connection appears to be offline|network connection was lost/i.test(
+        message
+      )
+    ) {
       throw new NetworkUnreachableError(message);
     }
     throw error;

@@ -1,4 +1,9 @@
-import { buildAuthorizedHeaders, fetchWithAuth, getWebRoute } from "@/lib/web-api";
+import {
+  buildAuthorizedHeaders,
+  fetchWithAuth,
+  getWebRoute,
+  NetworkUnreachableError,
+} from "@/lib/web-api";
 import { supabase } from "@/lib/supabase";
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
@@ -101,5 +106,10 @@ describe("web api helpers", () => {
 
     await expect(fetchWithAuth("/api/test")).rejects.toThrow("Not authenticated");
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("wraps native transport errors as NetworkUnreachableError", async () => {
+    mockFetch.mockRejectedValue(new Error("Network unreachable"));
+    await expect(fetchWithAuth("/api/test")).rejects.toThrow(NetworkUnreachableError);
   });
 });
