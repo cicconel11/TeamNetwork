@@ -43,7 +43,7 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
   return (
     <>
       {/* Top Bar (Mobile Only) */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card border-b border-border z-30 flex items-center justify-between px-4">
+      <header data-testid="mobile-nav" className={`lg:hidden fixed top-0 left-0 right-0 h-16 bg-card border-b border-border flex items-center justify-between px-4 ${isOpen ? "z-50" : "z-30"}`}>
         <Link href={basePath} className="flex items-center gap-3 min-w-0">
           {organization.logo_url ? (
             <div className="relative h-8 w-8 rounded-lg overflow-hidden">
@@ -73,6 +73,8 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
 
         <div className="flex items-center gap-1">
           <button
+            data-testid="mobile-nav-toggle"
+            aria-expanded={isOpen}
             onClick={toggleMenu}
             className="p-2 -mr-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-lg"
             aria-label="Toggle menu"
@@ -92,7 +94,8 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
 
       {/* Drawer Overlay */}
       {isOpen && (
-        <div 
+        <div
+          data-testid="mobile-nav-backdrop"
           className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
           onClick={closeMenu}
           aria-hidden="true"
@@ -101,6 +104,8 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
 
       {/* Slide-out Drawer */}
       <div
+        data-testid="mobile-nav-drawer"
+        data-state={isOpen ? "open" : "closed"}
         style={{
           "--foreground": "var(--sidebar-foreground)",
           "--muted": "var(--sidebar-muted)",
