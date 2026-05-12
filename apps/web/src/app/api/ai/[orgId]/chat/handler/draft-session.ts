@@ -22,6 +22,15 @@ import {
 export const DRAFT_CANCEL_PATTERN =
   /(?<!\w)(?:cancel|never\s+mind|nevermind|forget\s+(?:that|it)|scratch\s+that|stop\s+working\s+on\s+that)(?!\w)/i;
 
+const MUTATE_EXISTING_DRAFT_TYPES = new Set<DraftSessionType>([
+  "update_announcement",
+  "delete_announcement",
+  "update_job_posting",
+  "delete_job_posting",
+  "update_event",
+  "delete_event",
+]);
+
 export function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
   switch (draftType) {
     case "create_announcement":
@@ -809,12 +818,20 @@ export function shouldContinueDraftSession(
     return false;
   }
 
-  if (routing.intentType === "navigation" || routing.intentType === "casual") {
+  const isMutateExisting = MUTATE_EXISTING_DRAFT_TYPES.has(draftSession.draft_type);
+
+  if (
+    !isMutateExisting &&
+    (routing.intentType === "navigation" || routing.intentType === "casual")
+  ) {
     return false;
   }
 
   const trimmed = message.trim();
-  if (trimmed.endsWith("?") || DIRECT_QUERY_START_PATTERN.test(trimmed)) {
+  if (
+    !isMutateExisting &&
+    (trimmed.endsWith("?") || DIRECT_QUERY_START_PATTERN.test(trimmed))
+  ) {
     return false;
   }
 
