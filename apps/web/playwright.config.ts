@@ -60,8 +60,21 @@ export default defineConfig({
     {
       name: 'e2e',
       testDir: './tests/e2e/specs',
+      testIgnore: /mobile-.*\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+        storageState: 'playwright/.auth/e2e-state.json',
+      },
+      dependencies: ['e2e-setup'],
+    },
+    /* E2E Mobile Tests - iPhone 13 viewport for mobile nav drawer */
+    {
+      name: 'e2e-mobile',
+      testDir: './tests/e2e/specs',
+      testMatch: /mobile-.*\.spec\.ts/,
+      use: {
+        ...devices['iPhone 13'],
         baseURL: 'http://localhost:3000',
         storageState: 'playwright/.auth/e2e-state.json',
       },

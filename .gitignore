@@ -49,9 +49,11 @@ next-env.d.ts
 
 # audit artifacts (keep templates)
 /audit/
+**/audit/
 !/audit/*.template.*
 
 # playwright
+**/playwright/.auth/
 playwright/.auth/state.json
 playwright/.auth/e2e-state.json
 .playwright-mcp/

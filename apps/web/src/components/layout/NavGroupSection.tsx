@@ -58,8 +58,9 @@ export function NavGroupSection({
   }
 
   return (
-    <div>
+    <div data-testid={`nav-group-${group.id}`}>
       <button
+        data-testid={`nav-group-toggle-${group.id}`}
         aria-expanded={isOpen}
         aria-controls={panelId}
         onClick={onToggle}
@@ -146,9 +147,13 @@ export function NavItemLink({
   const badgeCount = badgeCounts?.[item.href];
   const hasBadge = badgeCount != null && badgeCount > 0;
 
+  const navItemSlug = item.href === "" ? "dashboard" : item.href.replace(/^\//, "").replace(/\//g, "-");
+
   return (
     <li className={isCollapsed ? "w-full flex justify-center" : ""}>
       <Link
+        data-testid={`nav-item-${navItemSlug}`}
+        data-active={isActive ? "true" : "false"}
         href={href}
         title={isCollapsed ? item.label : undefined}
         aria-label={isCollapsed ? item.label : undefined}
