@@ -45,6 +45,16 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Guard against stale channels left over from HMR / unclean teardown:
+    // supabase.channel(name) returns the cached instance if one already
+    // exists, and calling .on() on an already-subscribed channel throws.
+    const existing = supabase
+      .getChannels()
+      .find((c) => c.topic === `realtime:org-presence:${orgId}`);
+    if (existing) {
+      void supabase.removeChannel(existing);
+    }
+
     const channel = supabase.channel(`org-presence:${orgId}`, {
       config: { presence: { key: user.id } },
     });

@@ -505,8 +505,8 @@ export default function MenuScreen() {
     const version = Application.nativeApplicationVersion || "1.0.0";
     const buildNumber = Application.nativeBuildVersion || "1";
     Alert.alert(
-      "About TeamMeet",
-      `Version ${version} (${buildNumber})\n\nTeamMeet helps teams stay connected and organized.`,
+      "About TeamNetwork",
+      `Version ${version} (${buildNumber})\n\nTeamNetwork helps teams stay connected and organized.`,
       [
         { text: "OK", style: "default" },
         {
@@ -525,7 +525,7 @@ export default function MenuScreen() {
     },
     {
       icon: <Info size={20} color={neutral.muted} />,
-      label: "About TeamMeet",
+      label: "About TeamNetwork",
       onPress: handleAbout,
     },
     {

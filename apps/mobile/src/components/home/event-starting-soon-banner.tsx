@@ -149,16 +149,19 @@ export function EventStartingSoonBanner({
           ) : null}
 
           <View style={styles.countsRow}>
-            <View style={styles.countItem}>
-              <Users size={14} color={neutral.muted} />
-              <Text style={styles.countText}>{attendingCount}</Text>
-              <Text style={styles.countLabel}>going</Text>
-            </View>
-            <View style={styles.countItem}>
-              <CheckCircle2 size={14} color={neutral.muted} />
-              <Text style={styles.countText}>{checkedInCount}</Text>
-              <Text style={styles.countLabel}>checked in</Text>
-            </View>
+            {isLive ? (
+              <View style={styles.countItem}>
+                <CheckCircle2 size={14} color={accent} />
+                <Text style={styles.countText}>{checkedInCount}</Text>
+                <Text style={styles.countLabel}>checked in of {attendingCount}</Text>
+              </View>
+            ) : (
+              <View style={styles.countItem}>
+                <Users size={14} color={neutral.muted} />
+                <Text style={styles.countText}>{attendingCount}</Text>
+                <Text style={styles.countLabel}>going</Text>
+              </View>
+            )}
           </View>
         </View>
       </Pressable>

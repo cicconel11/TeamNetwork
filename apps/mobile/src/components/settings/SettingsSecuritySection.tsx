@@ -119,7 +119,7 @@ export function SettingsSecuritySection() {
               <Text style={styles.rowLabel}>Unlock with biometrics</Text>
               <Text style={styles.hint}>
                 {isEnrolled
-                  ? "Use Face ID, Touch ID, or your device passcode when you open or return to TeamMeet."
+                  ? "Use Face ID, Touch ID, or your device passcode when you open or return to TeamNetwork."
                   : "Set up Face ID, Touch ID, or a fingerprint in your device settings to enable this."}
               </Text>
             </View>

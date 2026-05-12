@@ -10,7 +10,7 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { useEventRSVPs } from "@/hooks/useEventRSVPs";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { parseTeammeetUrl } from "@/lib/deep-link";
-import { openVenueInMaps } from "@/lib/venue-maps";
+import { captureCurrentCoords } from "@/lib/event-location";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { SPACING } from "@/lib/design-tokens";
 import { supabase } from "@/lib/supabase";
@@ -52,7 +52,7 @@ export default function ScanCheckInScreen() {
   }, [router, orgSlug, eventId]);
 
   const [geofenceEnabled, setGeofenceEnabled] = useState(false);
-  const [eventLocation, setEventLocation] = useState("");
+  const [checkInMode, setCheckInMode] = useState<"qr" | "rsvp">("qr");
   const [toast, setToast] = useState<Toast>(null);
 
   useEffect(() => {
@@ -61,12 +61,13 @@ export default function ScanCheckInScreen() {
       if (!eventId) return;
       const { data } = await supabase
         .from("events")
-        .select("geofence_enabled, location")
+        .select("geofence_enabled, check_in_mode")
         .eq("id", eventId)
         .maybeSingle();
       if (!cancelled) {
         setGeofenceEnabled(!!data?.geofence_enabled);
-        setEventLocation(typeof data?.location === "string" ? data.location : "");
+        const mode = (data as { check_in_mode?: "qr" | "rsvp" } | null)?.check_in_mode;
+        if (mode === "rsvp" || mode === "qr") setCheckInMode(mode);
       }
     }
     void loadEventMeta();
@@ -81,11 +82,17 @@ export default function ScanCheckInScreen() {
   }, []);
 
   const completeSelfCheckIn = useCallback(
-    async (venueConfirmed: boolean): Promise<boolean> => {
+    async (
+      coords: { latitude: number; longitude: number } | null,
+    ): Promise<boolean> => {
       if (!eventId) return false;
       const { data, error: rpcError } = await supabase.rpc("self_check_in_event", {
         p_event_id: eventId,
-        p_venue_confirmed: venueConfirmed,
+        p_lat: coords?.latitude ?? undefined,
+        p_lng: coords?.longitude ?? undefined,
+        // venue_confirmed retained for back-compat with the old RPC signature;
+        // ignored when p_lat/p_lng are present.
+        p_venue_confirmed: coords != null,
       });
 
       if (rpcError) {
@@ -144,43 +151,24 @@ export default function ScanCheckInScreen() {
         }
 
         if (geofenceEnabled) {
-          if (!eventLocation.trim()) {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          showToast({ kind: "info", text: "Reading your location…" });
+          const locResult = await captureCurrentCoords();
+          if (!locResult.ok) {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             showToast({
               kind: "error",
-              text: "This event is missing a location for venue verification.",
+              text:
+                locResult.reason === "denied"
+                  ? "Allow Location in Settings → TeamNetwork to check in."
+                  : locResult.message,
             });
             return true;
           }
-          await new Promise<void>((resolve) => {
-            Alert.alert(
-              "Confirm venue",
-              "Open the location in Apple Maps, then confirm you’re at the venue.",
-              [
-                { text: "Cancel", style: "cancel", onPress: () => resolve() },
-                {
-                  text: "Open Maps",
-                  onPress: () => {
-                    void openVenueInMaps(eventLocation);
-                    resolve();
-                  },
-                },
-                {
-                  text: "I’m at the venue",
-                  onPress: () => {
-                    void (async () => {
-                      await completeSelfCheckIn(true);
-                      resolve();
-                    })();
-                  },
-                },
-              ]
-            );
-          });
+          await completeSelfCheckIn(locResult.coords);
           return true;
         }
 
-        await completeSelfCheckIn(false);
+        await completeSelfCheckIn(null);
         return true;
       }
 
@@ -231,7 +219,6 @@ export default function ScanCheckInScreen() {
       eventId,
       orgSlug,
       geofenceEnabled,
-      eventLocation,
       findRsvpByUserId,
       checkInAttendee,
       showToast,
@@ -250,6 +237,40 @@ export default function ScanCheckInScreen() {
         <Text style={[styles.title, { color: neutral.foreground }]}>Admins only</Text>
         <Text style={[styles.body, { color: neutral.muted }]}>
           Only admins can scan member QR codes for check-in.
+        </Text>
+      </View>
+    );
+  }
+
+  if (checkInMode === "rsvp") {
+    return (
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: neutral.background, paddingTop: topInset },
+        ]}
+      >
+        <Pressable
+          onPress={handleClose}
+          style={({ pressed }) => [
+            styles.backButton,
+            { alignSelf: "flex-start", margin: SPACING.md },
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <ArrowLeft size={24} color={neutral.foreground} />
+        </Pressable>
+        <Text style={[styles.title, { color: neutral.foreground, textAlign: "center" }]}>
+          No QR for this event
+        </Text>
+        <Text
+          style={[
+            styles.body,
+            { color: neutral.muted, textAlign: "center", marginHorizontal: SPACING.lg },
+          ]}
+        >
+          This event uses simple RSVP — attendees just confirm they’re coming, no QR check-in
+          needed.
         </Text>
       </View>
     );
@@ -299,6 +320,36 @@ export default function ScanCheckInScreen() {
           <Text style={styles.toastText}>{toast.text}</Text>
         </View>
       )}
+      {__DEV__ && eventId && mode === "self" ? (
+        <Pressable
+          onPress={async () => {
+            // Always exercise the self+geofence path — that's what's actually
+            // hard to reach on the sim (no camera). Independent of `mode`.
+            if (geofenceEnabled) {
+              showToast({ kind: "info", text: "Reading your location…" });
+              const locResult = await captureCurrentCoords();
+              if (!locResult.ok) {
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                showToast({
+                  kind: "error",
+                  text:
+                    locResult.reason === "denied"
+                      ? "Allow Location in Settings → TeamNetwork to check in."
+                      : locResult.message,
+                });
+                return;
+              }
+              await completeSelfCheckIn(locResult.coords);
+            } else {
+              await completeSelfCheckIn(null);
+            }
+          }}
+          style={({ pressed }) => [styles.simulateButton, pressed && { opacity: 0.7 }]}
+          accessibilityLabel="Dev: simulate successful self check-in"
+        >
+          <Text style={styles.simulateButtonText}>Dev: simulate scan (self)</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -325,6 +376,16 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   backText: { ...TYPOGRAPHY.labelMedium, color: "#fff" },
+  simulateButton: {
+    position: "absolute",
+    bottom: 32,
+    alignSelf: "center",
+    backgroundColor: "rgba(37, 99, 235, 0.95)",
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: 999,
+  },
+  simulateButtonText: { ...TYPOGRAPHY.labelMedium, color: "#fff" },
   toast: {
     position: "absolute",
     left: SPACING.md,

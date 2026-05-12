@@ -244,9 +244,11 @@ export async function unregisterPushToken(tokenOverride?: string): Promise<void>
     // Ignore table-not-found errors silently
     if (error && !isTableNotFoundError(error)) {
       console.warn("Error unregistering push token:", error.message);
+      captureException(new Error(error.message), { context: "unregisterPushToken" });
     }
   } catch (error) {
     console.warn("Error unregistering push token:", error);
+    captureException(error as Error, { context: "unregisterPushToken" });
   }
 }
 
@@ -329,7 +331,11 @@ export async function setBadgeCount(count: number): Promise<void> {
  */
 export async function dismissDeliveredNotifications(): Promise<void> {
   if (Platform.OS === "web") return;
-  await Notifications.dismissAllNotificationsAsync();
+  try {
+    await Notifications.dismissAllNotificationsAsync();
+  } catch (error) {
+    captureException(error as Error, { context: "dismissDeliveredNotifications" });
+  }
 }
 
 /**

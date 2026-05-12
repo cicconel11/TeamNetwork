@@ -640,8 +640,8 @@ export default function CheckInScreen() {
           )}
         </View>
 
-        {/* Scan QR action */}
-        {eventId && (
+        {/* Scan QR action — only when event uses QR check-in mode */}
+        {eventId && (event?.check_in_mode ?? "rsvp") === "qr" && (
           <Pressable
             onPress={() => router.push(`/(app)/${orgSlug}/events/${eventId}/scan` as never)}
             style={({ pressed }) => [styles.scanButton, pressed && { opacity: 0.85 }]}

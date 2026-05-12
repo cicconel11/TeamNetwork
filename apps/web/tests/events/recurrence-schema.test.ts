@@ -87,6 +87,7 @@ describe("newEventSchema recurrence validation", () => {
     event_type: "general",
     is_philanthropy: false,
     audience: "both",
+    check_in_mode: "rsvp",
     send_notification: true,
     channel: "email",
     is_recurring: false,

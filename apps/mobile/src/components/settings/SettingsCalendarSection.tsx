@@ -90,7 +90,7 @@ export function SettingsCalendarSection({ orgId, orgName }: Props) {
         if (!calendarPermission.canAskAgain) {
           Alert.alert(
             "Calendar access needed",
-            "Open Settings to allow TeamMeet to add events to your calendar.",
+            "Open Settings to allow TeamNetwork to add events to your calendar.",
             [
               { text: "Cancel", style: "cancel" },
               {
@@ -126,7 +126,7 @@ export function SettingsCalendarSection({ orgId, orgName }: Props) {
       try {
         await syncEventToDevice({
           orgId,
-          orgName: orgName ?? "TeamMeet",
+          orgName: orgName ?? "TeamNetwork",
           event,
         });
         count += 1;
@@ -190,10 +190,10 @@ export function SettingsCalendarSection({ orgId, orgName }: Props) {
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={styles.rowLabel}>Sync this org&apos;s events</Text>
               <Text style={styles.hint}>
-                Adds upcoming events to a &quot;TeamMeet — {orgName ?? "Org"}&quot;
+                Adds upcoming events to a &quot;TeamNetwork — {orgName ?? "Org"}&quot;
                 calendar on your device. You can hide or delete that calendar
                 from your phone&apos;s Calendar settings without affecting the rest
-                of TeamMeet.
+                of TeamNetwork.
               </Text>
             </View>
             <Switch value={enabled} onValueChange={handleToggle} disabled={busy} />

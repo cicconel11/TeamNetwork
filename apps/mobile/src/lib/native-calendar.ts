@@ -18,7 +18,11 @@ import * as Calendar from "expo-calendar";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const CALENDAR_TITLE_PREFIX = "TeamMeet";
+const CALENDAR_TITLE_PREFIX = "TeamNetwork";
+// Pre-rename prefix kept solely so existing installs reuse their old calendar
+// instead of creating a duplicate. Safe to remove once we're confident no
+// devices have a "TeamMeet — Org" calendar lying around.
+const LEGACY_CALENDAR_TITLE_PREFIX = "TeamMeet";
 const STORAGE_KEY_PREFIX = "teammeet.calendar.v1";
 
 function calendarTitleForOrg(orgName: string): string {
@@ -64,7 +68,10 @@ export async function getOrCreateAppCalendar(
   // Find existing by title (handles app reinstall / cache miss).
   const all = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
   const wanted = calendarTitleForOrg(orgName);
-  const existing = all.find((c) => c.title === wanted && c.allowsModifications);
+  const legacy = `${LEGACY_CALENDAR_TITLE_PREFIX} — ${orgName}`;
+  const existing = all.find(
+    (c) => (c.title === wanted || c.title === legacy) && c.allowsModifications,
+  );
   if (existing) {
     await AsyncStorage.setItem(calendarIdStorageKey(orgId), existing.id);
     return existing.id;
@@ -88,9 +95,9 @@ export async function getOrCreateAppCalendar(
     sourceId: source?.id,
     source: source
       ? undefined
-      : { isLocalAccount: true, name: "TeamMeet", type: Calendar.SourceType.LOCAL },
+      : { isLocalAccount: true, name: "TeamNetwork", type: Calendar.SourceType.LOCAL },
     accessLevel: Calendar.CalendarAccessLevel.OWNER,
-    ownerAccount: "TeamMeet",
+    ownerAccount: "TeamNetwork",
   });
   await AsyncStorage.setItem(calendarIdStorageKey(orgId), id);
   return id;

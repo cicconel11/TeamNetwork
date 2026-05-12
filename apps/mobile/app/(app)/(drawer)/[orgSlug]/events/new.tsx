@@ -26,11 +26,12 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { formatDatePickerLabel, formatTimePickerLabel } from "@/lib/date-format";
-import { openVenueInMaps } from "@/lib/venue-maps";
+import { captureCurrentCoords } from "@/lib/event-location";
 
 type Audience = "members" | "alumni" | "both" | "specific";
 type Channel = "email" | "sms" | "both";
 type EventType = "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser";
+type CheckInMode = "qr" | "rsvp";
 type PickerTarget = "start-date" | "start-time" | "end-date" | "end-time";
 
 type TargetUser = {
@@ -49,6 +50,11 @@ const CHANNEL_OPTIONS: { value: Channel; label: string }[] = [
   { value: "email", label: "Email" },
   { value: "sms", label: "SMS" },
   { value: "both", label: "Email + SMS" },
+];
+
+const CHECK_IN_MODE_OPTIONS: { value: CheckInMode; label: string }[] = [
+  { value: "rsvp", label: "Simple RSVP" },
+  { value: "qr", label: "QR check-in" },
 ];
 
 const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
@@ -87,8 +93,13 @@ export default function NewEventScreen() {
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [location, setLocation] = useState("");
   const [geofenceEnabled, setGeofenceEnabled] = useState(false);
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [radiusM, setRadiusM] = useState<number>(100);
+  const [capturingLocation, setCapturingLocation] = useState(false);
   const [eventType, setEventType] = useState<EventType>("general");
   const [audience, setAudience] = useState<Audience>("both");
+  const [checkInMode, setCheckInMode] = useState<CheckInMode>("rsvp");
   const [channel, setChannel] = useState<Channel>("email");
   const [sendNotification, setSendNotification] = useState(true);
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
@@ -455,8 +466,8 @@ export default function NewEventScreen() {
       return;
     }
 
-    if (geofenceEnabled && !location.trim()) {
-      setError("Add a location so members can open it in Maps for check-in.");
+    if (checkInMode === "qr" && geofenceEnabled && (latitude == null || longitude == null)) {
+      setError("Tap \"Use my current location\" so members can be geofence-verified.");
       return;
     }
 
@@ -501,15 +512,16 @@ export default function NewEventScreen() {
           start_date: startDateTime,
           end_date: endDateTime,
           location: location.trim() || null,
-          geofence_enabled: geofenceEnabled,
-          geofence_radius_m: 100,
-          latitude: null,
-          longitude: null,
+          geofence_enabled: checkInMode === "qr" ? geofenceEnabled : false,
+          geofence_radius_m: radiusM,
+          latitude: checkInMode === "qr" && geofenceEnabled ? latitude : null,
+          longitude: checkInMode === "qr" && geofenceEnabled ? longitude : null,
           event_type: eventType,
           is_philanthropy: eventType === "philanthropy",
           audience: audienceValue,
           target_user_ids: targetIds,
           created_by_user_id: createdByUserId,
+          check_in_mode: checkInMode,
         })
         .select()
         .single();
@@ -742,40 +754,75 @@ export default function NewEventScreen() {
             />
           </View>
 
-          <View style={styles.fieldGroup}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={styles.fieldLabel}>Verify check-in at venue (geofence)</Text>
-              <Switch
-                value={geofenceEnabled}
-                onValueChange={setGeofenceEnabled}
-                trackColor={{ false: neutral.border, true: semantic.success }}
-              />
-            </View>
-          </View>
-          {geofenceEnabled ? (
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { fontWeight: "400" as const, marginBottom: SPACING.sm }]}>
-                Members open this address in Apple Maps and confirm they’re at the venue before
-                self check-in.
-              </Text>
-              <Pressable
-                onPress={() => {
-                  if (!location.trim()) {
-                    Alert.alert("Location", "Enter a location first.");
-                    return;
-                  }
-                  void openVenueInMaps(location.trim());
-                }}
-                style={({ pressed }) => [
-                  styles.chipRow,
-                  { alignSelf: "flex-start", marginBottom: SPACING.sm },
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <Text style={[styles.fieldLabel, { fontSize: 14 }]}>Preview in Apple Maps</Text>
-              </Pressable>
-            </View>
-          ) : null}
+          {checkInMode === "qr" && (
+            <>
+              <View style={styles.fieldGroup}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={styles.fieldLabel}>Verify check-in at venue (geofence)</Text>
+                  <Switch
+                    value={geofenceEnabled}
+                    onValueChange={setGeofenceEnabled}
+                    trackColor={{ false: neutral.border, true: semantic.success }}
+                  />
+                </View>
+              </View>
+              {geofenceEnabled ? (
+                <>
+                  <View style={styles.fieldGroup}>
+                    <Text style={[styles.fieldLabel, { fontWeight: "400" as const, marginBottom: SPACING.sm }]}>
+                      Stamp this event with your current GPS so members can only check in when they’re nearby.
+                    </Text>
+                    <Pressable
+                      onPress={async () => {
+                        setCapturingLocation(true);
+                        const result = await captureCurrentCoords();
+                        setCapturingLocation(false);
+                        if (result.ok) {
+                          setLatitude(result.coords.latitude);
+                          setLongitude(result.coords.longitude);
+                        } else {
+                          Alert.alert("Couldn't read location", result.message);
+                        }
+                      }}
+                      disabled={capturingLocation}
+                      style={({ pressed }) => [
+                        styles.chip,
+                        styles.chipSelected,
+                        { alignSelf: "flex-start", marginBottom: SPACING.sm, opacity: capturingLocation || pressed ? 0.7 : 1 },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, styles.chipTextSelected]}>
+                        {capturingLocation
+                          ? "Reading GPS…"
+                          : latitude != null && longitude != null
+                            ? `Update location (captured ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+                            : "Use my current location"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Allowed distance from venue</Text>
+                    <View style={styles.chipRow}>
+                      {[25, 50, 100, 250, 500].map((meters) => {
+                        const selected = radiusM === meters;
+                        return (
+                          <Pressable
+                            key={meters}
+                            onPress={() => setRadiusM(meters)}
+                            style={[styles.chip, selected && styles.chipSelected]}
+                          >
+                            <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                              {meters} m
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </>
+              ) : null}
+            </>
+          )}
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Event type</Text>
@@ -853,6 +900,26 @@ export default function NewEventScreen() {
               )}
             </View>
           )}
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Check-in mode</Text>
+            <View style={styles.chipRow}>
+              {CHECK_IN_MODE_OPTIONS.map((option) => {
+                const selected = checkInMode === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setCheckInMode(option.value)}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Notification channel</Text>

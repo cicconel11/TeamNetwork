@@ -166,7 +166,7 @@ export default function EventQrScreen() {
     if (!qrValue || !event) return;
     try {
       await Share.share({
-        message: `${event.title}: check in with TeamMeet.\n${qrValue}`,
+        message: `${event.title}: check in with TeamNetwork.\n${qrValue}`,
       });
     } catch {
       /* user cancelled */
@@ -207,6 +207,22 @@ export default function EventQrScreen() {
           title={error ? "Unable to load event" : "Event not found"}
           isOffline={isOffline}
         />
+      </View>
+    );
+  }
+
+  if ((event.check_in_mode ?? "rsvp") !== "qr") {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <Text style={[styles.deniedTitle, { color: neutral.foreground }]}>
+          No QR for this event
+        </Text>
+        <Text style={[styles.deniedBody, { color: neutral.muted, textAlign: "center" }]}>
+          This event uses simple RSVP — attendees just confirm they&apos;re coming, no QR check-in needed.
+        </Text>
+        <Pressable onPress={() => router.back()}>
+          <Text style={[styles.linkBackText, { color: semantic.success }]}>Go back</Text>
+        </Pressable>
       </View>
     );
   }
@@ -255,7 +271,7 @@ export default function EventQrScreen() {
         </View>
 
         <Text style={styles.hint}>
-          Members scan this code in the TeamMeet app to RSVP as going and check in
+          Members scan this code in the TeamNetwork app to RSVP as going and check in
           {event.geofence_enabled ? " when they are at the venue." : "."}
         </Text>
 

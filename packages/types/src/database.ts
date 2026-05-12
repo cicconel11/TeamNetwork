@@ -2648,6 +2648,7 @@ export type Database = {
       events: {
         Row: {
           audience: string | null
+          check_in_mode: Database["public"]["Enums"]["event_check_in_mode"]
           created_at: string | null
           created_by_user_id: string | null
           deleted_at: string | null
@@ -2672,6 +2673,7 @@ export type Database = {
         }
         Insert: {
           audience?: string | null
+          check_in_mode?: Database["public"]["Enums"]["event_check_in_mode"]
           created_at?: string | null
           created_by_user_id?: string | null
           deleted_at?: string | null
@@ -2696,6 +2698,7 @@ export type Database = {
         }
         Update: {
           audience?: string | null
+          check_in_mode?: Database["public"]["Enums"]["event_check_in_mode"]
           created_at?: string | null
           created_by_user_id?: string | null
           deleted_at?: string | null
@@ -7387,6 +7390,7 @@ export type Database = {
         | "search_action_click"
       chat_group_role: "admin" | "moderator" | "member"
       chat_message_status: "pending" | "approved" | "rejected"
+      event_check_in_mode: "qr" | "rsvp"
       event_type:
         | "general"
         | "philanthropy"
@@ -7566,6 +7570,7 @@ export const Constants = {
       ],
       chat_group_role: ["admin", "moderator", "member"],
       chat_message_status: ["pending", "approved", "rejected"],
+      event_check_in_mode: ["qr", "rsvp"],
       event_type: [
         "general",
         "philanthropy",

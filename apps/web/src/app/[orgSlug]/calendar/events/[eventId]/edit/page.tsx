@@ -58,6 +58,7 @@ export default function EditCalendarEventPage() {
       location: "",
       event_type: "general",
       is_philanthropy: false,
+      check_in_mode: "rsvp",
     },
   });
 
@@ -117,6 +118,7 @@ export default function EditCalendarEventPage() {
         location: e.location || "",
         event_type: e.event_type || "general",
         is_philanthropy: e.is_philanthropy || false,
+        check_in_mode: e.check_in_mode ?? "rsvp",
       });
       setIsFetching(false);
     };
@@ -173,6 +175,7 @@ export default function EditCalendarEventPage() {
         location: data.location || null,
         event_type: data.event_type,
         is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
+        check_in_mode: data.check_in_mode,
       });
 
       if (updateError) {
@@ -224,6 +227,7 @@ export default function EditCalendarEventPage() {
         location: data.location || null,
         event_type: data.event_type,
         is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
+        check_in_mode: data.check_in_mode,
         updated_at: new Date().toISOString(),
       })
       .eq("id", eventId)
@@ -355,6 +359,16 @@ export default function EditCalendarEventPage() {
             onChange={(e) => setValue("event_type", e.target.value as EventType)}
             error={errors.event_type?.message}
             options={EVENT_TYPE_OPTIONS.map((o) => ({ value: o.value, label: tEvents(o.value) }))}
+          />
+
+          <Select
+            label="Check-in mode"
+            error={errors.check_in_mode?.message}
+            options={[
+              { label: "Simple RSVP (no check-in)", value: "rsvp" },
+              { label: "QR code check-in", value: "qr" },
+            ]}
+            {...register("check_in_mode")}
           />
 
           <div className="flex items-center gap-3">

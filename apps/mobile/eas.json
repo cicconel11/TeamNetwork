@@ -13,6 +13,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_MOBILE_LIVE_ACTIVITIES_ENABLED": "true"
+      },
       "ios": {
         "simulator": true
       }

@@ -66,6 +66,7 @@ export default function NewCalendarEventPage() {
       event_type: "general",
       is_philanthropy: false,
       audience: "both",
+      check_in_mode: "rsvp",
       send_notification: true,
       channel: "email",
       is_recurring: false,
@@ -252,6 +253,7 @@ export default function NewCalendarEventPage() {
         created_by_user_id: user?.id || null,
         audience: audienceValue,
         target_user_ids: targetIds,
+        check_in_mode: data.check_in_mode,
       }, rule);
 
       if (result.error) {
@@ -274,6 +276,7 @@ export default function NewCalendarEventPage() {
         created_by_user_id: user?.id || null,
         audience: audienceValue,
         target_user_ids: targetIds,
+        check_in_mode: data.check_in_mode,
       }).select().single();
 
       if (insertError) {
@@ -520,6 +523,16 @@ export default function NewCalendarEventPage() {
               </div>
             </div>
           )}
+
+          <Select
+            label="Check-in mode"
+            error={errors.check_in_mode?.message}
+            options={[
+              { label: "Simple RSVP (no check-in)", value: "rsvp" },
+              { label: "QR code check-in", value: "qr" },
+            ]}
+            {...register("check_in_mode")}
+          />
 
           <div className="space-y-3 rounded-xl border border-border p-4">
             <div className="flex items-center gap-3">

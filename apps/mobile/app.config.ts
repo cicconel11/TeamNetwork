@@ -19,7 +19,7 @@ if (process.env.EAS_BUILD_PROFILE === "production") {
 }
 
 const config: ExpoConfig = {
-  name: "TeamMeet",
+  name: "TeamNetwork",
   slug: "teammeet",
   owner: "teamnetwork",
   version: "1.0.0",
@@ -54,17 +54,19 @@ const config: ExpoConfig = {
       NSSupportsLiveActivitiesFrequentUpdates: true,
       ITSAppUsesNonExemptEncryption: false,
       NSCameraUsageDescription:
-        "Scan a TeamMeet QR code to join your organization or check members in at events.",
+        "Scan a TeamNetwork QR code to join your organization or check members in at events.",
       NSCalendarsFullAccessUsageDescription:
-        "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
+        "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
       NSCalendarsWriteOnlyAccessUsageDescription:
-        "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
+        "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
       NSCalendarsUsageDescription:
-        "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
+        "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
       NSRemindersFullAccessUsageDescription:
-        "TeamMeet uses reminders to surface event-related reminders alongside your existing reminders.",
+        "TeamNetwork uses reminders to surface event-related reminders alongside your existing reminders.",
       NSRemindersUsageDescription:
-        "TeamMeet uses reminders to surface event-related reminders alongside your existing reminders.",
+        "TeamNetwork uses reminders to surface event-related reminders alongside your existing reminders.",
+      NSLocationWhenInUseUsageDescription:
+        "TeamNetwork uses your location to verify you're at the event venue when checking in, and to tag the location of events you create.",
       CFBundleURLTypes: [
         {
           CFBundleURLSchemes: ["teammeet"],
@@ -147,7 +149,7 @@ const config: ExpoConfig = {
       "expo-image-picker",
       {
         photosPermission:
-          "TeamMeet needs access to your photos to attach images to posts.",
+          "TeamNetwork needs access to your photos to attach images to posts.",
         microphonePermission: false,
       },
     ],
@@ -155,7 +157,7 @@ const config: ExpoConfig = {
       "expo-camera",
       {
         cameraPermission:
-          "Scan a TeamMeet QR code to join your organization or check members in at events.",
+          "Scan a TeamNetwork QR code to join your organization or check members in at events.",
         microphonePermission: false,
         recordAudioAndroid: false,
       },
@@ -163,16 +165,23 @@ const config: ExpoConfig = {
     [
       "expo-local-authentication",
       {
-        faceIDPermission: "Use Face ID to quickly and securely sign in to TeamMeet.",
+        faceIDPermission: "Use Face ID to quickly and securely sign in to TeamNetwork.",
       },
     ],
     [
       "expo-calendar",
       {
         calendarPermission:
-          "Add TeamMeet events to your device calendar so you see them alongside your other commitments.",
+          "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
         remindersPermission:
-          "TeamMeet uses reminders to surface event-related reminders alongside your existing reminders.",
+          "TeamNetwork uses reminders to surface event-related reminders alongside your existing reminders.",
+      },
+    ],
+    [
+      "expo-location",
+      {
+        locationWhenInUsePermission:
+          "TeamNetwork uses your location to verify you're at the event venue when checking in, and to tag the location of events you create.",
       },
     ],
     "expo-quick-actions",

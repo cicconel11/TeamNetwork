@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import type { ErrorBoundaryProps } from "expo-router";
@@ -7,9 +7,11 @@ import LoadingScreen from "@/components/LoadingScreen";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ColorSchemeProvider } from "@/contexts/ColorSchemeContext";
 import { captureException } from "@/lib/analytics";
+import { useAuth } from "@/contexts/AuthContext";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { rememberLastActiveOrg, registerQuickActions } from "@/lib/quick-actions";
+import { showToast } from "@/components/ui/Toast";
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   captureException(error, { context: "OrgErrorBoundary" });
@@ -36,16 +38,36 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 function OrgLayoutInner() {
   const router = useRouter();
+  const { session, isLoading: authLoading } = useAuth();
   const { orgSlug, status, isLoading } = useOrg();
   const { isAdmin } = useOrgRole();
+  // Track which orgSlug we have already bounced from. Per-slug rather than
+  // per-mount so navigating to a different org in the same mount can still
+  // trigger a fresh bounce when warranted.
+  const redirectedSlugRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!orgSlug || isLoading || status === "loading" || status === "ready") {
-      return;
-    }
+    // Don't redirect on transient non-ready states caused by auth still
+    // hydrating (cold launch from a notification tap) or by org data still
+    // loading. The root layout owns the auth-group redirect.
+    if (!orgSlug || authLoading || !session) return;
+    if (isLoading || status === "loading" || status === "ready") return;
+    if (redirectedSlugRef.current === orgSlug) return;
 
-    router.replace("/(app)");
-  }, [orgSlug, isLoading, status, router]);
+    // Only `not_found` and `unauthorized` should bounce to the org list.
+    // `error` is rendered in place with a retry, so a flaky network doesn't
+    // throw the user out of their deep link.
+    if (status === "not_found" || status === "unauthorized") {
+      redirectedSlugRef.current = orgSlug;
+      showToast(
+        status === "not_found"
+          ? "That organization is no longer available."
+          : "You no longer have access to this organization.",
+        "warning",
+      );
+      router.replace("/(app)");
+    }
+  }, [orgSlug, authLoading, session, isLoading, status, router]);
 
   // Keep the home-screen Quick Actions in sync with the most recently visited
   // org + role so the action set matches what the user is most likely to do.
@@ -57,8 +79,22 @@ function OrgLayoutInner() {
     }).then(() => registerQuickActions());
   }, [orgSlug, status, isAdmin]);
 
-  if (!orgSlug || isLoading || status === "loading") {
+  if (!orgSlug || authLoading || isLoading || status === "loading") {
     return <LoadingScreen />;
+  }
+
+  if (status === "error") {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#0f172a" }}>
+        <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+          <ErrorState
+            onRetry={() => router.replace(`/(app)/${orgSlug}` as any)}
+            title="Couldn't load this organization"
+            subtitle="Check your connection and try again."
+          />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   if (status !== "ready") {
