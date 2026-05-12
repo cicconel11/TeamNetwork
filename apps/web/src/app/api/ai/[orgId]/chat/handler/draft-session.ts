@@ -10,7 +10,9 @@ import {
   CREATE_DISCUSSION_PROMPT_PATTERN,
   CREATE_EVENT_PROMPT_PATTERN,
   CREATE_JOB_PROMPT_PATTERN,
+  DELETE_EVENT_PROMPT_PATTERN,
   DIRECT_QUERY_START_PATTERN,
+  DIRECT_NAVIGATION_PROMPT_PATTERN,
   DISCUSSION_REPLY_PROMPT_PATTERN,
   EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN,
   LIST_CHAT_GROUPS_PROMPT_PATTERN,
@@ -97,6 +99,8 @@ const GROUP_CHAT_MESSAGE_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you draft a group message|i can draft that group message|i drafted the group message)/i;
 const EVENT_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create an event|i can draft this event|i drafted the event)/i;
+const DELETE_EVENT_DRAFT_ASSISTANT_PATTERN =
+  /(?:which event should i delete|i found the event\. confirm below to delete it|i found a few events that might match)/i;
 
 export function extractStructuredFieldMap(message: string): Record<string, string> {
   const entries: Record<string, string> = {};
@@ -577,6 +581,9 @@ export function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSe
     if (CREATE_EVENT_PROMPT_PATTERN.test(message.content)) {
       return "create_event";
     }
+    if (DELETE_EVENT_PROMPT_PATTERN.test(message.content)) {
+      return "delete_event";
+    }
     return null;
   }
 
@@ -600,6 +607,9 @@ export function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSe
   }
   if (EVENT_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
     return "create_event";
+  }
+  if (DELETE_EVENT_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
+    return "delete_event";
   }
   return null;
 }
@@ -693,7 +703,7 @@ export function inferDraftSessionFromHistory(input: {
       case "update_event":
       case "delete_event":
         draftPayload = {};
-        missingFields = [];
+        missingFields = draftType === "delete_event" ? ["event_id"] : [];
         break;
     }
 
@@ -796,6 +806,24 @@ export function shouldContinueDraftSession(
   }
 
   if (
+    draftSession.draft_type === "delete_event" &&
+    draftSession.missing_fields.includes("event_id") &&
+    !DIRECT_NAVIGATION_PROMPT_PATTERN.test(message) &&
+    !DRAFT_CANCEL_PATTERN.test(message) &&
+    !(
+      isAnnouncementPrompt ||
+      isJobPrompt ||
+      isChatMessagePrompt ||
+      isGroupMessagePrompt ||
+      isDiscussionReplyPrompt ||
+      isDiscussionPrompt ||
+      isEventPrompt
+    )
+  ) {
+    return true;
+  }
+
+  if (
     (draftSession.draft_type === "create_announcement" &&
       (isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
     (draftSession.draft_type === "create_job_posting" &&
@@ -809,7 +837,9 @@ export function shouldContinueDraftSession(
     (draftSession.draft_type === "create_discussion_thread" &&
       (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isEventPrompt)) ||
     (draftSession.draft_type === "create_event" &&
-      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt))
+      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt)) ||
+    (draftSession.draft_type === "delete_event" &&
+      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt))
   ) {
     return false;
   }
