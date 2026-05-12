@@ -40,7 +40,7 @@ const config: ExpoConfig = {
     supportsTablet: true,
     appleTeamId: "5GWLTFG43T",
     bundleIdentifier: "com.myteamnetwork.teammeet",
-    buildNumber: "11",
+    buildNumber: "22",
     usesAppleSignIn: true,
     associatedDomains: [
       "applinks:www.myteamnetwork.com",
@@ -67,6 +67,8 @@ const config: ExpoConfig = {
         "TeamNetwork uses reminders to surface event-related reminders alongside your existing reminders.",
       NSLocationWhenInUseUsageDescription:
         "TeamNetwork uses your location to verify you're at the event venue when checking in, and to tag the location of events you create.",
+      NSPhotoLibraryUsageDescription:
+        "TeamNetwork needs access to your photos to attach images to posts.",
       CFBundleURLTypes: [
         {
           CFBundleURLSchemes: ["teammeet"],

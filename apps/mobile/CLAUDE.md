@@ -64,7 +64,7 @@ bun run android:doctor       # Verify Android SDK, Java, adb setup
 
 ```bash
 cd apps/mobile
-# Bump version in app.json if shipping new marketing version (buildNumber auto-increments)
+# Bump version in app.config.ts if shipping new marketing version (buildNumber auto-increments)
 bun run eas:ios:production                      # npm script → eas production iOS build
 eas submit --platform ios --latest              # same as bun run eas:submit:ios
 ```
@@ -73,7 +73,7 @@ If `eas build` fails with **`Distribution Certificate is not validated for non-i
 
 Then in ASC:
 1. App → **TestFlight** tab → wait for processing (~10–30 min)
-2. Answer export compliance once (`ITSAppUsesNonExemptEncryption: false` already set in `app.json` → auto-passes)
+2. Answer export compliance once (`ITSAppUsesNonExemptEncryption: false` already set in `app.config.ts` → auto-passes)
 3. Internal Testing group → add build → add testers (must be ASC users, up to 100, no review)
 4. External Testing group → up to 10k testers via email/public link, requires Beta App Review (~24h)
 5. Testers install **TestFlight** app from App Store, accept invite, run build
@@ -91,7 +91,7 @@ Then in ASC:
 - Sign in with Apple required if any other social sign-in present. Mobile uses `expo-apple-authentication` on iOS and requires the Apple capability on bundle ID `com.myteamnetwork.teammeet`.
 - Push key (`.p8`) shared across all team apps; never revoke without rotating in Expo
 - Each `eas build --profile production` consumes paid build minutes; use `preview` profile for internal dogfood
-- Version in `app.json` (`expo.version`) = marketing version shown in store; `expo.ios.buildNumber` auto-increments via EAS
+- Version in `app.config.ts` (`version`) = marketing version shown in store; `ios.buildNumber` auto-increments via EAS
 
 ## Architecture
 
@@ -301,7 +301,7 @@ import { baseSchemas, z } from "@teammeet/validation";
 | `src/lib/design-tokens.ts` | Colors, spacing, radius, shadows |
 | `src/lib/typography.ts` | Typography scale |
 | `src/lib/chrome.ts` | Header/tab bar colors |
-| `app.json` | Expo config (authoritative — prebuild-only) |
+| `app.config.ts` | Expo config (authoritative — prebuild-only) |
 | `eas.json` | EAS Build profiles |
 | `metro.config.js` | Metro monorepo config |
 | `scripts/with-android-env.sh` | Auto-detects Android SDK/Java for `bun run android` |
