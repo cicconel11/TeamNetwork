@@ -236,6 +236,9 @@ const { createChatPostHandler } = await import(
 const { shouldContinueDraftSession } = await import(
   "../../../src/app/api/ai/[orgId]/chat/handler/draft-session.ts"
 );
+const { inferDraftSessionFromHistory } = await import(
+  "../../../src/app/api/ai/[orgId]/chat/handler/draft-session.ts"
+);
 const { resolveSurfaceRouting } = await import(
   "../../../src/lib/ai/intent-router.ts"
 );
@@ -652,6 +655,44 @@ test("group message draft does not swallow a direct message switch prompt", () =
   );
 
   assert.equal(shouldContinue, false);
+});
+
+test("delete event draft accepts a title/date clarification even when routing looks like navigation", () => {
+  const message = "It's called Meeting Monday May 18th";
+  const routing = {
+    ...resolveSurfaceRouting(message, "events"),
+    intentType: "navigation" as const,
+  };
+
+  const draft = makeDraftSession("delete_event", {
+    event_query: "Meeting next week on monday",
+  });
+  draft.missing_fields = ["event_id"];
+
+  const shouldContinue = shouldContinueDraftSession(message, draft as any, routing);
+
+  assert.equal(shouldContinue, true);
+});
+
+test("delete event draft inference recognizes event clarification prompts", () => {
+  const draft = inferDraftSessionFromHistory({
+    organizationId: ORG_ID,
+    userId: ADMIN_USER.id,
+    threadId: buildThreadId(97),
+    messages: [
+      {
+        role: "user",
+        content: "remove Meeting next week on monday",
+      },
+      {
+        role: "assistant",
+        content: "Which event should I delete? Share the title or date.",
+      },
+    ],
+  });
+
+  assert.equal(draft?.draft_type, "delete_event");
+  assert.deepEqual(draft?.missing_fields, ["event_id"]);
 });
 
 test("tool call: SSE stream contains tool_status calling, done, and final chunk", async () => {
