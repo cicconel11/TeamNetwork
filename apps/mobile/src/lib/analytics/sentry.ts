@@ -4,6 +4,8 @@
 
 import * as Sentry from "@sentry/react-native";
 
+import { isExpectedClientNetworkFailure } from "@/lib/network-reachability";
+
 let initialized = false;
 let telemetryEnabled = false;
 
@@ -15,7 +17,14 @@ export function init(dsn: string): void {
     attachStacktrace: true,
     environment: __DEV__ ? "development" : "production",
     sendDefaultPii: false,
-    beforeSend(event) {
+    beforeSend(event, hint) {
+      if (hint?.originalException && isExpectedClientNetworkFailure(hint.originalException)) {
+        return null;
+      }
+      const exceptionType = event.exception?.values?.[0]?.type;
+      if (exceptionType === "NetworkUnreachableError") {
+        return null;
+      }
       if (event.user) {
         delete event.user.email;
         delete event.user.username;
@@ -45,6 +54,7 @@ export function captureException(
   context?: Record<string, unknown>
 ): void {
   if (!initialized || !telemetryEnabled) return;
+  if (isExpectedClientNetworkFailure(error)) return;
   Sentry.captureException(error, { extra: context });
 }
 
