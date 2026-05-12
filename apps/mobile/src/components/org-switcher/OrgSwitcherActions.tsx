@@ -1,23 +1,14 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import * as WebBrowser from "expo-web-browser";
-import { ExternalLink, LogOut } from "lucide-react-native";
+import { LogOut } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { signOut } from "@/lib/supabase";
-import { getWebAppUrl } from "@/lib/web-api";
 import { NEUTRAL, SEMANTIC, SHADOWS, RADIUS, SPACING } from "@/lib/design-tokens";
 
 export function OrgSwitcherActions() {
   const router = useRouter();
 
-  const openInApp = (path: string) => {
-    void WebBrowser.openBrowserAsync(`${getWebAppUrl()}${path}`, {
-      presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-      controlsColor: NEUTRAL.foreground,
-      dismissButtonStyle: "close",
-    });
-  };
-
-  const handleJoin = () => openInApp("/app/join");
+  const handleJoin = () =>
+    router.push("/(app)/(drawer)/join-organization" as never);
   const handleCreate = () => router.push("/(app)/(drawer)/create-org" as never);
 
   const handleSignOut = async () => {
@@ -38,11 +29,10 @@ export function OrgSwitcherActions() {
               styles.rowFirst,
               pressed && styles.rowPressed,
             ]}
-            accessibilityRole="link"
-            accessibilityLabel="Join another organization (opens web)"
+            accessibilityRole="button"
+            accessibilityLabel="Join another organization"
           >
             <Text style={styles.rowText}>Join another organization</Text>
-            <ExternalLink size={16} color={NEUTRAL.muted} />
           </Pressable>
 
           <View style={styles.divider} />

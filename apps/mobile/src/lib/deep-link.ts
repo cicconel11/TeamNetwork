@@ -15,12 +15,10 @@
  */
 
 import type { Router } from "expo-router";
-import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { parseMobileAuthCallbackUrl } from "@/lib/auth-redirects";
 import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
 import { getNativeAppLinkRoute, sanitizeUrlForTelemetry } from "@/lib/url-safety";
-import { getWebAppUrl } from "@/lib/web-api";
 import { captureException } from "@/lib/analytics";
 
 export type ShortcutAction =
@@ -321,19 +319,10 @@ export async function routeIntent(
       return;
 
     case "join-org":
-      // Defer to the web join handler — it owns invite acceptance, captcha,
-      // sign-in/sign-up routing, and parent-vs-org logic. Universal Links
-      // bring users with the app installed back into native afterwards.
-      try {
-        await Linking.openURL(
-          `${getWebAppUrl()}/app/join?token=${encodeURIComponent(intent.token)}`
-        );
-      } catch (err) {
-        captureException(err as Error, {
-          context: "routeIntent.join-org",
-          ...sanitizeUrlForTelemetry(originalUrl),
-        });
-      }
+      router.push({
+        pathname: "/(app)/(drawer)/join-organization",
+        params: { token: intent.token },
+      } as never);
       return;
 
     case "event":

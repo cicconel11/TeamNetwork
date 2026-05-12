@@ -253,4 +253,16 @@ describe("routeIntent", () => {
       "/(app)/acme-hs/events/evt-42/scan?mode=self"
     );
   });
+
+  it("routes join-org intents to the native join screen with the token", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+
+    await routeIntent(router, { kind: "join-org", token: "ABCD1234" });
+
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/(app)/(drawer)/join-organization",
+      params: { token: "ABCD1234" },
+    });
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });

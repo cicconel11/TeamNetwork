@@ -47,6 +47,13 @@ export default function DrawerStackLayout() {
           }}
         />
         <Stack.Screen
+          name="join-organization"
+          options={{
+            headerShown: false,
+            presentation: "modal",
+          }}
+        />
+        <Stack.Screen
           name="profile"
           options={{
             headerShown: false,

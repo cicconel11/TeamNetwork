@@ -13,7 +13,8 @@
     "./announcements": "./src/announcements/index.ts",
     "./formatters": "./src/formatters/index.ts",
     "./apns": "./src/apns/index.ts",
-    "./calendar": "./src/calendar/event-status.ts"
+    "./calendar": "./src/calendar/event-status.ts",
+    "./invites": "./src/invites/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
