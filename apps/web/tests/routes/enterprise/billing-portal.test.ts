@@ -2,18 +2,21 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 
 /**
- * Tests for H1 security fix: POST /api/enterprise/[enterpriseId]/billing/portal
+ * Tests for POST /api/enterprise/[enterpriseId]/billing/portal
  *
  * The billing portal route creates a Stripe billing portal session with a return_url.
- * Before the fix, it used `req.headers.get("origin")` which is attacker-controlled.
- * After the fix, it uses `process.env.NEXT_PUBLIC_APP_URL` (server-controlled).
+ * Origin resolution is delegated to `getStripeOrigin(req.url)`, which prefers
+ * the validated `NEXT_PUBLIC_SITE_URL` env var and falls back to the
+ * server-controlled `req.url` origin. Attacker-controlled `Origin` headers are
+ * never consulted.
  *
- * These simulation tests verify the origin resolution logic:
- * 1. NEXT_PUBLIC_APP_URL is preferred when set
+ * These simulation tests verify:
+ * 1. NEXT_PUBLIC_SITE_URL is preferred when set
  * 2. Spoofed Origin headers are never used
- * 3. Fallback to req.url origin (server-controlled) when env var unset
+ * 3. Fallback to req.url origin when env var unset
  * 4. Various error conditions (no Stripe customer, DB errors)
  */
+import { getStripeOrigin } from "../../../src/lib/stripe-origin.ts";
 
 // ── Types mirroring billing/portal/route.ts ─────────────────────────────────
 
@@ -32,7 +35,7 @@ interface PortalRouteParams {
   enterprise: EnterpriseRow | null;
   stripeRetrieveCustomerId: string | null;
   stripePortalUrl: string;
-  envAppUrl: string | undefined;
+  envSiteUrl: string | undefined;
   reqUrl: string;
   reqOriginHeader: string | null;
 }
@@ -49,13 +52,13 @@ interface PortalRouteResult {
  *   - subscriptionError → 500
  *   - no stripe_customer_id (and no stripe_subscription_id) → 400
  *   - enterprise not found → 404
- *   - success → return_url uses NEXT_PUBLIC_APP_URL, NOT Origin header
+ *   - success → return_url uses NEXT_PUBLIC_SITE_URL, NOT Origin header
  */
 function simulatePortalRoute(params: PortalRouteParams): PortalRouteResult {
   const {
     subscription, subscriptionError, enterprise,
     stripeRetrieveCustomerId, stripePortalUrl,
-    envAppUrl, reqUrl, reqOriginHeader,
+    envSiteUrl, reqUrl, reqOriginHeader,
   } = params;
 
   if (subscriptionError) {
@@ -64,7 +67,6 @@ function simulatePortalRoute(params: PortalRouteParams): PortalRouteResult {
 
   let stripeCustomerId = subscription?.stripe_customer_id ?? null;
 
-  // If no customer ID but has subscription ID, try to retrieve from Stripe
   if (!stripeCustomerId && subscription?.stripe_subscription_id) {
     stripeCustomerId = stripeRetrieveCustomerId;
   }
@@ -77,12 +79,14 @@ function simulatePortalRoute(params: PortalRouteParams): PortalRouteResult {
     return { status: 404, body: { error: "Enterprise not found" } };
   }
 
-  // SECURITY FIX (H1): Use NEXT_PUBLIC_APP_URL, NOT req.headers.get("origin")
-  // The Origin header is attacker-controlled and can redirect users to phishing sites
-  const origin = envAppUrl ?? new URL(reqUrl).origin;
+  const prevSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (envSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+  else process.env.NEXT_PUBLIC_SITE_URL = envSiteUrl;
+  const origin = getStripeOrigin(reqUrl);
+  if (prevSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+  else process.env.NEXT_PUBLIC_SITE_URL = prevSiteUrl;
 
-  // Verify we never use the Origin header (this is the fix)
-  void reqOriginHeader; // explicitly unused
+  void reqOriginHeader; // Origin header must never influence return_url
 
   const returnUrl = `${origin}/enterprise/${enterprise.slug}/billing`;
 
@@ -92,17 +96,17 @@ function simulatePortalRoute(params: PortalRouteParams): PortalRouteResult {
   };
 }
 
-// ── Origin header injection tests (H1 fix) ──────────────────────────────────
+// ── Origin header injection tests ───────────────────────────────────────────
 
-describe("billing portal origin handling (H1 fix)", () => {
-  it("uses NEXT_PUBLIC_APP_URL for return_url when env var is set", () => {
+describe("billing portal origin handling", () => {
+  it("uses NEXT_PUBLIC_SITE_URL for return_url when env var is set", () => {
     const result = simulatePortalRoute({
       subscription: { stripe_customer_id: "cus_test", stripe_subscription_id: null },
       subscriptionError: null,
       enterprise: { slug: "test-enterprise" },
       stripeRetrieveCustomerId: null,
       stripePortalUrl: "https://billing.stripe.com/session/test",
-      envAppUrl: "https://www.myteamnetwork.com",
+      envSiteUrl: "https://www.myteamnetwork.com",
       reqUrl: "https://api.myteamnetwork.com/api/enterprise/ent-1/billing/portal",
       reqOriginHeader: "https://evil-phishing.com", // attacker-controlled
     });
@@ -111,7 +115,7 @@ describe("billing portal origin handling (H1 fix)", () => {
     const returnUrl = result.body._returnUrl as string;
     assert.ok(
       returnUrl.startsWith("https://www.myteamnetwork.com/"),
-      `return_url must use NEXT_PUBLIC_APP_URL, got: ${returnUrl}`
+      `return_url must use NEXT_PUBLIC_SITE_URL, got: ${returnUrl}`
     );
     assert.ok(
       !returnUrl.includes("evil-phishing"),
@@ -119,14 +123,14 @@ describe("billing portal origin handling (H1 fix)", () => {
     );
   });
 
-  it("does NOT use spoofed Origin header even when NEXT_PUBLIC_APP_URL is unset", () => {
+  it("does NOT use spoofed Origin header even when NEXT_PUBLIC_SITE_URL is unset", () => {
     const result = simulatePortalRoute({
       subscription: { stripe_customer_id: "cus_test", stripe_subscription_id: null },
       subscriptionError: null,
       enterprise: { slug: "test-enterprise" },
       stripeRetrieveCustomerId: null,
       stripePortalUrl: "https://billing.stripe.com/session/test",
-      envAppUrl: undefined, // not set
+      envSiteUrl: undefined, // not set
       reqUrl: "https://api.myteamnetwork.com/api/enterprise/ent-1/billing/portal",
       reqOriginHeader: "https://evil-phishing.com",
     });
@@ -151,7 +155,7 @@ describe("billing portal origin handling (H1 fix)", () => {
       enterprise: { slug: "acme-corp" },
       stripeRetrieveCustomerId: null,
       stripePortalUrl: "https://billing.stripe.com/session/test",
-      envAppUrl: "https://www.myteamnetwork.com",
+      envSiteUrl: "https://www.myteamnetwork.com",
       reqUrl: "https://api.myteamnetwork.com/api/enterprise/ent-1/billing/portal",
       reqOriginHeader: null,
     });
@@ -175,7 +179,7 @@ describe("billing portal error handling", () => {
       enterprise: { slug: "test-enterprise" },
       stripeRetrieveCustomerId: null,
       stripePortalUrl: "https://billing.stripe.com/session/test",
-      envAppUrl: "https://www.myteamnetwork.com",
+      envSiteUrl: "https://www.myteamnetwork.com",
       reqUrl: "https://api.myteamnetwork.com/api/enterprise/ent-1/billing/portal",
       reqOriginHeader: null,
     });
@@ -191,7 +195,7 @@ describe("billing portal error handling", () => {
       enterprise: { slug: "test-enterprise" },
       stripeRetrieveCustomerId: null,
       stripePortalUrl: "https://billing.stripe.com/session/test",
-      envAppUrl: "https://www.myteamnetwork.com",
+      envSiteUrl: "https://www.myteamnetwork.com",
       reqUrl: "https://api.myteamnetwork.com/api/enterprise/ent-1/billing/portal",
       reqOriginHeader: null,
     });
@@ -209,7 +213,7 @@ describe("billing portal error handling", () => {
       enterprise: null,
       stripeRetrieveCustomerId: null,
       stripePortalUrl: "https://billing.stripe.com/session/test",
-      envAppUrl: "https://www.myteamnetwork.com",
+      envSiteUrl: "https://www.myteamnetwork.com",
       reqUrl: "https://api.myteamnetwork.com/api/enterprise/ent-1/billing/portal",
       reqOriginHeader: null,
     });
@@ -225,7 +229,7 @@ describe("billing portal error handling", () => {
       enterprise: { slug: "test-enterprise" },
       stripeRetrieveCustomerId: "cus_resolved", // retrieved from Stripe
       stripePortalUrl: "https://billing.stripe.com/session/test",
-      envAppUrl: "https://www.myteamnetwork.com",
+      envSiteUrl: "https://www.myteamnetwork.com",
       reqUrl: "https://api.myteamnetwork.com/api/enterprise/ent-1/billing/portal",
       reqOriginHeader: null,
     });

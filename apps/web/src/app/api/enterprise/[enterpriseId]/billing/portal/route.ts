@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
+import { getStripeOrigin } from "@/lib/stripe-origin";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getEnterpriseApiContext, ENTERPRISE_BILLING_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
@@ -84,7 +85,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Enterprise not found" }, 404);
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
+  const origin = getStripeOrigin(req.url);
 
   let session: { url: string };
   try {
