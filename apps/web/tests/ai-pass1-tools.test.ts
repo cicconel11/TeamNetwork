@@ -8,12 +8,16 @@ import {
   CONTENT_SEARCH_PROMPT_PATTERN,
   CREATE_ANNOUNCEMENT_PROMPT_PATTERN,
   CREATE_JOB_PROMPT_PATTERN,
+  UPDATE_JOB_PROMPT_PATTERN,
+  DELETE_JOB_PROMPT_PATTERN,
   SEND_CHAT_MESSAGE_PROMPT_PATTERN,
   LIST_CHAT_GROUPS_PROMPT_PATTERN,
   SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN,
   CREATE_DISCUSSION_PROMPT_PATTERN,
   DISCUSSION_REPLY_PROMPT_PATTERN,
   CREATE_EVENT_PROMPT_PATTERN,
+  UPDATE_EVENT_PROMPT_PATTERN,
+  DELETE_EVENT_PROMPT_PATTERN,
   EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN,
   MEMBER_ROLE_CHANGE_PROMPT_PATTERN,
   MEMBER_COUNT_PROMPT_PATTERN,
@@ -968,6 +972,88 @@ describe("isToolFirstEligible", () => {
   });
 });
 
+// Plural noun coverage — singular-only nouns previously caused
+// "create two events", "post some jobs", etc. to fall through to
+// generic navigation instead of the intended prepare_* tool.
+describe("PROMPT_PATTERN plural noun coverage", () => {
+  const cases: Array<[string, RegExp, string]> = [
+    [
+      "create two announcements about practice",
+      CREATE_ANNOUNCEMENT_PROMPT_PATTERN,
+      "CREATE_ANNOUNCEMENT plural noun",
+    ],
+    [
+      "post some bulletins",
+      CREATE_ANNOUNCEMENT_PROMPT_PATTERN,
+      "CREATE_ANNOUNCEMENT bulletins",
+    ],
+    ["post two jobs", CREATE_JOB_PROMPT_PATTERN, "CREATE_JOB plural"],
+    [
+      "create three openings",
+      CREATE_JOB_PROMPT_PATTERN,
+      "CREATE_JOB openings",
+    ],
+    [
+      "add several positions",
+      CREATE_JOB_PROMPT_PATTERN,
+      "CREATE_JOB positions",
+    ],
+    ["close those jobs", UPDATE_JOB_PROMPT_PATTERN, "UPDATE_JOB plural"],
+    ["edit my postings", UPDATE_JOB_PROMPT_PATTERN, "UPDATE_JOB postings"],
+    ["delete those jobs", DELETE_JOB_PROMPT_PATTERN, "DELETE_JOB plural"],
+    [
+      "start two discussions",
+      CREATE_DISCUSSION_PROMPT_PATTERN,
+      "CREATE_DISCUSSION plural",
+    ],
+    [
+      "open new threads",
+      CREATE_DISCUSSION_PROMPT_PATTERN,
+      "CREATE_DISCUSSION threads",
+    ],
+    [
+      "write replies to those threads",
+      DISCUSSION_REPLY_PROMPT_PATTERN,
+      "DISCUSSION_REPLY plural",
+    ],
+    [
+      "create two events: practice Tuesday 5pm and game Saturday 2pm",
+      CREATE_EVENT_PROMPT_PATTERN,
+      "CREATE_EVENT plural with activity nouns",
+    ],
+    [
+      "schedule two meetings next week",
+      CREATE_EVENT_PROMPT_PATTERN,
+      "CREATE_EVENT meetings plural",
+    ],
+    [
+      "schedule a practice for tuesday",
+      CREATE_EVENT_PROMPT_PATTERN,
+      "CREATE_EVENT practice noun",
+    ],
+    [
+      "add a game saturday",
+      CREATE_EVENT_PROMPT_PATTERN,
+      "CREATE_EVENT game noun",
+    ],
+    [
+      "create two events for next week",
+      EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN,
+      "EXPLICIT_EVENT_DRAFT_SWITCH plural",
+    ],
+    [
+      "schedule a practice for tuesday",
+      EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN,
+      "EXPLICIT_EVENT_DRAFT_SWITCH practice",
+    ],
+  ];
+  for (const [message, pattern, label] of cases) {
+    it(`matches "${message}" (${label})`, () => {
+      assert.ok(pattern.test(message), `expected match: ${message}`);
+    });
+  }
+});
+
 // Coverage assertion: every exported PATTERN constant referenced
 // somewhere in this file (directly or as a regex used by getPass1Tools).
 describe("pattern export coverage", () => {
@@ -979,12 +1065,16 @@ describe("pattern export coverage", () => {
       DIRECT_NAVIGATION_PROMPT_PATTERN,
       CREATE_ANNOUNCEMENT_PROMPT_PATTERN,
       CREATE_JOB_PROMPT_PATTERN,
+      UPDATE_JOB_PROMPT_PATTERN,
+      DELETE_JOB_PROMPT_PATTERN,
       SEND_CHAT_MESSAGE_PROMPT_PATTERN,
       LIST_CHAT_GROUPS_PROMPT_PATTERN,
       SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN,
       CREATE_DISCUSSION_PROMPT_PATTERN,
       DISCUSSION_REPLY_PROMPT_PATTERN,
       CREATE_EVENT_PROMPT_PATTERN,
+      UPDATE_EVENT_PROMPT_PATTERN,
+      DELETE_EVENT_PROMPT_PATTERN,
       EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN,
       MEMBER_ROLE_CHANGE_PROMPT_PATTERN,
       MEMBER_COUNT_PROMPT_PATTERN,
