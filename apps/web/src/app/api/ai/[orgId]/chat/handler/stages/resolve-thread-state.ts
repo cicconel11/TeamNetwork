@@ -140,6 +140,35 @@ export async function resolveThreadState(
         activeDraftSession = null;
       }
 
+      if (activeDraftSession && activeDraftSession.pending_action_id) {
+        const { data: pendingRow, error: pendingRowError } = await ctx.serviceSupabase
+          .from("ai_pending_actions")
+          .select("status")
+          .eq("id", activeDraftSession.pending_action_id)
+          .maybeSingle();
+        if (pendingRowError) {
+          aiLog("warn", "ai-chat", "failed to verify draft pending action status", {
+            ...requestLogContext,
+            threadId,
+          }, { error: pendingRowError });
+        } else if (!pendingRow || pendingRow.status !== "pending") {
+          try {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId,
+              pendingActionId: activeDraftSession.pending_action_id,
+            });
+          } catch (error) {
+            aiLog("warn", "ai-chat", "failed to clear stale draft session", {
+              ...requestLogContext,
+              threadId,
+            }, { error });
+          }
+          activeDraftSession = null;
+        }
+      }
+
       if (activeDraftSession) {
         if (
           shouldContinueDraftSession(

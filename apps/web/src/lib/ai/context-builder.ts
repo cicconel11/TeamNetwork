@@ -143,7 +143,7 @@ function isChatSurfacePath(p: string | undefined): boolean {
 const PARTIAL_CAPABILITY_POLICY = [
   "PARTIAL CAPABILITY POLICY:",
   "- When the user asks for an action you cannot perform directly (edit, delete, manage, moderate, configure, invite, export, bill), you MUST call find_navigation_targets instead of answering in prose.",
-  "- Member role/status changes and supported send/draft actions are exceptions: when the matching prepare_* tool is attached, call it instead of navigation.",
+  "- Member role/status changes, supported send/draft actions, and supported edit/delete actions for events, jobs, and announcements are exceptions: when the matching prepare_* tool is attached, call it instead of navigation.",
   "- Do not claim you can edit, delete, export, moderate, bill, or change settings unless an attached tool explicitly supports that action.",
   "- Do not emit preamble, meta-commentary, or phrases like \"Based on your organization's URL\" or \"Need to do anything specific?\" before or after tool output.",
   "- When the user says \"this X\" (this member, this event, this job) and the current route is NOT on a detail page for that X, do not bind to anything on the current page. Call find_navigation_targets for the X surface and state explicitly that you are not on a detail page for that entity.",

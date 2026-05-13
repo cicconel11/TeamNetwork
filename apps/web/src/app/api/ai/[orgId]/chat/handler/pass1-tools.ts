@@ -110,7 +110,7 @@ export const UPDATE_CURRENT_EVENT_PROMPT_PATTERN =
 export const DELETE_CURRENT_EVENT_PROMPT_PATTERN =
   /(?<!\w)(?:delete|remove|cancel)(?!\w)[\s\S]{0,80}\b(?:this|it|this\s+event)(?!\w)/i;
 export const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
-  /(?:(?<!\w)(?:create|add|schedule|plan|make|set\s+up)(?!\w)[\s\S]{0,80}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,60}\b(?:create|add|schedule|plan|make|set\s+up)(?!\w))/i;
+  /(?:(?<!\w)(?:create|add|schedule|plan|make|set\s+up|edit|update|change|move|rename|reschedule|delete|remove|cancel)(?!\w)[\s\S]{0,80}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,60}\b(?:create|add|schedule|plan|make|set\s+up|edit|update|change|move|rename|reschedule|delete|remove|cancel)(?!\w))/i;
 // Match explicit member-role-change intent. Requires either:
 //   (a) a role-change verb followed (within ~80 chars) by `to|as|an?` and a role
 //       token, e.g. "promote Jane to alumni", "make John an admin",
@@ -121,7 +121,7 @@ export const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
 // "pending") to avoid false positives like "make a member feel welcome" or
 // "I want an active role here".
 export const MEMBER_ROLE_CHANGE_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:make|change|set|promote|demote|update)(?!\w)[\s\S]{0,80}\b(?:to|as|an?|into)\s+(?:an?\s+)?(?:admin|administrator|active[_\s-]?member|alumni|alumnus|alumna|parent)\b|(?<!\w)(?:role|membership|access)\s+(?:change|update|to)\b[\s\S]{0,40}\b(?:admin|administrator|active[_\s-]?member|alumni|parent)\b|(?<!\w)(?:revoke|reactivate)\s+(?:[\w'.-]+(?:\s+[\w'.-]+){0,3}(?:'s)?\s+)?(?:access|membership|account|admin\s+rights?|admin\s+role)\b)/i;
+  /(?:(?<!\w)(?:make|change|set|promote|demote|update)(?!\w)[\s\S]{0,80}\b(?:to|as|an?|into)\s+(?:an?\s+)?(?:admin|administrator|active[_\s-]?member|alumni|alumnus|alumna|parent|coach|coaches|captain|staff|volunteer)\b|(?<!\w)(?:role|membership|access)\s+(?:change|update|to)\b[\s\S]{0,40}\b(?:admin|administrator|active[_\s-]?member|alumni|parent|coach|captain|staff|volunteer)\b|(?<!\w)(?:revoke|reactivate)\s+(?:[\w'.-]+(?:\s+[\w'.-]+){0,3}(?:'s)?\s+)?(?:access|membership|account|admin\s+rights?|admin\s+role)\b)/i;
 export const MEMBER_COUNT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:how many|count|number of|total|totals|snapshot|stats)(?!\w)[\s\S]{0,80}\b(?:member|members|active members|alumni|parents?|donors?|donations?)\b|(?<!\w)(?:member|members|active members|alumni|parents?|donors?|donations?)(?!\w)[\s\S]{0,40}\b(?:how many|count|number of|total|totals)\b)/i;
 export const MEMBER_ROSTER_PROMPT_PATTERN =
