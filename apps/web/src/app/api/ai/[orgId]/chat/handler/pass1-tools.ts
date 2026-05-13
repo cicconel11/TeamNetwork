@@ -166,7 +166,7 @@ export const GROUP_CHAT_MESSAGE_FALLBACK_PATTERN =
 export const DISCUSSION_REPLY_FALLBACK_PATTERN =
   /\b(?:reply|respond|response|comment|answer)\b/i;
 export const DIRECT_QUERY_START_PATTERN =
-  /^(?:show|tell|list|what|who|when|where|why|how|give|summarize|explain|open|find)\b/i;
+  /^(?:show|tell|list|what|which|who|when|where|why|how|give|summarize|explain|open|find)\b/i;
 
 export type OrgStatsScope =
   | "members"

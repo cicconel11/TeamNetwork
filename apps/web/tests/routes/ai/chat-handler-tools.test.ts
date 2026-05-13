@@ -674,6 +674,48 @@ test("delete event draft accepts a title/date clarification even when routing lo
   assert.equal(shouldContinue, true);
 });
 
+test("delete event draft does not swallow an explicit member role change", () => {
+  const message = "Change Patrick Leonard's role to Coach";
+  const routing = resolveSurfaceRouting(message, "events");
+  const draft = makeDraftSession("delete_event", {
+    event_query: "Meeting next week on monday",
+  });
+  draft.missing_fields = ["event_id"];
+
+  const shouldContinue = shouldContinueDraftSession(message, draft as any, routing);
+
+  assert.equal(shouldContinue, false);
+});
+
+test("mutate-existing drafts do not swallow unrelated lookup questions", () => {
+  const jobQuestion = "What jobs are open right now?";
+  const jobRouting = resolveSurfaceRouting(jobQuestion, "general");
+
+  assert.equal(
+    shouldContinueDraftSession(
+      jobQuestion,
+      makeDraftSession("update_job_posting", {
+        job_id: "job-123",
+        title: "Assistant Coach",
+      }) as any,
+      jobRouting
+    ),
+    false
+  );
+
+  const eventQuestion = "Which events are coming up this week?";
+  const eventRouting = resolveSurfaceRouting(eventQuestion, "events");
+  const deleteEventDraft = makeDraftSession("delete_event", {
+    event_query: "Meeting next week on monday",
+  });
+  deleteEventDraft.missing_fields = ["event_id"];
+
+  assert.equal(
+    shouldContinueDraftSession(eventQuestion, deleteEventDraft as any, eventRouting),
+    false
+  );
+});
+
 test("delete event draft inference recognizes event clarification prompts", () => {
   const draft = inferDraftSessionFromHistory({
     organizationId: ORG_ID,
