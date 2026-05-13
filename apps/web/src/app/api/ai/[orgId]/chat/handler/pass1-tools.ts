@@ -289,6 +289,399 @@ export function looksLikeStructuredJobDraft(message: string): boolean {
   return hasJobContext && structuredFieldMatches >= 2 && message.trim().length >= 80;
 }
 
+// Multi-event intent: "create 3 events", "schedule multiple events", numbered
+// list patterns. Lives near its only usage.
+const MULTI_EVENT_PROMPT_PATTERN =
+  /(?:\b(?:\d+|two|three|four|five|six|seven|eight|nine|ten|multiple|several|a few|some|batch)\s+events?\b|(?:events?.*,.*(?:and|&)\s))/i;
+
+interface RoutingContext {
+  message: string;
+  trimmedMessage: string;
+  isQuestionLike: boolean;
+  surface: CacheSurface;
+  intentType: TurnExecutionPolicy["intentType"];
+  attachment?: ChatAttachment;
+  currentEventId: string | null;
+  currentJobPostingId: string | null;
+  currentMemberId: string | null;
+  currentDiscussionThreadId: string | null;
+  currentFeatureSegment: string | null;
+  isEnterpriseScopedRequest: boolean;
+  canManageEnterpriseBilling: boolean;
+}
+
+interface RoutingRule {
+  id: string;
+  when: (ctx: RoutingContext) => boolean;
+  tools: (ctx: RoutingContext) => ToolName[];
+}
+
+// Guard for fallback rules that should not fire on direct queries/questions
+// (e.g. on /members/[id], "who is this member?" must not route to role-change).
+function isImperative(ctx: RoutingContext): boolean {
+  return !DIRECT_QUERY_START_PATTERN.test(ctx.trimmedMessage) && !ctx.isQuestionLike;
+}
+
+// Ordered intent rules. Precedence = array order; first match wins. Each rule
+// is self-contained so adding/removing one is a local edit. Rule ids double
+// as eval labels when chasing false positives/negatives.
+const PASS1_ROUTING_RULES: ReadonlyArray<RoutingRule> = [
+  {
+    id: "create_announcement",
+    when: (ctx) => CREATE_ANNOUNCEMENT_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_announcement"],
+  },
+  {
+    id: "create_job",
+    when: (ctx) =>
+      CREATE_JOB_PROMPT_PATTERN.test(ctx.message) || looksLikeStructuredJobDraft(ctx.message),
+    tools: () => ["prepare_job_posting"],
+  },
+  {
+    id: "delete_current_event",
+    when: (ctx) =>
+      ctx.currentEventId != null && DELETE_CURRENT_EVENT_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_delete_event"],
+  },
+  {
+    id: "update_current_event",
+    when: (ctx) =>
+      ctx.currentEventId != null && UPDATE_CURRENT_EVENT_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_update_event"],
+  },
+  {
+    id: "delete_current_job",
+    when: (ctx) =>
+      ctx.currentJobPostingId != null && DELETE_CURRENT_JOB_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_delete_job_posting"],
+  },
+  {
+    id: "update_current_job",
+    when: (ctx) =>
+      ctx.currentJobPostingId != null && UPDATE_CURRENT_JOB_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_update_job_posting"],
+  },
+  {
+    id: "member_role_change",
+    when: (ctx) =>
+      MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(ctx.message) && isImperative(ctx),
+    tools: () => ["prepare_member_role_change"],
+  },
+  {
+    id: "delete_job",
+    when: (ctx) => DELETE_JOB_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_delete_job_posting"],
+  },
+  {
+    id: "update_job",
+    when: (ctx) => UPDATE_JOB_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_update_job_posting"],
+  },
+  {
+    id: "list_chat_groups",
+    when: (ctx) => LIST_CHAT_GROUPS_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["list_chat_groups"],
+  },
+  {
+    id: "send_group_chat_message",
+    when: (ctx) => SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_group_message"],
+  },
+  {
+    id: "send_chat_message",
+    when: (ctx) => SEND_CHAT_MESSAGE_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_chat_message"],
+  },
+  {
+    id: "discussion_reply",
+    when: (ctx) => DISCUSSION_REPLY_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_discussion_reply"],
+  },
+  {
+    id: "create_discussion",
+    when: (ctx) => CREATE_DISCUSSION_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_discussion_thread"],
+  },
+  {
+    id: "schedule_pdf",
+    when: (ctx) =>
+      PDF_SCHEDULE_PROMPT_PATTERN.test(ctx.message) ||
+      (ctx.attachment?.mimeType != null &&
+        SCHEDULE_ATTACHMENT_MIME_TYPES.has(ctx.attachment.mimeType)),
+    tools: () => ["extract_schedule_pdf"],
+  },
+  {
+    id: "scrape_schedule",
+    when: (ctx) =>
+      SCRAPE_SCHEDULE_PROMPT_PATTERN.test(ctx.message) ||
+      (HTTPS_URL_PATTERN.test(ctx.message) &&
+        CREATE_EVENT_PROMPT_PATTERN.test(ctx.message)),
+    tools: () => ["scrape_schedule_website"],
+  },
+  {
+    id: "create_event",
+    when: (ctx) => CREATE_EVENT_PROMPT_PATTERN.test(ctx.message),
+    // Multi-event variant exposes both tools — model can batch via
+    // prepare_events_batch or fan out prepare_event calls. We do NOT force
+    // tool choice when length > 1 because the batch schema is too complex
+    // for the 15s pass-1 timeout when forced.
+    tools: (ctx) =>
+      MULTI_EVENT_PROMPT_PATTERN.test(ctx.message)
+        ? ["prepare_events_batch", "prepare_event"]
+        : ["prepare_event"],
+  },
+  {
+    id: "delete_event",
+    when: (ctx) => DELETE_EVENT_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_delete_event"],
+  },
+  {
+    id: "update_event",
+    when: (ctx) => UPDATE_EVENT_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_update_event"],
+  },
+  {
+    id: "navigation",
+    when: (ctx) =>
+      ctx.intentType === "navigation" && DIRECT_NAVIGATION_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["find_navigation_targets"],
+  },
+  {
+    id: "content_search",
+    when: (ctx) => CONTENT_SEARCH_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["search_org_content"],
+  },
+
+  // ── Enterprise-scoped rules ────────────────────────────────────────────
+  // Each rule gates on `isEnterpriseScopedRequest` so precedence stays flat.
+  {
+    id: "enterprise_invite_revoke",
+    when: (ctx) =>
+      ctx.isEnterpriseScopedRequest &&
+      ENTERPRISE_INVITE_REVOKE_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["revoke_enterprise_invite"],
+  },
+  {
+    id: "enterprise_invite_create",
+    when: (ctx) =>
+      ctx.isEnterpriseScopedRequest &&
+      ENTERPRISE_INVITE_CREATE_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["prepare_enterprise_invite"],
+  },
+  {
+    id: "enterprise_audit",
+    when: (ctx) =>
+      ctx.isEnterpriseScopedRequest && ENTERPRISE_AUDIT_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["list_enterprise_audit_events"],
+  },
+  {
+    id: "enterprise_billing_quota",
+    when: (ctx) =>
+      ctx.isEnterpriseScopedRequest &&
+      (ctx.currentFeatureSegment === "billing" ||
+        ENTERPRISE_QUOTA_PROMPT_PATTERN.test(ctx.message)),
+    tools: (ctx) => {
+      if (ctx.canManageEnterpriseBilling) return ["get_enterprise_quota"];
+      if (ENTERPRISE_SUB_ORG_CAPACITY_PROMPT_PATTERN.test(ctx.message)) {
+        return ["get_enterprise_org_capacity"];
+      }
+      return ["get_enterprise_quota"];
+    },
+  },
+  {
+    id: "enterprise_managed_orgs",
+    when: (ctx) =>
+      ctx.isEnterpriseScopedRequest &&
+      (ctx.currentFeatureSegment === "organizations" ||
+        MANAGED_ORGS_PROMPT_PATTERN.test(ctx.message)),
+    tools: () => ["list_managed_orgs"],
+  },
+  {
+    id: "enterprise_alumni",
+    when: (ctx) =>
+      ctx.isEnterpriseScopedRequest &&
+      (ctx.currentFeatureSegment === "alumni" ||
+        ALUMNI_ROSTER_PROMPT_PATTERN.test(ctx.message)),
+    tools: (ctx) =>
+      MEMBER_COUNT_PROMPT_PATTERN.test(ctx.message)
+        ? ["get_enterprise_stats"]
+        : ["list_enterprise_alumni"],
+  },
+
+  // ── Members-surface specials ───────────────────────────────────────────
+  {
+    id: "mentor_intent",
+    when: (ctx) => ctx.surface === "members" && MENTOR_PROMPT_PATTERN.test(ctx.message),
+    tools: (ctx) =>
+      MENTOR_AVAILABILITY_PROMPT_PATTERN.test(ctx.message)
+        ? ["list_available_mentors"]
+        : ["suggest_mentors"],
+  },
+  {
+    id: "connection_intent",
+    when: (ctx) =>
+      ctx.surface === "members" && CONNECTION_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["suggest_connections"],
+  },
+
+  // ── Generic readers ────────────────────────────────────────────────────
+  {
+    id: "alumni_roster",
+    when: (ctx) =>
+      ALUMNI_ROSTER_PROMPT_PATTERN.test(ctx.message) &&
+      !MEMBER_COUNT_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["list_alumni"],
+  },
+  {
+    id: "parent_list",
+    when: (ctx) => PARENT_LIST_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["list_parents"],
+  },
+  {
+    id: "philanthropy_events",
+    when: (ctx) => PHILANTHROPY_EVENTS_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["list_philanthropy_events"],
+  },
+  {
+    id: "donation_analytics",
+    when: (ctx) => DONATION_ANALYTICS_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["get_donation_analytics"],
+  },
+  {
+    id: "donation_list",
+    when: (ctx) =>
+      DONATION_LIST_PROMPT_PATTERN.test(ctx.message) &&
+      !MEMBER_COUNT_PROMPT_PATTERN.test(ctx.message) &&
+      !DONATION_STATS_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["list_donations"],
+  },
+  {
+    id: "members_surface_count",
+    when: (ctx) =>
+      ctx.surface === "members" && MEMBER_COUNT_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["get_org_stats"],
+  },
+  {
+    id: "members_surface_roster",
+    when: (ctx) =>
+      ctx.surface === "members" && MEMBER_ROSTER_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["list_members"],
+  },
+
+  // ── Route-context fallbacks (only fire on imperative phrasing) ─────────
+  {
+    id: "announcement_detail_fallback",
+    when: (ctx) =>
+      ctx.currentFeatureSegment === "announcements" &&
+      ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN.test(ctx.message) &&
+      isImperative(ctx),
+    tools: () => ["prepare_announcement"],
+  },
+  {
+    id: "member_route_role_change",
+    when: (ctx) =>
+      ctx.currentMemberId != null &&
+      MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(ctx.message) &&
+      isImperative(ctx),
+    tools: () => ["prepare_member_role_change"],
+  },
+  {
+    id: "member_route_chat_fallback",
+    when: (ctx) =>
+      ctx.currentMemberId != null &&
+      CHAT_MESSAGE_FALLBACK_PATTERN.test(ctx.message) &&
+      isImperative(ctx),
+    tools: () => ["prepare_chat_message"],
+  },
+  {
+    id: "messages_route_group_fallback",
+    when: (ctx) =>
+      ctx.currentFeatureSegment === "messages" &&
+      GROUP_CHAT_MESSAGE_FALLBACK_PATTERN.test(ctx.message) &&
+      isImperative(ctx),
+    tools: () => ["prepare_group_message"],
+  },
+  {
+    id: "discussion_thread_reply_fallback",
+    when: (ctx) =>
+      ctx.currentDiscussionThreadId != null &&
+      DISCUSSION_REPLY_FALLBACK_PATTERN.test(ctx.message) &&
+      isImperative(ctx),
+    tools: () => ["prepare_discussion_reply"],
+  },
+];
+
+export const PASS1_ROUTING_RULE_IDS: ReadonlyArray<string> = PASS1_ROUTING_RULES.map(
+  (r) => r.id,
+);
+
+function buildRoutingContext(
+  message: string,
+  effectiveSurface: CacheSurface,
+  intentType: TurnExecutionPolicy["intentType"],
+  attachment: ChatAttachment | undefined,
+  currentPath: string | undefined,
+  enterpriseEnabled: boolean | undefined,
+  enterpriseRole: EnterpriseRole | undefined,
+): RoutingContext {
+  const trimmedMessage = message.trim();
+  const currentFeatureSegment = getCurrentPathFeatureSegment(currentPath);
+  const isEnterprisePortal =
+    enterpriseEnabled === true && currentPath?.startsWith("/enterprise/") === true;
+  const isEnterpriseScopedRequest =
+    enterpriseEnabled === true &&
+    (isEnterprisePortal || ENTERPRISE_SCOPE_PROMPT_PATTERN.test(message));
+  const canManageEnterpriseBilling =
+    enterpriseRole != null && getEnterprisePermissions(enterpriseRole).canManageBilling;
+
+  return {
+    message,
+    trimmedMessage,
+    isQuestionLike: trimmedMessage.endsWith("?"),
+    surface: effectiveSurface,
+    intentType,
+    attachment,
+    currentEventId: extractCurrentEventRouteId(currentPath),
+    currentJobPostingId: extractCurrentJobPostingRouteId(currentPath),
+    currentMemberId: extractCurrentMemberRouteId(currentPath),
+    currentDiscussionThreadId: extractCurrentDiscussionThreadRouteId(currentPath),
+    currentFeatureSegment,
+    isEnterpriseScopedRequest,
+    canManageEnterpriseBilling,
+  };
+}
+
+/**
+ * Diagnostic helper: returns the id of the first matching rule, or `null` for
+ * the surface fallback. Useful when investigating why a prompt routed to a
+ * given tool. Not used in production hot path.
+ */
+export function matchPass1RoutingRule(
+  message: string,
+  effectiveSurface: CacheSurface,
+  toolPolicy: TurnExecutionPolicy["toolPolicy"],
+  intentType: TurnExecutionPolicy["intentType"],
+  attachment?: ChatAttachment,
+  currentPath?: string,
+  enterpriseEnabled?: boolean,
+  enterpriseRole?: EnterpriseRole,
+): string | null {
+  if (toolPolicy !== "surface_read_tools") return null;
+  const ctx = buildRoutingContext(
+    message,
+    effectiveSurface,
+    intentType,
+    attachment,
+    currentPath,
+    enterpriseEnabled,
+    enterpriseRole,
+  );
+  for (const rule of PASS1_ROUTING_RULES) {
+    if (rule.when(ctx)) return rule.id;
+  }
+  return null;
+}
+
 export function getPass1Tools(
   message: string,
   effectiveSurface: CacheSurface,
@@ -303,256 +696,20 @@ export function getPass1Tools(
     return undefined;
   }
 
-  if (CREATE_ANNOUNCEMENT_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_announcement];
-  }
+  const ctx = buildRoutingContext(
+    message,
+    effectiveSurface,
+    intentType,
+    attachment,
+    currentPath,
+    enterpriseEnabled,
+    enterpriseRole,
+  );
 
-  if (CREATE_JOB_PROMPT_PATTERN.test(message) || looksLikeStructuredJobDraft(message)) {
-    return [AI_TOOL_MAP.prepare_job_posting];
-  }
-
-  const currentEventId = extractCurrentEventRouteId(currentPath);
-  if (currentEventId && DELETE_CURRENT_EVENT_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_delete_event];
-  }
-
-  if (currentEventId && UPDATE_CURRENT_EVENT_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_update_event];
-  }
-
-  const currentJobPostingId = extractCurrentJobPostingRouteId(currentPath);
-  if (currentJobPostingId && DELETE_CURRENT_JOB_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_delete_job_posting];
-  }
-
-  if (currentJobPostingId && UPDATE_CURRENT_JOB_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_update_job_posting];
-  }
-
-  if (
-    MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(message) &&
-    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
-    !message.trim().endsWith("?")
-  ) {
-    return [AI_TOOL_MAP.prepare_member_role_change];
-  }
-
-  if (DELETE_JOB_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_delete_job_posting];
-  }
-
-  if (UPDATE_JOB_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_update_job_posting];
-  }
-
-  if (LIST_CHAT_GROUPS_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.list_chat_groups];
-  }
-
-  if (SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_group_message];
-  }
-
-  if (SEND_CHAT_MESSAGE_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_chat_message];
-  }
-
-  if (DISCUSSION_REPLY_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_discussion_reply];
-  }
-
-  if (CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_discussion_thread];
-  }
-
-  if (
-    PDF_SCHEDULE_PROMPT_PATTERN.test(message) ||
-    (attachment?.mimeType && SCHEDULE_ATTACHMENT_MIME_TYPES.has(attachment.mimeType))
-  ) {
-    return [AI_TOOL_MAP.extract_schedule_pdf];
-  }
-
-  if (
-    SCRAPE_SCHEDULE_PROMPT_PATTERN.test(message) ||
-    (HTTPS_URL_PATTERN.test(message) && CREATE_EVENT_PROMPT_PATTERN.test(message))
-  ) {
-    return [AI_TOOL_MAP.scrape_schedule_website];
-  }
-
-  if (CREATE_EVENT_PROMPT_PATTERN.test(message)) {
-    // Detect multi-event intent: "create 3 events", "schedule multiple events", numbered list patterns
-    const multiEventPattern = /(?:\b(?:\d+|two|three|four|five|six|seven|eight|nine|ten|multiple|several|a few|some|batch)\s+events?\b|(?:events?.*,.*(?:and|&)\s))/i;
-    if (multiEventPattern.test(message)) {
-      // Provide both tools — the model can use prepare_events_batch for all
-      // events in one call, or call prepare_event multiple times via parallel
-      // tool calls. Either path works because the frontend accumulates
-      // pending actions. Importantly, we do NOT force tool choice here — the
-      // batch schema is too complex for the 15s pass-1 timeout when forced.
-      return [AI_TOOL_MAP.prepare_events_batch, AI_TOOL_MAP.prepare_event];
+  for (const rule of PASS1_ROUTING_RULES) {
+    if (rule.when(ctx)) {
+      return rule.tools(ctx).map((toolName) => AI_TOOL_MAP[toolName]);
     }
-    return [AI_TOOL_MAP.prepare_event];
-  }
-
-  if (DELETE_EVENT_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_delete_event];
-  }
-
-  if (UPDATE_EVENT_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_update_event];
-  }
-
-  if (intentType === "navigation" && DIRECT_NAVIGATION_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.find_navigation_targets];
-  }
-
-  if (CONTENT_SEARCH_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.search_org_content];
-  }
-
-  const currentFeatureSegment = getCurrentPathFeatureSegment(currentPath);
-  const isEnterprisePortal =
-    enterpriseEnabled === true && currentPath?.startsWith("/enterprise/") === true;
-  const isEnterpriseScopedRequest =
-    enterpriseEnabled === true &&
-    (isEnterprisePortal || ENTERPRISE_SCOPE_PROMPT_PATTERN.test(message));
-  const canManageEnterpriseBilling =
-    enterpriseRole != null && getEnterprisePermissions(enterpriseRole).canManageBilling;
-
-  if (isEnterpriseScopedRequest) {
-    if (ENTERPRISE_INVITE_REVOKE_PROMPT_PATTERN.test(message)) {
-      return [AI_TOOL_MAP.revoke_enterprise_invite];
-    }
-
-    if (ENTERPRISE_INVITE_CREATE_PROMPT_PATTERN.test(message)) {
-      return [AI_TOOL_MAP.prepare_enterprise_invite];
-    }
-
-    if (ENTERPRISE_AUDIT_PROMPT_PATTERN.test(message)) {
-      return [AI_TOOL_MAP.list_enterprise_audit_events];
-    }
-
-    if (
-      currentFeatureSegment === "billing" ||
-      ENTERPRISE_QUOTA_PROMPT_PATTERN.test(message)
-    ) {
-      if (canManageEnterpriseBilling) {
-        return [AI_TOOL_MAP.get_enterprise_quota];
-      }
-
-      if (ENTERPRISE_SUB_ORG_CAPACITY_PROMPT_PATTERN.test(message)) {
-        return [AI_TOOL_MAP.get_enterprise_org_capacity];
-      }
-
-      return [AI_TOOL_MAP.get_enterprise_quota];
-    }
-
-    if (
-      currentFeatureSegment === "organizations" ||
-      MANAGED_ORGS_PROMPT_PATTERN.test(message)
-    ) {
-      return [AI_TOOL_MAP.list_managed_orgs];
-    }
-
-    if (
-      currentFeatureSegment === "alumni" ||
-      ALUMNI_ROSTER_PROMPT_PATTERN.test(message)
-    ) {
-      if (MEMBER_COUNT_PROMPT_PATTERN.test(message)) {
-        return [AI_TOOL_MAP.get_enterprise_stats];
-      }
-
-      return [AI_TOOL_MAP.list_enterprise_alumni];
-    }
-  }
-
-  if (effectiveSurface === "members" && MENTOR_PROMPT_PATTERN.test(message)) {
-    if (MENTOR_AVAILABILITY_PROMPT_PATTERN.test(message)) {
-      return [AI_TOOL_MAP.list_available_mentors];
-    }
-    return [AI_TOOL_MAP.suggest_mentors];
-  }
-
-  if (effectiveSurface === "members" && CONNECTION_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.suggest_connections];
-  }
-
-  if (ALUMNI_ROSTER_PROMPT_PATTERN.test(message) && !MEMBER_COUNT_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.list_alumni];
-  }
-
-  if (PARENT_LIST_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.list_parents];
-  }
-
-  if (PHILANTHROPY_EVENTS_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.list_philanthropy_events];
-  }
-
-  if (DONATION_ANALYTICS_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.get_donation_analytics];
-  }
-
-  if (
-    DONATION_LIST_PROMPT_PATTERN.test(message) &&
-    !MEMBER_COUNT_PROMPT_PATTERN.test(message) &&
-    !DONATION_STATS_PROMPT_PATTERN.test(message)
-  ) {
-    return [AI_TOOL_MAP.list_donations];
-  }
-
-  if (effectiveSurface === "members") {
-    if (MEMBER_COUNT_PROMPT_PATTERN.test(message)) {
-      return [AI_TOOL_MAP.get_org_stats];
-    }
-
-    if (MEMBER_ROSTER_PROMPT_PATTERN.test(message)) {
-      return [AI_TOOL_MAP.list_members];
-    }
-  }
-
-  if (
-    currentFeatureSegment === "announcements" &&
-    ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN.test(message) &&
-    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
-    !message.trim().endsWith("?")
-  ) {
-    return [AI_TOOL_MAP.prepare_announcement];
-  }
-
-  if (
-    extractCurrentMemberRouteId(currentPath) &&
-    MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(message) &&
-    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
-    !message.trim().endsWith("?")
-  ) {
-    return [AI_TOOL_MAP.prepare_member_role_change];
-  }
-
-  if (
-    extractCurrentMemberRouteId(currentPath) &&
-    CHAT_MESSAGE_FALLBACK_PATTERN.test(message) &&
-    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
-    !message.trim().endsWith("?")
-  ) {
-    return [AI_TOOL_MAP.prepare_chat_message];
-  }
-
-  if (
-    currentFeatureSegment === "messages" &&
-    GROUP_CHAT_MESSAGE_FALLBACK_PATTERN.test(message) &&
-    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
-    !message.trim().endsWith("?")
-  ) {
-    return [AI_TOOL_MAP.prepare_group_message];
-  }
-
-  if (
-    extractCurrentDiscussionThreadRouteId(currentPath) &&
-    DISCUSSION_REPLY_FALLBACK_PATTERN.test(message) &&
-    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
-    !message.trim().endsWith("?")
-  ) {
-    return [AI_TOOL_MAP.prepare_discussion_reply];
   }
 
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
