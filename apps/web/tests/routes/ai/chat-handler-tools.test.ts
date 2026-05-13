@@ -687,6 +687,19 @@ test("delete event draft does not swallow an explicit member role change", () =>
   assert.equal(shouldContinue, false);
 });
 
+test("delete event draft does not swallow a coach assignment follow-up", () => {
+  const message = "Make Patrick Leonard a coach";
+  const routing = resolveSurfaceRouting(message, "events");
+  const draft = makeDraftSession("delete_event", {
+    event_query: "Meeting next week on monday",
+  });
+  draft.missing_fields = ["event_id"];
+
+  const shouldContinue = shouldContinueDraftSession(message, draft as any, routing);
+
+  assert.equal(shouldContinue, false);
+});
+
 test("mutate-existing drafts do not swallow unrelated lookup questions", () => {
   const jobQuestion = "What jobs are open right now?";
   const jobRouting = resolveSurfaceRouting(jobQuestion, "general");
