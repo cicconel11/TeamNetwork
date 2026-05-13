@@ -75,15 +75,46 @@ function assertEnv(name, required = true) {
   return value || "";
 }
 
+const optionalEnvLogSymbol = Symbol.for("teamnetwork.nextConfig.optionalEnvLogged");
+
+function claimOptionalEnvLogEmission() {
+  if (globalThis[optionalEnvLogSymbol]) {
+    return false;
+  }
+  globalThis[optionalEnvLogSymbol] = true;
+  return true;
+}
+
+function shouldLogOptionalEnv() {
+  return (
+    process.env.NODE_ENV === "production" ||
+    process.env.CI === "true" ||
+    process.env.TEAMNETWORK_VERBOSE_ENV === "1"
+  );
+}
+
+function logOptionalEnvWarning(message, shouldEmit) {
+  if (shouldEmit && shouldLogOptionalEnv()) {
+    console.warn(message);
+  }
+}
+
+function logOptionalEnvInfo(message, shouldEmit) {
+  if (shouldEmit && shouldLogOptionalEnv()) {
+    console.info(message);
+  }
+}
+
 function validateBuildEnv() {
   const isDev = process.env.NODE_ENV !== "production";
   const skipStripe = process.env.SKIP_STRIPE_VALIDATION === "true" || (isDev && !process.env.STRIPE_SECRET_KEY);
+  const shouldEmitOptionalEnvLogs = claimOptionalEnvLogEmission();
   
   // Always require Supabase
   supabaseEnv.forEach((key) => assertEnv(key, true));
   
   if (skipStripe) {
-    console.log("⚠️  Skipping Stripe validation (dev mode without Stripe keys)");
+    logOptionalEnvWarning("⚠️  Skipping Stripe validation (dev mode without Stripe keys)", shouldEmitOptionalEnvLogs);
   } else {
     // Require Stripe in production
     stripeEnv.forEach((key) => assertEnv(key, true));
@@ -119,41 +150,41 @@ function validateBuildEnv() {
     if (isVercelProduction) {
       throw new Error("Missing required environment variable: STRIPE_WEBHOOK_SECRET_CONNECT (required for donation webhooks)");
     }
-    console.warn("⚠️  STRIPE_WEBHOOK_SECRET_CONNECT not set — Connect donation webhooks will return 503");
+    logOptionalEnvWarning("⚠️  STRIPE_WEBHOOK_SECRET_CONNECT not set — Connect donation webhooks will return 503", shouldEmitOptionalEnvLogs);
   }
 
   // Optional: warn if Google Calendar env vars are missing (feature will be disabled)
   const missingGoogleVars = googleCalendarEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
   if (missingGoogleVars.length > 0 && missingGoogleVars.length < googleCalendarEnv.length) {
-    console.warn(`⚠️  Partial Google Calendar config: missing ${missingGoogleVars.join(", ")}. Google Calendar integration will not work.`);
+    logOptionalEnvWarning(`⚠️  Partial Google Calendar config: missing ${missingGoogleVars.join(", ")}. Google Calendar integration will not work.`, shouldEmitOptionalEnvLogs);
   }
 
   // Optional: warn if LinkedIn env vars are partially configured
   const missingLinkedInVars = linkedInEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
   if (missingLinkedInVars.length > 0 && missingLinkedInVars.length < linkedInEnv.length) {
-    console.warn(`⚠️  Partial LinkedIn config: missing ${missingLinkedInVars.join(", ")}. LinkedIn integration will not work.`);
+    logOptionalEnvWarning(`⚠️  Partial LinkedIn config: missing ${missingLinkedInVars.join(", ")}. LinkedIn integration will not work.`, shouldEmitOptionalEnvLogs);
   }
 
   // Optional: warn if Blackbaud env vars are partially configured
   const missingBlackbaudVars = blackbaudEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
   if (missingBlackbaudVars.length > 0 && missingBlackbaudVars.length < blackbaudEnv.length) {
-    console.warn(`⚠️  Partial Blackbaud config: missing ${missingBlackbaudVars.join(", ")}. Blackbaud integration will not work.`);
+    logOptionalEnvWarning(`⚠️  Partial Blackbaud config: missing ${missingBlackbaudVars.join(", ")}. Blackbaud integration will not work.`, shouldEmitOptionalEnvLogs);
   }
 
   // Optional: warn if Microsoft Calendar env vars are partially configured
   const missingMicrosoftVars = microsoftCalendarEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
   if (missingMicrosoftVars.length > 0 && missingMicrosoftVars.length < microsoftCalendarEnv.length) {
-    console.warn(`⚠️  Partial Microsoft Calendar config: missing ${missingMicrosoftVars.join(", ")}. Outlook Calendar integration will not work.`);
+    logOptionalEnvWarning(`⚠️  Partial Microsoft Calendar config: missing ${missingMicrosoftVars.join(", ")}. Outlook Calendar integration will not work.`, shouldEmitOptionalEnvLogs);
   }
 
   // Optional: Bright Data enrichment (enriches member profiles from LinkedIn)
   if (!process.env.BRIGHT_DATA_API_KEY) {
-    console.log("ℹ️  BRIGHT_DATA_API_KEY not set — LinkedIn profile enrichment disabled");
+    logOptionalEnvInfo("ℹ️  BRIGHT_DATA_API_KEY not set — LinkedIn profile enrichment disabled", shouldEmitOptionalEnvLogs);
   }
 
   // Optional: warn if z.ai (AI assistant) API key is missing
   if (!process.env.ZAI_API_KEY) {
-    console.log("ℹ️  ZAI_API_KEY not set — AI assistant features disabled");
+    logOptionalEnvInfo("ℹ️  ZAI_API_KEY not set — AI assistant features disabled", shouldEmitOptionalEnvLogs);
   }
 
   // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
@@ -174,7 +205,7 @@ function validateBuildEnv() {
     isVercelProduction &&
     (!parsedSiteUrl || parsedSiteUrl.host !== "www.myteamnetwork.com" || parsedSiteUrl.protocol !== "https:")
   ) {
-    console.warn(`⚠️  NEXT_PUBLIC_SITE_URL should use https://www.myteamnetwork.com in production, got: ${siteUrl || "(unset)"}. OAuth redirects may break.`);
+    logOptionalEnvWarning(`⚠️  NEXT_PUBLIC_SITE_URL should use https://www.myteamnetwork.com in production, got: ${siteUrl || "(unset)"}. OAuth redirects may break.`, shouldEmitOptionalEnvLogs);
   }
 
   // Require CRON_SECRET on Vercel production deploys, warn otherwise
@@ -184,7 +215,7 @@ function validateBuildEnv() {
     throw new Error("Missing required environment variable: CRON_SECRET (required on Vercel production)");
   }
   if (!isDev && !cronSecret) {
-    console.warn("⚠️  CRON_SECRET not set — cron job authentication will not work");
+    logOptionalEnvWarning("⚠️  CRON_SECRET not set — cron job authentication will not work", shouldEmitOptionalEnvLogs);
   }
 
   // Captcha: fail fast on Vercel production when the selected provider is
@@ -240,6 +271,19 @@ const nextConfig = {
     staleTimes: {
       dynamic: 0,
     },
+  },
+  webpack(config, { dev }) {
+    if (dev && process.env.TEAMNETWORK_VERBOSE_WEBPACK !== "1") {
+      // Next dev emits noisy infrastructure warnings for known third-party
+      // dynamic imports (notably next-intl's extractor) and cache serialization.
+      // They are not actionable for app developers and make the task runner
+      // unreadable, so keep dev output focused on real compile/runtime errors.
+      config.infrastructureLogging = {
+        ...(config.infrastructureLogging ?? {}),
+        level: "error",
+      };
+    }
+    return config;
   },
   // Load server-side; avoids flaky missing `./vendor-chunks/@supabase.js` after HMR / partial `.next` deletes
   serverExternalPackages: [

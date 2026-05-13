@@ -711,7 +711,9 @@
     "lead": "Lead",
     "executive": "Dirigente",
     "postedBy": "Pubblicato il {date} da {name}",
-    "postedDate": "Pubblicato il {date}"
+    "postedDate": "Pubblicato il {date}",
+    "unavailableTitle": "Le offerte di lavoro sono temporaneamente non disponibili",
+    "unavailableDescription": "Non siamo riusciti a caricare la bacheca delle offerte. Aggiorna la pagina o riprova tra poco."
   },
   "philanthropy": {
     "description": "Servizio comunitario e raccolta fondi per la tua organizzazione.",
