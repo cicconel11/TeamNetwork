@@ -711,7 +711,9 @@
     "lead": "قيادي",
     "executive": "تنفيذي",
     "postedBy": "نُشر {date} بواسطة {name}",
-    "postedDate": "نُشر {date}"
+    "postedDate": "نُشر {date}",
+    "unavailableTitle": "الوظائف غير متاحة مؤقتاً",
+    "unavailableDescription": "تعذر تحميل لوحة الوظائف الآن. يرجى تحديث الصفحة أو المحاولة مرة أخرى بعد قليل."
   },
   "philanthropy": {
     "description": "الخدمة المجتمعية وجمع التبرعات لمنظمتك.",

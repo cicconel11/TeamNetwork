@@ -711,7 +711,9 @@
     "lead": "Lider",
     "executive": "Executivo",
     "postedBy": "Publicado em {date} por {name}",
-    "postedDate": "Publicado em {date}"
+    "postedDate": "Publicado em {date}",
+    "unavailableTitle": "As vagas estão temporariamente indisponíveis",
+    "unavailableDescription": "Não foi possível carregar o quadro de vagas agora. Atualize a página ou tente novamente em instantes."
   },
   "philanthropy": {
     "description": "Servico comunitario e arrecadacao de fundos para sua organizacao.",

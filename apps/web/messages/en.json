@@ -729,7 +729,9 @@
     "lead": "Lead",
     "executive": "Executive",
     "postedBy": "Posted {date} by {name}",
-    "postedDate": "Posted {date}"
+    "postedDate": "Posted {date}",
+    "unavailableTitle": "Jobs are temporarily unavailable",
+    "unavailableDescription": "We could not load the job board right now. Please refresh or try again in a moment."
   },
   "philanthropy": {
     "description": "Community service and fundraising for your organization.",

@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/layout";
 import { JobList } from "@/components/jobs/JobList";
 import { JobsFilters } from "@/components/jobs/JobsFilters";
 import Link from "next/link";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 interface PageProps {
@@ -21,6 +21,32 @@ interface PageProps {
     company?: string;
     industry?: string;
   }>;
+}
+
+function renderJobsUnavailable(input: {
+  canPost: boolean;
+  orgSlug: string;
+  tJobs: Awaited<ReturnType<typeof getTranslations>>;
+}) {
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={input.tJobs("title")}
+        description={input.tJobs("description")}
+        actions={
+          input.canPost && (
+            <Link href={`/${input.orgSlug}/jobs/new`}>
+              <Button>{input.tJobs("postJob")}</Button>
+            </Link>
+          )
+        }
+      />
+      <EmptyState
+        title={input.tJobs("unavailableTitle")}
+        description={input.tJobs("unavailableDescription")}
+      />
+    </div>
+  );
 }
 
 export default async function JobsPage({ params, searchParams }: PageProps) {
@@ -99,9 +125,31 @@ export default async function JobsPage({ params, searchParams }: PageProps) {
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
-  const [{ data: allJobs }, mainResult] = await Promise.all([filterOptionsPromise, mainQueryPromise]);
+  let queryResults: [
+    Awaited<typeof filterOptionsPromise>,
+    Awaited<typeof mainQueryPromise>,
+  ];
+  try {
+    queryResults = await Promise.all([filterOptionsPromise, mainQueryPromise]);
+  } catch (error) {
+    console.error("[jobs-page] failed to load job postings", {
+      orgId: org.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return renderJobsUnavailable({ canPost, orgSlug, tJobs });
+  }
 
-  const allJobRows = allJobs || [];
+  const [filterOptionsResult, mainResult] = queryResults;
+  if (filterOptionsResult.error || mainResult.error) {
+    console.error("[jobs-page] failed to load job postings", {
+      orgId: org.id,
+      filterOptionsError: filterOptionsResult.error?.message,
+      mainQueryError: mainResult.error?.message,
+    });
+    return renderJobsUnavailable({ canPost, orgSlug, tJobs });
+  }
+
+  const allJobRows = filterOptionsResult.data || [];
   const uniqueLocations = [...new Set(allJobRows.map((j) => j.location).filter(Boolean))];
   const uniqueCompanies = [...new Set(allJobRows.map((j) => j.company).filter(Boolean))];
   const uniqueIndustries = [...new Set(allJobRows.map((j) => j.industry).filter(Boolean))];

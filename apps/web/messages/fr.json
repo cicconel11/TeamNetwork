@@ -711,7 +711,9 @@
     "lead": "Responsable",
     "executive": "Dirigeant",
     "postedBy": "Publie le {date} par {name}",
-    "postedDate": "Publie le {date}"
+    "postedDate": "Publie le {date}",
+    "unavailableTitle": "Les offres sont temporairement indisponibles",
+    "unavailableDescription": "Nous n'avons pas pu charger le tableau des offres. Actualisez la page ou réessayez dans un instant."
   },
   "philanthropy": {
     "description": "Service communautaire et collecte de fonds pour votre organisation.",

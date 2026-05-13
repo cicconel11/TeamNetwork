@@ -713,7 +713,9 @@
     "lead": "Lider",
     "executive": "Ejecutivo",
     "postedBy": "Publicado {date} por {name}",
-    "postedDate": "Publicado {date}"
+    "postedDate": "Publicado {date}",
+    "unavailableTitle": "Los empleos no están disponibles temporalmente",
+    "unavailableDescription": "No pudimos cargar la bolsa de trabajo ahora. Actualiza la página o inténtalo de nuevo en un momento."
   },
   "philanthropy": {
     "description": "Servicio comunitario y recaudacion de fondos para tu organizacion.",

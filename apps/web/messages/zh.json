@@ -711,7 +711,9 @@
     "lead": "主管",
     "executive": "高管",
     "postedBy": "{date} 由 {name} 发布",
-    "postedDate": "发布于 {date}"
+    "postedDate": "发布于 {date}",
+    "unavailableTitle": "职位暂时不可用",
+    "unavailableDescription": "我们现在无法加载职位列表。请刷新页面或稍后再试。"
   },
   "philanthropy": {
     "description": "为您的组织提供社区服务和筹款活动。",
