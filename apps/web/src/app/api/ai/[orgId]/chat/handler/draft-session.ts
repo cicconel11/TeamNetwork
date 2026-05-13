@@ -805,9 +805,14 @@ export function shouldContinueDraftSession(
     return true;
   }
 
+  const trimmed = message.trim();
+  const isDirectLookupQuestion =
+    trimmed.endsWith("?") && DIRECT_QUERY_START_PATTERN.test(trimmed);
+
   if (
     draftSession.draft_type === "delete_event" &&
     draftSession.missing_fields.includes("event_id") &&
+    !isDirectLookupQuestion &&
     !DIRECT_NAVIGATION_PROMPT_PATTERN.test(message) &&
     !DRAFT_CANCEL_PATTERN.test(message) &&
     !(
@@ -857,11 +862,7 @@ export function shouldContinueDraftSession(
     return false;
   }
 
-  const trimmed = message.trim();
-  if (
-    !isMutateExisting &&
-    (trimmed.endsWith("?") || DIRECT_QUERY_START_PATTERN.test(trimmed))
-  ) {
+  if (trimmed.endsWith("?") || DIRECT_QUERY_START_PATTERN.test(trimmed)) {
     return false;
   }
 
