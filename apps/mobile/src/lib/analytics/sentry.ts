@@ -7,6 +7,22 @@ import * as Sentry from "@sentry/react-native";
 let initialized = false;
 let telemetryEnabled = false;
 
+// Transient connectivity failures are not actionable bugs. Drop them at
+// every entry point: the explicit captureException wrapper, the Sentry
+// SDK's auto-instrumentation, and the beforeSend safety net.
+function isTransientNetworkError(error: unknown): boolean {
+  if (!error) return false;
+  const name = (error as { name?: string }).name ?? "";
+  if (name === "NetworkUnreachableError" || name === "AbortError") return true;
+  const message =
+    typeof error === "string"
+      ? error
+      : ((error as { message?: string }).message ?? "");
+  return /network request failed|failed to fetch|the network connection was lost|the internet connection appears to be offline/i.test(
+    message,
+  );
+}
+
 export function init(dsn: string): void {
   if (initialized) return;
   Sentry.init({
@@ -15,7 +31,15 @@ export function init(dsn: string): void {
     attachStacktrace: true,
     environment: __DEV__ ? "development" : "production",
     sendDefaultPii: false,
-    beforeSend(event) {
+    ignoreErrors: [
+      "NetworkUnreachableError",
+      /Network request failed/i,
+      /Failed to fetch/i,
+      /The network connection was lost/i,
+      /The Internet connection appears to be offline/i,
+    ],
+    beforeSend(event, hint) {
+      if (isTransientNetworkError(hint?.originalException)) return null;
       if (event.user) {
         delete event.user.email;
         delete event.user.username;
@@ -45,6 +69,7 @@ export function captureException(
   context?: Record<string, unknown>
 ): void {
   if (!initialized || !telemetryEnabled) return;
+  if (isTransientNetworkError(error)) return;
   Sentry.captureException(error, { extra: context });
 }
 
