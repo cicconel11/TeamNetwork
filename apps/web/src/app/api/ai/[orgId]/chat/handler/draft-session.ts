@@ -16,6 +16,7 @@ import {
   DISCUSSION_REPLY_PROMPT_PATTERN,
   EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN,
   LIST_CHAT_GROUPS_PROMPT_PATTERN,
+  MEMBER_ROLE_CHANGE_PROMPT_PATTERN,
   SEND_CHAT_MESSAGE_PROMPT_PATTERN,
   SEND_GROUP_CHAT_MESSAGE_PROMPT_PATTERN,
   looksLikeStructuredJobDraft,
@@ -32,6 +33,15 @@ const MUTATE_EXISTING_DRAFT_TYPES = new Set<DraftSessionType>([
   "update_event",
   "delete_event",
 ]);
+
+const EXPLICIT_MEMBER_ROLE_DRAFT_SWITCH_PATTERN = new RegExp(
+  [
+    String.raw`(?<!\w)(?:change|set|update|make|promote|demote)(?!\w)[\s\S]{0,100}\b(?:role|membership|access)\b`,
+    String.raw`\b(?:role|membership|access)\b[\s\S]{0,80}\b(?:to|as|into)\b`,
+    String.raw`(?<!\w)(?:make|set|promote|demote)(?!\w)[\s\S]{0,80}\b(?:coach|coaches|captain|staff|volunteer)\b`,
+  ].join("|"),
+  "i",
+);
 
 export function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
   switch (draftType) {
@@ -772,6 +782,9 @@ export function shouldContinueDraftSession(
   const isDiscussionReplyPrompt = DISCUSSION_REPLY_PROMPT_PATTERN.test(message);
   const isDiscussionPrompt = CREATE_DISCUSSION_PROMPT_PATTERN.test(message);
   const isEventPrompt = EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN.test(message);
+  const isMemberRolePrompt =
+    MEMBER_ROLE_CHANGE_PROMPT_PATTERN.test(message) ||
+    EXPLICIT_MEMBER_ROLE_DRAFT_SWITCH_PATTERN.test(message);
 
   if (draftSession.draft_type === "send_chat_message" && isGroupMessagePrompt) {
     return false;
@@ -822,10 +835,15 @@ export function shouldContinueDraftSession(
       isGroupMessagePrompt ||
       isDiscussionReplyPrompt ||
       isDiscussionPrompt ||
-      isEventPrompt
+      isEventPrompt ||
+      isMemberRolePrompt
     )
   ) {
     return true;
+  }
+
+  if (isMemberRolePrompt) {
+    return false;
   }
 
   if (
@@ -844,7 +862,7 @@ export function shouldContinueDraftSession(
     (draftSession.draft_type === "create_event" &&
       (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt)) ||
     (draftSession.draft_type === "delete_event" &&
-      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt))
+      (isAnnouncementPrompt || isJobPrompt || isChatMessagePrompt || isGroupMessagePrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt || isMemberRolePrompt))
   ) {
     return false;
   }
