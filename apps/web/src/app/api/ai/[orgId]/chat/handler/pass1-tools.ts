@@ -273,6 +273,12 @@ export function deriveForcedPass1ToolArgs(
   return undefined;
 }
 
+// Treat a prompt as a structured job draft only when it has job context and
+// enough field markers + length that it is clearly a paste-in, not a casual
+// "post a job" mention. Tuned to avoid false positives on short prompts.
+const MIN_STRUCTURED_JOB_FIELD_HITS = 2;
+const MIN_STRUCTURED_JOB_LENGTH = 80;
+
 export function looksLikeStructuredJobDraft(message: string): boolean {
   const hasJobContext =
     /\b(job|job posting|opening|role|position|hiring|apply|application)\b/i.test(message);
@@ -286,7 +292,11 @@ export function looksLikeStructuredJobDraft(message: string): boolean {
     /https?:\/\//i,
   ].filter((pattern) => pattern.test(message)).length;
 
-  return hasJobContext && structuredFieldMatches >= 2 && message.trim().length >= 80;
+  return (
+    hasJobContext &&
+    structuredFieldMatches >= MIN_STRUCTURED_JOB_FIELD_HITS &&
+    message.trim().length >= MIN_STRUCTURED_JOB_LENGTH
+  );
 }
 
 // Multi-event intent: "create 3 events", "schedule multiple events", numbered
