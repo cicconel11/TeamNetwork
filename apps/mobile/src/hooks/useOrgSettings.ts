@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { createPostgresChangesChannel, supabase } from "@/lib/supabase";
 import { fetchWithAuth } from "@/lib/web-api";
 import * as sentry from "@/lib/analytics/sentry";
 
@@ -89,8 +89,7 @@ export function useOrgSettings(orgId: string | null): UseOrgSettingsReturn {
   useEffect(() => {
     if (!org?.id) return;
 
-    const channel = supabase
-      .channel(`org-settings:${org.id}`)
+    const channel = createPostgresChangesChannel(`org-settings:${org.id}`)
       .on(
         "postgres_changes",
         {
