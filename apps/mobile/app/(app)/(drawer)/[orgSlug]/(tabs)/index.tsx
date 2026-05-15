@@ -25,7 +25,9 @@ import { FeedTab } from "@/components/home/FeedTab";
 import { EventStartingSoonBanner } from "@/components/home/event-starting-soon-banner";
 import { useEventCheckInCount } from "@/hooks/useEventCheckInCount";
 import { useNow } from "@/hooks/useNow";
+import { promptAndSetRsvp } from "@/hooks/useRsvp";
 import type { EventCardEvent } from "@/components/cards/EventCard";
+import type { RsvpStatus } from "@teammeet/core";
 
 function computeGreeting(hour: number): string {
   if (hour >= 5 && hour < 12) return "Good morning";
@@ -179,6 +181,28 @@ export default function HomeScreen() {
   const handleSeeAllAnnouncements = useCallback(
     () => router.push(`/(app)/(drawer)/${orgSlug}/announcements` as any),
     [router, orgSlug]
+  );
+
+  const handleEventRsvp = useCallback(
+    (eventId: string, _status: RsvpStatus) => {
+      if (isOffline) {
+        showToast("You're offline. Try again when connected.", "info");
+        return;
+      }
+      if (!orgId || !user?.id) return;
+
+      promptAndSetRsvp({
+        eventId,
+        organizationId: orgId,
+        userId: user.id,
+        onComplete: (result) => {
+          if (result.ok) {
+            void refetchEvents();
+          }
+        },
+      });
+    },
+    [isOffline, orgId, refetchEvents, user?.id],
   );
 
   // Derive user identity for child tabs
@@ -460,6 +484,7 @@ export default function HomeScreen() {
           onEventPress={(id: string) =>
             handleNavigate(`/(app)/(drawer)/${orgSlug}/events/${id}`)
           }
+          onEventRsvp={handleEventRsvp}
           onAnnouncementPress={(id: string) =>
             handleNavigate(`/(app)/(drawer)/${orgSlug}/announcements/${id}`)
           }

@@ -31,6 +31,7 @@ import { AnnouncementCardCompact } from "@/components/cards/AnnouncementCard";
 import type { FeedPost } from "@/types/feed";
 import type { EventCardEvent } from "@/components/cards/EventCard";
 import type { AnnouncementCardAnnouncement } from "@/components/cards/AnnouncementCard";
+import type { RsvpStatus } from "@teammeet/core";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 
@@ -51,6 +52,7 @@ interface FeedTabProps {
   upNextEvent?: EventCardEvent | null;
   pinnedAnnouncement?: AnnouncementCardAnnouncement | null;
   onEventPress?: (eventId: string) => void;
+  onEventRsvp?: (eventId: string, status: RsvpStatus) => void;
   onAnnouncementPress?: (announcementId: string) => void;
   onSeeAllEvents?: () => void;
   onSeeAllAnnouncements?: () => void;
@@ -76,6 +78,7 @@ export function FeedTab({
   upNextEvent,
   pinnedAnnouncement,
   onEventPress,
+  onEventRsvp,
   onAnnouncementPress,
   onSeeAllEvents,
   onSeeAllAnnouncements,
@@ -278,6 +281,7 @@ export function FeedTab({
               <EventCard
                 event={upNextEvent}
                 onPress={() => onEventPress?.(upNextEvent.id)}
+                onRSVP={(status) => onEventRsvp?.(upNextEvent.id, status)}
               />
             </View>
           </View>
@@ -323,6 +327,7 @@ export function FeedTab({
       upNextEvent,
       pinnedAnnouncement,
       onEventPress,
+      onEventRsvp,
       onAnnouncementPress,
       onSeeAllEvents,
       onSeeAllAnnouncements,

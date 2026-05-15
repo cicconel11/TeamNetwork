@@ -259,10 +259,6 @@ export default function EventDetailScreen() {
   const [savingTrack, setSavingTrack] = useState(false);
   const { user } = useAuth();
 
-  const rsvp = useRsvp(eventId, orgId, {
-    initialStatus: event?.user_rsvp_status ?? null,
-  });
-
   const fetchRsvps = useCallback(async () => {
     if (!eventId || !orgId) return;
     const { data: rsvpData, error: rsvpError } = await supabase
@@ -287,6 +283,16 @@ export default function EventDetailScreen() {
       );
     }
   }, [eventId, orgId]);
+
+  const currentUserRsvpStatus = useMemo(
+    () => rsvps.find((row) => row.user_id === user?.id)?.status ?? null,
+    [rsvps, user?.id],
+  );
+
+  const rsvp = useRsvp(eventId, orgId, {
+    initialStatus: currentUserRsvpStatus,
+    onSaved: fetchRsvps,
+  });
 
   // Whether THIS user has opted into Live Activity tracking for this event.
   // Independent fetch from fetchRsvps so the toggle state survives unrelated
@@ -802,4 +808,3 @@ export default function EventDetailScreen() {
     </View>
   );
 }
-

@@ -13,6 +13,8 @@ export interface UseRsvpOptions {
    * `events_with_user_rsvp` RPC). Used as the optimistic baseline.
    */
   initialStatus?: RsvpStatus | null;
+  /** Called after the RSVP write succeeds so screens can refresh derived data. */
+  onSaved?: (status: RsvpStatus) => void | Promise<void>;
 }
 
 interface UseRsvpReturn {
@@ -135,10 +137,12 @@ export function useRsvp(
 ): UseRsvpReturn {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const initialStatus = options?.initialStatus ?? null;
+  const onSaved = options?.onSaved;
 
   const isMountedRef = useRef(true);
   const inFlightRef = useRef(false);
-  const initial = normalizeRsvpStatus(options?.initialStatus ?? null);
+  const initial = normalizeRsvpStatus(initialStatus);
   const [status, setStatus] = useState<RsvpStatus | null>(initial);
   const [saving, setSaving] = useState(false);
   // Stable handle on the latest status so `setRsvp` doesn't have to
@@ -158,8 +162,8 @@ export function useRsvp(
   // Sync with caller-provided initial status (e.g. when the parent's data
   // refetches and surfaces a new value).
   useEffect(() => {
-    setStatus(normalizeRsvpStatus(options?.initialStatus ?? null));
-  }, [options?.initialStatus]);
+    setStatus(normalizeRsvpStatus(initialStatus));
+  }, [initialStatus]);
 
   const setRsvp = useCallback(
     async (
@@ -189,13 +193,15 @@ export function useRsvp(
       if (!result.ok) {
         if (isMountedRef.current) setStatus(previous);
         showToast("Couldn't save RSVP", "error");
+      } else {
+        await onSaved?.(next);
       }
 
       inFlightRef.current = false;
       if (isMountedRef.current) setSaving(false);
       return result;
     },
-    [eventId, organizationId, userId],
+    [eventId, onSaved, organizationId, userId],
   );
 
   const promptRsvp = useCallback(() => {
