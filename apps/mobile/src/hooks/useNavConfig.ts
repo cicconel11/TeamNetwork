@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
-import { fetchWithAuth } from "@/lib/web-api";
-import type { OrgRole } from "@teammeet/core";
+import { normalizeRole, roleFlags, type OrgRole } from "@teammeet/core";
+import type { Json } from "@teammeet/types";
 import * as sentry from "@/lib/analytics/sentry";
 
 export interface NavConfigEntry {
@@ -13,6 +13,68 @@ export interface NavConfigEntry {
 }
 
 export type NavConfig = Record<string, NavConfigEntry>;
+
+const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni", "parent"];
+const ALLOWED_NAV_KEYS = new Set([
+  "dashboard",
+  "/members",
+  "/parents",
+  "/chat",
+  "/alumni",
+  "/mentorship",
+  "/workouts",
+  "/competition",
+  "/events",
+  "/announcements",
+  "/philanthropy",
+  "/donations",
+  "/expenses",
+  "/records",
+  "/schedules",
+  "/forms",
+  "/settings",
+]);
+
+function sanitizeNavConfig(config: NavConfig): NavConfig {
+  const sanitized: NavConfig = {};
+
+  for (const [href, entry] of Object.entries(config)) {
+    if (!ALLOWED_NAV_KEYS.has(href) || !entry || typeof entry !== "object") continue;
+
+    const clean: NavConfigEntry = {};
+    if (typeof entry.label === "string" && entry.label.trim()) {
+      clean.label = entry.label.trim().slice(0, 80);
+    }
+    if (entry.hidden === true) {
+      clean.hidden = true;
+    }
+    if (Array.isArray(entry.hiddenForRoles)) {
+      const roles = entry.hiddenForRoles.filter((role): role is OrgRole =>
+        ALLOWED_ROLES.includes(role)
+      );
+      if (roles.length) {
+        clean.hiddenForRoles = Array.from(new Set(roles));
+      }
+    }
+    if (Array.isArray(entry.editRoles)) {
+      const roles = entry.editRoles.filter((role): role is OrgRole =>
+        ALLOWED_ROLES.includes(role)
+      );
+      if (roles.length) {
+        clean.editRoles = Array.from(new Set([...roles, "admin"] as OrgRole[]));
+      }
+    }
+    if (typeof entry.order === "number" && Number.isInteger(entry.order) && entry.order >= 0) {
+      clean.order = Math.min(entry.order, 100);
+    }
+
+    if (Object.keys(clean).length > 0) {
+      sanitized[href] = clean;
+    }
+  }
+
+  return sanitized;
+}
 
 interface UseNavConfigReturn {
   navConfig: NavConfig;
@@ -117,24 +179,33 @@ export function useNavConfig(orgId: string | null): UseNavConfigReturn {
       try {
         setSaving(true);
 
-        const response = await fetchWithAuth(`/api/organizations/${orgId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ navConfig: config }),
-        });
-
-        const data = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Unable to save navigation settings");
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData.user) {
+          throw new Error("Not authenticated");
         }
 
-        // Update local state with the sanitized config from server
-        if (isMountedRef.current && data?.navConfig) {
-          setNavConfig(data.navConfig);
-        } else if (isMountedRef.current) {
-          // Fallback: use the config we sent
-          setNavConfig(config);
+        const { data: roleData, error: roleError } = await supabase
+          .from("user_organization_roles")
+          .select("role")
+          .eq("user_id", userData.user.id)
+          .eq("organization_id", orgId)
+          .eq("status", "active")
+          .single();
+        if (roleError || !roleFlags(normalizeRole(roleData?.role)).isAdmin) {
+          throw new Error("Only admins can update navigation settings");
+        }
+
+        const sanitizedConfig = sanitizeNavConfig(config);
+        const { error: updateError } = await supabase
+          .from("organizations")
+          .update({ nav_config: sanitizedConfig as Json })
+          .eq("id", orgId);
+        if (updateError) {
+          throw updateError;
+        }
+
+        if (isMountedRef.current) {
+          setNavConfig(sanitizedConfig);
         }
 
         return { success: true };
