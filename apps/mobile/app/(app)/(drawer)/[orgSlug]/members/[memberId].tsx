@@ -4,13 +4,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Mail, Share as ShareIcon, Linkedin } from "lucide-react-native";
+import { ChevronLeft, Mail, MessageCircle, Share as ShareIcon, Linkedin } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
+import { useAuth } from "@/hooks/useAuth";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { openEmailAddress, openHttpsUrl } from "@/lib/url-safety";
+import { ensureMobileDirectChatGroup } from "@/lib/chat-helpers";
+import { showToast } from "@/components/ui/Toast";
 
 const DETAIL_COLORS = {
   background: "#ffffff",
@@ -34,15 +37,18 @@ interface Member {
   graduation_year: number | null;
   role: string | null;
   linkedin_url: string | null;
+  user_id: string | null;
 }
 
 export default function MemberProfileScreen() {
   const { memberId } = useLocalSearchParams<{ memberId: string }>();
-  const { orgId } = useOrg();
+  const { orgId, orgSlug } = useOrg();
+  const { user } = useAuth();
   const router = useRouter();
   const styles = useMemo(() => createStyles(), []);
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
+  const [openingChat, setOpeningChat] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,7 +59,7 @@ export default function MemberProfileScreen() {
         setLoading(true);
         const { data, error: memberError } = await supabase
           .from("members")
-          .select("id, first_name, last_name, email, photo_url, graduation_year, role, linkedin_url")
+          .select("id, first_name, last_name, email, photo_url, graduation_year, role, linkedin_url, user_id")
           .eq("id", memberId)
           .eq("organization_id", orgId)
           .is("deleted_at", null)
@@ -86,6 +92,34 @@ export default function MemberProfileScreen() {
   const handleLinkedIn = () => {
     if (member?.linkedin_url) {
       void openHttpsUrl(member.linkedin_url);
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!member || !orgId || !orgSlug || !user?.id || openingChat) return;
+
+    if (!member.user_id) {
+      showToast("This member hasn't linked an app account yet.", "info");
+      return;
+    }
+
+    setOpeningChat(true);
+    try {
+      const result = await ensureMobileDirectChatGroup(supabase, {
+        organizationId: orgId,
+        currentUserId: user.id,
+        recipientUserId: member.user_id,
+        recipientDisplayName: getDisplayName(),
+      });
+
+      if (!result.ok) {
+        showToast(result.error, "error");
+        return;
+      }
+
+      router.push(`/(app)/${orgSlug}/chat/${result.chatGroupId}`);
+    } finally {
+      setOpeningChat(false);
     }
   };
 
@@ -166,6 +200,28 @@ export default function MemberProfileScreen() {
           <Text style={styles.role}>{getRoleLabel(member.role)}</Text>
           {member.graduation_year && (
             <Text style={styles.year}>Class of {member.graduation_year}</Text>
+          )}
+
+          {member.user_id && member.user_id !== user?.id && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.messageButton,
+                (pressed || openingChat) && { opacity: 0.75 },
+              ]}
+              onPress={handleMessage}
+              disabled={openingChat}
+              accessibilityRole="button"
+              accessibilityLabel={`Message ${getDisplayName()}`}
+            >
+              {openingChat ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <MessageCircle size={20} color="#ffffff" />
+              )}
+              <Text style={styles.messageButtonText}>
+                {openingChat ? "Opening..." : "Message"}
+              </Text>
+            </Pressable>
           )}
         </View>
 
@@ -285,6 +341,23 @@ const createStyles = () =>
       ...TYPOGRAPHY.bodySmall,
       color: DETAIL_COLORS.secondaryText,
       marginTop: 2,
+    },
+    messageButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: SPACING.sm,
+      marginTop: SPACING.md,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.lg,
+      backgroundColor: DETAIL_COLORS.success,
+      minWidth: 160,
+    },
+    messageButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+      fontWeight: "600",
     },
     contactSection: {
       backgroundColor: DETAIL_COLORS.card,
