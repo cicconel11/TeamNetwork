@@ -4,24 +4,19 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Stack, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft } from "lucide-react-native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { supabase } from "@/lib/supabase";
-import { SPACING, RADIUS } from "@/lib/design-tokens";
-import { TYPOGRAPHY } from "@/lib/typography";
-import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
-import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { borderRadius, fontSize, fontWeight, spacing, type ThemeColors } from "@/lib/theme";
 import { formatDatePickerLabel, formatTimePickerLabel } from "@/lib/date-format";
-import { APP_CHROME } from "@/lib/chrome";
 
 type PickerTarget = "start-date" | "start-time" | "end-date" | "end-time";
 
@@ -43,145 +38,8 @@ export default function NewPhilanthropyEventScreen() {
   const router = useRouter();
   const { orgId, orgSlug } = useOrg();
   const { isAdmin, isActiveMember, isLoading: roleLoading } = useOrgRole();
-  const { neutral, semantic } = useAppColorScheme();
-  const styles = useThemedStyles((n, s) => ({
-    container: {
-      flex: 1,
-      backgroundColor: n.background,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.xs,
-    },
-    headerSafeArea: {},
-    navHeader: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      padding: SPACING.xs,
-      marginLeft: -SPACING.xs,
-    },
-    navTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-      flex: 1,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: SPACING.xl,
-      gap: SPACING.lg,
-    },
-    header: {
-      gap: SPACING.xs,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.headlineLarge,
-      color: n.foreground,
-    },
-    headerSubtitle: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: n.secondary,
-    },
-    errorCard: {
-      backgroundColor: s.errorLight,
-      borderRadius: RADIUS.md,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: s.error,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: s.error,
-    },
-    loadingState: {
-      alignItems: "center" as const,
-      gap: SPACING.sm,
-    },
-    loadingText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: n.secondary,
-    },
-    fieldGroup: {
-      gap: SPACING.xs,
-    },
-    fieldLabel: {
-      ...TYPOGRAPHY.labelMedium,
-      color: n.secondary,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: n.border,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      ...TYPOGRAPHY.bodyMedium,
-      color: n.foreground,
-      backgroundColor: n.surface,
-    },
-    textArea: {
-      minHeight: 140,
-    },
-    inlineRow: {
-      flexDirection: "row" as const,
-      gap: SPACING.sm,
-    },
-    selectField: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: n.border,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      backgroundColor: n.surface,
-    },
-    selectFieldPressed: {
-      opacity: 0.9,
-    },
-    selectFieldText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: n.foreground,
-    },
-    pickerContainer: {
-      borderWidth: 1,
-      borderColor: n.border,
-      borderRadius: RADIUS.md,
-      overflow: "hidden" as const,
-      backgroundColor: n.surface,
-    },
-    ghostButton: {
-      alignItems: "center" as const,
-      paddingVertical: SPACING.sm,
-      borderTopWidth: 1,
-      borderTopColor: n.border,
-    },
-    ghostButtonPressed: {
-      opacity: 0.85,
-    },
-    ghostButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: s.success,
-    },
-    primaryButton: {
-      backgroundColor: s.success,
-      borderRadius: RADIUS.md,
-      paddingVertical: SPACING.md,
-      alignItems: "center" as const,
-    },
-    primaryButtonPressed: {
-      opacity: 0.9,
-    },
-    primaryButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: "#ffffff",
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-  }));
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -194,32 +52,6 @@ export default function NewPhilanthropyEventScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const canEdit = isAdmin || isActiveMember;
-  const handleBack = () => {
-    router.replace(`/(app)/${orgSlug}/philanthropy`);
-  };
-
-  const renderHeader = () => (
-    <LinearGradient
-      colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
-      style={styles.headerGradient}
-    >
-      <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
-        <View style={styles.navHeader}>
-          <Pressable
-            onPress={handleBack}
-            style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Back to philanthropy"
-          >
-            <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
-          </Pressable>
-          <Text style={styles.navTitle} numberOfLines={1}>
-            New Philanthropy Event
-          </Text>
-        </View>
-      </SafeAreaView>
-    </LinearGradient>
-  );
 
   const pickerMode = useMemo(() => {
     if (!activePicker) return "date";
@@ -336,54 +168,49 @@ export default function NewPhilanthropyEventScreen() {
 
   if (roleLoading) {
     return (
-      <View style={styles.container}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+      >
         <Stack.Screen options={{ title: "New Philanthropy Event" }} />
-        {renderHeader()}
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.loadingState}>
-            <ActivityIndicator color={semantic.success} />
-            <Text style={styles.loadingText}>Loading...</Text>
-          </View>
-        </ScrollView>
-      </View>
+        <View style={styles.loadingState}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </ScrollView>
     );
   }
 
   if (!canEdit) {
     return (
-      <View style={styles.container}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+      >
         <Stack.Screen options={{ title: "New Philanthropy Event" }} />
-        {renderHeader()}
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.errorCard}>
-            <Text selectable style={styles.errorText}>
-              You do not have access to add philanthropy events.
-            </Text>
-          </View>
-        </ScrollView>
-      </View>
+        <View style={styles.errorCard}>
+          <Text selectable style={styles.errorText}>
+            You do not have access to add philanthropy events.
+          </Text>
+        </View>
+      </ScrollView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+    >
       <Stack.Screen options={{ title: "New Philanthropy Event" }} />
-      {renderHeader()}
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>New Philanthropy Event</Text>
-          <Text style={styles.headerSubtitle}>Add a volunteer or community service event</Text>
-        </View>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>New Philanthropy Event</Text>
+        <Text style={styles.headerSubtitle}>Add a volunteer or community service event</Text>
+      </View>
 
       {error ? (
         <View style={styles.errorCard}>
@@ -399,7 +226,7 @@ export default function NewPhilanthropyEventScreen() {
           value={title}
           onChangeText={setTitle}
           placeholder="e.g., Charity 5K Run, Food Bank Volunteering"
-          placeholderTextColor={neutral.placeholder}
+          placeholderTextColor={colors.mutedForeground}
           style={styles.input}
         />
       </View>
@@ -410,7 +237,7 @@ export default function NewPhilanthropyEventScreen() {
           value={description}
           onChangeText={setDescription}
           placeholder="Describe the philanthropy event, what volunteers will be doing, any requirements..."
-          placeholderTextColor={neutral.placeholder}
+          placeholderTextColor={colors.mutedForeground}
           multiline
           textAlignVertical="top"
           style={[styles.input, styles.textArea]}
@@ -499,7 +326,7 @@ export default function NewPhilanthropyEventScreen() {
           value={location}
           onChangeText={setLocation}
           placeholder="e.g., Philadelphia Food Bank, Schuylkill River Trail"
-          placeholderTextColor={neutral.placeholder}
+          placeholderTextColor={colors.mutedForeground}
           style={styles.input}
         />
       </View>
@@ -514,12 +341,135 @@ export default function NewPhilanthropyEventScreen() {
         ]}
       >
         {isSaving ? (
-          <ActivityIndicator color="#ffffff" />
+          <ActivityIndicator color={colors.primaryForeground} />
         ) : (
           <Text style={styles.primaryButtonText}>Create event</Text>
         )}
       </Pressable>
-      </ScrollView>
-    </View>
+    </ScrollView>
   );
 }
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      padding: spacing.md,
+      paddingBottom: spacing.xl,
+      gap: spacing.lg,
+    },
+    header: {
+      gap: spacing.xs,
+    },
+    headerTitle: {
+      fontSize: fontSize["2xl"],
+      fontWeight: fontWeight.bold,
+      color: colors.foreground,
+    },
+    headerSubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    errorCard: {
+      backgroundColor: `${colors.error}14`,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: `${colors.error}55`,
+    },
+    errorText: {
+      fontSize: fontSize.sm,
+      color: colors.error,
+    },
+    loadingState: {
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    loadingText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    fieldGroup: {
+      gap: spacing.xs,
+    },
+    fieldLabel: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: colors.mutedForeground,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      fontSize: fontSize.base,
+      color: colors.foreground,
+      backgroundColor: colors.background,
+    },
+    textArea: {
+      minHeight: 140,
+    },
+    inlineRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    selectField: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: colors.background,
+    },
+    selectFieldPressed: {
+      opacity: 0.9,
+    },
+    selectFieldText: {
+      fontSize: fontSize.base,
+      color: colors.foreground,
+    },
+    pickerContainer: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.md,
+      overflow: "hidden",
+      backgroundColor: colors.card,
+    },
+    ghostButton: {
+      alignItems: "center",
+      paddingVertical: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    ghostButtonPressed: {
+      opacity: 0.85,
+    },
+    ghostButtonText: {
+      fontSize: fontSize.base,
+      color: colors.primary,
+      fontWeight: fontWeight.semibold,
+    },
+    primaryButton: {
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.md,
+      paddingVertical: spacing.sm,
+      alignItems: "center",
+      borderCurve: "continuous",
+    },
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: colors.primaryForeground,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+  });
