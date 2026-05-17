@@ -45,6 +45,7 @@
     "@teammeet/core": "workspace:*",
     "@teammeet/types": "workspace:*",
     "@teammeet/validation": "workspace:*",
+    "@teammeet/wallet": "workspace:*",
     "animejs": "^4.2.2",
     "cheerio": "^1.2.0",
     "cmdk": "^1.1.1",
