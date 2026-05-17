@@ -23,6 +23,7 @@ import {
   FileText,
   ShieldOff,
   Trash2,
+  Wallet,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -1084,6 +1085,28 @@ export default function ProfileScreen() {
               <View style={styles.groupedListWrap}>
                 <Text style={styles.groupedListHeader}>Account</Text>
                 <View style={styles.groupedList}>
+                  {Platform.OS === "ios" && routeSlug ? (
+                    <>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Add member card to Apple Wallet"
+                        onPress={() => {
+                          router.push(
+                            `/(app)/(drawer)/${routeSlug}/wallet/add-member-card` as any,
+                          );
+                        }}
+                        style={({ pressed }) => [
+                          styles.groupedRow,
+                          pressed && styles.groupedRowPressed,
+                        ]}
+                      >
+                        <Wallet size={20} color={neutral.foreground} />
+                        <Text style={styles.groupedRowLabel}>Add to Apple Wallet</Text>
+                        <ChevronRight size={18} color={neutral.placeholder} />
+                      </Pressable>
+                      <View style={styles.groupedDivider} />
+                    </>
+                  ) : null}
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Terms of Service"

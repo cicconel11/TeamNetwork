@@ -199,6 +199,13 @@ function OrgLayoutInner() {
         }}
       />
       <Stack.Screen
+        name="wallet/add-member-card"
+        options={{
+          headerShown: false,
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
         name="expenses"
         options={{
           headerShown: false,
