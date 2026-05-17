@@ -2,6 +2,7 @@ import type OpenAI from "openai";
 import { z } from "zod";
 import { createZaiClient, getZaiImageModel, getZaiModel } from "@/lib/ai/client";
 import { chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
+import { Profiles, runLlmCompletion, type LlmProfile } from "@/lib/ai/llm";
 
 const MAX_SOURCE_TEXT_CHARS = 12_000;
 const MAX_SOURCE_TEXT_CHUNK_COUNT = 4;
@@ -246,6 +247,7 @@ export async function extractScheduleFromImage(
     temperature: 0.2,
     orgId: normalizedContext.orgId,
     spendBypass: normalizedContext.spendBypass,
+    isImage: true,
   });
 
   try {
@@ -262,6 +264,7 @@ export async function extractScheduleFromImage(
       temperature: 0,
       orgId: normalizedContext.orgId,
       spendBypass: normalizedContext.spendBypass,
+      isImage: true,
     });
 
     return parseExtractionResponse(retryResponse, normalizedContext);
@@ -275,45 +278,53 @@ async function requestExtraction(params: {
   temperature: number;
   orgId?: string;
   spendBypass?: boolean;
+  isImage?: boolean;
 }): Promise<string> {
-  const { client, model, messages, temperature, orgId, spendBypass } = params;
+  const { client, model, messages, temperature, orgId, spendBypass, isImage } = params;
   if (orgId) await checkAiSpend(orgId, { bypass: spendBypass });
 
-  const chargeUsage = async (usage?: OpenAI.Completions.CompletionUsage | null) => {
+  const chargeUsage = async (
+    usage: OpenAI.Completions.CompletionUsage | null | undefined,
+    actualModel: string
+  ) => {
     if (!orgId || !usage) return;
     await chargeAiSpend({
       orgId,
-      model,
+      model: actualModel,
       inputTokens: usage.prompt_tokens ?? 0,
       outputTokens: usage.completion_tokens ?? 0,
       bypass: spendBypass,
     });
   };
 
-  try {
-    const completion = await client.chat.completions.create({
-      model,
-      temperature,
-      max_tokens: 2500,
-      response_format: { type: "json_object" },
-      messages,
-    });
+  const baseProfile: LlmProfile = isImage
+    ? Profiles.scheduleExtractImage(model)
+    : { ...Profiles.scheduleExtract(), model };
 
-    await chargeUsage(completion.usage);
+  const profileWithJson: LlmProfile = {
+    ...baseProfile,
+    responseFormat: { type: "json_object" },
+  };
+
+  try {
+    const { completion, actualModel } = await runLlmCompletion(profileWithJson, {
+      messages,
+      overrides: { temperature },
+      client,
+    });
+    await chargeUsage(completion.usage, actualModel);
     return readCompletionText(completion);
   } catch (error) {
     if (!supportsPromptOnlyJsonFallback(error)) {
       throw error;
     }
 
-    const completion = await client.chat.completions.create({
-      model,
-      temperature,
-      max_tokens: 2500,
+    const { completion, actualModel } = await runLlmCompletion(baseProfile, {
       messages,
+      overrides: { temperature },
+      client,
     });
-
-    await chargeUsage(completion.usage);
+    await chargeUsage(completion.usage, actualModel);
     return readCompletionText(completion);
   }
 }
