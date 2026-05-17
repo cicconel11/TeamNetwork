@@ -118,16 +118,72 @@ test("classifySafety delegates long content to judge", async () => {
   assert.equal(result.usedJudge, true);
 });
 
-test("classifySafety fails open on judge error", async () => {
+test("classifySafety fails closed to controversial on judge error and fires ops event", async () => {
   const long = "This is a longer benign message. ".repeat(5);
+  const ops: Array<[string, Record<string, unknown>, string | null | undefined]> = [];
   const result = await classifySafety({
     content: long,
     judge: async () => {
       throw new Error("network down");
     },
+    trackOpsEvent: (event, props, orgId) => {
+      ops.push([event, props, orgId ?? null]);
+    },
+  });
+  assert.equal(result.verdict, "controversial");
+  assert.ok(result.categories.includes("judge_error"));
+  assert.ok(result.categories.includes("fail_mode:controversial"));
+  assert.equal(ops.length, 1);
+  assert.equal(ops[0][0], "api_error");
+  assert.equal(ops[0][1].error_code, "safety_judge_throw");
+});
+
+test("classifySafety failMode=open restores legacy safe verdict and still fires ops event", async () => {
+  const long = "This is a longer benign message. ".repeat(5);
+  const ops: Array<[string, Record<string, unknown>, string | null | undefined]> = [];
+  const result = await classifySafety({
+    content: long,
+    failMode: "open",
+    judge: async () => {
+      throw new Error("network down");
+    },
+    trackOpsEvent: (event, props, orgId) => {
+      ops.push([event, props, orgId ?? null]);
+    },
   });
   assert.equal(result.verdict, "safe");
-  assert.ok(result.categories.includes("judge_error"));
+  assert.ok(result.categories.includes("fail_mode:open"));
+  assert.equal(ops[0][1].error_code, "safety_judge_throw");
+});
+
+test("classifySafety fails closed on judge parse failure and fires ops event", async () => {
+  const long = "This is a longer benign message. ".repeat(5);
+  const ops: Array<[string, Record<string, unknown>, string | null | undefined]> = [];
+  const result = await classifySafety({
+    content: long,
+    judge: async () => ({ kind: "parse_failed", raw: "junk" }),
+    trackOpsEvent: (event, props, orgId) => {
+      ops.push([event, props, orgId ?? null]);
+    },
+  });
+  assert.equal(result.verdict, "controversial");
+  assert.ok(result.categories.includes("judge_parse_failed"));
+  assert.equal(ops[0][1].error_code, "safety_judge_parse_failed");
+});
+
+test("classifySafety spend cap returns safe with telemetry", async () => {
+  const long = "This is a longer benign message. ".repeat(5);
+  const ops: Array<[string, Record<string, unknown>, string | null | undefined]> = [];
+  const result = await classifySafety({
+    content: long,
+    judge: async () => ({ kind: "cap_reached" }),
+    trackOpsEvent: (event, props, orgId) => {
+      ops.push([event, props, orgId ?? null]);
+    },
+  });
+  assert.equal(result.verdict, "safe");
+  assert.deepEqual(result.categories, ["judge_cap_reached"]);
+  assert.equal(ops[0][1].error_code, "safety_judge_cap_reached");
 });
 
 test("parseJudgeResponse tolerates prose wrappers", () => {
@@ -136,13 +192,14 @@ test("parseJudgeResponse tolerates prose wrappers", () => {
   );
   assert.equal(r.verdict, "unsafe");
   assert.deepEqual(r.categories, ["toxicity"]);
+  assert.equal(r.parseOk, true);
 });
 
-test("parseJudgeResponse defaults to safe on malformed JSON", () => {
-  assert.deepEqual(parseJudgeResponse("no json here"), {
-    verdict: "safe",
-    categories: [],
-  });
+test("parseJudgeResponse returns parseOk=false on malformed JSON", () => {
+  const r = parseJudgeResponse("no json here");
+  assert.equal(r.verdict, "safe");
+  assert.deepEqual(r.categories, []);
+  assert.equal(r.parseOk, false);
 });
 
 test("SAFETY_FALLBACK_TEXT is non-empty", () => {

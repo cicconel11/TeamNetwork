@@ -48,7 +48,7 @@ const SOFT_PATTERNS: Array<{ reason: string; pattern: RegExp }> = [
 export const REDACTED_HISTORY_MESSAGE =
   "[Earlier user message withheld from model context because it attempted to override assistant behavior.]";
 
-function normalizeTransportNoise(message: string): string {
+export function normalizeTransportNoise(message: string): string {
   return message
     .normalize("NFC")
     .replace(/\r\n?/g, "\n")
