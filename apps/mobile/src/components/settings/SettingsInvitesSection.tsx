@@ -6,6 +6,7 @@ import {
   TextInput,
   Pressable,
   Alert,
+  Platform,
 } from "react-native";
 import {
   Link as LinkIcon,
@@ -265,7 +266,12 @@ export function SettingsInvitesSection({ orgId, isAdmin, subscription }: Props) 
       subscription.alumniLimit !== null &&
       subscription.alumniCount >= subscription.alumniLimit
     ) {
-      Alert.alert("Alumni Limit Reached", "Upgrade your plan to invite more alumni.");
+      Alert.alert(
+        "Alumni Limit Reached",
+        Platform.OS === "ios"
+          ? "You've reached your organization's alumni limit. Contact your administrator to add capacity."
+          : "Upgrade your plan to invite more alumni."
+      );
       return;
     }
 

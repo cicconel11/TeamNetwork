@@ -7,6 +7,7 @@ import {
   Pressable,
   RefreshControl,
   Linking,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { useNavigation } from "expo-router";
@@ -353,10 +354,15 @@ export default function BillingScreen() {
     setRefreshing(false);
   }, [refetchSubscription]);
 
+  const isIOS = Platform.OS === "ios";
+
   const handleManageBillingInWeb = useCallback(() => {
-    const url = `${getWebAppUrl()}/${orgSlug}/settings/billing`;
-    Linking.openURL(url);
-  }, [orgSlug]);
+    // On iOS, App Review anti-steering rules (3.1.1) forbid linking users
+    // directly to a paywall page. Land on the generic org settings page; an
+    // admin can navigate to billing from there if needed.
+    const path = isIOS ? `/${orgSlug}/settings` : `/${orgSlug}/settings/billing`;
+    Linking.openURL(`${getWebAppUrl()}${path}`);
+  }, [orgSlug, isIOS]);
 
   const formatStatus = useCallback(
     (status: string): { label: string; color: string; bgColor: string } => {
@@ -390,7 +396,7 @@ export default function BillingScreen() {
       : 0;
 
   const estimatedPrice =
-    subscription && normalizedBucket !== "none"
+    !isIOS && subscription && normalizedBucket !== "none"
       ? getTotalPrice("month" as SubscriptionInterval, normalizedBucket)
       : null;
 
@@ -580,7 +586,7 @@ export default function BillingScreen() {
                   </View>
                 )}
 
-                {usagePercent >= 90 && (
+                {usagePercent >= 90 && !isIOS && (
                   <View style={styles.warningBanner}>
                     <TrendingUp size={16} color={semantic.warning} />
                     <Text style={styles.warningText}>
@@ -596,13 +602,16 @@ export default function BillingScreen() {
                 onPress={handleManageBillingInWeb}
               >
                 <CreditCard size={20} color={neutral.surface} />
-                <Text style={styles.manageBillingText}>Manage Billing in Web</Text>
+                <Text style={styles.manageBillingText}>
+                  {isIOS ? "Manage organization on web" : "Manage Billing in Web"}
+                </Text>
                 <ExternalLink size={18} color={neutral.surface} />
               </Pressable>
 
               <Text style={styles.hintText}>
-                To change your plan, update payment methods, or view invoices, visit the billing
-                settings on the web.
+                {isIOS
+                  ? "Organization settings are managed on the web."
+                  : "To change your plan, update payment methods, or view invoices, visit the billing settings on the web."}
               </Text>
             </>
           ) : (
@@ -610,15 +619,19 @@ export default function BillingScreen() {
               <CreditCard size={48} color={neutral.muted} />
               <Text style={styles.noSubscriptionTitle}>No Active Subscription</Text>
               <Text style={styles.noSubscriptionText}>
-                Set up billing from the web to access all features.
+                {isIOS
+                  ? "Subscription is managed by your organization administrator on the web."
+                  : "Set up billing from the web to access all features."}
               </Text>
-              <Pressable
-                style={({ pressed }) => [styles.setupButton, pressed && { opacity: 0.9 }]}
-                onPress={handleManageBillingInWeb}
-              >
-                <Text style={styles.setupButtonText}>Set Up Billing</Text>
-                <ExternalLink size={16} color={neutral.surface} />
-              </Pressable>
+              {!isIOS && (
+                <Pressable
+                  style={({ pressed }) => [styles.setupButton, pressed && { opacity: 0.9 }]}
+                  onPress={handleManageBillingInWeb}
+                >
+                  <Text style={styles.setupButtonText}>Set Up Billing</Text>
+                  <ExternalLink size={16} color={neutral.surface} />
+                </Pressable>
+              )}
             </View>
           )}
         </ScrollView>
