@@ -28,6 +28,7 @@ interface OrgContextValue {
   orgPrimaryColor: string | null;
   orgSecondaryColor: string | null;
   hasParentsAccess: boolean;
+  donationEligibleIos: boolean;
   userRole: NormalizedRole;
   status: OrgAccessStatus;
   isLoading: boolean;
@@ -74,6 +75,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [orgPrimaryColor, setOrgPrimaryColor] = useState<string | null>(null);
   const [orgSecondaryColor, setOrgSecondaryColor] = useState<string | null>(null);
   const [hasParentsAccess, setHasParentsAccess] = useState(false);
+  const [donationEligibleIos, setDonationEligibleIos] = useState(false);
   const [userRole, setUserRole] = useState<NormalizedRole>(null);
   const [status, setStatus] = useState<OrgAccessStatus>("loading");
   const [isLoading, setIsLoading] = useState(true);
@@ -96,11 +98,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       try {
         // Fetch org and user's membership in parallel
         const [orgResult, userResult] = await Promise.all([
-          supabase
+          // donation_eligible_ios is not in generated types yet; cast through any
+          (supabase as any)
             .from("organizations")
-            .select("id, name, logo_url, primary_color, secondary_color")
+            .select("id, name, logo_url, primary_color, secondary_color, donation_eligible_ios")
             .eq("slug", orgSlug)
-            .single(),
+            .single() as Promise<{ data: { id: string; name: string; logo_url: string | null; primary_color: string | null; secondary_color: string | null; donation_eligible_ios: boolean | null } | null; error: { code?: string; message: string } | null }>,
           supabase.auth.getUser(),
         ]);
 
@@ -176,11 +179,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           (subscriptionData?.parents_bucket != null && subscriptionData.parents_bucket !== "none");
 
         setOrgId(fetchedOrgId);
-        setOrgName(orgResult.data.name ?? null);
-        setOrgLogoUrl(orgResult.data.logo_url ?? null);
-        setOrgPrimaryColor(orgResult.data.primary_color ?? null);
-        setOrgSecondaryColor(orgResult.data.secondary_color ?? null);
+        setOrgName(orgResult.data?.name ?? null);
+        setOrgLogoUrl(orgResult.data?.logo_url ?? null);
+        setOrgPrimaryColor(orgResult.data?.primary_color ?? null);
+        setOrgSecondaryColor(orgResult.data?.secondary_color ?? null);
         setHasParentsAccess(parentsEnabled);
+        setDonationEligibleIos(Boolean(orgResult.data?.donation_eligible_ios));
         setUserRole(normalizeRole(roleResult.data.role));
         setStatus("ready");
       } catch (err) {
@@ -210,6 +214,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     setOrgPrimaryColor(null);
     setOrgSecondaryColor(null);
     setHasParentsAccess(false);
+    setDonationEligibleIos(false);
     fetchOrgData();
 
     return () => {
@@ -236,11 +241,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     orgPrimaryColor,
     orgSecondaryColor,
     hasParentsAccess,
+    donationEligibleIos,
     userRole,
     status,
     isLoading,
     error,
-  }), [orgSlug, orgId, orgName, orgLogoUrl, orgPrimaryColor, orgSecondaryColor, hasParentsAccess, userRole, status, isLoading, error]);
+  }), [orgSlug, orgId, orgName, orgLogoUrl, orgPrimaryColor, orgSecondaryColor, hasParentsAccess, donationEligibleIos, userRole, status, isLoading, error]);
 
   return (
     <OrgContext.Provider value={value}>

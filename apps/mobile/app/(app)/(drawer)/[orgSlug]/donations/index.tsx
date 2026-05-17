@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  Platform,
   RefreshControl,
   Pressable,
 } from "react-native";
@@ -31,7 +32,8 @@ import { formatMonthDay } from "@/lib/date-format";
 import type { OrganizationDonation } from "@teammeet/types";
 
 export default function DonationsScreen() {
-  const { orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgSlug, orgName, orgLogoUrl, donationEligibleIos } = useOrg();
+  const showDonateCta = !(Platform.OS === "ios" && !donationEligibleIos);
   const router = useRouter();
   const navigation = useNavigation();
   const { isAdmin, permissions } = useOrgRole();
@@ -122,6 +124,29 @@ export default function DonationsScreen() {
     donateButtonText: {
       ...TYPOGRAPHY.titleSmall,
       color: "#ffffff",
+    },
+    webNotice: {
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: 4,
+    },
+    webNoticeTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    webNoticeBody: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+    },
+    webNoticeLink: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+      marginTop: SPACING.xs,
+      textDecorationLine: "underline" as const,
     },
     purposeSection: {
       backgroundColor: n.surface,
@@ -376,11 +401,31 @@ export default function DonationsScreen() {
         </View>
       </View>
 
-      {/* Make a Donation Button */}
-      <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>
-        <Plus size={20} color="#ffffff" />
-        <Text style={styles.donateButtonText}>Make a Donation</Text>
-      </Pressable>
+      {/* Make a Donation Button — hidden on iOS for orgs not verified as
+          donation-eligible (Apple Guideline 3.2.1(vi)); we surface a neutral
+          web-managed notice instead so the screen never dead-ends. */}
+      {showDonateCta ? (
+        <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>
+          <Plus size={20} color="#ffffff" />
+          <Text style={styles.donateButtonText}>Make a Donation</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.webNotice}>
+          <Text style={styles.webNoticeTitle}>Donations are managed on the web</Text>
+          <Text style={styles.webNoticeBody}>
+            Contributions for this organization are handled through its
+            website.
+          </Text>
+          <Pressable
+            onPress={() => {
+              const webUrl = getWebPath(orgSlug, "donations");
+              Linking.openURL(webUrl);
+            }}
+          >
+            <Text style={styles.webNoticeLink}>Open on web</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Purpose Breakdown */}
       {sortedPurposes.length > 0 && (
