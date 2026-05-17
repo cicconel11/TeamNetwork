@@ -8,11 +8,23 @@
 //
 // Verdicts: `safe | controversial | unsafe`. Only `unsafe` blocks.
 
-import type OpenAI from "openai";
-import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { AiCapReachedError, chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
+import { Profiles, runLlmCompletion } from "@/lib/ai/llm";
 
 export type SafetyVerdict = "safe" | "controversial" | "unsafe";
+
+export type SafetyFailMode = "block" | "controversial" | "open";
+
+export type SafetyTrackOpsEventFn = (
+  event: "api_error",
+  props: {
+    endpoint_group: string;
+    error_code: string;
+    http_status?: number;
+    retryable?: boolean;
+  },
+  orgId?: string | null
+) => void | Promise<void>;
 
 export interface ClassifySafetyInput {
   content: string;
@@ -25,6 +37,10 @@ export interface ClassifySafetyInput {
   /** Skip ledger write (dev-admin bypass). */
   spendBypass?: boolean;
   judge?: SafetyJudge;
+  /** Optional fail-mode override (default resolves from env). */
+  failMode?: SafetyFailMode;
+  /** Optional ops telemetry sink (fire-and-forget). */
+  trackOpsEvent?: SafetyTrackOpsEventFn;
 }
 
 export interface SafetyResult {
@@ -34,10 +50,15 @@ export interface SafetyResult {
   usedJudge: boolean;
 }
 
+export type JudgeOutcome =
+  | { kind: "ok"; verdict: SafetyVerdict; categories: string[] }
+  | { kind: "parse_failed"; raw: string }
+  | { kind: "cap_reached" };
+
 export type SafetyJudge = (
   prompt: string,
   content: string
-) => Promise<{ verdict: SafetyVerdict; categories: string[] }>;
+) => Promise<JudgeOutcome | { verdict: SafetyVerdict; categories: string[] }>;
 
 export const SAFETY_FALLBACK_TEXT =
   "I can't share that response. Try rephrasing or ask about your organization.";
@@ -178,33 +199,31 @@ async function defaultJudge(
   content: string,
   orgId?: string,
   spendBypass?: boolean
-): Promise<{ verdict: SafetyVerdict; categories: string[] }> {
-  const client: OpenAI = createZaiClient();
-  const model = process.env.SAFETY_JUDGE_MODEL || getZaiModel();
+): Promise<JudgeOutcome> {
   if (orgId) {
     try {
       await checkAiSpend(orgId, { bypass: spendBypass });
     } catch (err) {
       if (err instanceof AiCapReachedError) {
-        return { verdict: "safe", categories: [] };
+        return { kind: "cap_reached" };
       }
       throw err;
     }
   }
 
-  const completion = await client.chat.completions.create({
-    model,
-    temperature: 0,
+  const profile = Profiles.safetyJudge();
+  const { completion, actualModel } = await runLlmCompletion(profile, {
     messages: [
       { role: "system", content: prompt },
       { role: "user", content: `ASSISTANT RESPONSE:\n${content}` },
     ],
+    orgId,
   });
 
   if (orgId && completion.usage) {
     await chargeAiSpend({
       orgId,
-      model,
+      model: actualModel,
       inputTokens: completion.usage.prompt_tokens ?? 0,
       outputTokens: completion.usage.completion_tokens ?? 0,
       bypass: spendBypass,
@@ -212,30 +231,80 @@ async function defaultJudge(
   }
 
   const raw = completion.choices?.[0]?.message?.content ?? "";
-  return parseJudgeResponse(raw);
+  const parsed = parseJudgeResponse(raw);
+  if (!parsed.parseOk) {
+    return { kind: "parse_failed", raw };
+  }
+  return { kind: "ok", verdict: parsed.verdict, categories: parsed.categories };
 }
 
-export function parseJudgeResponse(raw: string): {
+function resolveFailMode(explicit?: SafetyFailMode): SafetyFailMode {
+  if (explicit) return explicit;
+  if (process.env.SAFETY_JUDGE_FAIL_OPEN === "1") return "open";
+  const env = process.env.SAFETY_JUDGE_FAIL_MODE;
+  if (env === "open" || env === "block" || env === "controversial") return env;
+  return "controversial";
+}
+
+function fallbackVerdictForFailMode(mode: SafetyFailMode): SafetyVerdict {
+  switch (mode) {
+    case "open":
+      return "safe";
+    case "block":
+      return "unsafe";
+    case "controversial":
+    default:
+      return "controversial";
+  }
+}
+
+function emitOpsEvent(
+  trackOpsEvent: SafetyTrackOpsEventFn | undefined,
+  errorCode: string,
+  orgId: string | undefined
+): void {
+  if (!trackOpsEvent) return;
+  try {
+    void Promise.resolve(
+      trackOpsEvent(
+        "api_error",
+        { endpoint_group: "ai_safety_judge", error_code: errorCode, retryable: false },
+        orgId ?? null
+      )
+    ).catch(() => {});
+  } catch {
+    // swallow
+  }
+}
+
+export interface ParsedJudgeResponse {
   verdict: SafetyVerdict;
   categories: string[];
-} {
+  parseOk: boolean;
+}
+
+export function parseJudgeResponse(raw: string): ParsedJudgeResponse {
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return { verdict: "safe", categories: [] };
+  if (!match) return { verdict: "safe", categories: [], parseOk: false };
   try {
     const parsed = JSON.parse(match[0]) as {
       verdict?: unknown;
       categories?: unknown;
     };
-    const verdict: SafetyVerdict =
-      parsed.verdict === "unsafe" || parsed.verdict === "controversial"
-        ? parsed.verdict
-        : "safe";
+    const verdictOk =
+      parsed.verdict === "safe" ||
+      parsed.verdict === "controversial" ||
+      parsed.verdict === "unsafe";
+    if (!verdictOk) {
+      return { verdict: "safe", categories: [], parseOk: false };
+    }
+    const verdict = parsed.verdict as SafetyVerdict;
     const categories = Array.isArray(parsed.categories)
       ? parsed.categories.filter((v): v is string => typeof v === "string")
       : [];
-    return { verdict, categories };
+    return { verdict, categories, parseOk: true };
   } catch {
-    return { verdict: "safe", categories: [] };
+    return { verdict: "safe", categories: [], parseOk: false };
   }
 }
 
@@ -287,27 +356,57 @@ export async function classifySafety(
     };
   }
 
+  const failMode = resolveFailMode(input.failMode);
+  const fallback = fallbackVerdictForFailMode(failMode);
+
   const judge =
     input.judge ?? ((p, c) => defaultJudge(p, c, input.orgId, input.spendBypass));
+
+  let outcome: JudgeOutcome;
   try {
-    const { verdict, categories: judgeCategories } = await judge(
-      buildSafetyJudgePrompt(),
-      content
-    );
-    return {
-      verdict,
-      categories: judgeCategories,
-      latencyMs: Date.now() - started,
-      usedJudge: true,
-    };
+    const raw = await judge(buildSafetyJudgePrompt(), content);
+    outcome = normalizeJudgeOutcome(raw);
   } catch {
-    // Judge failure: fail open to `safe` (primitives already caught hard
-    // cases). Caller still gets latency + audit row.
+    emitOpsEvent(input.trackOpsEvent, "safety_judge_throw", input.orgId);
     return {
-      verdict: "safe",
-      categories: ["judge_error"],
+      verdict: fallback,
+      categories: ["judge_error", `fail_mode:${failMode}`],
       latencyMs: Date.now() - started,
       usedJudge: true,
     };
   }
+
+  if (outcome.kind === "cap_reached") {
+    emitOpsEvent(input.trackOpsEvent, "safety_judge_cap_reached", input.orgId);
+    return {
+      verdict: "safe",
+      categories: ["judge_cap_reached"],
+      latencyMs: Date.now() - started,
+      usedJudge: true,
+    };
+  }
+
+  if (outcome.kind === "parse_failed") {
+    emitOpsEvent(input.trackOpsEvent, "safety_judge_parse_failed", input.orgId);
+    return {
+      verdict: fallback,
+      categories: ["judge_parse_failed", `fail_mode:${failMode}`],
+      latencyMs: Date.now() - started,
+      usedJudge: true,
+    };
+  }
+
+  return {
+    verdict: outcome.verdict,
+    categories: outcome.categories,
+    latencyMs: Date.now() - started,
+    usedJudge: true,
+  };
+}
+
+function normalizeJudgeOutcome(
+  raw: JudgeOutcome | { verdict: SafetyVerdict; categories: string[] }
+): JudgeOutcome {
+  if ("kind" in raw) return raw;
+  return { kind: "ok", verdict: raw.verdict, categories: raw.categories };
 }
