@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 
 const STALE_TIME_MS = 30_000;
 const DEFAULT_PAGE_SIZE = 50;
@@ -59,6 +60,9 @@ export function useMemberDirectory(
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
+  const { blockedUserIds } = useBlockedUsers();
+  const blockedRef = useRef<Set<string>>(blockedUserIds);
+  blockedRef.current = blockedUserIds;
 
   useEffect(() => {
     lastFetchTimeRef.current = 0;
@@ -118,7 +122,10 @@ export function useMemberDirectory(
         if (membersError) throw membersError;
 
         if (isMountedRef.current) {
-          const newData = (data as DirectoryMember[]) || [];
+          const blocked = blockedRef.current;
+          const newData = ((data as DirectoryMember[]) || []).filter(
+            (m) => !m.user_id || !blocked.has(m.user_id),
+          );
 
           if (append) {
             setMembers((prev) => [...prev, ...newData]);
@@ -174,6 +181,10 @@ export function useMemberDirectory(
       isMountedRef.current = false;
     };
   }, [fetchMembers]);
+
+  useEffect(() => {
+    setMembers((prev) => prev.filter((m) => !m.user_id || !blockedUserIds.has(m.user_id)));
+  }, [blockedUserIds]);
 
   // Real-time subscription for member changes
   useEffect(() => {

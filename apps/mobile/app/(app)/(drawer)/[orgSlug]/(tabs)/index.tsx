@@ -354,10 +354,6 @@ export default function HomeScreen() {
     contentSheet: {
       flex: 1,
       backgroundColor: n.surface,
-      borderTopLeftRadius: RADIUS.xxl,
-      borderTopRightRadius: RADIUS.xxl,
-      overflow: "hidden" as const,
-      marginTop: -SPACING.sm,
     },
     centered: {
       flex: 1,

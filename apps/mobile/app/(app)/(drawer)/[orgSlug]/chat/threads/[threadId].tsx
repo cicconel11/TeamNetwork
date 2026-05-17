@@ -18,6 +18,8 @@ import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
+import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
 import { Avatar } from "@/components/ui/Avatar";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import { APP_CHROME } from "@/lib/chrome";
@@ -54,6 +56,9 @@ export default function ThreadDetailScreen() {
   const resolvedThreadId = Array.isArray(threadId) ? threadId[0] : threadId;
   const { orgId, orgSlug } = useOrg();
   const { user } = useAuth();
+  const { blockedUserIds } = useBlockedUsers();
+  const blockedRef = useRef<Set<string>>(blockedUserIds);
+  blockedRef.current = blockedUserIds;
   const router = useRouter();
   const styles = useMemo(() => createStyles(), []);
   const listRef = useRef<FlatList<ReplyWithAuthor>>(null);
@@ -65,6 +70,11 @@ export default function ThreadDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [reportTarget, setReportTarget] = useState<
+    | { kind: "thread"; id: string; authorId: string }
+    | { kind: "reply"; id: string; authorId: string }
+    | null
+  >(null);
 
   const currentUserId = user?.id ?? null;
 
@@ -97,8 +107,20 @@ export default function ThreadDetailScreen() {
       if (repliesRes.error) throw repliesRes.error;
 
       if (isMountedRef.current) {
-        setThread(threadRes.data as ThreadWithAuthor);
-        setReplies((repliesRes.data || []) as ReplyWithAuthor[]);
+        const threadData = threadRes.data as ThreadWithAuthor;
+        const blocked = blockedRef.current;
+        if (threadData && blocked.has(threadData.author_id)) {
+          setThread(null);
+          setReplies([]);
+          setError("Thread not found.");
+          return;
+        }
+        setThread(threadData);
+        setReplies(
+          ((repliesRes.data || []) as ReplyWithAuthor[]).filter(
+            (r) => !blocked.has(r.author_id),
+          ),
+        );
         setError(null);
       }
     } catch (e) {
@@ -180,6 +202,7 @@ export default function ThreadDetailScreen() {
         },
         async (payload: RealtimePostgresChangesPayload<DiscussionReply>) => {
           const newReply = payload.new as DiscussionReply;
+          if (blockedRef.current.has(newReply.author_id)) return;
           const { data: replyWithAuthor } = await supabase
             .from("discussion_replies")
             .select("*, author:users!discussion_replies_author_id_fkey(id, name, avatar_url)")
@@ -221,6 +244,13 @@ export default function ThreadDetailScreen() {
       supabase.removeChannel(channel);
     };
   }, [resolvedThreadId, scrollToBottom]);
+
+  useEffect(() => {
+    setReplies((prev) => prev.filter((r) => !blockedUserIds.has(r.author_id)));
+    setThread((prev) =>
+      prev && blockedUserIds.has(prev.author_id) ? null : prev,
+    );
+  }, [blockedUserIds]);
 
   const groupedReplies = useMemo(() => {
     return replies.map((reply, index) => {
@@ -334,12 +364,26 @@ export default function ThreadDetailScreen() {
               <Text style={styles.messageTime}>{formatTimestamp(item.created_at)}</Text>
             )}
 
-            <View
-              style={[
+            <Pressable
+              onLongPress={
+                isOwn
+                  ? undefined
+                  : () =>
+                      setReportTarget({
+                        kind: "reply",
+                        id: item.id,
+                        authorId: item.author_id,
+                      })
+              }
+              delayLongPress={350}
+              style={({ pressed }) => [
                 styles.messageBubble,
                 bubbleRadius,
                 isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther,
+                pressed && !isOwn && { opacity: 0.8 },
               ]}
+              accessibilityRole={isOwn ? undefined : "button"}
+              accessibilityHint={isOwn ? undefined : "Long-press to report or block"}
             >
               <Text
                 style={[
@@ -349,7 +393,7 @@ export default function ThreadDetailScreen() {
               >
                 {item.body}
               </Text>
-            </View>
+            </Pressable>
           </View>
         </View>
       );
@@ -361,9 +405,28 @@ export default function ThreadDetailScreen() {
     if (!thread) return null;
 
     const authorName = thread.author?.name || "Unknown";
+    const isOwn = thread.author_id === currentUserId;
 
     return (
-      <View style={styles.opCard}>
+      <Pressable
+        onLongPress={
+          isOwn
+            ? undefined
+            : () =>
+                setReportTarget({
+                  kind: "thread",
+                  id: thread.id,
+                  authorId: thread.author_id,
+                })
+        }
+        delayLongPress={350}
+        style={({ pressed }) => [
+          styles.opCard,
+          pressed && !isOwn && { opacity: 0.85 },
+        ]}
+        accessibilityRole={isOwn ? undefined : "button"}
+        accessibilityHint={isOwn ? undefined : "Long-press to report or block"}
+      >
         <View style={styles.opMeta}>
           <Avatar size="sm" name={authorName} />
           <Text style={styles.opAuthor}>{authorName}</Text>
@@ -372,9 +435,9 @@ export default function ThreadDetailScreen() {
         </View>
         <Text style={styles.opTitle}>{thread.title}</Text>
         <Text style={styles.opBody}>{thread.body}</Text>
-      </View>
+      </Pressable>
     );
-  }, [thread, styles]);
+  }, [thread, currentUserId, styles]);
 
   if (loading && !thread) {
     return (
@@ -489,6 +552,15 @@ export default function ThreadDetailScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      <ReportBlockSheet
+        visible={!!reportTarget}
+        onClose={() => setReportTarget(null)}
+        orgId={orgId}
+        targetType="chat_message"
+        targetId={reportTarget?.id ?? ""}
+        reportedUserId={reportTarget?.authorId ?? null}
+      />
     </View>
   );
 }

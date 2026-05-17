@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 import { fetchWithAuth } from "@/lib/web-api";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
@@ -17,6 +18,9 @@ export function useFeed(orgId: string | null): UseFeedReturn {
   const pendingPostsRef = useRef<FeedPost[]>([]);
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const { blockedUserIds } = useBlockedUsers();
+  const blockedRef = useRef<Set<string>>(blockedUserIds);
+  blockedRef.current = blockedUserIds;
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [pendingPosts, setPendingPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +47,12 @@ export function useFeed(orgId: string | null): UseFeedReturn {
   useEffect(() => {
     pendingPostsRef.current = pendingPosts;
   }, [pendingPosts]);
+
+  // Prune locally-cached posts whenever the block set changes.
+  useEffect(() => {
+    setPosts((prev) => prev.filter((p) => !blockedUserIds.has(p.author_id)));
+    setPendingPosts((prev) => prev.filter((p) => !blockedUserIds.has(p.author_id)));
+  }, [blockedUserIds]);
 
   const fetchPosts = useCallback(
     async (fetchOffset: number = 0, append: boolean = false) => {
@@ -84,7 +94,8 @@ export function useFeed(orgId: string | null): UseFeedReturn {
         if (postsError) throw postsError;
         if (currentGeneration !== generationRef.current) return;
 
-        const rawPosts = postsData || [];
+        const blocked = blockedRef.current;
+        const rawPosts = (postsData || []).filter((p) => !blocked.has(p.author_id));
         const postIds = rawPosts.map((p) => p.id);
 
         // Identify poll posts so we can hydrate their voting state alongside likes/media.
@@ -522,6 +533,9 @@ export function useFeed(orgId: string | null): UseFeedReturn {
         },
         async (payload) => {
           const newPost = payload.new as FeedPost;
+          if (blockedRef.current.has(newPost.author_id)) {
+            return;
+          }
           if (newPost.author_id === userId) {
             void refetch();
             return;

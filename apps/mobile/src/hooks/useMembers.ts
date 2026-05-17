@@ -3,6 +3,7 @@ import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
 import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
 
@@ -38,6 +39,9 @@ export function useMembers(orgId: string | null): UseMembersReturn {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { blockedUserIds } = useBlockedUsers();
+  const blockedRef = useRef<Set<string>>(blockedUserIds);
+  blockedRef.current = blockedUserIds;
 
   useEffect(() => {
     lastFetchTimeRef.current = 0;
@@ -80,7 +84,11 @@ export function useMembers(orgId: string | null): UseMembersReturn {
       if (membersError) throw membersError;
 
       if (isMountedRef.current && isCurrentRequest(requestId)) {
-        setMembers((data as unknown as Member[]) || []);
+        const blocked = blockedRef.current;
+        const rows = ((data as unknown as Member[]) || []).filter(
+          (m) => !blocked.has(m.user_id),
+        );
+        setMembers(rows);
         setError(null);
         lastFetchTimeRef.current = Date.now();
       }
@@ -109,6 +117,10 @@ export function useMembers(orgId: string | null): UseMembersReturn {
       isMountedRef.current = false;
     };
   }, [fetchMembers]);
+
+  useEffect(() => {
+    setMembers((prev) => prev.filter((m) => !blockedUserIds.has(m.user_id)));
+  }, [blockedUserIds]);
 
   // Real-time subscription for member changes
   useEffect(() => {

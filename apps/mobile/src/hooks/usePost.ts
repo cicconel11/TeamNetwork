@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
 import { showToast } from "@/components/ui/Toast";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 import type {
   FeedPost,
   PostAuthor,
@@ -16,6 +17,7 @@ export function usePost(postId: string | undefined): UsePostReturn {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const postRef = useRef<FeedPost | null>(null);
+  const { blockedUserIds } = useBlockedUsers();
 
   useEffect(() => {
     postRef.current = post;
@@ -52,6 +54,14 @@ export function usePost(postId: string | undefined): UsePostReturn {
       if (!postData) {
         if (isMountedRef.current) {
           setPost(null);
+          setLoading(false);
+        }
+        return;
+      }
+      if (blockedUserIds.has(postData.author_id)) {
+        if (isMountedRef.current) {
+          setPost(null);
+          setError(null);
           setLoading(false);
         }
         return;

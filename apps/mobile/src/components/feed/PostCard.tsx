@@ -1,8 +1,8 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
-import { MessageCircle } from "lucide-react-native";
+import { Flag, MessageCircle, ShieldOff } from "lucide-react-native";
 import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatRelativeTime } from "@/lib/date-format";
@@ -12,6 +12,10 @@ import { FeedPoll } from "./FeedPoll";
 import type { FeedPost } from "@/types/feed";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/contexts/OrgContext";
+import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
+import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
 
 interface PostCardProps {
   post: FeedPost;
@@ -30,7 +34,11 @@ function PostCardInner({
   likeDisabled = false,
   pollDisabled = false,
 }: PostCardProps) {
-  const { neutral } = useAppColorScheme();
+  const { neutral, semantic } = useAppColorScheme();
+  const { user } = useAuth();
+  const { orgId } = useOrg();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const isOwnPost = !!user?.id && post.author_id === user.id;
   const styles = useThemedStyles((n) => ({
     card: {
       backgroundColor: n.surface,
@@ -107,6 +115,12 @@ function PostCardInner({
       ...TYPOGRAPHY.labelMedium,
       color: n.muted,
     },
+    menuAnchor: {
+      position: "absolute" as const,
+      top: SPACING.xs,
+      right: SPACING.xs,
+      zIndex: 2,
+    },
   }));
 
   const handlePress = useCallback(() => {
@@ -124,11 +138,35 @@ function PostCardInner({
     onPress(post.id);
   }, [onPress, post.id]);
 
+  const menuItems = useMemo<OverflowMenuItem[]>(() => {
+    if (isOwnPost) return [];
+    return [
+      {
+        id: "report",
+        label: "Report post",
+        icon: <Flag size={18} color={neutral.foreground} />,
+        onPress: () => setSheetOpen(true),
+      },
+      {
+        id: "block",
+        label: "Block user",
+        icon: <ShieldOff size={18} color={semantic.error} />,
+        destructive: true,
+        onPress: () => setSheetOpen(true),
+      },
+    ];
+  }, [isOwnPost, neutral.foreground, semantic.error]);
+
   // Only the header + body navigate to the detail screen. Poll, media,
   // and the actions row are siblings — interactive children inside a
   // navigating Pressable can race with the parent and swallow taps.
   return (
     <View style={styles.card}>
+      {menuItems.length > 0 && (
+        <View style={styles.menuAnchor}>
+          <OverflowMenu items={menuItems} accessibilityLabel="Post options" />
+        </View>
+      )}
       <Pressable
         onPress={handlePress}
         style={({ pressed }) => [styles.headerPress, pressed && styles.cardPressed]}
@@ -200,6 +238,15 @@ function PostCardInner({
           <Text style={styles.commentCount}>{post.comment_count}</Text>
         </Pressable>
       </View>
+
+      <ReportBlockSheet
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        orgId={orgId}
+        targetType="feed_post"
+        targetId={post.id}
+        reportedUserId={post.author_id}
+      />
     </View>
   );
 }

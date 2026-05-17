@@ -2,11 +2,15 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 import type { FeedComment, PostAuthor, UseCommentsReturn } from "@/types/feed";
 
 export function useComments(postId: string | undefined, orgId: string | null): UseCommentsReturn {
   const isMountedRef = useRef(true);
   const [comments, setComments] = useState<FeedComment[]>([]);
+  const { blockedUserIds } = useBlockedUsers();
+  const blockedRef = useRef<Set<string>>(blockedUserIds);
+  blockedRef.current = blockedUserIds;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,10 +36,13 @@ export function useComments(postId: string | undefined, orgId: string | null): U
 
       if (fetchError) throw fetchError;
 
-      const enriched: FeedComment[] = (data || []).map((c) => ({
-        ...c,
-        author: (Array.isArray(c.author) ? c.author[0] : c.author) as PostAuthor | null,
-      }));
+      const blocked = blockedRef.current;
+      const enriched: FeedComment[] = (data || [])
+        .filter((c) => !blocked.has(c.author_id))
+        .map((c) => ({
+          ...c,
+          author: (Array.isArray(c.author) ? c.author[0] : c.author) as PostAuthor | null,
+        }));
 
       if (isMountedRef.current) {
         setComments(enriched);
@@ -146,6 +153,10 @@ export function useComments(postId: string | undefined, orgId: string | null): U
       isMountedRef.current = false;
     };
   }, [fetchComments]);
+
+  useEffect(() => {
+    setComments((prev) => prev.filter((c) => !blockedUserIds.has(c.author_id)));
+  }, [blockedUserIds]);
 
   useEffect(() => {
     if (!postId) return;
