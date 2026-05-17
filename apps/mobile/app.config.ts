@@ -40,7 +40,7 @@ const config: ExpoConfig = {
     supportsTablet: true,
     appleTeamId: "5GWLTFG43T",
     bundleIdentifier: "com.myteamnetwork.teammeet",
-    buildNumber: "22",
+    buildNumber: "29",
     usesAppleSignIn: true,
     associatedDomains: [
       "applinks:www.myteamnetwork.com",
