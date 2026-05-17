@@ -14,8 +14,9 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { showToast } from "@/components/ui/Toast";
-import { reportContent, toggleBlock } from "@/lib/moderation";
+import { reportContent } from "@/lib/moderation";
 import type { ReportReason, ReportTargetType } from "@/lib/moderation";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 import * as sentry from "@/lib/analytics/sentry";
 
 const REASONS: { id: ReportReason; label: string; description: string }[] = [
@@ -60,6 +61,7 @@ export function ReportBlockSheet({
   onBlocked,
 }: ReportBlockSheetProps) {
   const { neutral, semantic } = useAppColorScheme();
+  const { toggleBlock } = useBlockedUsers();
   const [stage, setStage] = useState<Stage>("picker");
   const [selectedReason, setSelectedReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState("");

@@ -38,7 +38,6 @@ import { openEmailAddress, openHttpsUrl } from "@/lib/url-safety";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
 import { showToast } from "@/components/ui/Toast";
-import { toggleBlock } from "@/lib/moderation";
 import * as sentry from "@/lib/analytics/sentry";
 
 const DETAIL_COLORS = {
@@ -61,7 +60,7 @@ export default function AlumniDetailScreen() {
   const { isAdmin } = useOrgRole();
   const { orgId } = useOrg();
   const { user } = useAuth();
-  const { blockedUserIds } = useBlockedUsers();
+  const { blockedUserIds, toggleBlock } = useBlockedUsers();
   const router = useRouter();
   const styles = useMemo(() => createStyles(), []);
   const [refreshing, setRefreshing] = useState(false);
