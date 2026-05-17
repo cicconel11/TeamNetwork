@@ -26,37 +26,55 @@ export interface ReportContentInput {
   details?: string | null;
 }
 
+function summarizeErrorBody(text: string): string {
+  if (!text) return "";
+  try {
+    const json = JSON.parse(text) as {
+      error?: string;
+      details?: string[];
+    };
+    const detail = json.details && json.details.length > 0 ? ` (${json.details.join("; ")})` : "";
+    return json.error ? `${json.error}${detail}` : text;
+  } catch {
+    return text;
+  }
+}
+
 export async function reportContent(input: ReportContentInput): Promise<{ id: string }> {
+  const payload = {
+    organization_id: input.orgId,
+    target_type: input.targetType,
+    target_id: input.targetId,
+    reported_user_id: input.reportedUserId ?? null,
+    reason: input.reason,
+    details: input.details ?? null,
+  };
   const res = await fetchWithAuth("/api/moderation/report", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      organization_id: input.orgId,
-      target_type: input.targetType,
-      target_id: input.targetId,
-      reported_user_id: input.reportedUserId ?? null,
-      reason: input.reason,
-      details: input.details ?? null,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Failed to file report (${res.status}): ${text}`);
+    console.warn("[moderation.reportContent] failed", { status: res.status, payload, body: text });
+    throw new Error(summarizeErrorBody(text) || `Report failed (${res.status})`);
   }
   return (await res.json()) as { id: string };
 }
 
 export async function toggleBlock(blockedUserId: string): Promise<{ blocked: boolean }> {
+  const payload = { blocked_user_id: blockedUserId };
   const res = await fetchWithAuth("/api/moderation/block", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ blocked_user_id: blockedUserId }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Failed to toggle block (${res.status}): ${text}`);
+    console.warn("[moderation.toggleBlock] failed", { status: res.status, payload, body: text });
+    throw new Error(summarizeErrorBody(text) || `Block failed (${res.status})`);
   }
   return (await res.json()) as { blocked: boolean };
 }

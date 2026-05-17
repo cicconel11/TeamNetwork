@@ -1,3 +1,4 @@
+import React from "react";
 import { View, TextInput, Pressable, StyleSheet } from "react-native";
 import { Search, X } from "lucide-react-native";
 import { spacing, fontSize, borderRadius, type ThemeColors } from "@/lib/theme";
@@ -10,7 +11,7 @@ interface DirectorySearchBarProps {
   rightSlot?: React.ReactNode;
 }
 
-export function DirectorySearchBar({
+function DirectorySearchBarBase({
   value,
   onChangeText,
   placeholder = "Search...",
@@ -19,8 +20,8 @@ export function DirectorySearchBar({
 }: DirectorySearchBarProps) {
   return (
     <View style={styles.searchRow}>
-      <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
-        <Search size={20} color={colors.muted} style={styles.searchIcon} />
+      <View style={[styles.searchContainer, { backgroundColor: colors.mutedSurface }]}>
+        <Search size={18} color={colors.mutedForeground} style={styles.searchIcon} />
         <TextInput
           style={[styles.searchInput, { color: colors.foreground }]}
           placeholder={placeholder}
@@ -29,6 +30,8 @@ export function DirectorySearchBar({
           onChangeText={onChangeText}
           autoCapitalize="none"
           autoCorrect={false}
+          returnKeyType="search"
+          clearButtonMode="never"
         />
         {value.length > 0 && (
           <Pressable onPress={() => onChangeText("")} hitSlop={12}>
@@ -41,27 +44,28 @@ export function DirectorySearchBar({
   );
 }
 
+export const DirectorySearchBar = React.memo(DirectorySearchBarBase);
+
 const styles = StyleSheet.create({
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.md,
     gap: spacing.sm,
   },
   searchContainer: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing.md,
-    height: 48,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.sm + 2,
+    height: 40,
   },
   searchIcon: {
-    marginRight: spacing.sm,
+    marginRight: spacing.xs + 2,
   },
   searchInput: {
     flex: 1,
-    fontSize: fontSize.base,
+    fontSize: 17,
     paddingVertical: 0,
   },
 });

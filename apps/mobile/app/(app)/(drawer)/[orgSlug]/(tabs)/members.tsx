@@ -1,10 +1,11 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect, useDeferredValue } from "react";
 import {
   View,
   Text,
   FlatList,
   RefreshControl,
   Pressable,
+  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -134,6 +135,7 @@ export default function MembersScreen() {
       backgroundColor: n.surface,
       paddingTop: SPACING.md,
       paddingBottom: SPACING.sm,
+      paddingHorizontal: SPACING.md,
       gap: SPACING.md,
     },
     sortButton: {
@@ -153,9 +155,13 @@ export default function MembersScreen() {
       color: n.muted,
     },
     listContent: {
-      paddingHorizontal: SPACING.md,
       paddingBottom: SPACING.xl,
       flexGrow: 1,
+    },
+    rowSeparator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: n.border,
+      marginLeft: SPACING.md + 44 + SPACING.md,
     },
   }));
 
@@ -210,8 +216,9 @@ export default function MembersScreen() {
     return Array.from(yearSet).sort((a, b) => b - a);
   }, [members]);
 
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const filteredMembers = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
+    const q = deferredSearchQuery.toLowerCase().trim();
     let result = members.filter((m) => {
       if (selectedRole === "admin" && m.role !== "admin") return false;
       if (selectedRole === "member" && m.role === "admin") return false;
@@ -236,7 +243,7 @@ export default function MembersScreen() {
     });
 
     return result;
-  }, [members, searchQuery, selectedRole, selectedYear, sortBy]);
+  }, [members, deferredSearchQuery, selectedRole, selectedYear, sortBy]);
 
   const getInitials = (member: DirectoryMember) => {
     if (member.first_name && member.last_name) {
@@ -282,6 +289,21 @@ export default function MembersScreen() {
       );
     },
     [handleMemberPress, directoryColors, isOnline]
+  );
+
+  const renderRowSeparator = useCallback(
+    () => <View style={styles.rowSeparator} />,
+    [styles.rowSeparator],
+  );
+
+  const ROW_HEIGHT = 64;
+  const getItemLayout = useCallback(
+    (_: unknown, index: number) => ({
+      length: ROW_HEIGHT,
+      offset: ROW_HEIGHT * index,
+      index,
+    }),
+    [],
   );
 
   const roleOptions: { value: RoleFilter; label: string }[] = [
@@ -473,6 +495,8 @@ export default function MembersScreen() {
           data={filteredMembers}
           keyExtractor={(item) => item.id}
           renderItem={renderMemberCard}
+          ItemSeparatorComponent={renderRowSeparator}
+          getItemLayout={getItemLayout}
           contentContainerStyle={styles.listContent}
           stickyHeaderIndices={[0]}
           ListHeaderComponent={renderListHeader}
@@ -481,9 +505,9 @@ export default function MembersScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={semantic.success} />
           }
           keyboardShouldPersistTaps="handled"
-          initialNumToRender={10}
-          maxToRenderPerBatch={10}
-          windowSize={5}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={7}
           removeClippedSubviews={true}
           updateCellsBatchingPeriod={50}
         />
