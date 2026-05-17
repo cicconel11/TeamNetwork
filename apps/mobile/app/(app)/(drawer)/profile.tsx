@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  FileText,
   ShieldOff,
   Trash2,
 } from "lucide-react-native";
@@ -1083,6 +1084,25 @@ export default function ProfileScreen() {
               <View style={styles.groupedListWrap}>
                 <Text style={styles.groupedListHeader}>Account</Text>
                 <View style={styles.groupedList}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Terms of Service"
+                    onPress={() => {
+                      router.push({
+                        pathname: "/(app)/(drawer)/terms",
+                        params: routeSlug ? { currentSlug: routeSlug } : undefined,
+                      } as any);
+                    }}
+                    style={({ pressed }) => [
+                      styles.groupedRow,
+                      pressed && styles.groupedRowPressed,
+                    ]}
+                  >
+                    <FileText size={20} color={neutral.foreground} />
+                    <Text style={styles.groupedRowLabel}>Terms of Service</Text>
+                    <ChevronRight size={18} color={neutral.placeholder} />
+                  </Pressable>
+                  <View style={styles.groupedDivider} />
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Blocked Users"
