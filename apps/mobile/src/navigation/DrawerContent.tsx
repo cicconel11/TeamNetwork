@@ -12,6 +12,7 @@ import {
   Award,
   Briefcase,
   Building2,
+  ChevronRight,
   ClipboardList,
   DollarSign,
   Dumbbell,
@@ -23,7 +24,6 @@ import {
   MessageCircle,
   Receipt,
   Settings,
-  ShieldOff,
   SlidersHorizontal,
   Trophy,
   Users,
@@ -54,7 +54,7 @@ interface NavItem {
 
 // Pinned footer items (Settings, Navigation, Organizations, Sign Out)
 const PINNED_ITEM_HEIGHT = 48;
-const PINNED_FOOTER_COUNT = 3;
+const PINNED_FOOTER_COUNT = 2;
 const BRAND_STRIP_HEIGHT = 88;
 const FOOTER_PADDING = 32;
 const FOOTER_TOP_INSET = 8;
@@ -68,17 +68,22 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
-  const { orgSlug } = useGlobalSearchParams<{ orgSlug?: string }>();
+  const { orgSlug, currentSlug } = useGlobalSearchParams<{
+    orgSlug?: string;
+    currentSlug?: string;
+  }>();
   const { user } = useAuth();
   const { permissions, role } = useOrgRole();
   const { orgName, orgLogoUrl, hasParentsAccess, orgId } = useOrg();
   const { navConfig } = useNavConfig(orgId);
-  const slug = typeof orgSlug === "string" ? orgSlug : "";
+  const rawSlug =
+    (typeof orgSlug === "string" && orgSlug) ||
+    (typeof currentSlug === "string" && currentSlug) ||
+    "";
+  const slug = rawSlug;
   const orgInitial = (orgName ?? slug ?? "").trim().charAt(0).toUpperCase() || "O";
   const userMeta = (user?.user_metadata ?? {}) as { name?: string; avatar_url?: string };
   const displayName = userMeta.name || user?.email || "Member";
-  const displayEmail = user?.email || "";
-  const isAppleRelayEmail = /@privaterelay\.appleid\.com$/i.test(displayEmail);
   const avatarUrl = userMeta.avatar_url || "";
   const initial = displayName.trim().charAt(0).toUpperCase() || "M";
 
@@ -217,7 +222,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const pinnedItems = useMemo<NavItem[]>(() => {
     if (!slug) return [];
     return [
-      { label: "Blocked Users", href: "/(app)/(drawer)/blocked-users", icon: ShieldOff },
       { label: "Organizations", href: "/(app)", icon: Building2 },
     ];
   }, [slug]);
@@ -331,8 +335,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             </View>
           </View>
         ) : null}
-        {/* Profile Card */}
+        {/* Profile Card — taps to profile screen */}
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Profile — ${displayName}`}
+          accessibilityHint="Opens your profile"
           style={({ pressed }) => [styles.profileCard, pressed && styles.profileCardPressed]}
           onPress={() => {
             props.navigation.closeDrawer();
@@ -350,18 +357,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             )}
           </View>
           <View style={styles.profileMeta}>
-            <Text style={styles.profileName}>{displayName}</Text>
-            {displayEmail ? (
-              <Text style={styles.profileEmail} numberOfLines={1} ellipsizeMode="tail">
-                {displayEmail}
-              </Text>
-            ) : null}
-            {isAppleRelayEmail ? (
-              <View style={styles.relayBadge}>
-                <Text style={styles.relayBadgeText}>Hidden by Apple</Text>
-              </View>
-            ) : null}
+            <Text style={styles.profileName}>Profile</Text>
           </View>
+          <ChevronRight size={20} color={NEUTRAL.placeholder} strokeWidth={1.8} />
         </Pressable>
         <View style={styles.divider} />
 
@@ -504,27 +502,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
     color: NEUTRAL.surface,
-  },
-  profileEmail: {
-    marginTop: 2,
-    fontSize: fontSize.sm,
-    color: NEUTRAL.placeholder,
-  },
-  relayBadge: {
-    alignSelf: "flex-start",
-    marginTop: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255, 255, 255, 0.16)",
-  },
-  relayBadgeText: {
-    fontSize: 10,
-    fontWeight: fontWeight.medium,
-    color: NEUTRAL.placeholder,
-    letterSpacing: 0.2,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
