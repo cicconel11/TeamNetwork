@@ -118,8 +118,14 @@ describe("enterprise AI prompt context", () => {
       serviceSupabase: createMockServiceSupabase() as any,
     });
 
-    assert.match(result.systemPrompt, /enterprise access for Acme Enterprise/i);
+    assert.match(result.systemPrompt, /enterprise access as owner/i);
+    assert.doesNotMatch(
+      result.systemPrompt,
+      /Acme Enterprise/i,
+      "enterprise name must live only in the untrusted org-context message",
+    );
     assert.match(result.systemPrompt, /enterprise-wide alumni, quota, managed organizations/i);
+    assert.match(result.orgContextMessage ?? "", /Acme Enterprise/i);
     assert.match(result.orgContextMessage ?? "", /## Enterprise Overview/);
     assert.match(result.orgContextMessage ?? "", /Enterprise alumni: 180/);
     assert.match(result.orgContextMessage ?? "", /Managed orgs: 3/);

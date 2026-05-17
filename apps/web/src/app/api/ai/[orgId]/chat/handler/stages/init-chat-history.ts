@@ -20,6 +20,7 @@ import type { CacheSurface } from "@/lib/ai/semantic-cache-utils";
 import type { RouteEntityContext } from "@/lib/ai/route-entity";
 import type { RagChunkInput, buildPromptContext } from "@/lib/ai/context-builder";
 import type { ToolName } from "@/lib/ai/tools/definitions";
+import type { ChatAttachment } from "../shared";
 
 export interface HistoryRow {
   role: "user" | "assistant" | string;
@@ -40,6 +41,7 @@ export interface InitChatHistoryInput {
   currentPath: string | undefined;
   routeEntityContext: RouteEntityContext | null;
   availableTools: ToolName[] | undefined;
+  attachment: ChatAttachment | undefined;
   stageTimings: AiAuditStageTimings;
   requestLogContext: AiLogContext;
   buildPromptContextFn: typeof buildPromptContext;
@@ -129,6 +131,12 @@ export async function runInitChatHistoryStage(
         routeEntity: input.routeEntityContext,
         availableTools: input.availableTools,
         threadTurnCount: input.existingThreadId ? 2 : 1,
+        attachment: input.attachment
+          ? {
+              fileName: input.attachment.fileName,
+              storagePath: input.attachment.storagePath,
+            }
+          : null,
       })
       .then((result: Awaited<ReturnType<typeof buildPromptContext>>) => {
         setStageStatus(

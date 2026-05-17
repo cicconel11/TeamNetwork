@@ -7,6 +7,7 @@ import type { AiAuditStageTimings } from "@/lib/ai/chat-telemetry";
 import type { AiLogContext } from "@/lib/ai/logger";
 import type OpenAI from "openai";
 import { PASS2_MODEL_TIMEOUT_MS } from "@/lib/ai/timeout";
+import { Profiles, type LlmTrackOpsEventFn } from "@/lib/ai/llm";
 import type { TurnRuntimeState } from "../sse-runtime";
 import { runModelStage, type ModelStageOutcome } from "./run-model-stage";
 
@@ -27,6 +28,8 @@ export interface RunPass2Input {
   onError: (event: Extract<SSEEvent, { type: "error" }>) => void;
   onUsage: (usage: { inputTokens: number; outputTokens: number }) => void;
   emitTimeoutError: () => void;
+  trackOpsEvent?: LlmTrackOpsEventFn;
+  orgId?: string;
 }
 
 /**
@@ -40,13 +43,21 @@ export async function runPass2(input: RunPass2Input): Promise<ModelStageOutcome>
     stage: "pass2_model",
     auditStage: "pass2",
     timeoutMs: PASS2_MODEL_TIMEOUT_MS,
-    options: {
-      client: input.client,
-      systemPrompt: input.systemPrompt,
-      messages: input.messages,
-      toolResults: input.toolResults,
-      onUsage: input.onUsage,
-    },
+    options: (() => {
+      const profile = Profiles.pass2Compose();
+      return {
+        client: input.client,
+        systemPrompt: input.systemPrompt,
+        messages: input.messages,
+        toolResults: input.toolResults,
+        onUsage: input.onUsage,
+        temperature: profile.temperature,
+        maxTokens: profile.maxTokens,
+        profile,
+        trackOpsEvent: input.trackOpsEvent,
+        orgId: input.orgId,
+      };
+    })(),
     composeResponseFn: input.composeResponseFn,
     stageTimings: input.stageTimings,
     streamSignal: input.streamSignal,

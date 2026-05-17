@@ -279,6 +279,8 @@ export async function runModelToolsLoop(
       requestLogContext: input.requestLogContext,
       runtimeState: input.runtimeState,
       emitTimeoutError: input.emitTimeoutError,
+      trackOpsEvent: input.trackOpsEventServerFn,
+      orgId: input.ctx.orgId,
       onUsage: input.recordUsage,
       onChunk: (content) => {
         pass1BufferedContent += content;
@@ -430,6 +432,8 @@ export async function runModelToolsLoop(
         requestLogContext: input.requestLogContext,
         runtimeState: input.runtimeState,
         emitTimeoutError: input.emitTimeoutError,
+        trackOpsEvent: input.trackOpsEventServerFn,
+        orgId: input.ctx.orgId,
         onUsage: input.recordUsage,
         onChunk: (content) => {
           pass2BufferedContent += content;

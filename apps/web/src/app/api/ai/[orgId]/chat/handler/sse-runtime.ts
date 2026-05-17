@@ -165,6 +165,7 @@ export async function applySafetyGate(args: {
       orgContext: { ownedEmails, ownedPhones },
       orgId: args.orgId,
       spendBypass: args.spendBypass,
+      trackOpsEvent: args.trackOpsEventServerFn,
     });
     args.state.safetyVerdict = result.verdict;
     args.state.safetyCategories = result.categories;
@@ -242,6 +243,7 @@ export async function applyRagGrounding(args: {
       ragChunks: args.ragChunks,
       orgId: args.orgId,
       spendBypass: args.spendBypass,
+      trackOpsEvent: args.trackOpsEventServerFn,
     });
     args.state.ragGrounded = result.grounded;
     args.state.ragGroundingFailures = result.uncoveredClaims;
