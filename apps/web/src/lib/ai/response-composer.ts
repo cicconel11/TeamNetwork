@@ -2,6 +2,12 @@ import type OpenAI from "openai";
 import { getZaiModel } from "./client";
 import type { SSEEvent } from "./sse";
 import { aiLog, type AiLogContext } from "./logger";
+import {
+  runLlmStream,
+  type LlmProfile,
+  type LlmStreamEvent,
+  type LlmTrackOpsEventFn,
+} from "./llm";
 
 export interface UsageAccumulator {
   inputTokens: number;
@@ -32,40 +38,22 @@ interface ComposeOptions {
   onUsage?: (usage: UsageAccumulator) => void;
   signal?: AbortSignal;
   logContext?: AiLogContext;
-}
-
-function getProviderErrorStatus(error: unknown): number | undefined {
-  if (typeof error !== "object" || error === null || !("status" in error)) {
-    return undefined;
-  }
-
-  const status = (error as { status?: unknown }).status;
-  return typeof status === "number" ? status : undefined;
-}
-
-function getProviderErrorCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null) {
-    return undefined;
-  }
-
-  const directCode = (error as { code?: unknown }).code;
-  if (typeof directCode === "string") {
-    return directCode;
-  }
-
-  const nestedError = (error as { error?: unknown }).error;
-  if (typeof nestedError === "object" && nestedError !== null) {
-    const nestedCode = (nestedError as { code?: unknown }).code;
-    if (typeof nestedCode === "string") {
-      return nestedCode;
-    }
-  }
-
-  return undefined;
-}
-
-function isProviderRateLimitError(error: unknown): boolean {
-  return getProviderErrorStatus(error) === 429 || getProviderErrorCode(error) === "1302";
+  /** Sampling temperature. Defaults to 0.7. Set to 0 for deterministic tool routing. */
+  temperature?: number;
+  /** Max output tokens. Defaults to 2000. */
+  maxTokens?: number;
+  /** Override model. Defaults to getZaiModel(). */
+  model?: string;
+  /**
+   * Optional LLM profile. When supplied, retry/fallback/timeout/ops behavior
+   * defined by the profile is honored at the streaming boundary (pre-stream
+   * errors only — mid-stream errors are non-retryable by design).
+   */
+  profile?: LlmProfile;
+  /** Ops-event sink for retry/giveup/midstream classification. */
+  trackOpsEvent?: LlmTrackOpsEventFn;
+  /** Org context for ops events. */
+  orgId?: string;
 }
 
 /**
@@ -74,6 +62,10 @@ function isProviderRateLimitError(error: unknown): boolean {
  *
  * When `tools` is provided, the LLM may choose to call a tool instead of
  * generating text. In that case, a ToolCallRequestedEvent is yielded.
+ *
+ * Retry/fallback live in `runLlmStream`. This generator translates the
+ * wrapper's stream events into SSE-compatible chunks + the composer's tool-
+ * call protocol, and surfaces user-facing error events for terminal failures.
  */
 export async function* composeResponse(
   options: ComposeOptions
@@ -88,15 +80,19 @@ export async function* composeResponse(
     onUsage,
     signal,
     logContext,
+    temperature = 0.7,
+    maxTokens = 2000,
+    model,
+    profile,
+    trackOpsEvent,
+    orgId,
   } = options;
 
-  // Build message array
   const apiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
     ...messages,
   ];
 
-  // If tool results exist, replay them as tool messages to preserve the trust boundary.
   if (toolResults && toolResults.length > 0) {
     apiMessages.push({
       role: "assistant",
@@ -120,64 +116,41 @@ export async function* composeResponse(
     }
   }
 
+  const effectiveProfile: LlmProfile = profile ?? {
+    name: "compose_default",
+    model: model ?? getZaiModel(),
+    temperature,
+    maxTokens,
+    timeoutMs: 30_000,
+    maxRetries: 0,
+  };
+
+  const toolCalls = new Map<number, { id: string; name: string; argsJson: string }>();
+
   try {
-    const stream = await client.chat.completions.create(
-      {
-        model: getZaiModel(),
-        messages: apiMessages,
-        ...(tools ? { tools, tool_choice: toolChoice ?? ("auto" as const) } : {}),
-        stream: true,
-        stream_options: { include_usage: true },
-        temperature: 0.7,
-        max_tokens: 2000,
+    const streamIter = runLlmStream(effectiveProfile, {
+      messages: apiMessages,
+      tools,
+      toolChoice,
+      signal,
+      overrides: {
+        temperature,
+        maxTokens,
+        ...(model ? { model } : {}),
       },
-      signal ? { signal } : undefined
-    );
+      client,
+      trackOpsEvent,
+      orgId,
+    });
 
-    const toolCalls = new Map<number, { id: string; name: string; argsJson: string }>();
-
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta;
-
-      if (delta?.content) {
-        yield { type: "chunk", content: delta.content };
-      }
-
-      for (const tc of delta?.tool_calls ?? []) {
-        const existing = toolCalls.get(tc.index) ?? {
-          id: tc.id ?? `tool-call-${tc.index}`,
-          name: "",
-          argsJson: "",
-        };
-
-        if (tc.id) existing.id = tc.id;
-        if (tc.function?.name) existing.name = tc.function.name;
-        if (tc.function?.arguments) existing.argsJson += tc.function.arguments;
-
-        toolCalls.set(tc.index, existing);
-      }
-
-      if (chunk.choices[0]?.finish_reason === "tool_calls") {
-        for (const toolCall of [...toolCalls.entries()]
-          .sort(([left], [right]) => left - right)
-          .map(([, value]) => value)
-          .filter((value) => value.name)) {
-          yield {
-            type: "tool_call_requested",
-            id: toolCall.id,
-            name: toolCall.name,
-            argsJson: toolCall.argsJson,
-          };
+    for await (const event of streamIter) {
+      const result = handleStreamEvent(event, toolCalls, onUsage);
+      if (result) {
+        if (Array.isArray(result)) {
+          for (const yielded of result) yield yielded;
+        } else {
+          yield result;
         }
-      }
-
-      // Usage arrives on the final chunk (when stream_options.include_usage is true).
-      // Gracefully skip if the provider doesn't support it.
-      if (chunk.usage && onUsage) {
-        onUsage({
-          inputTokens: chunk.usage.prompt_tokens,
-          outputTokens: chunk.usage.completion_tokens,
-        });
       }
     }
   } catch (err) {
@@ -188,18 +161,70 @@ export async function* composeResponse(
       requestId: "unknown_request",
       orgId: "unknown_org",
     }, { error: err });
-    if (isProviderRateLimitError(err)) {
-      yield {
-        type: "error",
-        message: "The AI provider is rate limited right now. Please try again shortly.",
-        retryable: true,
-      };
-      return;
-    }
     yield {
       type: "error",
       message: "Failed to generate response",
       retryable: true,
     };
   }
+}
+
+function handleStreamEvent(
+  event: LlmStreamEvent,
+  toolCalls: Map<number, { id: string; name: string; argsJson: string }>,
+  onUsage: ((usage: UsageAccumulator) => void) | undefined,
+): SSEEvent | ToolCallRequestedEvent | Array<SSEEvent | ToolCallRequestedEvent> | null {
+  if (event.type === "chunk") {
+    return { type: "chunk", content: event.content };
+  }
+
+  if (event.type === "tool_call_delta") {
+    const existing = toolCalls.get(event.index) ?? {
+      id: event.id ?? `tool-call-${event.index}`,
+      name: "",
+      argsJson: "",
+    };
+    if (event.id) existing.id = event.id;
+    if (event.name) existing.name = event.name;
+    if (event.argumentsFragment) existing.argsJson += event.argumentsFragment;
+    toolCalls.set(event.index, existing);
+    return null;
+  }
+
+  if (event.type === "finish" && event.reason === "tool_calls") {
+    return [...toolCalls.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, value]) => value)
+      .filter((value) => value.name)
+      .map(
+        (toolCall): ToolCallRequestedEvent => ({
+          type: "tool_call_requested",
+          id: toolCall.id,
+          name: toolCall.name,
+          argsJson: toolCall.argsJson,
+        }),
+      );
+  }
+
+  if (event.type === "usage") {
+    onUsage?.({ inputTokens: event.inputTokens, outputTokens: event.outputTokens });
+    return null;
+  }
+
+  if (event.type === "stream_error") {
+    if (event.httpStatus === 429) {
+      return {
+        type: "error",
+        message: "The AI provider is rate limited right now. Please try again shortly.",
+        retryable: true,
+      };
+    }
+    return {
+      type: "error",
+      message: "Failed to generate response",
+      retryable: true,
+    };
+  }
+
+  return null;
 }
