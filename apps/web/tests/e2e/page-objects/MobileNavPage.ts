@@ -66,7 +66,15 @@ export class MobileNavPage extends BasePage {
   }
 
   async clickBackdrop(): Promise<void> {
-    await this.backdrop.click();
+    // The drawer (w-64 = 256px, z-50) overlays the left side of the backdrop.
+    // Click on the right side of the viewport so the drawer doesn't intercept.
+    const viewport = this.page.viewportSize();
+    const x = viewport ? viewport.width - 40 : 350;
+    const y = viewport ? Math.floor(viewport.height / 2) : 400;
+    await this.backdrop.click({ position: { x, y } }).catch(async () => {
+      // Fallback: click directly on page coords (in case position is still occluded)
+      await this.page.mouse.click(x, y);
+    });
   }
 
   async isMenuOpen(): Promise<boolean> {
