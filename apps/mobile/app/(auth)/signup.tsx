@@ -5,6 +5,7 @@ import {
   TextInput,
   Pressable,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ActivityIndicator,
   StyleSheet,
@@ -94,6 +95,14 @@ export default function SignupScreen() {
     } else {
       router.replace("/(auth)/login");
     }
+  };
+
+  const handleTermsPress = () => {
+    Linking.openURL(`${getWebAppUrl()}/terms`).catch(() => {});
+  };
+
+  const handlePrivacyPress = () => {
+    Linking.openURL(`${getWebAppUrl()}/privacy`).catch(() => {});
   };
 
   // Form state
@@ -566,7 +575,26 @@ export default function SignupScreen() {
               </View>
             )}
 
-            {/* Primary CTA */}
+            <Text style={styles.consentText}>
+              By creating an account, you agree to our{" "}
+              <Text
+                style={styles.consentLink}
+                onPress={handleTermsPress}
+                accessibilityRole="link"
+              >
+                Terms of Service
+              </Text>{" "}
+              and{" "}
+              <Text
+                style={styles.consentLink}
+                onPress={handlePrivacyPress}
+                accessibilityRole="link"
+              >
+                Privacy Policy
+              </Text>
+              . We have zero tolerance for objectionable content or abusive users.
+            </Text>
+
             <Pressable
               style={({ pressed }) => [
                 styles.primaryButton,
@@ -861,6 +889,18 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     textAlign: "center",
     lineHeight: 20,
+  },
+  consentText: {
+    color: colors.subtitle,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+    textAlign: "center",
+  },
+  consentLink: {
+    color: colors.link,
+    fontWeight: "600",
   },
 
   // Primary Button
