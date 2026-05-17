@@ -17,7 +17,6 @@ import { showToast } from "@/components/ui/Toast";
 import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
-import { toggleBlock } from "@/lib/moderation";
 import * as sentry from "@/lib/analytics/sentry";
 
 const DETAIL_COLORS = {
@@ -57,7 +56,7 @@ export default function MemberProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [unblockLoading, setUnblockLoading] = useState(false);
-  const { blockedUserIds } = useBlockedUsers();
+  const { blockedUserIds, toggleBlock } = useBlockedUsers();
   const isSelf = !!member?.user_id && member.user_id === user?.id;
   const isBlocked = !!member?.user_id && blockedUserIds.has(member.user_id);
   const canReport = !!member && !isSelf;
