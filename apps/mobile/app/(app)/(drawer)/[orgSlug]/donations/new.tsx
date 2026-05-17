@@ -24,6 +24,7 @@ import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { openHttpsUrl } from "@/lib/url-safety";
 import { track } from "@/lib/analytics";
 import { useDonationPaymentSheet } from "@/hooks/useDonationPaymentSheet";
+import { AddToWalletButton } from "@/components/wallet/AddToWalletButton";
 
 export default function NewDonationScreen() {
   const navigation = useNavigation();
@@ -158,6 +159,7 @@ export default function NewDonationScreen() {
   const [purpose, setPurpose] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [succeededAttemptId, setSucceededAttemptId] = useState<string | null>(null);
   const { start: startPaymentSheet, isProcessing: paymentSheetBusy } =
     useDonationPaymentSheet();
   const isIOS = Platform.OS === "ios";
@@ -217,7 +219,7 @@ export default function NewDonationScreen() {
           has_purpose: !!purpose.trim(),
           channel: "payment_sheet",
         });
-        router.replace(`/(app)/${orgSlug}/donations?donation=success`);
+        setSucceededAttemptId(result.paymentAttemptId);
         return;
       }
       if (result.status === "canceled") {
@@ -316,8 +318,14 @@ export default function NewDonationScreen() {
           />
 
           <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Make a Donation</Text>
-            <Text style={styles.formSubtitle}>Support the team with a contribution</Text>
+            <Text style={styles.formTitle}>
+              {succeededAttemptId ? "Thank you!" : "Make a Donation"}
+            </Text>
+            <Text style={styles.formSubtitle}>
+              {succeededAttemptId
+                ? "Your donation was received. Save a receipt to Apple Wallet for your records."
+                : "Support the team with a contribution"}
+            </Text>
           </View>
 
           {error && (
@@ -326,6 +334,27 @@ export default function NewDonationScreen() {
             </View>
           )}
 
+          {succeededAttemptId && (
+            <>
+              <AddToWalletButton
+                apiPath={`/api/wallet/receipt/by-payment-attempt/${succeededAttemptId}`}
+                fileBaseName={`donation-${succeededAttemptId}`}
+                label="Save receipt to Apple Wallet"
+              />
+              <Pressable
+                onPress={() => router.replace(`/(app)/${orgSlug}/donations`)}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.primaryButtonPressed,
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>Done</Text>
+              </Pressable>
+            </>
+          )}
+
+          {!succeededAttemptId && (
+          <>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Amount (USD)</Text>
             <TextInput
@@ -392,6 +421,8 @@ export default function NewDonationScreen() {
               </Text>
             )}
           </Pressable>
+          </>
+          )}
         </ScrollView>
       </View>
     </View>
