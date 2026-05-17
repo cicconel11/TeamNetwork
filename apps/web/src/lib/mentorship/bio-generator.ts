@@ -1,6 +1,5 @@
-import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { assessAiMessageSafety } from "@/lib/ai/message-safety";
-import { withStageTimeout } from "@/lib/ai/timeout";
+import { Profiles, runLlmCompletion } from "@/lib/ai/llm";
 import { chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
 import {
   canonicalizeIndustry,
@@ -271,21 +270,17 @@ export async function generateMentorBio(
   const userMessage = `<profile_data>\n${JSON.stringify(profileData, null, 2)}\n</profile_data>\n\nGenerate the bio.`;
 
   try {
-    const client = createZaiClient();
-    const model = getZaiModel();
     if (input.orgId) await checkAiSpend(input.orgId, { bypass: input.spendBypass });
 
-    const completion = await withStageTimeout("bio_generation", 8000, () =>
-      client.chat.completions.create({
-        model,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-        temperature: 0.2,
-        max_tokens: 150,
-      })
-    );
+    const profile = Profiles.bioGen();
+    const { completion, actualModel } = await runLlmCompletion(profile, {
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+      orgId: input.orgId,
+    });
+    const model = actualModel;
 
     const rawBio = completion.choices[0]?.message?.content?.trim() ?? "";
 
