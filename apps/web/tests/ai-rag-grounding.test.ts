@@ -130,6 +130,24 @@ test("verifyRagGrounding marks claim uncovered on judge error", async () => {
   assert.equal(result.grounded, false);
 });
 
+test("verifyRagGrounding fires ops event when judge throws", async () => {
+  const ops: Array<[string, Record<string, unknown>, string | null | undefined]> = [];
+  const result = await verifyRagGrounding({
+    content: "Our CEO announced record revenue growth yesterday.",
+    ragChunks: [chunkAnnouncement],
+    judge: async () => {
+      throw new Error("boom");
+    },
+    trackOpsEvent: (event, props, orgId) => {
+      ops.push([event, props, orgId ?? null]);
+    },
+  });
+  assert.equal(result.grounded, false);
+  assert.equal(ops.length, 1);
+  assert.equal(ops[0][0], "api_error");
+  assert.equal(ops[0][1].error_code, "rag_judge_throw");
+});
+
 test("buildRagGroundingFallback includes source excerpt", () => {
   const text = buildRagGroundingFallback(["foo"], chunkAnnouncement);
   assert.match(text, /couldn't verify/i);

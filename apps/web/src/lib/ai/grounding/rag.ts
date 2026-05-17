@@ -10,9 +10,8 @@
 //
 // No retry loops. Single pass. Abstain on failure.
 
-import type OpenAI from "openai";
-import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { AiCapReachedError, chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
+import { Profiles, runLlmCompletion } from "@/lib/ai/llm";
 import {
   extractAllCurrencyDollars,
   extractEmails,
@@ -29,6 +28,17 @@ export interface RagChunkForGrounding {
   metadata?: Record<string, unknown>;
 }
 
+export type RagTrackOpsEventFn = (
+  event: "api_error",
+  props: {
+    endpoint_group: string;
+    error_code: string;
+    http_status?: number;
+    retryable?: boolean;
+  },
+  orgId?: string | null
+) => void | Promise<void>;
+
 export interface RagGroundingInput {
   content: string;
   ragChunks: RagChunkForGrounding[];
@@ -38,6 +48,8 @@ export interface RagGroundingInput {
   orgId?: string;
   /** Skip ledger write (dev-admin bypass). */
   spendBypass?: boolean;
+  /** Optional ops telemetry sink (fire-and-forget). */
+  trackOpsEvent?: RagTrackOpsEventFn;
 }
 
 export interface RagGroundingResult {
@@ -203,25 +215,29 @@ function buildJudgePrompt(): string {
   ].join("\n");
 }
 
+class RagJudgeCapReachedSignal extends Error {
+  constructor() {
+    super("rag_judge_cap_reached");
+    this.name = "RagJudgeCapReachedSignal";
+  }
+}
+
 async function defaultJudge(
   chunks: string,
   claim: string,
   orgId?: string,
   spendBypass?: boolean
 ): Promise<"yes" | "no" | "partial"> {
-  const client: OpenAI = createZaiClient();
-  const model = process.env.RAG_GROUNDING_JUDGE_MODEL || getZaiModel();
   if (orgId) {
     try {
       await checkAiSpend(orgId, { bypass: spendBypass });
     } catch (err) {
-      if (err instanceof AiCapReachedError) return "no";
+      if (err instanceof AiCapReachedError) throw new RagJudgeCapReachedSignal();
       throw err;
     }
   }
-  const completion = await client.chat.completions.create({
-    model,
-    temperature: 0,
+  const profile = Profiles.ragJudge();
+  const { completion, actualModel } = await runLlmCompletion(profile, {
     messages: [
       { role: "system", content: buildJudgePrompt() },
       {
@@ -229,11 +245,12 @@ async function defaultJudge(
         content: `CHUNKS:\n${chunks}\n\nSENTENCE:\n${claim}`,
       },
     ],
+    orgId,
   });
   if (orgId && completion.usage) {
     await chargeAiSpend({
       orgId,
-      model,
+      model: actualModel,
       inputTokens: completion.usage.prompt_tokens ?? 0,
       outputTokens: completion.usage.completion_tokens ?? 0,
       bypass: spendBypass,
@@ -308,8 +325,28 @@ export async function verifyRagGrounding(
         usedJudge = true;
         const verdict = await judge(combined, sentence);
         if (verdict === "no") uncovered.push(sentence);
-      } catch {
-        // judge failure: conservatively mark uncovered
+      } catch (err) {
+        const code =
+          err instanceof RagJudgeCapReachedSignal
+            ? "rag_judge_cap_reached"
+            : "rag_judge_throw";
+        if (input.trackOpsEvent) {
+          try {
+            void Promise.resolve(
+              input.trackOpsEvent(
+                "api_error",
+                {
+                  endpoint_group: "ai_rag_grounding_judge",
+                  error_code: code,
+                  retryable: false,
+                },
+                input.orgId ?? null
+              )
+            ).catch(() => {});
+          } catch {
+            // swallow
+          }
+        }
         uncovered.push(sentence);
       }
     }
