@@ -23,6 +23,7 @@ import { findNavigationTargetsModule } from "./find-navigation-targets";
 import { suggestConnectionsModule } from "./suggest-connections";
 import { suggestMentorsModule } from "./suggest-mentors";
 import { listAvailableMentorsModule } from "./list-available-mentors";
+import { listMemberPreferencesModule } from "./list-member-preferences";
 import { prepareAnnouncementModule } from "./prepare-announcement";
 import { prepareJobPostingModule } from "./prepare-job-posting";
 import { prepareUpdateJobPostingModule } from "./prepare-update-job-posting";
@@ -68,6 +69,7 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   suggestConnectionsModule,
   suggestMentorsModule,
   listAvailableMentorsModule,
+  listMemberPreferencesModule,
   prepareAnnouncementModule,
   prepareJobPostingModule,
   prepareUpdateJobPostingModule,

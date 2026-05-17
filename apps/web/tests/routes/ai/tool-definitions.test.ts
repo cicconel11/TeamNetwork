@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 42 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 42);
+test("AI_TOOLS exports 43 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 43);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -55,6 +55,7 @@ test("TOOL_NAMES contains all tool names", () => {
     "revoke_enterprise_invite",
     "suggest_connections",
     "list_available_mentors",
+    "list_member_preferences",
     "suggest_mentors",
     "find_navigation_targets",
     "search_org_content",
@@ -96,6 +97,21 @@ test("list_events has limit and upcoming parameters", () => {
   assert.equal(props.limit.maximum, 25);
   assert.ok(props.upcoming);
   assert.equal(props.upcoming.type, "boolean");
+});
+
+test("list_member_preferences accepts limit, sport, and topic filters", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "list_member_preferences")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+  assert.ok(props.limit);
+  assert.equal(props.limit.type, "integer");
+  assert.equal(props.limit.maximum, 50);
+  assert.ok(props.sport);
+  assert.equal(props.sport.type, "string");
+  assert.ok(props.topic);
+  assert.equal(props.topic.type, "string");
+  assert.match(tool.function.description, /time_availability/i);
+  assert.match(tool.function.description, /never claim to compute overlaps/i);
 });
 
 test("list_announcements has a limit parameter", () => {

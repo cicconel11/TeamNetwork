@@ -1357,6 +1357,36 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  list_member_preferences: {
+    type: "function" as const,
+    function: {
+      name: "list_member_preferences" as const,
+      description:
+        "List members who have published mentor profiles or mentee preferences. Returns sports, topics, industries, positions, and any free-text time_availability (mentees) or time_commitment (mentors) that members have shared. Use when the user asks who plays a sport, who is interested in a topic, who has noted availability, or any interest/availability-style question. Free-text availability is not a structured schedule — surface it verbatim, never claim to compute overlaps.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 50,
+            description: "Max members to return (default 20)",
+          },
+          sport: {
+            type: "string" as const,
+            description:
+              "Optional case-insensitive substring filter applied against mentor sports and mentee preferred_sports (e.g. 'tennis').",
+          },
+          topic: {
+            type: "string" as const,
+            description:
+              "Optional case-insensitive substring filter applied against mentor topics and mentee preferred_topics (e.g. 'fundraising').",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
 } as const;
 
 export const AI_TOOLS = [
@@ -1398,6 +1428,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.suggest_mentors,
   TOOL_BY_NAME.list_available_mentors,
+  TOOL_BY_NAME.list_member_preferences,
   TOOL_BY_NAME.find_navigation_targets,
   TOOL_BY_NAME.search_org_content,
   TOOL_BY_NAME.prepare_update_announcement,
