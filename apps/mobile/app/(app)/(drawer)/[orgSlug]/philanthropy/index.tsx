@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
   View,
 } from "react-native";
+import * as Linking from "expo-linking";
+import { getWebPath } from "@/lib/web-api";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -41,7 +44,8 @@ const ACCENT = "#059669"; // emerald-600
 export default function PhilanthropyScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgId, orgSlug, orgName, orgLogoUrl, donationEligibleIos } = useOrg();
+  const showDonateCta = !(Platform.OS === "ios" && !donationEligibleIos);
   const { isAdmin, isActiveMember } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
   const isMountedRef = useRef(true);
@@ -767,19 +771,29 @@ export default function PhilanthropyScreen() {
                   </View>
                   <View style={styles.actionCard}>
                     <View style={styles.actionContent}>
-                      <Text style={styles.actionTitle}>Donate</Text>
+                      <Text style={styles.actionTitle}>
+                        {showDonateCta ? "Donate" : "Donations on the web"}
+                      </Text>
                       <Text style={styles.actionSubtitle}>
-                        Record a contribution or share a donation link.
+                        {showDonateCta
+                          ? "Record a contribution or share a donation link."
+                          : "Contributions for this organization are managed through its website."}
                       </Text>
                     </View>
                     <Pressable
-                      onPress={handleDonate}
+                      onPress={
+                        showDonateCta
+                          ? handleDonate
+                          : () => Linking.openURL(getWebPath(orgSlug, "donations"))
+                      }
                       style={({ pressed }) => [
                         styles.secondaryButton,
                         pressed && styles.secondaryButtonPressed,
                       ]}
                     >
-                      <Text style={styles.secondaryButtonText}>Open Donations</Text>
+                      <Text style={styles.secondaryButtonText}>
+                        {showDonateCta ? "Open Donations" : "Open on web"}
+                      </Text>
                     </Pressable>
                   </View>
                 </View>

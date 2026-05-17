@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -160,9 +160,63 @@ export default function NewDonationScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [succeededAttemptId, setSucceededAttemptId] = useState<string | null>(null);
+  const [receiptState, setReceiptState] = useState<
+    | { kind: "idle" }
+    | { kind: "polling" }
+    | { kind: "ready" }
+    | { kind: "timeout" }
+  >({ kind: "idle" });
   const { start: startPaymentSheet, isProcessing: paymentSheetBusy } =
     useDonationPaymentSheet();
   const isIOS = Platform.OS === "ios";
+
+  // Webhook lag: organization_donations is created by the Stripe Connect
+  // webhook asynchronously after Payment Sheet completes. Poll the receipt
+  // route until it returns 200, with bounded retry. The Wallet button shows
+  // once ready; the Done button is always available so the user can leave.
+  // pollEpoch advances on manual retry to re-trigger the effect.
+  const [pollEpoch, setPollEpoch] = useState(0);
+  useEffect(() => {
+    if (!succeededAttemptId) return;
+    let cancelled = false;
+    setReceiptState({ kind: "polling" });
+    (async () => {
+      const maxAttempts = 10;
+      const intervalMs = 3000;
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        if (cancelled) return;
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          const res = await fetch(
+            `${getWebAppUrl()}/api/wallet/receipt/by-payment-attempt/${succeededAttemptId}`,
+            {
+              method: "GET",
+              headers: accessToken
+                ? { Authorization: `Bearer ${accessToken}` }
+                : undefined,
+            },
+          );
+          if (cancelled) return;
+          if (res.ok) {
+            setReceiptState({ kind: "ready" });
+            return;
+          }
+          if (res.status !== 409) {
+            setReceiptState({ kind: "timeout" });
+            return;
+          }
+        } catch {
+          // Network blip — keep polling.
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+      if (!cancelled) setReceiptState({ kind: "timeout" });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [succeededAttemptId, pollEpoch]);
 
   const handleBack = useCallback(() => {
     if ((navigation as any).canGoBack && (navigation as any).canGoBack()) {
@@ -336,11 +390,39 @@ export default function NewDonationScreen() {
 
           {succeededAttemptId && (
             <>
-              <AddToWalletButton
-                apiPath={`/api/wallet/receipt/by-payment-attempt/${succeededAttemptId}`}
-                fileBaseName={`donation-${succeededAttemptId}`}
-                label="Save receipt to Apple Wallet"
-              />
+              {receiptState.kind === "polling" && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: SPACING.sm,
+                    padding: SPACING.md,
+                  }}
+                >
+                  <ActivityIndicator color={semantic.success} />
+                  <Text style={styles.formSubtitle}>
+                    We&apos;re finalizing your receipt…
+                  </Text>
+                </View>
+              )}
+              {receiptState.kind === "ready" && (
+                <AddToWalletButton
+                  apiPath={`/api/wallet/receipt/by-payment-attempt/${succeededAttemptId}`}
+                  fileBaseName={`donation-${succeededAttemptId}`}
+                  label="Save receipt to Apple Wallet"
+                />
+              )}
+              {receiptState.kind === "timeout" && (
+                <Pressable
+                  onPress={() => setPollEpoch((n) => n + 1)}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    pressed && styles.primaryButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.primaryButtonText}>Try again</Text>
+                </Pressable>
+              )}
               <Pressable
                 onPress={() => router.replace(`/(app)/${orgSlug}/donations`)}
                 style={({ pressed }) => [
