@@ -8,22 +8,30 @@ import { buildReceiptResponse } from "@/lib/wallet/receipt";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/**
+ * Resolves a donation receipt by payment_attempts.id rather than by the
+ * organization_donations.id. Used by the mobile donation success screen so
+ * the iOS client can offer "Save to Wallet" immediately after the Payment
+ * Sheet completes — the donation row is created asynchronously by the
+ * Stripe webhook, so this route returns 409 with `{ reason: "pending" }`
+ * until the donation lands.
+ */
 export async function GET(
   req: Request,
-  ctx: { params: Promise<{ donationId: string }> },
+  ctx: { params: Promise<{ paymentAttemptId: string }> },
 ) {
-  const { donationId: rawDonationId } = await ctx.params;
-  const idParse = baseSchemas.uuid.safeParse(rawDonationId);
+  const { paymentAttemptId: rawId } = await ctx.params;
+  const idParse = baseSchemas.uuid.safeParse(rawId);
   if (!idParse.success) {
-    return NextResponse.json({ error: "Invalid donation id" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid payment attempt id" }, { status: 400 });
   }
-  const donationId = idParse.data;
+  const paymentAttemptId = idParse.data;
 
   const rateLimit = checkRateLimit(req, {
     userId: null,
-    feature: "wallet donation receipt",
-    limitPerIp: 30,
-    limitPerUser: 20,
+    feature: "wallet donation receipt by attempt",
+    limitPerIp: 60,
+    limitPerUser: 30,
   });
   if (!rateLimit.ok) {
     return buildRateLimitResponse(rateLimit);
@@ -37,48 +45,54 @@ export async function GET(
     );
   }
 
-  // Service client because donations are not RLS-readable by the donor's own
-  // session if the donation was made anonymously. Ownership checks below.
   const service = createServiceClient();
+  const { data: attempt } = await service
+    .from("payment_attempts")
+    .select(
+      "id, status, stripe_payment_intent_id, organization_id, metadata, flow_type",
+    )
+    .eq("id", paymentAttemptId)
+    .maybeSingle();
+  if (!attempt) {
+    return NextResponse.json(
+      { error: "Payment attempt not found" },
+      { status: 404, headers: rateLimit.headers },
+    );
+  }
+  if (!attempt.stripe_payment_intent_id) {
+    return NextResponse.json(
+      { error: "Receipt not ready yet.", reason: "pending" },
+      { status: 409, headers: rateLimit.headers },
+    );
+  }
+
   const { data: donation } = await service
     .from("organization_donations")
     .select(
       "id, amount_cents, currency, donor_name, donor_email, purpose, status, created_at, organization_id, anonymous",
     )
-    .eq("id", donationId)
+    .eq("stripe_payment_intent_id", attempt.stripe_payment_intent_id)
     .is("deleted_at", null)
     .maybeSingle();
   if (!donation) {
     return NextResponse.json(
-      { error: "Donation not found" },
-      { status: 404, headers: rateLimit.headers },
+      { error: "Receipt not ready yet.", reason: "pending" },
+      { status: 409, headers: rateLimit.headers },
     );
   }
   if (donation.status !== "succeeded") {
     return NextResponse.json(
-      { error: "Receipt is only available after payment succeeds." },
+      { error: "Receipt not ready yet.", reason: "pending" },
       { status: 409, headers: rateLimit.headers },
     );
   }
 
-  // Donor (by email) can claim their receipt; org admins can re-issue.
-  // Anonymous donations require a signed token (not implemented).
+  // Caller must be the donor (by email) — the only person on a mobile client
+  // who could legitimately be polling this. Org admins use the donation-id
+  // route. Anonymous donations are not claimable via this endpoint.
   const callerEmail = user.email?.toLowerCase() ?? "";
   const donorEmail = donation.donor_email?.toLowerCase() ?? "";
-  const isDonor = donorEmail !== "" && callerEmail === donorEmail;
-
-  let isOrgAdmin = false;
-  if (!isDonor) {
-    const { data: membership } = await service
-      .from("user_organization_roles")
-      .select("role, status")
-      .eq("organization_id", donation.organization_id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    isOrgAdmin = membership?.role === "admin" && membership?.status === "active";
-  }
-
-  if (!isDonor && !isOrgAdmin) {
+  if (donation.anonymous || donorEmail === "" || callerEmail !== donorEmail) {
     return NextResponse.json(
       { error: "You can only download receipts for your own donations." },
       { status: 403, headers: rateLimit.headers },
