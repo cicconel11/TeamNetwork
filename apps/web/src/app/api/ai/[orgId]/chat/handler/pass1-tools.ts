@@ -32,6 +32,7 @@ const GLOBAL_READ_TOOL_NAMES: ReadonlyArray<ToolName> = [
 const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   general: [
     "list_members",
+    "list_member_preferences",
     "list_events",
     "list_announcements",
     "list_discussions",
@@ -47,6 +48,7 @@ const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   ],
   members: [
     "list_members",
+    "list_member_preferences",
     "list_alumni",
     "list_parents",
     "get_org_stats",
@@ -73,6 +75,13 @@ export const MENTOR_PROMPT_PATTERN =
   /(?<!\w)(?:mentor|mentors|mentee|mentees|pair\s+with|match\s+(?:me|us|them)\s+with)(?!\w)/i;
 export const MENTOR_AVAILABILITY_PROMPT_PATTERN =
   /\b(?:available|availability|accepting(?:\s+new)?|open(?:\s+spots?)?|capacity|room\s+for\s+more)\b/i;
+// Sport/interest/personal-availability questions about regular members (not mentor capacity).
+// Matches "who plays tennis", "members interested in fundraising", "anyone free Tuesday evening",
+// "find members who like X". Intentionally broad on the noun side so it picks up casual phrasings.
+export const MEMBER_INTEREST_PROMPT_PATTERN =
+  /(?:\b(?:who|which|any|find|list|show|tell)\b[\s\S]{0,40}\b(?:plays?|play|playing|interested\s+in|likes?|enjoys?|does|practices?)\b|\binterest(?:s|ed)?\b|\bhobby\b|\bhobbies\b|\b(?:tennis|soccer|football|basketball|baseball|golf|hockey|swim(?:ming)?|run(?:ning)?|cycling|lacrosse|volleyball|rugby|cricket|track|cross[-\s]?country|crew|rowing|wrestling|gymnastics|skiing|snowboarding|climbing)\b)/i;
+export const MEMBER_AVAILABILITY_PROMPT_PATTERN =
+  /(?:\b(?:who|which|anyone|anybody)\b[\s\S]{0,40}\b(?:free|available|around|open)\b|\bavailability\b[\s\S]{0,40}\b(?:overlap|match|share|same)\b|\b(?:free|available)\b[\s\S]{0,40}\b(?:tuesday|monday|wednesday|thursday|friday|saturday|sunday|weekday|weekend|morning|afternoon|evening|night|lunch|am|pm)\b|\b(?:overlap|matches?)\b[\s\S]{0,40}\bschedule\b)/i;
 export const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
 export const CONTENT_SEARCH_PROMPT_PATTERN =
@@ -518,6 +527,18 @@ const PASS1_ROUTING_RULES: ReadonlyArray<RoutingRule> = [
         : ["list_enterprise_alumni"],
   },
 
+  // Member interest / personal availability (sport, hobby, free-time) — fires
+  // on any surface. Routes to list_member_preferences which surfaces mentor
+  // profile sports/topics and mentee free-text time_availability.
+  {
+    id: "member_interest_or_availability",
+    when: (ctx) =>
+      !MENTOR_PROMPT_PATTERN.test(ctx.message) &&
+      (MEMBER_INTEREST_PROMPT_PATTERN.test(ctx.message) ||
+        MEMBER_AVAILABILITY_PROMPT_PATTERN.test(ctx.message)),
+    tools: () => ["list_member_preferences"],
+  },
+
   // ── Members-surface specials ───────────────────────────────────────────
   {
     id: "mentor_intent",
@@ -740,6 +761,7 @@ export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<
   "prepare_delete_event",
   "prepare_member_role_change",
   "list_members",
+  "list_member_preferences",
   "get_org_stats",
   "get_donation_analytics",
   "get_enterprise_stats",
@@ -840,6 +862,7 @@ export function canBypassPass1(input: CanBypassPass1Input): boolean {
 
 export const TOOL_FIRST_ELIGIBLE: ReadonlySet<ToolName> = new Set<ToolName>([
   "list_members",
+  "list_member_preferences",
   "get_org_stats",
   "get_donation_analytics",
   "find_navigation_targets",

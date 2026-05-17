@@ -791,6 +791,7 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
   assert.equal(composeResponseCalls.length, 2);
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
+    "list_member_preferences",
     "list_alumni",
     "list_parents",
     "get_org_stats",
@@ -922,6 +923,7 @@ test("ambiguous queries keep fallback surface tool set", async () => {
 
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
+    "list_member_preferences",
     "list_events",
     "list_announcements",
     "list_discussions",
@@ -1611,6 +1613,7 @@ test("action requests do not get forced into find_navigation_targets", async () 
 
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
+    "list_member_preferences",
     "list_alumni",
     "list_parents",
     "get_org_stats",
