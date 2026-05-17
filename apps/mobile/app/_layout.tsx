@@ -13,6 +13,7 @@ import {
   PlusJakartaSans_600SemiBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { StripeProvider } from "@stripe/stripe-react-native";
 import { ColorSchemeProvider } from "@/contexts/ColorSchemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { BlockedUsersProvider } from "@/contexts/BlockedUsersContext";
@@ -274,10 +275,16 @@ function RootLayoutInner() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <ToastProvider>
-        <ToastBridge />
-        {navigation}
-      </ToastProvider>
+      <StripeProvider
+        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ""}
+        merchantIdentifier="merchant.com.myteamnetwork.teammeet"
+        urlScheme="teammeet"
+      >
+        <ToastProvider>
+          <ToastBridge />
+          {navigation}
+        </ToastProvider>
+      </StripeProvider>
     </GestureHandlerRootView>
   );
 }

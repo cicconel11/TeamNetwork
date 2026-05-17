@@ -26,6 +26,7 @@
         "@react-navigation/elements": "^2.9.5",
         "@react-navigation/native": "^7.1.28",
         "@sentry/react-native": "^7.9.0",
+        "@stripe/stripe-react-native": "^0.65.1",
         "@supabase/supabase-js": "^2.39.6",
         "@teammeet/core": "workspace:*",
         "@teammeet/types": "workspace:*",
@@ -877,6 +878,8 @@
     "@stablelib/base64": ["@stablelib/base64@1.0.1", "", {}, "sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ=="],
 
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
+
+    "@stripe/stripe-react-native": ["@stripe/stripe-react-native@0.65.1", "", { "peerDependencies": { "expo": ">=46.0.9", "react": "*", "react-native": "*", "react-native-webview": "*" }, "optionalPeers": ["expo", "react-native-webview"] }, "sha512-h2Zj0zu4ddf1lnyTM6Qchs8fXpkgvZ7zKMXku5QuFuJIYldDuxu8GMCNDvvqzx7lGa0WU74a47lD4KFhS48NVQ=="],
 
     "@supabase/auth-js": ["@supabase/auth-js@2.105.3", "", { "dependencies": { "tslib": "2.8.1" } }, "sha512-hMFuzP++mjRfe0/BUq4/e82CXIDgyjUgg0khLN8waol/gzoM1t2iGmhfJSGvQHQ1dr3XqWpP6ThAw4bLHMot5Q=="],
 
