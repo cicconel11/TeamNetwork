@@ -1,2 +1,11 @@
-export { generateMemberPass } from "./generateMemberPass.js";
-export type { MemberPassInput, WalletCertificates } from "./generateMemberPass.js";
+export {
+  generateMemberPass,
+  generateEventTicketPass,
+  generateDonationReceiptPass,
+} from "./generateMemberPass.js";
+export type {
+  MemberPassInput,
+  EventTicketPassInput,
+  DonationReceiptPassInput,
+  WalletCertificates,
+} from "./generateMemberPass.js";

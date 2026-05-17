@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Linking,
-  Platform,
   Pressable,
   Text,
   View,
@@ -11,10 +9,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
-import { Directory, File, Paths } from "expo-file-system";
-import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
-import { getWebAppUrl } from "@/lib/web-api";
+import { addToWallet } from "@/lib/add-to-wallet";
 import { APP_CHROME } from "@/lib/chrome";
 import { RADIUS, SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -94,40 +90,24 @@ export default function AddMemberCardScreen() {
   }, [router, orgSlug]);
 
   const handleAdd = useCallback(async () => {
-    if (Platform.OS !== "ios") {
-      setError("Apple Wallet is iOS only. Use Google Wallet on Android (coming soon).");
-      return;
-    }
     setError(null);
     setStage("downloading");
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) {
-        throw new Error("Sign in required.");
-      }
-
-      const cacheDir = new Directory(Paths.cache, "wallet");
-      cacheDir.create({ intermediates: true, idempotent: true });
-      const destination = new File(cacheDir, `${orgSlug}-member-card.pkpass`);
-      if (destination.exists) destination.delete();
-
-      const url = `${getWebAppUrl()}/api/wallet/member/${orgSlug}`;
-      const downloaded = await File.downloadFileAsync(url, destination, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        idempotent: true,
-      });
-
-      setStage("presenting");
-      const opened = await Linking.openURL(downloaded.uri);
-      if (opened === false) {
-        throw new Error("Could not open the pass in Wallet.");
-      }
+    const result = await addToWallet({
+      apiPath: `/api/wallet/member/${orgSlug}`,
+      fileBaseName: `${orgSlug}-member-card`,
+    });
+    if (result.status === "added") {
       setStage("idle");
-    } catch (e) {
-      setError((e as Error).message || "Could not add the member card to Wallet.");
-      setStage("error");
+      return;
     }
+    if (result.status === "unsupported_platform") {
+      setError("Apple Wallet is iOS only. Use Google Wallet on Android (coming soon).");
+    } else if (result.status === "unauthenticated") {
+      setError("Sign in required.");
+    } else {
+      setError(result.message);
+    }
+    setStage("error");
   }, [orgSlug]);
 
   useEffect(() => {

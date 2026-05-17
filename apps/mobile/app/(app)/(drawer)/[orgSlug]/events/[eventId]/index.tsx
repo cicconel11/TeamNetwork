@@ -23,6 +23,7 @@ import { SPACING, RADIUS, RSVP_COLORS } from "@/lib/design-tokens";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { AddToWalletButton } from "@/components/wallet/AddToWalletButton";
 import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 import { EventCountdownBadge } from "@/components/calendar/event-countdown-badge";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
@@ -752,6 +753,14 @@ export default function EventDetailScreen() {
                   : "RSVP"}
           </Text>
         </Pressable>
+
+        {rsvp.status && rsvp.status !== "not_attending" && (
+          <AddToWalletButton
+            apiPath={`/api/wallet/event/${eventId}`}
+            fileBaseName={`event-${eventId}`}
+            label="Add ticket to Apple Wallet"
+          />
+        )}
 
         {user && qrCheckInEnabled && (
           <Pressable
