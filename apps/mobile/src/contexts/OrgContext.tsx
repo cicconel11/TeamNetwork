@@ -60,7 +60,14 @@ export async function waitForAuthUser(timeoutMs: number) {
 }
 
 export function OrgProvider({ children }: { children: ReactNode }) {
-  const { orgSlug } = useGlobalSearchParams<{ orgSlug: string }>();
+  const { orgSlug: rawOrgSlug, currentSlug } = useGlobalSearchParams<{
+    orgSlug?: string;
+    currentSlug?: string;
+  }>();
+  const orgSlug =
+    (typeof rawOrgSlug === "string" && rawOrgSlug) ||
+    (typeof currentSlug === "string" && currentSlug) ||
+    "";
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgName, setOrgName] = useState<string | null>(null);
   const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);

@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActionSheetIOS,
   ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -12,7 +15,14 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Camera, Trash2 } from "lucide-react-native";
+import {
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ShieldOff,
+  Trash2,
+} from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Database, Organization } from "@teammeet/types";
@@ -55,6 +65,61 @@ function getRowPhotoUrl(row: EditableProfileRow): string | null {
   return row.photo_url ?? null;
 }
 
+interface FormFieldProps {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+  placeholderTextColor: string;
+  helperText?: string;
+  multiline?: boolean;
+  keyboardType?: "default" | "number-pad" | "email-address";
+  autoCapitalize?: "none" | "sentences" | "words";
+  maxLength?: number;
+  inputStyle: any;
+  textAreaStyle: any;
+  labelStyle: any;
+  hintStyle: any;
+  groupStyle: any;
+}
+
+const FormField = memo(function FormField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  placeholderTextColor,
+  helperText,
+  multiline,
+  keyboardType,
+  autoCapitalize,
+  maxLength,
+  inputStyle,
+  textAreaStyle,
+  labelStyle,
+  hintStyle,
+  groupStyle,
+}: FormFieldProps) {
+  return (
+    <View style={groupStyle}>
+      <Text style={labelStyle}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={placeholderTextColor}
+        style={[inputStyle, multiline ? textAreaStyle : null]}
+        multiline={multiline}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize ?? "words"}
+        autoCorrect={false}
+        maxLength={maxLength}
+      />
+      {helperText ? <Text style={hintStyle}>{helperText}</Text> : null}
+    </View>
+  );
+});
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { currentSlug } = useLocalSearchParams<{ currentSlug?: string | string[] }>();
@@ -67,10 +132,18 @@ export default function ProfileScreen() {
   const [profileRecordId, setProfileRecordId] = useState<string | null>(null);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<ProfileFormValues>(INITIAL_PROFILE_FORM_VALUES);
+  const [initialFormValues, setInitialFormValues] = useState<ProfileFormValues>(INITIAL_PROFILE_FORM_VALUES);
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isDirty = useMemo(() => {
+    if (localAvatarUrl) return true;
+    return (Object.keys(formValues) as Array<keyof ProfileFormValues>).some(
+      (key) => formValues[key] !== initialFormValues[key]
+    );
+  }, [formValues, initialFormValues, localAvatarUrl]);
 
   const styles = useThemedStyles((n, s) => ({
     container: {
@@ -100,6 +173,20 @@ export default function ProfileScreen() {
     },
     headerSpacer: {
       width: 36,
+    },
+    headerSaveButton: {
+      minWidth: 56,
+      height: 36,
+      alignItems: "flex-end" as const,
+      justifyContent: "center" as const,
+    },
+    headerSaveText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: APP_CHROME.headerTitle,
+      fontWeight: "600" as const,
+    },
+    headerSaveTextDisabled: {
+      opacity: 0.4,
     },
     contentSheet: {
       flex: 1,
@@ -138,9 +225,6 @@ export default function ProfileScreen() {
       ...TYPOGRAPHY.bodySmall,
       color: n.muted,
     },
-    orgSelectorList: {
-      gap: SPACING.sm,
-    },
     orgOption: {
       borderWidth: 1,
       borderColor: n.border,
@@ -150,43 +234,9 @@ export default function ProfileScreen() {
       paddingVertical: SPACING.sm,
       backgroundColor: n.background,
     },
-    orgOptionSelected: {
-      borderColor: s.success,
-      backgroundColor: s.successLight,
-    },
     orgOptionText: {
       ...TYPOGRAPHY.bodyMedium,
       color: n.foreground,
-    },
-    orgOptionTextSelected: {
-      color: s.successDark,
-    },
-    contextCard: {
-      backgroundColor: n.background,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      gap: SPACING.xs,
-    },
-    contextLabel: {
-      ...TYPOGRAPHY.labelMedium,
-      color: n.secondary,
-      textTransform: "uppercase" as const,
-      letterSpacing: 0.4,
-    },
-    contextValue: {
-      ...TYPOGRAPHY.bodyLarge,
-      color: n.foreground,
-    },
-    rolePill: {
-      alignSelf: "flex-start" as const,
-      backgroundColor: s.successLight,
-      borderRadius: 999,
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: 6,
-    },
-    rolePillText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: s.successDark,
     },
     avatarSection: {
       alignItems: "center" as const,
@@ -287,33 +337,67 @@ export default function ProfileScreen() {
       ...TYPOGRAPHY.bodySmall,
       color: s.error,
     },
-    primaryButton: {
-      backgroundColor: s.success,
-      borderRadius: RADIUS.md,
-      paddingVertical: SPACING.md,
-      alignItems: "center" as const,
-    },
-    primaryButtonPressed: {
-      opacity: 0.9,
-    },
-    primaryButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: "#ffffff",
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-    deleteAccountRow: {
+    orgChip: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
-      justifyContent: "center" as const,
-      gap: SPACING.sm,
-      paddingVertical: SPACING.md,
-      marginTop: SPACING.sm,
+      alignSelf: "center" as const,
+      gap: 6,
+      marginTop: SPACING.md,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+      maxWidth: "90%" as const,
     },
-    deleteAccountLabel: {
-      ...TYPOGRAPHY.labelLarge,
-      color: s.error,
+    orgChipLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+      flexShrink: 1,
+    },
+    orgChipRole: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+    groupedListWrap: {
+      gap: SPACING.xs,
+    },
+    groupedListHeader: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.4,
+      paddingHorizontal: SPACING.md,
+    },
+    groupedList: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      overflow: "hidden" as const,
+    },
+    groupedRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.md,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.md,
+      minHeight: 48,
+    },
+    groupedRowPressed: {
+      backgroundColor: n.background,
+    },
+    groupedRowLabel: {
+      ...TYPOGRAPHY.bodyLarge,
+      color: n.foreground,
+      flex: 1,
+    },
+    groupedDivider: {
+      height: 1,
+      marginLeft: SPACING.md + 20 + SPACING.md,
+      backgroundColor: n.border,
     },
   }));
 
@@ -359,6 +443,7 @@ export default function ProfileScreen() {
       setProfileRecordId(null);
       setProfileAvatarUrl(null);
       setFormValues(INITIAL_PROFILE_FORM_VALUES);
+      setInitialFormValues(INITIAL_PROFILE_FORM_VALUES);
       setLoadingProfile(false);
       return;
     }
@@ -435,13 +520,17 @@ export default function ProfileScreen() {
         setProfileRole(nextRole);
         setProfileRecordId(row.id);
         setProfileAvatarUrl(getRowPhotoUrl(row));
-        setFormValues(buildProfileFormValues(nextRole, row, currentUser));
+        const nextValues = buildProfileFormValues(nextRole, row, currentUser);
+        setFormValues(nextValues);
+        setInitialFormValues(nextValues);
+        setLocalAvatarUrl(null);
       } catch (loadError) {
         if (!isMounted) return;
         setProfileRole(null);
         setProfileRecordId(null);
         setProfileAvatarUrl(null);
         setFormValues(INITIAL_PROFILE_FORM_VALUES);
+        setInitialFormValues(INITIAL_PROFILE_FORM_VALUES);
         setError((loadError as Error).message || "Failed to load profile");
       } finally {
         if (isMounted) {
@@ -458,8 +547,66 @@ export default function ProfileScreen() {
   }, [resolvedOrganization, user]);
 
   const handleBack = useCallback(() => {
+    if (isDirty) {
+      Alert.alert(
+        "Discard changes?",
+        "You have unsaved changes. Are you sure you want to leave?",
+        [
+          { text: "Keep editing", style: "cancel" },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => router.back(),
+          },
+        ],
+      );
+      return;
+    }
     router.back();
-  }, [router]);
+  }, [isDirty, router]);
+
+  const handleOrgPress = useCallback(() => {
+    if (organizations.length <= 1) return;
+    const orgList = organizations as Organization[];
+    const labels = orgList.map((o) => o.name || o.slug);
+    const activeIndex = orgList.findIndex(
+      (o) => o.slug === resolvedOrganization?.slug,
+    );
+    const onPick = (idx: number) => {
+      const next = orgList[idx];
+      if (!next || next.slug === resolvedOrganization?.slug) return;
+      setSelectedOrgSlug(next.slug);
+      if (Platform.OS === "ios") {
+        void Haptics.selectionAsync();
+      }
+    };
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [...labels, "Cancel"],
+          cancelButtonIndex: labels.length,
+          title: "Switch organization",
+          userInterfaceStyle: "light",
+        },
+        (idx) => {
+          if (idx === labels.length) return;
+          onPick(idx);
+        },
+      );
+      return;
+    }
+    Alert.alert(
+      "Switch organization",
+      undefined,
+      [
+        ...orgList.map((o, idx) => ({
+          text: `${o.name || o.slug}${idx === activeIndex ? "  ✓" : ""}`,
+          onPress: () => onPick(idx),
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
+  }, [organizations, resolvedOrganization]);
 
   const handleFieldChange = useCallback(
     <K extends keyof ProfileFormValues>(field: K, value: ProfileFormValues[K]) => {
@@ -470,6 +617,16 @@ export default function ProfileScreen() {
     },
     []
   );
+
+  const fieldHandlers = useMemo(() => {
+    const handlers = {} as Record<keyof ProfileFormValues, (text: string) => void>;
+    (Object.keys(INITIAL_PROFILE_FORM_VALUES) as Array<keyof ProfileFormValues>).forEach(
+      (key) => {
+        handlers[key] = (text: string) => handleFieldChange(key, text);
+      },
+    );
+    return handlers;
+  }, [handleFieldChange]);
 
   const handleAvatarPress = useCallback(async () => {
     const newUrl = await pickAndUpload();
@@ -566,25 +723,23 @@ export default function ProfileScreen() {
       maxLength?: number;
     }
   ) => (
-    <View style={styles.fieldGroup}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        value={formValues[field]}
-        onChangeText={(text) => handleFieldChange(field, text)}
-        placeholder={options?.placeholder}
-        placeholderTextColor={neutral.placeholder}
-        style={[
-          styles.input,
-          options?.multiline ? styles.textArea : null,
-        ] as any}
-        multiline={options?.multiline}
-        keyboardType={options?.keyboardType}
-        autoCapitalize={options?.autoCapitalize ?? "words"}
-        autoCorrect={false}
-        maxLength={options?.maxLength}
-      />
-      {options?.helperText ? <Text style={styles.fieldHint}>{options.helperText}</Text> : null}
-    </View>
+    <FormField
+      label={label}
+      value={formValues[field]}
+      onChangeText={fieldHandlers[field]}
+      placeholder={options?.placeholder}
+      placeholderTextColor={neutral.placeholder}
+      helperText={options?.helperText}
+      multiline={options?.multiline}
+      keyboardType={options?.keyboardType}
+      autoCapitalize={options?.autoCapitalize}
+      maxLength={options?.maxLength}
+      inputStyle={styles.input}
+      textAreaStyle={styles.textArea}
+      labelStyle={styles.fieldLabel}
+      hintStyle={styles.fieldHint}
+      groupStyle={styles.fieldGroup}
+    />
   );
 
   const renderRoleFields = () => {
@@ -749,60 +904,65 @@ export default function ProfileScreen() {
     );
   }
 
+  const saveDisabled = isSaving || isUploading || !isDirty;
+  const activeOrgLabel = resolvedOrganization
+    ? resolvedOrganization.name || resolvedOrganization.slug
+    : null;
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]} style={styles.headerGradient}>
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            <Pressable onPress={handleBack} style={styles.backButton}>
+            <Pressable
+              onPress={handleBack}
+              style={styles.backButton}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+            >
               <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
             </Pressable>
             <Text style={styles.headerTitle}>Edit Profile</Text>
-            <View style={styles.headerSpacer} />
+            <Pressable
+              onPress={handleSave}
+              disabled={saveDisabled}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Save"
+              style={({ pressed }) => [
+                styles.headerSaveButton,
+                pressed && !saveDisabled && { opacity: 0.6 },
+              ]}
+            >
+              {isSaving ? (
+                <ActivityIndicator color={APP_CHROME.headerTitle} size="small" />
+              ) : (
+                <Text
+                  style={[
+                    styles.headerSaveText,
+                    saveDisabled && styles.headerSaveTextDisabled,
+                  ]}
+                >
+                  Save
+                </Text>
+              )}
+            </Pressable>
           </View>
         </SafeAreaView>
       </LinearGradient>
 
-      <View style={styles.contentSheet}>
+      <KeyboardAvoidingView
+        style={styles.contentSheet}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
           contentInsetAdjustmentBehavior="automatic"
         >
-          {hasMultipleOrganizations ? (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Organization</Text>
-              <Text style={styles.sectionBody}>
-                Your profile edits apply to one organization at a time.
-              </Text>
-              <View style={styles.orgSelectorList}>
-                {organizations.map((organization) => {
-                  const isSelected = organization.slug === resolvedOrganization?.slug;
-                  return (
-                    <Pressable
-                      key={organization.id}
-                      onPress={() => setSelectedOrgSlug(organization.slug)}
-                      style={[
-                        styles.orgOption,
-                        isSelected ? styles.orgOptionSelected : null,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.orgOptionText,
-                          isSelected ? styles.orgOptionTextSelected : null,
-                        ]}
-                      >
-                        {organization.name || organization.slug}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
           {!user ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorText}>You must be signed in to edit your profile.</Text>
@@ -815,20 +975,20 @@ export default function ProfileScreen() {
               <Text style={styles.sectionBody}>
                 Select which organization profile you want to edit.
               </Text>
-            </View>
-          ) : null}
-
-          {resolvedOrganization ? (
-            <View style={styles.contextCard}>
-              <Text style={styles.contextLabel}>Active organization</Text>
-              <Text style={styles.contextValue}>
-                {resolvedOrganization.name || resolvedOrganization.slug}
-              </Text>
-              {profileRole ? (
-                <View style={styles.rolePill}>
-                  <Text style={styles.rolePillText}>{getEditableProfileRoleLabel(profileRole)}</Text>
-                </View>
-              ) : null}
+              {organizations.map((organization) => (
+                <Pressable
+                  key={organization.id}
+                  onPress={() => setSelectedOrgSlug(organization.slug)}
+                  style={({ pressed }) => [
+                    styles.orgOption,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={styles.orgOptionText}>
+                    {organization.name || organization.slug}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
           ) : null}
 
@@ -844,6 +1004,8 @@ export default function ProfileScreen() {
                 <Pressable
                   onPress={handleAvatarPress}
                   disabled={isUploading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change photo"
                   style={styles.avatarWrapper as any}
                 >
                   {avatarUrl ? (
@@ -861,6 +1023,33 @@ export default function ProfileScreen() {
                     )}
                   </View>
                 </Pressable>
+                {activeOrgLabel ? (
+                  <Pressable
+                    onPress={handleOrgPress}
+                    disabled={organizations.length <= 1}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Active organization: ${activeOrgLabel}. ${
+                      organizations.length > 1 ? "Tap to switch." : ""
+                    }`}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.orgChip,
+                      pressed && organizations.length > 1 && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text style={styles.orgChipLabel} numberOfLines={1}>
+                      {activeOrgLabel}
+                    </Text>
+                    {profileRole ? (
+                      <Text style={styles.orgChipRole}>
+                        · {getEditableProfileRoleLabel(profileRole)}
+                      </Text>
+                    ) : null}
+                    {organizations.length > 1 ? (
+                      <ChevronDown size={14} color={neutral.secondary} />
+                    ) : null}
+                  </Pressable>
+                ) : null}
               </View>
 
               <Animated.View entering={FadeInDown.duration(250)} style={styles.sectionCard}>
@@ -891,43 +1080,54 @@ export default function ProfileScreen() {
 
               {renderRoleFields()}
 
-              <Pressable
-                onPress={handleSave}
-                disabled={isSaving || isUploading}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.primaryButtonPressed,
-                  (isSaving || isUploading) && styles.buttonDisabled,
-                ]}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Save Changes</Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Delete My Account"
-                onPress={() => {
-                  router.push({
-                    pathname: "/(app)/(drawer)/delete-account",
-                    params: routeSlug ? { currentSlug: routeSlug } : undefined,
-                  } as any);
-                }}
-                style={({ pressed }) => [
-                  styles.deleteAccountRow,
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <Trash2 size={18} color={semantic.error} />
-                <Text style={styles.deleteAccountLabel}>Delete My Account</Text>
-              </Pressable>
+              <View style={styles.groupedListWrap}>
+                <Text style={styles.groupedListHeader}>Account</Text>
+                <View style={styles.groupedList}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Blocked Users"
+                    onPress={() => {
+                      router.push({
+                        pathname: "/(app)/(drawer)/blocked-users",
+                        params: routeSlug ? { currentSlug: routeSlug } : undefined,
+                      } as any);
+                    }}
+                    style={({ pressed }) => [
+                      styles.groupedRow,
+                      pressed && styles.groupedRowPressed,
+                    ]}
+                  >
+                    <ShieldOff size={20} color={neutral.foreground} />
+                    <Text style={styles.groupedRowLabel}>Blocked Users</Text>
+                    <ChevronRight size={18} color={neutral.placeholder} />
+                  </Pressable>
+                  <View style={styles.groupedDivider} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete My Account"
+                    onPress={() => {
+                      router.push({
+                        pathname: "/(app)/(drawer)/delete-account",
+                        params: routeSlug ? { currentSlug: routeSlug } : undefined,
+                      } as any);
+                    }}
+                    style={({ pressed }) => [
+                      styles.groupedRow,
+                      pressed && styles.groupedRowPressed,
+                    ]}
+                  >
+                    <Trash2 size={20} color={semantic.error} />
+                    <Text style={[styles.groupedRowLabel, { color: semantic.error }]}>
+                      Delete My Account
+                    </Text>
+                    <ChevronRight size={18} color={neutral.placeholder} />
+                  </Pressable>
+                </View>
+              </View>
             </>
           ) : null}
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

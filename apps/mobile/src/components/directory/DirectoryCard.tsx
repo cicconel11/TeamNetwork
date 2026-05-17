@@ -86,7 +86,7 @@ export const DirectoryCard = React.memo(function DirectoryCard({
             ))}
           </View>
         )}
-        <ChevronRight size={16} color={colors.border} />
+        <ChevronRight size={18} color={colors.mutedForeground} />
       </View>
     </Pressable>
   );
@@ -96,29 +96,26 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.sm,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.xs + 2,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    minHeight: 64,
   },
   cardPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.995 }],
+    opacity: 0.6,
   },
   avatarWrap: {
     position: "relative",
     marginRight: spacing.md,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -133,7 +130,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   avatarText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
   },
   cardContent: {
@@ -147,7 +144,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.sm,
-    marginTop: 1,
+    marginTop: 2,
     lineHeight: 18,
   },
   locationRow: {
@@ -162,7 +159,7 @@ const styles = StyleSheet.create({
   cardRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginLeft: spacing.sm,
   },
   cardChipColumn: {
