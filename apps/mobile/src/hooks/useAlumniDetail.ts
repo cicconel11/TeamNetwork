@@ -4,6 +4,7 @@ import * as sentry from "@/lib/analytics/sentry";
 
 interface Alumni {
   id: string;
+  user_id: string | null;
   first_name: string | null;
   last_name: string | null;
   photo_url: string | null;
@@ -58,6 +59,7 @@ export function useAlumniDetail(orgSlug: string, alumniId: string): UseAlumniDet
         .select(
           `
           id,
+          user_id,
           first_name,
           last_name,
           photo_url,

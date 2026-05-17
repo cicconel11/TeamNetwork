@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, StyleSheet, Pressable, Share } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, View, Text, ScrollView, ActivityIndicator, StyleSheet, Pressable, Share } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Mail, MessageCircle, Share as ShareIcon, Linkedin } from "lucide-react-native";
+import { ChevronLeft, Mail, MessageCircle, Share as ShareIcon, Linkedin, Flag, ShieldOff } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,6 +14,11 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import { openEmailAddress, openHttpsUrl } from "@/lib/url-safety";
 import { ensureMobileDirectChatGroup } from "@/lib/chat-helpers";
 import { showToast } from "@/components/ui/Toast";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
+import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
+import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
+import { toggleBlock } from "@/lib/moderation";
+import * as sentry from "@/lib/analytics/sentry";
 
 const DETAIL_COLORS = {
   background: "#ffffff",
@@ -50,6 +55,73 @@ export default function MemberProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [openingChat, setOpeningChat] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [unblockLoading, setUnblockLoading] = useState(false);
+  const { blockedUserIds } = useBlockedUsers();
+  const isSelf = !!member?.user_id && member.user_id === user?.id;
+  const isBlocked = !!member?.user_id && blockedUserIds.has(member.user_id);
+  const canReport = !!member && !isSelf;
+  const canBlock = !!member?.user_id && !isSelf;
+
+  const handleUnblock = useCallback(async () => {
+    if (!member?.user_id) return;
+    Alert.alert(
+      "Unblock this user?",
+      "Their content will be visible again.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unblock",
+          onPress: async () => {
+            try {
+              setUnblockLoading(true);
+              await toggleBlock(member.user_id!);
+              showToast("Unblocked", "success");
+            } catch (e) {
+              const message = (e as Error).message || "Failed to unblock";
+              showToast(message, "error");
+              sentry.captureException(e as Error, {
+                context: "MemberProfile.unblock",
+              });
+            } finally {
+              setUnblockLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [member?.user_id]);
+
+  const headerMenuItems = useMemo<OverflowMenuItem[]>(() => {
+    if (!canReport) return [];
+    const items: OverflowMenuItem[] = [
+      {
+        id: "report",
+        label: "Report",
+        icon: <Flag size={20} color={DETAIL_COLORS.primaryText} />,
+        onPress: () => setReportSheetOpen(true),
+      },
+    ];
+    if (canBlock) {
+      items.push(
+        isBlocked
+          ? {
+              id: "unblock",
+              label: "Unblock",
+              icon: <ShieldOff size={20} color={DETAIL_COLORS.primaryText} />,
+              onPress: handleUnblock,
+            }
+          : {
+              id: "block",
+              label: "Block",
+              icon: <ShieldOff size={20} color={DETAIL_COLORS.error} />,
+              destructive: true,
+              onPress: () => setReportSheetOpen(true),
+            },
+      );
+    }
+    return items;
+  }, [canReport, canBlock, isBlocked, handleUnblock]);
 
   useEffect(() => {
     async function fetchMember() {
@@ -182,13 +254,20 @@ export default function MemberProfileScreen() {
                 Member Profile
               </Text>
             </View>
+            {headerMenuItems.length > 0 && (
+              <OverflowMenu
+                items={headerMenuItems}
+                iconColor={APP_CHROME.headerTitle}
+                accessibilityLabel="Profile options"
+              />
+            )}
           </View>
         </SafeAreaView>
       </LinearGradient>
 
       {/* Content */}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.profileHeader}>
+        <View style={[styles.profileHeader, isBlocked && styles.dimmed]}>
           {member.photo_url ? (
             <Image source={member.photo_url} style={styles.avatarImage} contentFit="cover" transition={200} />
           ) : (
@@ -225,7 +304,67 @@ export default function MemberProfileScreen() {
           )}
         </View>
 
-        <View style={styles.contactSection}>
+        {canReport && (
+          <View style={styles.moderationActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.moderationButton,
+                styles.moderationButtonSecondary,
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() => setReportSheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Report user"
+            >
+              <Flag size={18} color={DETAIL_COLORS.primaryText} />
+              <Text style={styles.moderationButtonSecondaryText}>Report</Text>
+            </Pressable>
+            {canBlock && (
+              isBlocked ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.moderationButton,
+                    styles.moderationButtonSecondary,
+                    (pressed || unblockLoading) && { opacity: 0.7 },
+                  ]}
+                  onPress={handleUnblock}
+                  disabled={unblockLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Unblock user"
+                >
+                  <ShieldOff size={18} color={DETAIL_COLORS.primaryText} />
+                  <Text style={styles.moderationButtonSecondaryText}>
+                    {unblockLoading ? "Unblocking…" : "Unblock"}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.moderationButton,
+                    styles.moderationButtonDestructive,
+                    pressed && { opacity: 0.85 },
+                  ]}
+                  onPress={() => setReportSheetOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Block user"
+                >
+                  <ShieldOff size={18} color="#ffffff" />
+                  <Text style={styles.moderationButtonDestructiveText}>Block</Text>
+                </Pressable>
+              )
+            )}
+          </View>
+        )}
+
+        {isBlocked && (
+          <View style={styles.blockedNotice}>
+            <Text style={styles.blockedNoticeText}>
+              You blocked this user. Their content is hidden everywhere.
+            </Text>
+          </View>
+        )}
+
+        <View style={[styles.contactSection, isBlocked && styles.dimmed]}>
           <Text style={styles.sectionTitle}>Contact</Text>
 
           {member.email && (
@@ -259,6 +398,16 @@ export default function MemberProfileScreen() {
           )}
         </View>
       </ScrollView>
+
+      <ReportBlockSheet
+        visible={reportSheetOpen}
+        onClose={() => setReportSheetOpen(false)}
+        orgId={orgId}
+        targetType="user_profile"
+        targetId={member.user_id ?? member.id}
+        reportedUserId={member.user_id ?? null}
+        hideBlock={!member.user_id}
+      />
     </View>
   );
 }
@@ -363,6 +512,53 @@ const createStyles = () =>
       backgroundColor: DETAIL_COLORS.card,
       borderRadius: RADIUS.lg,
       padding: SPACING.md,
+    },
+    moderationActions: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.md,
+    },
+    moderationButton: {
+      flex: 1,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: SPACING.xs,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+    },
+    moderationButtonSecondary: {
+      backgroundColor: DETAIL_COLORS.card,
+      borderWidth: 1,
+      borderColor: DETAIL_COLORS.border,
+    },
+    moderationButtonSecondaryText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: DETAIL_COLORS.primaryText,
+      fontWeight: "600" as const,
+    },
+    moderationButtonDestructive: {
+      backgroundColor: DETAIL_COLORS.error,
+    },
+    moderationButtonDestructiveText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
+      fontWeight: "600" as const,
+    },
+    blockedNotice: {
+      backgroundColor: "#fef2f2",
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    blockedNoticeText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: DETAIL_COLORS.error,
+      textAlign: "center" as const,
+    },
+    dimmed: {
+      opacity: 0.4,
     },
     sectionTitle: {
       ...TYPOGRAPHY.titleMedium,

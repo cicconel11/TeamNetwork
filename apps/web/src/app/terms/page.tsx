@@ -59,8 +59,19 @@ const termsSections: TermsSection[] = [
     ],
   },
   {
-    id: "ip",
+    id: "ugc",
     number: "5",
+    title: "User-Generated Content, Reporting, and Blocking",
+    paragraphs: [
+      "TeamNetwork lets members share user-generated content such as chat messages, feed posts, comments, and profile information. You are solely responsible for content you submit and must not post anything that is abusive, harassing, hateful, sexually explicit, violent, illegal, or otherwise objectionable.",
+      "We provide in-app tools to report objectionable content and to block other users. Reports can be filed on any chat message, feed post, comment, or member profile. Reported content is reviewed and actioned within 24 hours where appropriate; we may remove content, restrict accounts, or terminate access for violations.",
+      "Blocking is symmetric: when you block another user, neither of you will see the other's messages, posts, comments, or profile activity. You can manage your blocked users from the in-app Blocked Users settings at any time.",
+      "We have no tolerance for objectionable content or abusive behavior. Continued violations will result in account termination.",
+    ],
+  },
+  {
+    id: "ip",
+    number: "6",
     title: "Intellectual Property & License",
     paragraphs: [
       "TeamNetwork and its licensors retain all rights, title, and interest in the Service, including software, content, designs, trademarks, and logos.",
@@ -71,7 +82,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "payments",
-    number: "6",
+    number: "7",
     title: "Payments and Subscriptions",
     paragraphs: [
       "Certain features may require payment; all fees are non-refundable unless required by law.",
@@ -81,7 +92,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "donations",
-    number: "7",
+    number: "8",
     title: "Donations and Mentorship",
     paragraphs: [
       "The Service may include options to donate to teams or programs, or participate in mentorship opportunities. Users understand that all donations are voluntary and may be subject to separate terms and conditions.",
@@ -90,7 +101,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "termination",
-    number: "8",
+    number: "9",
     title: "Termination",
     paragraphs: [
       "TeamNetwork may suspend or terminate accounts at any time for violations of these Terms.",
@@ -99,7 +110,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "disclaimers",
-    number: "9",
+    number: "10",
     title: "Disclaimers",
     paragraphs: [
       "The Service is provided \"as is\" and \"as available\" without warranties of any kind.",
@@ -109,7 +120,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "liability",
-    number: "10",
+    number: "11",
     title: "Limitation of Liability",
     paragraphs: [
       "To the fullest extent permitted by law, TeamNetwork shall not be liable for:",
@@ -122,7 +133,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "indemnification",
-    number: "11",
+    number: "12",
     title: "Indemnification",
     paragraphs: [
       "You agree to indemnify, defend, and hold harmless TeamNetwork, MAC Connect LLC, and their affiliates from any claims, damages, or expenses arising from:",
@@ -135,7 +146,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "arbitration",
-    number: "12",
+    number: "13",
     title: "Dispute Resolution and Arbitration",
     paragraphs: [],
     bullets: [
@@ -148,7 +159,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "changes",
-    number: "13",
+    number: "14",
     title: "Changes to Terms",
     paragraphs: [
       "TeamNetwork may modify these Terms at any time. Changes will be effective when posted. Continued use of the Service constitutes acceptance of the updated Terms.",
@@ -156,7 +167,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "governing-law",
-    number: "14",
+    number: "15",
     title: "Governing Law",
     paragraphs: [
       "These Terms are governed by the laws of the State of New York, without regard to conflict of law principles.",
@@ -164,7 +175,7 @@ const termsSections: TermsSection[] = [
   },
   {
     id: "contact",
-    number: "15",
+    number: "16",
     title: "Contact Information",
     paragraphs: [
       "Email: mleonard@myteamnetwork.com",
@@ -216,7 +227,7 @@ export default function TermsPage() {
             Legal
           </div>
           <h1 className="font-display text-4xl sm:text-5xl font-bold mb-4">Terms of Service</h1>
-          <p className="text-landing-cream/50">Last Updated: December 8, 2025</p>
+          <p className="text-landing-cream/50">Last Updated: May 16, 2026</p>
         </div>
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-12">

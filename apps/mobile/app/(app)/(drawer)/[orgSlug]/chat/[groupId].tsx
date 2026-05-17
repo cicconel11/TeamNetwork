@@ -19,6 +19,8 @@ import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
+import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
 import { Avatar } from "@/components/ui/Avatar";
 import { ReactionRow } from "@/components/reactions/ReactionRow";
 import {
@@ -86,6 +88,9 @@ export default function ChatRoomScreen() {
   const { orgId, orgSlug } = useOrg();
   const { user } = useAuth();
   const { isAdmin } = useOrgRole();
+  const { blockedUserIds } = useBlockedUsers();
+  const blockedRef = useRef<Set<string>>(blockedUserIds);
+  blockedRef.current = blockedUserIds;
   const router = useRouter();
   const styles = useMemo(() => createStyles(), []);
   const listRef = useRef<FlatList<MessageWithAuthor>>(null);
@@ -113,6 +118,11 @@ export default function ChatRoomScreen() {
   const [canManageMembers, setCanManageMembers] = useState(false);
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [userCache, setUserCache] = useState<Map<string, User>>(new Map());
+
+  // Report/block sheet target
+  const [reportTarget, setReportTarget] = useState<
+    { messageId: string; authorId: string } | null
+  >(null);
 
   // Members sheet state
   const [addMembersMode, setAddMembersMode] = useState(false);
@@ -252,9 +262,11 @@ export default function ChatRoomScreen() {
     if (error) { setError(error.message); return; }
 
     if (data) {
-      const authorIds = [...new Set(data.map((msg) => msg.author_id))];
+      const blocked = blockedRef.current;
+      const filtered = data.filter((msg) => !blocked.has(msg.author_id));
+      const authorIds = [...new Set(filtered.map((msg) => msg.author_id))];
       await fetchUnknownUsers(authorIds);
-      setMessages(data.map((msg) => ({ ...msg, author: userMap.get(msg.author_id) })));
+      setMessages(filtered.map((msg) => ({ ...msg, author: userMap.get(msg.author_id) })));
       setTimeout(scrollToBottom, 100);
     }
   }, [resolvedGroupId, fetchUnknownUsers, scrollToBottom, userMap]);
@@ -279,6 +291,7 @@ export default function ChatRoomScreen() {
         async (payload: RealtimePostgresChangesPayload<ChatMessage>) => {
           if (payload.eventType === "INSERT") {
             const newMsg = payload.new as ChatMessage;
+            if (blockedRef.current.has(newMsg.author_id)) return;
             if (!userMap.has(newMsg.author_id)) await fetchUnknownUsers([newMsg.author_id]);
             if (newMsg.status === "approved" || newMsg.author_id === currentUserId || canModerate) {
               setMessages((prev) => {
@@ -311,6 +324,10 @@ export default function ChatRoomScreen() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [resolvedGroupId, currentUserId, canModerate, fetchUnknownUsers, userMap, scrollToBottom]);
+
+  useEffect(() => {
+    setMessages((prev) => prev.filter((m) => !blockedUserIds.has(m.author_id)));
+  }, [blockedUserIds]);
 
   const pendingCount = useMemo(
     () => messages.filter((m) => m.status === "pending").length,
@@ -646,9 +663,29 @@ export default function ChatRoomScreen() {
             {isFirstInRun && isOwn && (
               <Text style={styles.messageTime}>{formatTimestamp(item.created_at)}</Text>
             )}
-            <View style={[styles.messageBubble, bubbleRadius, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther, isPending && styles.messageBubblePending]}>
+            <Pressable
+              onLongPress={
+                isOwn
+                  ? undefined
+                  : () =>
+                      setReportTarget({
+                        messageId: item.id,
+                        authorId: item.author_id,
+                      })
+              }
+              delayLongPress={350}
+              style={({ pressed }) => [
+                styles.messageBubble,
+                bubbleRadius,
+                isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther,
+                isPending && styles.messageBubblePending,
+                pressed && !isOwn && { opacity: 0.8 },
+              ]}
+              accessibilityRole={isOwn ? undefined : "button"}
+              accessibilityHint={isOwn ? undefined : "Long-press to report or block"}
+            >
               <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>{item.body}</Text>
-            </View>
+            </Pressable>
             {!isPending && !isRejected && (
               <ReactionRow
                 targetKind="chat_message"
@@ -978,6 +1015,15 @@ export default function ChatRoomScreen() {
           )}
         </BottomSheet>
       )}
+
+      <ReportBlockSheet
+        visible={!!reportTarget}
+        onClose={() => setReportTarget(null)}
+        orgId={orgId}
+        targetType="chat_message"
+        targetId={reportTarget?.messageId ?? ""}
+        reportedUserId={reportTarget?.authorId ?? null}
+      />
     </View>
   );
 }

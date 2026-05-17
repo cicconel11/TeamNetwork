@@ -1,5 +1,6 @@
 import { useMemo, useCallback, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -22,13 +23,23 @@ import {
   Linkedin,
   RefreshCw,
   Pencil,
+  Flag,
+  ShieldOff,
 } from "lucide-react-native";
 import { useAlumniDetail } from "@/hooks/useAlumniDetail";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useOrg } from "@/contexts/OrgContext";
+import { useAuth } from "@/hooks/useAuth";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { openEmailAddress, openHttpsUrl } from "@/lib/url-safety";
+import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
+import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
+import { showToast } from "@/components/ui/Toast";
+import { toggleBlock } from "@/lib/moderation";
+import * as sentry from "@/lib/analytics/sentry";
 
 const DETAIL_COLORS = {
   background: "#ffffff",
@@ -48,9 +59,80 @@ export default function AlumniDetailScreen() {
   const { alumniId, orgSlug } = useLocalSearchParams<{ alumniId: string; orgSlug: string }>();
   const { alumni, loading, error, refetch } = useAlumniDetail(orgSlug || "", alumniId || "");
   const { isAdmin } = useOrgRole();
+  const { orgId } = useOrg();
+  const { user } = useAuth();
+  const { blockedUserIds } = useBlockedUsers();
   const router = useRouter();
   const styles = useMemo(() => createStyles(), []);
   const [refreshing, setRefreshing] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [unblockLoading, setUnblockLoading] = useState(false);
+
+  const alumniUserId = alumni?.user_id ?? null;
+  const isSelf = !!alumniUserId && alumniUserId === user?.id;
+  const isBlocked = !!alumniUserId && blockedUserIds.has(alumniUserId);
+  const canReport = !!alumni && !isSelf;
+  const canBlock = !!alumniUserId && !isSelf;
+
+  const handleUnblock = useCallback(async () => {
+    if (!alumniUserId) return;
+    Alert.alert(
+      "Unblock this user?",
+      "Their content will be visible again.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unblock",
+          onPress: async () => {
+            try {
+              setUnblockLoading(true);
+              await toggleBlock(alumniUserId);
+              showToast("Unblocked", "success");
+            } catch (e) {
+              const message = (e as Error).message || "Failed to unblock";
+              showToast(message, "error");
+              sentry.captureException(e as Error, {
+                context: "AlumniProfile.unblock",
+              });
+            } finally {
+              setUnblockLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [alumniUserId]);
+
+  const headerMenuItems = useMemo<OverflowMenuItem[]>(() => {
+    if (!canReport) return [];
+    const items: OverflowMenuItem[] = [
+      {
+        id: "report",
+        label: "Report",
+        icon: <Flag size={20} color={DETAIL_COLORS.primaryText} />,
+        onPress: () => setReportSheetOpen(true),
+      },
+    ];
+    if (canBlock) {
+      items.push(
+        isBlocked
+          ? {
+              id: "unblock",
+              label: "Unblock",
+              icon: <ShieldOff size={20} color={DETAIL_COLORS.primaryText} />,
+              onPress: handleUnblock,
+            }
+          : {
+              id: "block",
+              label: "Block",
+              icon: <ShieldOff size={20} color={DETAIL_COLORS.error} />,
+              destructive: true,
+              onPress: () => setReportSheetOpen(true),
+            },
+      );
+    }
+    return items;
+  }, [canReport, canBlock, isBlocked, handleUnblock]);
 
   const handleEditPress = useCallback(() => {
     if (alumniId && orgSlug) {
@@ -161,6 +243,13 @@ export default function AlumniDetailScreen() {
                 <Pencil size={18} color={APP_CHROME.headerTitle} />
               </Pressable>
             )}
+            {headerMenuItems.length > 0 && (
+              <OverflowMenu
+                items={headerMenuItems}
+                iconColor={APP_CHROME.headerTitle}
+                accessibilityLabel="Profile options"
+              />
+            )}
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -174,7 +263,7 @@ export default function AlumniDetailScreen() {
         }
       >
         {/* Header Card */}
-        <View style={styles.profileHeader}>
+        <View style={[styles.profileHeader, isBlocked && styles.dimmed]}>
           {alumni.photo_url ? (
             <Image source={alumni.photo_url} style={styles.avatar} contentFit="cover" transition={200} />
           ) : (
@@ -191,9 +280,68 @@ export default function AlumniDetailScreen() {
           )}
         </View>
 
+        {canReport && (
+          <View style={styles.moderationActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.moderationButton,
+                styles.moderationButtonSecondary,
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() => setReportSheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Report this user"
+            >
+              <Flag size={18} color={DETAIL_COLORS.primaryText} />
+              <Text style={styles.moderationButtonSecondaryText}>Report</Text>
+            </Pressable>
+            {canBlock && (
+              isBlocked ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.moderationButton,
+                    styles.moderationButtonSecondary,
+                    pressed && { opacity: 0.7 },
+                    unblockLoading && { opacity: 0.5 },
+                  ]}
+                  onPress={handleUnblock}
+                  disabled={unblockLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Unblock this user"
+                >
+                  <ShieldOff size={18} color={DETAIL_COLORS.primaryText} />
+                  <Text style={styles.moderationButtonSecondaryText}>Unblock</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.moderationButton,
+                    styles.moderationButtonDestructive,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => setReportSheetOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Block this user"
+                >
+                  <ShieldOff size={18} color="#ffffff" />
+                  <Text style={styles.moderationButtonDestructiveText}>Block</Text>
+                </Pressable>
+              )
+            )}
+          </View>
+        )}
+
+        {isBlocked && (
+          <View style={styles.blockedNotice}>
+            <Text style={styles.blockedNoticeText}>
+              You blocked this user. Their content is hidden from you.
+            </Text>
+          </View>
+        )}
+
         {/* Quick Actions */}
         {(alumni.email || alumni.linkedin_url) && (
-          <View style={styles.actionsRow}>
+          <View style={[styles.actionsRow, isBlocked && styles.dimmed]}>
             {alumni.email && (
               <Pressable
                 style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.7 }]}
@@ -216,7 +364,7 @@ export default function AlumniDetailScreen() {
         )}
 
         {/* Details Section */}
-        <View style={styles.section}>
+        <View style={[styles.section, isBlocked && styles.dimmed]}>
           {alumni.graduation_year && (
             <View style={styles.detailRow}>
               <View style={styles.detailIcon}>
@@ -266,6 +414,16 @@ export default function AlumniDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      <ReportBlockSheet
+        visible={reportSheetOpen}
+        onClose={() => setReportSheetOpen(false)}
+        orgId={orgId}
+        targetType="user_profile"
+        targetId={alumni.user_id ?? alumni.id}
+        reportedUserId={alumni.user_id ?? null}
+        hideBlock={!alumni.user_id}
+      />
     </View>
   );
 }
@@ -452,5 +610,55 @@ const createStyles = () =>
       ...TYPOGRAPHY.bodyMedium,
       color: DETAIL_COLORS.primaryText,
       marginTop: 2,
+    },
+    moderationActions: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+      marginBottom: SPACING.md,
+    },
+    moderationButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: SPACING.xs,
+      paddingVertical: SPACING.sm + 2,
+      borderRadius: RADIUS.md,
+    },
+    moderationButtonSecondary: {
+      backgroundColor: DETAIL_COLORS.card,
+      borderWidth: 1,
+      borderColor: DETAIL_COLORS.border,
+    },
+    moderationButtonSecondaryText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: DETAIL_COLORS.primaryText,
+      fontWeight: "600",
+    },
+    moderationButtonDestructive: {
+      backgroundColor: DETAIL_COLORS.error,
+    },
+    moderationButtonDestructiveText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+      fontWeight: "600",
+    },
+    blockedNotice: {
+      marginHorizontal: SPACING.lg,
+      marginBottom: SPACING.md,
+      padding: SPACING.md,
+      backgroundColor: DETAIL_COLORS.card,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: DETAIL_COLORS.border,
+    },
+    blockedNoticeText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: DETAIL_COLORS.secondaryText,
+      textAlign: "center",
+    },
+    dimmed: {
+      opacity: 0.4,
     },
   });

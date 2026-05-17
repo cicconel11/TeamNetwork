@@ -84,3 +84,6 @@ export * from "./global-search";
 
 // AI feedback schemas
 export * from "./ai-feedback";
+
+// Moderation schemas (content reports, blocks)
+export * from "./moderation";

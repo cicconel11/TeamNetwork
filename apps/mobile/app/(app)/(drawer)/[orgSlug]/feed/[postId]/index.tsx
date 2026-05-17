@@ -14,7 +14,7 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Send, Edit2, Trash2, ExternalLink, Share2 } from "lucide-react-native";
+import { ArrowLeft, Send, Edit2, Trash2, ExternalLink, Share2, Flag } from "lucide-react-native";
 import { sharePost } from "@/lib/share";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
@@ -29,6 +29,7 @@ import { LikeButton } from "@/components/feed/LikeButton";
 import { FeedPoll } from "@/components/feed/FeedPoll";
 import { CommentItem } from "@/components/feed/CommentItem";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
+import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import { formatRelativeTime } from "@/lib/date-format";
@@ -69,6 +70,7 @@ export default function PostDetailScreen() {
   const textRef = useRef("");
   const inputRef = useRef<TextInput>(null);
   const [sending, setSending] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
 
   const { neutral, semantic } = useAppColorScheme();
   const styles = useThemedStyles((n, s) => ({
@@ -372,8 +374,18 @@ export default function PostDetailScreen() {
       },
     });
 
+    if (post && userId && post.author_id !== userId) {
+      items.push({
+        id: "report",
+        label: "Report Post",
+        icon: <Flag size={20} color={semantic.error} />,
+        destructive: true,
+        onPress: () => setReportSheetOpen(true),
+      });
+    }
+
     return items;
-  }, [canEdit, post?.author_id, userId, orgSlug, postId, handleDeletePost, router, neutral, semantic]);
+  }, [canEdit, post, userId, orgSlug, postId, handleDeletePost, router, neutral, semantic]);
 
   const renderComment = useCallback(
     ({ item }: { item: FeedComment }) => (
@@ -552,6 +564,15 @@ export default function PostDetailScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <ReportBlockSheet
+        visible={reportSheetOpen}
+        onClose={() => setReportSheetOpen(false)}
+        orgId={orgId}
+        targetType="feed_post"
+        targetId={postId ?? ""}
+        reportedUserId={post?.author_id ?? null}
+      />
     </View>
   );
 }

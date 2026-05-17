@@ -67,6 +67,13 @@ export default function DrawerStackLayout() {
             title: "Delete Account",
           }}
         />
+        <Stack.Screen
+          name="blocked-users"
+          options={{
+            headerShown: false,
+            title: "Blocked Users",
+          }}
+        />
       </Stack>
     </View>
   );

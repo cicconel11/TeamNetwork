@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import type { Database, NotificationAudience, NotificationChannel, UserRole } from "@/types/database";
+import { buildNewReportEmail, type NewReportEmailContext } from "./notifications/templates/moderation/new-report";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -391,4 +392,73 @@ export async function sendNotificationBlast(input: NotificationBlastInput): Prom
     skippedMissingContact: stats.skippedMissingContact,
     errors,
   };
+}
+
+export interface SendNewReportEmailInput {
+  supabase: SupabaseClient<Database>;
+  organizationId: string;
+  report: {
+    id: string;
+    target_type: NewReportEmailContext["targetType"];
+    reason: NewReportEmailContext["reason"];
+    details: string | null;
+  };
+  reporterFirstName: string | null;
+}
+
+/**
+ * Best-effort admin alert for a new content_reports row. Never throws — caller
+ * always returns success to the user even if email plumbing fails.
+ */
+export async function sendNewReportEmail(input: SendNewReportEmailInput): Promise<void> {
+  try {
+    const { supabase, organizationId, report, reporterFirstName } = input;
+
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("name")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+    const orgName = org?.name ?? "your organization";
+
+    const { data: adminRoles } = await supabase
+      .from("user_organization_roles")
+      .select("user_id")
+      .eq("organization_id", organizationId)
+      .eq("role", "admin")
+      .eq("status", "active");
+
+    const adminIds = (adminRoles ?? []).map((r) => r.user_id).filter(Boolean) as string[];
+    if (adminIds.length === 0) return;
+
+    const { data: admins } = await supabase
+      .from("users")
+      .select("id, email")
+      .in("id", adminIds);
+
+    const recipients = (admins ?? [])
+      .map((u) => u.email)
+      .filter((e): e is string => typeof e === "string" && e.length > 0);
+
+    if (recipients.length === 0) return;
+
+    const reviewUrl = process.env.MODERATION_REVIEW_URL || null;
+
+    const { subject, body } = buildNewReportEmail({
+      orgName,
+      targetType: report.target_type,
+      reason: report.reason,
+      reporterFirstName,
+      details: report.details,
+      reportId: report.id,
+      reviewUrl,
+    });
+
+    await Promise.allSettled(
+      recipients.map((to) => sendEmail({ to, subject, body })),
+    );
+  } catch (err) {
+    console.error("[sendNewReportEmail] best-effort failure", err);
+  }
 }

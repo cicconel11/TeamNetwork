@@ -15,6 +15,7 @@ import {
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ColorSchemeProvider } from "@/contexts/ColorSchemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { BlockedUsersProvider } from "@/contexts/BlockedUsersContext";
 import { NetworkProvider } from "@/contexts/NetworkContext";
 import { BiometricLockProvider } from "@/contexts/BiometricLockContext";
 import { LiveActivityProvider } from "@/contexts/LiveActivityContext";
@@ -107,13 +108,15 @@ export default function RootLayout() {
   return (
     <ColorSchemeProvider>
       <AuthProvider>
-        <NetworkProvider>
-          <BiometricLockProvider>
-            <LiveActivityProvider>
-              <RootLayoutInner />
-            </LiveActivityProvider>
-          </BiometricLockProvider>
-        </NetworkProvider>
+        <BlockedUsersProvider>
+          <NetworkProvider>
+            <BiometricLockProvider>
+              <LiveActivityProvider>
+                <RootLayoutInner />
+              </LiveActivityProvider>
+            </BiometricLockProvider>
+          </NetworkProvider>
+        </BlockedUsersProvider>
       </AuthProvider>
     </ColorSchemeProvider>
   );

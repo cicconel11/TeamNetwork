@@ -2,12 +2,14 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
+import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
 const DEFAULT_PAGE_SIZE = 50;
 
 export interface Alumni {
   id: string;
+  user_id: string | null;
   first_name: string | null;
   last_name: string | null;
   photo_url: string | null;
@@ -63,6 +65,9 @@ export function useAlumni(
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
+  const { blockedUserIds } = useBlockedUsers();
+  const blockedRef = useRef<Set<string>>(blockedUserIds);
+  blockedRef.current = blockedUserIds;
 
   useEffect(() => {
     lastFetchTimeRef.current = 0;
@@ -97,6 +102,7 @@ export function useAlumni(
           .select(
             `
             id,
+            user_id,
             first_name,
             last_name,
             photo_url,
@@ -125,7 +131,10 @@ export function useAlumni(
         if (alumniError) throw alumniError;
 
         if (isMountedRef.current) {
-          const newData = (data as Alumni[]) || [];
+          const blocked = blockedRef.current;
+          const newData = ((data as Alumni[]) || []).filter(
+            (a) => !a.user_id || !blocked.has(a.user_id),
+          );
 
           if (append) {
             setAlumni((prev) => [...prev, ...newData]);
@@ -186,6 +195,10 @@ export function useAlumni(
       isMountedRef.current = false;
     };
   }, [fetchAlumni]);
+
+  useEffect(() => {
+    setAlumni((prev) => prev.filter((a) => !a.user_id || !blockedUserIds.has(a.user_id)));
+  }, [blockedUserIds]);
 
   // Real-time subscription for alumni changes
   useEffect(() => {

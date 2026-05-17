@@ -23,6 +23,7 @@ import {
   MessageCircle,
   Receipt,
   Settings,
+  ShieldOff,
   SlidersHorizontal,
   Trophy,
   Users,
@@ -53,7 +54,7 @@ interface NavItem {
 
 // Pinned footer items (Settings, Navigation, Organizations, Sign Out)
 const PINNED_ITEM_HEIGHT = 48;
-const PINNED_FOOTER_COUNT = 2;
+const PINNED_FOOTER_COUNT = 3;
 const BRAND_STRIP_HEIGHT = 88;
 const FOOTER_PADDING = 32;
 const FOOTER_TOP_INSET = 8;
@@ -216,6 +217,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const pinnedItems = useMemo<NavItem[]>(() => {
     if (!slug) return [];
     return [
+      { label: "Blocked Users", href: "/(app)/(drawer)/blocked-users", icon: ShieldOff },
       { label: "Organizations", href: "/(app)", icon: Building2 },
     ];
   }, [slug]);
@@ -232,7 +234,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     // Use replace for secondary screens to avoid stacking
     if (item.href === `/(app)/${slug}`) {
       router.push(item.href);
-    } else if (item.href === "/(app)/(drawer)/delete-account") {
+    } else if (
+      item.href === "/(app)/(drawer)/delete-account" ||
+      item.href === "/(app)/(drawer)/blocked-users"
+    ) {
       router.push({
         pathname: item.href as any,
         params: slug ? { currentSlug: slug } : undefined,

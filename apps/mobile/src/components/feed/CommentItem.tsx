@@ -1,13 +1,16 @@
-import React, { useCallback } from "react";
-import { View, Text, Pressable } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { View, Text } from "react-native";
 import { Image } from "expo-image";
-import { Trash2 } from "lucide-react-native";
+import { Flag, Trash2 } from "lucide-react-native";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatRelativeTime } from "@/lib/date-format";
 import type { FeedComment } from "@/types/feed";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { useOrg } from "@/contexts/OrgContext";
+import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
+import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
 
 interface CommentItemProps {
   comment: FeedComment;
@@ -17,7 +20,9 @@ interface CommentItemProps {
 }
 
 export function CommentItem({ comment, isOwn, isAdmin, onDelete }: CommentItemProps) {
-  const { neutral } = useAppColorScheme();
+  const { neutral, semantic } = useAppColorScheme();
+  const { orgId } = useOrg();
+  const [sheetOpen, setSheetOpen] = useState(false);
   const styles = useThemedStyles((n) => ({
     container: {
       flexDirection: "row" as const,
@@ -67,10 +72,31 @@ export function CommentItem({ comment, isOwn, isAdmin, onDelete }: CommentItemPr
     },
   }));
 
-  const canDelete = (isOwn || isAdmin) && !!onDelete;
   const handleDelete = useCallback(() => {
     onDelete?.(comment.id);
   }, [onDelete, comment.id]);
+
+  const menuItems = useMemo<OverflowMenuItem[]>(() => {
+    const items: OverflowMenuItem[] = [];
+    if ((isOwn || isAdmin) && onDelete) {
+      items.push({
+        id: "delete",
+        label: "Delete comment",
+        icon: <Trash2 size={18} color={semantic.error} />,
+        destructive: true,
+        onPress: handleDelete,
+      });
+    }
+    if (!isOwn) {
+      items.push({
+        id: "report",
+        label: "Report comment",
+        icon: <Flag size={18} color={neutral.foreground} />,
+        onPress: () => setSheetOpen(true),
+      });
+    }
+    return items;
+  }, [isOwn, isAdmin, onDelete, handleDelete, neutral.foreground, semantic.error]);
 
   return (
     <View style={styles.container}>
@@ -96,19 +122,25 @@ export function CommentItem({ comment, isOwn, isAdmin, onDelete }: CommentItemPr
           <Text style={styles.timestamp}>
             {formatRelativeTime(comment.created_at)}
           </Text>
-          {canDelete && (
-            <Pressable
-              onPress={handleDelete}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityLabel="Delete comment"
-              accessibilityRole="button"
-            >
-              <Trash2 size={14} color={neutral.placeholder} />
-            </Pressable>
+          {menuItems.length > 0 && (
+            <OverflowMenu
+              items={menuItems}
+              iconSize={16}
+              accessibilityLabel="Comment options"
+            />
           )}
         </View>
         <Text style={styles.body}>{comment.body}</Text>
       </View>
+
+      <ReportBlockSheet
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        orgId={orgId}
+        targetType="feed_comment"
+        targetId={comment.id}
+        reportedUserId={comment.author_id}
+      />
     </View>
   );
 }
