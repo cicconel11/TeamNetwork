@@ -581,6 +581,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         currentPath,
         routeEntityContext,
         availableTools: pass1Tools?.map((tool) => tool.function.name as ToolName),
+        attachment,
         stageTimings,
         requestLogContext,
         buildPromptContextFn,
@@ -602,20 +603,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               : (m.content as string),
         }))
         .filter((m: { content: string }) => Boolean(m.content));
-      const finalHistory =
-        attachment &&
-        historyMessages.length > 0 &&
-        historyMessages[historyMessages.length - 1]?.role === "user"
-          ? [
-              ...historyMessages.slice(0, -1),
-              {
-                ...historyMessages[historyMessages.length - 1],
-                content:
-                  `${historyMessages[historyMessages.length - 1].content}\n\n` +
-                  `[Attached schedule file: "${attachment.fileName}", storage path: "${attachment.storagePath}"]`,
-              },
-            ]
-          : historyMessages;
+      const finalHistory = historyMessages;
       const pendingConnectionDisambiguation =
         hasPendingConnectionDisambiguation(finalHistory) &&
         looksLikeConnectionDisambiguationReply(messageSafety.promptSafeMessage);
