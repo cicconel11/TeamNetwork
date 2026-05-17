@@ -27,13 +27,14 @@ import { verifyCaptcha } from "@/lib/security/captcha";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type DonationMode = "checkout" | "payment_intent";
+type DonationMode = "checkout" | "payment_intent" | "payment_sheet";
 type DonationOrganization = {
   id: string;
   slug: string;
   name: string;
   stripe_connect_account_id: string | null;
   captcha_provider?: string | null;
+  donation_eligible_ios?: boolean | null;
 };
 
 const donationSchema = z
@@ -46,7 +47,7 @@ const donationSchema = z
     donorEmail: optionalEmail,
     eventId: baseSchemas.uuid.optional(),
     purpose: optionalSafeString(500),
-    mode: z.enum(["checkout", "payment_intent"]).optional(),
+    mode: z.enum(["checkout", "payment_intent", "payment_sheet"]).optional(),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
     paymentAttemptId: baseSchemas.uuid.optional(),
     anonymous: z.boolean().optional(),
@@ -100,7 +101,14 @@ export async function POST(req: Request) {
   }
 
   const currency = normalizeCurrency(body.currency);
-  const mode: DonationMode = body.mode === "payment_intent" ? "payment_intent" : "checkout";
+  const mode: DonationMode =
+    body.mode === "payment_intent"
+      ? "payment_intent"
+      : body.mode === "payment_sheet"
+        ? "payment_sheet"
+        : "checkout";
+  const platformHeader = req.headers.get("x-platform")?.toLowerCase() ?? null;
+  const isIosClient = platformHeader === "ios";
   // SECURITY: Platform fee is ALWAYS calculated server-side to prevent fee bypass attacks
   // Client-provided platformFeeAmountCents is intentionally ignored
   const platformFeeCents = calculatePlatformFee(amountCents);
@@ -119,7 +127,9 @@ export async function POST(req: Request) {
 
   const { data: org, error: orgError } = await supabase
     .from("organizations")
-    .select("id, slug, name, stripe_connect_account_id, captcha_provider")
+    .select(
+      "id, slug, name, stripe_connect_account_id, captcha_provider, donation_eligible_ios",
+    )
     .eq(orgFilter.column as "id" | "slug", orgFilter.value)
     .maybeSingle();
 
@@ -127,6 +137,26 @@ export async function POST(req: Request) {
     return respond({ error: "Organization not found" }, 404);
   }
   const resolvedOrg = org as unknown as DonationOrganization;
+
+  // Apple Guideline 3.2.1(vi): donations from iOS may only be collected by
+  // verified nonprofits. Block both payment_sheet (native) and checkout
+  // (Safari) flows from the iOS client if the org has not been verified —
+  // the safer default is "redirect to the web for this org".
+  if (isIosClient && !resolvedOrg.donation_eligible_ios) {
+    return respond(
+      {
+        error: "Donations to this organization are only available on the web.",
+        reason: "org_not_eligible_ios",
+      },
+      403,
+    );
+  }
+  if (mode === "payment_sheet" && !isIosClient) {
+    return respond(
+      { error: "payment_sheet mode is only available on the iOS client." },
+      400,
+    );
+  }
 
   // Verify captcha after org lookup so per-org provider flag can apply.
   const orgCaptchaProvider = resolvedOrg.captcha_provider;
@@ -212,7 +242,10 @@ export async function POST(req: Request) {
       supabase,
       idempotencyKey,
       paymentAttemptId,
-      flowType: mode === "payment_intent" ? "donation_payment_intent" : "donation_checkout",
+      flowType:
+        mode === "payment_intent" || mode === "payment_sheet"
+          ? "donation_payment_intent"
+          : "donation_checkout",
       amountCents,
       currency,
       organizationId: resolvedOrg.id,
@@ -288,7 +321,27 @@ export async function POST(req: Request) {
       );
     }
 
-    if (mode === "payment_intent") {
+    if (mode === "payment_intent" || mode === "payment_sheet") {
+      // For payment_sheet we additionally create a Customer + ephemeral key on
+      // the connected account so the iOS Stripe Payment Sheet can list saved
+      // payment methods. Customer is keyed by donor email when available;
+      // anonymous donations get a fresh customer per attempt.
+      let customerId: string | null = null;
+      if (mode === "payment_sheet") {
+        const customer = await stripe.customers.create(
+          {
+            email: donorEmail || undefined,
+            name: donorName || undefined,
+            metadata: { organization_id: resolvedOrg.id, source: "ios_payment_sheet" },
+          },
+          {
+            idempotencyKey: `${claimedAttempt.idempotency_key}:customer`,
+            ...stripeOptions,
+          },
+        );
+        customerId = customer.id;
+      }
+
       const paymentIntent = await stripe.paymentIntents.create(
         {
           amount: amountCents,
@@ -298,6 +351,7 @@ export async function POST(req: Request) {
           description: purpose ? `Donation: ${purpose}` : `Donation to ${resolvedOrg.name}`,
           metadata,
           application_fee_amount: platformFeeCents || undefined,
+          ...(customerId ? { customer: customerId } : {}),
         },
         { idempotencyKey: claimedAttempt.idempotency_key, ...stripeOptions },
       );
@@ -309,6 +363,26 @@ export async function POST(req: Request) {
         status: "processing",
         stripe_connected_account_id: resolvedOrg.stripe_connect_account_id,
       });
+
+      if (mode === "payment_sheet" && customerId) {
+        const ephemeralKey = await stripe.ephemeralKeys.create(
+          { customer: customerId },
+          // Use the same Stripe API version the platform Stripe client targets.
+          // The mobile SDK pins its own version; this just controls the shape
+          // of the ephemeral key payload returned here.
+          { apiVersion: "2025-12-15.clover", ...stripeOptions },
+        );
+
+        return respond({
+          mode,
+          paymentIntentClientSecret: paymentIntent.client_secret,
+          ephemeralKeySecret: ephemeralKey.secret,
+          customerId,
+          stripeAccountId: resolvedOrg.stripe_connect_account_id,
+          idempotencyKey: claimedAttempt.idempotency_key,
+          paymentAttemptId: claimedAttempt.id,
+        });
+      }
 
       return respond({
         mode,

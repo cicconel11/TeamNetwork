@@ -188,6 +188,16 @@ const config: ExpoConfig = {
     ],
     "expo-quick-actions",
     "expo-apple-authentication",
+    [
+      "@stripe/stripe-react-native",
+      {
+        // Apple Pay Merchant ID must be registered in App Store Connect and
+        // paired with a Stripe-issued Payment Processing Certificate before
+        // Apple Pay will succeed on a signed build.
+        merchantIdentifier: "merchant.com.myteamnetwork.teammeet",
+        enableGooglePay: false,
+      },
+    ],
     "./plugins/withOptionalHardwareFeatures",
     "expo-font",
     "@bacons/apple-targets",

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -22,6 +23,7 @@ import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { openHttpsUrl } from "@/lib/url-safety";
 import { track } from "@/lib/analytics";
+import { useDonationPaymentSheet } from "@/hooks/useDonationPaymentSheet";
 
 export default function NewDonationScreen() {
   const navigation = useNavigation();
@@ -156,6 +158,9 @@ export default function NewDonationScreen() {
   const [purpose, setPurpose] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { start: startPaymentSheet, isProcessing: paymentSheetBusy } =
+    useDonationPaymentSheet();
+  const isIOS = Platform.OS === "ios";
 
   const handleBack = useCallback(() => {
     if ((navigation as any).canGoBack && (navigation as any).canGoBack()) {
@@ -191,6 +196,40 @@ export default function NewDonationScreen() {
     const amountValue = Number(amount.trim());
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       setError("Enter a donation amount greater than zero.");
+      return;
+    }
+
+    if (isIOS) {
+      const result = await startPaymentSheet({
+        organizationId: orgId,
+        organizationSlug: orgSlug,
+        amount: amountValue,
+        donorName: donorName.trim() || undefined,
+        donorEmail: donorEmail.trim() || undefined,
+        purpose: purpose.trim() || undefined,
+        captchaToken: token,
+      });
+
+      if (result.status === "completed") {
+        track("donation_checkout_started", {
+          org_slug: orgSlug,
+          amount: amountValue,
+          has_purpose: !!purpose.trim(),
+          channel: "payment_sheet",
+        });
+        router.replace(`/(app)/${orgSlug}/donations?donation=success`);
+        return;
+      }
+      if (result.status === "canceled") {
+        return;
+      }
+      if (result.status === "ineligible_ios") {
+        setError(
+          "Donations for this organization are only available on the web. Please open the web app to contribute.",
+        );
+        return;
+      }
+      setError(result.message);
       return;
     }
 
@@ -338,17 +377,19 @@ export default function NewDonationScreen() {
 
           <Pressable
             onPress={handleSubmit}
-            disabled={isSaving}
+            disabled={isSaving || paymentSheetBusy}
             style={({ pressed }) => [
               styles.primaryButton,
               pressed && styles.primaryButtonPressed,
-              isSaving && styles.buttonDisabled,
+              (isSaving || paymentSheetBusy) && styles.buttonDisabled,
             ]}
           >
-            {isSaving ? (
+            {isSaving || paymentSheetBusy ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.primaryButtonText}>Continue to Stripe</Text>
+              <Text style={styles.primaryButtonText}>
+                {isIOS ? "Donate" : "Continue to Stripe"}
+              </Text>
             )}
           </Pressable>
         </ScrollView>
