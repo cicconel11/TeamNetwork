@@ -102,6 +102,7 @@ describe("ai access policy — active_member", () => {
       "list_job_postings",
       "list_chat_groups",
       "list_philanthropy_events",
+      "list_member_preferences",
       "find_navigation_targets",
       "search_org_content",
     ]));
