@@ -1,8 +1,9 @@
-import React, { useMemo } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import React from "react";
+import { View, Text, ScrollView } from "react-native";
 import { Stack } from "expo-router";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import type { ThemeColors } from "@/lib/theme";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 type TermsSection = {
   id: string;
@@ -176,14 +177,95 @@ const termsSections: TermsSection[] = [
     number: "16",
     title: "Contact Information",
     paragraphs: [
-      "Email: support@myteamnetwork.com",
+      "Email: mleonard@myteamnetwork.com",
     ],
   },
 ];
 
 export default function TermsScreen() {
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useThemedStyles((n) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    scrollContent: {
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.md,
+      paddingBottom: SPACING.xl,
+    },
+    header: {
+      marginBottom: SPACING.lg,
+    },
+    title: {
+      ...TYPOGRAPHY.displayMedium,
+      color: n.foreground,
+      marginBottom: SPACING.xs,
+    },
+    lastUpdated: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    sectionCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.md,
+      marginBottom: SPACING.sm,
+    },
+    sectionHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      marginBottom: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    numberBadge: {
+      minWidth: 28,
+      height: 28,
+      paddingHorizontal: SPACING.xs,
+      borderRadius: RADIUS.full,
+      backgroundColor: n.divider,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    numberBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.secondary,
+      fontVariant: ["tabular-nums" as const],
+    },
+    sectionTitle: {
+      flex: 1,
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+    },
+    sectionContent: {
+      gap: SPACING.sm,
+    },
+    paragraph: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+    bulletList: {
+      gap: SPACING.xs,
+      marginTop: SPACING.xs / 2,
+    },
+    bulletItem: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+    },
+    bulletDot: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.placeholder,
+      marginTop: 1,
+    },
+    bulletText: {
+      flex: 1,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+  }));
 
   return (
     <View style={styles.container}>
@@ -191,14 +273,13 @@ export default function TermsScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Terms of Service</Text>
           <Text style={styles.lastUpdated}>Last Updated: May 16, 2026</Text>
         </View>
 
-        {/* Sections */}
         {termsSections.map((section) => (
           <View key={section.id} style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
@@ -213,7 +294,7 @@ export default function TermsScreen() {
                   {paragraph}
                 </Text>
               ))}
-              {section.bullets && (
+              {section.bullets ? (
                 <View style={styles.bulletList}>
                   {section.bullets.map((bullet, index) => (
                     <View key={index} style={styles.bulletItem}>
@@ -222,7 +303,7 @@ export default function TermsScreen() {
                     </View>
                   ))}
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
         ))}
@@ -230,90 +311,3 @@ export default function TermsScreen() {
     </View>
   );
 }
-
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    scrollContent: {
-      padding: 16,
-      paddingBottom: 40,
-    },
-    header: {
-      marginBottom: 24,
-    },
-    title: {
-      fontSize: 28,
-      fontWeight: "700",
-      color: colors.foreground,
-      marginBottom: 8,
-    },
-    lastUpdated: {
-      fontSize: 14,
-      color: colors.mutedForeground,
-    },
-    sectionCard: {
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      borderCurve: "continuous",
-      padding: 16,
-      marginBottom: 12,
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-    },
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      marginBottom: 12,
-      gap: 12,
-    },
-    numberBadge: {
-      width: 32,
-      height: 32,
-      borderRadius: 8,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    numberBadgeText: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: colors.primaryForeground,
-    },
-    sectionTitle: {
-      flex: 1,
-      fontSize: 18,
-      fontWeight: "600",
-      color: colors.foreground,
-      lineHeight: 24,
-      paddingTop: 4,
-    },
-    sectionContent: {
-      gap: 12,
-    },
-    paragraph: {
-      fontSize: 15,
-      lineHeight: 22,
-      color: colors.mutedForeground,
-    },
-    bulletList: {
-      gap: 8,
-    },
-    bulletItem: {
-      flexDirection: "row",
-      gap: 8,
-    },
-    bulletDot: {
-      fontSize: 15,
-      color: colors.primary,
-      lineHeight: 22,
-      marginTop: 1,
-    },
-    bulletText: {
-      flex: 1,
-      fontSize: 15,
-      lineHeight: 22,
-      color: colors.mutedForeground,
-    },
-  });
