@@ -24,6 +24,7 @@ import { suggestConnectionsModule } from "./suggest-connections";
 import { suggestMentorsModule } from "./suggest-mentors";
 import { listAvailableMentorsModule } from "./list-available-mentors";
 import { listMemberPreferencesModule } from "./list-member-preferences";
+import { findFreeMembersModule } from "./find-free-members";
 import { prepareAnnouncementModule } from "./prepare-announcement";
 import { prepareJobPostingModule } from "./prepare-job-posting";
 import { prepareUpdateJobPostingModule } from "./prepare-update-job-posting";
@@ -70,6 +71,7 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   suggestMentorsModule,
   listAvailableMentorsModule,
   listMemberPreferencesModule,
+  findFreeMembersModule,
   prepareAnnouncementModule,
   prepareJobPostingModule,
   prepareUpdateJobPostingModule,
