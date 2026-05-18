@@ -60,6 +60,15 @@ The assistant is locked to TeamNetwork organization tasks. Enforcement runs at f
 - Role-safe operational enterprise metrics should use deterministic tool-backed responses when available.
 - Mixed prompts should answer allowed parts and deny restricted parts in the same response.
 
+## Member Interest vs. Member Availability Routing
+
+Two sibling tools answer different "who?" questions about members and the pass1 router splits them deterministically:
+
+- `list_member_preferences` (sport / interest / free-text fields): triggered by `MEMBER_INTEREST_PROMPT_PATTERN` — questions like "who plays tennis?", "anyone interested in fundraising?", or any prompt that names a sport or hobby. Reads `mentor_profiles` and `mentee_preferences`. Surfaces free-text `time_availability` / `time_commitment` strings verbatim; never claims to compute schedule overlaps.
+- `find_free_members` (structured day/time): triggered by `MEMBER_AVAILABILITY_PROMPT_PATTERN` — questions like "who is free Tuesday evening?", "anyone free Wednesday lunch?". Reads `academic_schedules` (per-user weekly commitments) plus org-wide `schedule_events` and team `events`. Returns hour-bucketed `free` / `busy` lists with member names. Does NOT read personal Google or ICS calendars — those are RLS-locked to each owner; the policy block in `context-builder.ts` instructs the model to mention that limitation when relevant.
+- Order matters: the `member_availability` rule is evaluated before `member_interest` so prompts that match both ("anyone free Tuesday for tennis?") pick availability as the primary intent.
+- Empty-state semantics: `find_free_members` returns `state="no_data"` when the org has no published schedules or events in the window (model offers to draft an announcement asking members to share availability), distinct from `state="resolved"` with zero free members (model says "no one is free in that window").
+
 ## Tech Stack
 
 | Layer | Technology |
