@@ -1,5 +1,13 @@
 import { useEffect, useCallback, useRef } from "react";
-import { StyleSheet, Platform, View } from "react-native";
+import { LogBox, StyleSheet, Platform, View } from "react-native";
+
+// Silences a React-19 vs @stripe/stripe-react-native@0.65.1 compat warning
+// that fires during module load. We're already on the latest Stripe SDK
+// version (no upstream fix yet) and the SDK still functions. Remove once
+// stripe-react-native ships a React-19-safe release.
+LogBox.ignoreLogs([
+  /forwardRef render functions accept exactly two parameters/,
+]);
 import { Stack, useRouter, useSegments } from "expo-router";
 import type { ErrorBoundaryProps } from "expo-router";
 import * as Linking from "expo-linking";
