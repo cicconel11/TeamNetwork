@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { eventOverlapsRange } from "@/lib/calendar/event-segments";
+import { fetchTeamAvailabilitySources } from "@/lib/calendar/team-availability";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 const MAX_EVENTS = 500;
@@ -149,31 +150,19 @@ export async function GET(request: Request) {
       );
     }
 
-    // Query all three event sources in parallel
+    // Query personal calendar (per-user, RLS-scoped) + org-wide sources (via helper)
     // Note: RLS policy only allows users to see their own calendar_events (auth.uid() = user_id)
 
-    const [calendarResult, scheduleResult, orgResult] = await Promise.all([
+    const [calendarResult, teamSources] = await Promise.all([
       fetchOverlappingCalendarEvents(supabase, user.id, start, end),
-
-      supabase
-        .from("schedule_events")
-        .select("id, title, start_at, end_at, location, status")
-        .eq("org_id", organizationId)
-        .neq("status", "cancelled")
-        .lte("start_at", end.toISOString())
-        .gte("end_at", start.toISOString())
-        .limit(MAX_EVENTS + 1)
-        .order("start_at", { ascending: true }),
-
-      supabase
-        .from("events")
-        .select("id, title, start_date, end_date, location, event_type, organization_id, audience, target_user_ids")
-        .eq("organization_id", organizationId)
-        .is("deleted_at", null)
-        .lte("start_date", end.toISOString())
-        .or(`end_date.gte.${start.toISOString()},end_date.is.null`)
-        .limit(MAX_EVENTS + 1)
-        .order("start_date", { ascending: true }),
+      fetchTeamAvailabilitySources({
+        supabase,
+        orgId: organizationId,
+        start,
+        end,
+        membership: { role: membership.role, userId: user.id },
+        maxEvents: MAX_EVENTS,
+      }),
     ]);
 
     if (calendarResult.error) {
@@ -183,80 +172,19 @@ export async function GET(request: Request) {
       );
     }
 
-    const events = calendarResult.events;
-
-    if (scheduleResult.error) {
-      console.error("[calendar-events] Failed to fetch schedule events:", scheduleResult.error);
+    if (teamSources.scheduleError) {
+      console.error("[calendar-events] Failed to fetch schedule events:", teamSources.scheduleError);
     }
-    const scheduleEvents = scheduleResult.data || [];
-
-    if (orgResult.error) {
-      console.error("[calendar-events] Failed to fetch org events:", orgResult.error);
+    if (teamSources.orgError) {
+      console.error("[calendar-events] Failed to fetch org events:", teamSources.orgError);
     }
-    const orgEvents = orgResult.data || [];
 
-    const normalizedCalendar = events
-      .map((event) => ({
-        ...event,
-        origin: "calendar" as const,
-      }));
+    const normalizedCalendar = calendarResult.events.map((event) => ({
+      ...event,
+      origin: "calendar" as const,
+    }));
 
-    const normalizedSchedule = scheduleEvents
-      .filter((event) => eventOverlapsRange({
-        startAt: event.start_at,
-        endAt: event.end_at,
-        allDay: false,
-      }, start, end))
-      .map((event) => ({
-        id: `schedule:${event.id}`,
-        title: event.title,
-        start_at: event.start_at,
-        end_at: event.end_at,
-        all_day: false,
-        location: event.location,
-        feed_id: null,
-        user_id: `org:${organizationId}`,
-        origin: "schedule" as const,
-      }));
-
-    const normalizedOrg = orgEvents
-      .filter((event) => {
-        const targetUserIds = Array.isArray(event.target_user_ids) ? event.target_user_ids : [];
-        if (targetUserIds.length > 0) {
-          return targetUserIds.includes(user.id);
-        }
-
-        switch (event.audience) {
-          case "members":
-            return membership.role === "admin" || membership.role === "active_member" || membership.role === "member";
-          case "alumni":
-            return membership.role === "alumni";
-          case "all":
-          case "both":
-          case null:
-            return true;
-          default:
-            return true;
-        }
-      })
-      .filter((event) => eventOverlapsRange({
-        startAt: event.start_date,
-        endAt: event.end_date,
-        allDay: false,
-      }, start, end))
-      .map((event) => ({
-        id: `org:${event.id}`,
-        title: event.title,
-        start_at: event.start_date,
-        end_at: event.end_date,
-        all_day: false,
-        location: event.location,
-        feed_id: null,
-        user_id: `org:${organizationId}`,
-        origin: "org" as const,
-      }));
-
-    const combined = [...normalizedCalendar, ...normalizedSchedule, ...normalizedOrg].sort((a, b) => {
+    const combined = [...normalizedCalendar, ...teamSources.normalized].sort((a, b) => {
       return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
     });
 
