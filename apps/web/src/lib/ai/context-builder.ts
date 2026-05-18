@@ -162,11 +162,22 @@ function isChatSurfacePath(p: string | undefined): boolean {
 }
 
 const MEMBER_PREFERENCES_POLICY = [
-  "MEMBER INTEREST AND AVAILABILITY POLICY:",
-  "- When the user asks who plays a sport, who is interested in a topic, who has noted availability, or 'who is free [day/time]', call list_member_preferences when attached. Pass `sport` or `topic` filters when the question names one.",
+  "MEMBER INTEREST POLICY:",
+  "- When the user asks who plays a sport, who is interested in a topic, or who has written free-form text about their availability, call list_member_preferences when attached. Pass `sport` or `topic` filters when the question names one.",
   "- Free-text time_availability is a member-authored string (e.g. 'weekday evenings'). Surface it verbatim; do NOT claim to compute schedule overlaps the user did not state.",
-  "- If list_member_preferences returns no_results, do NOT just refuse. Say members have not published interests or availability yet, then offer one concrete next step: draft an announcement to gather it (call prepare_announcement when attached) or open /members via find_navigation_targets.",
+  "- For structured 'who is free [day/time]' questions, use find_free_members instead (see MEMBER AVAILABILITY POLICY).",
+  "- If list_member_preferences returns no_results, do NOT just refuse. Say members have not published interests yet, then offer one concrete next step: draft an announcement to gather it (call prepare_announcement when attached) or open /members via find_navigation_targets.",
   "- Never invent sports, interests, or availability that the tool did not return.",
+].join("\n");
+
+const MEMBER_AVAILABILITY_POLICY = [
+  "MEMBER AVAILABILITY POLICY:",
+  "- When the user asks a structured time question — 'who is free Tuesday evening?', 'anyone free Wednesday lunch?', 'who can meet tomorrow morning?' — call find_free_members when attached.",
+  "- Pass `start` and `end` as ISO 8601 timestamps covering the requested window. Default time-of-day guesses: morning = 08:00–12:00, lunch = 12:00–14:00, afternoon = 13:00–17:00, evening = 17:00–22:00, night = 20:00–23:00 (local org time).",
+  "- find_free_members reads each member's published academic schedules plus org-wide team events. It does NOT read personal Google or ICS calendars; mention that limitation if the user asks why someone shows as free.",
+  "- Surface free members by name for the requested hours. If multiple hour buckets are returned, group members by free-count and call out the best window. Never invent free/busy state the tool did not return.",
+  "- If state='no_data', say clearly that the org has not published structured availability yet, then offer one next step: draft an announcement asking members to share availability (call prepare_announcement when attached) or open /members via find_navigation_targets.",
+  "- If state='resolved' but zero free members in the window, say 'no one is free in that window' — explicitly different from no_data.",
 ].join("\n");
 
 const PARTIAL_CAPABILITY_POLICY = [
@@ -732,6 +743,7 @@ export async function buildPromptContext(
     "For navigation or 'where do I go' requests, call find_navigation_targets and prefer returning direct in-app links.",
     PARTIAL_CAPABILITY_POLICY,
     MEMBER_PREFERENCES_POLICY,
+    MEMBER_AVAILABILITY_POLICY,
     "When listing members or admins, prefer real human names over raw emails whenever a trustworthy name is available.",
     "Do NOT present placeholder identities like Member(email@example.com).",
     "If a member or admin has no trustworthy human name, describe them as an email-only member account or email-only admin account and include the email only when it is the only identifier or the user explicitly asks for emails.",
