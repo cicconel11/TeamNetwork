@@ -1362,7 +1362,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_member_preferences" as const,
       description:
-        "List members who have published mentor profiles or mentee preferences. Returns sports, topics, industries, positions, and any free-text time_availability (mentees) or time_commitment (mentors) that members have shared. Use when the user asks who plays a sport, who is interested in a topic, who has noted availability, or any interest/availability-style question. Free-text availability is not a structured schedule — surface it verbatim, never claim to compute overlaps.",
+        "List members who have published mentor profiles or mentee preferences. Returns sports, topics, industries, positions, and any free-text time_availability (mentees) or time_commitment (mentors) that members have shared. Use when the user asks who plays a sport, who is interested in a topic, or who has written about their availability in free-form text. For structured 'who is free [day/time]' questions, call find_free_members instead. Free-text availability is not a structured schedule — surface it verbatim, never claim to compute overlaps.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -1383,6 +1383,43 @@ const TOOL_BY_NAME = {
               "Optional case-insensitive substring filter applied against mentor topics and mentee preferred_topics (e.g. 'fundraising').",
           },
         },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  find_free_members: {
+    type: "function" as const,
+    function: {
+      name: "find_free_members" as const,
+      description:
+        "Find which org members are free or busy during a structured time window. Source data: each member's academic_schedules (recurring class/practice commitments) plus org-wide schedule_events and team events that mark everyone busy. Does NOT include personal Google/ICS calendar events (those are RLS-locked to each owner). Returns hour-bucketed free/busy lists with member names. Use for 'who is free [day/time]' questions — pass start/end as ISO timestamps covering the requested window. Distinguish state='no_data' (org hasn't published any schedules) from state='resolved' with zero free members (people are busy).",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          start: {
+            type: "string" as const,
+            description:
+              "ISO 8601 timestamp (with timezone offset) marking the start of the window to check.",
+          },
+          end: {
+            type: "string" as const,
+            description:
+              "ISO 8601 timestamp (with timezone offset) marking the end of the window. Must be after start and within 14 days of start.",
+          },
+          sport: {
+            type: "string" as const,
+            description:
+              "Optional case-insensitive substring filter applied against academic schedule titles (e.g. 'tennis' to find members whose Tennis practice conflicts).",
+          },
+          min_free: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 500,
+            description:
+              "Optional minimum free member count per hour. Hours with fewer free members are omitted.",
+          },
+        },
+        required: ["start", "end"],
         additionalProperties: false as const,
       },
     },
@@ -1429,6 +1466,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.suggest_mentors,
   TOOL_BY_NAME.list_available_mentors,
   TOOL_BY_NAME.list_member_preferences,
+  TOOL_BY_NAME.find_free_members,
   TOOL_BY_NAME.find_navigation_targets,
   TOOL_BY_NAME.search_org_content,
   TOOL_BY_NAME.prepare_update_announcement,
