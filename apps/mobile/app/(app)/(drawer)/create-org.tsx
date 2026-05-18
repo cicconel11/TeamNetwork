@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -579,6 +580,53 @@ export default function CreateOrgScreen() {
     : salesLed
       ? "Request custom plan"
       : "Create Organization";
+
+  // Apple Guideline 3.1.1 (anti-steering): iOS clients cannot initiate a
+  // paid subscription that completes via an external web checkout. Org
+  // creation is gated to the web; the existing /app/create-org page
+  // handles the authenticated user end-to-end.
+  if (Platform.OS === "ios") {
+    return (
+      <View style={styles.container}>
+        <View style={styles.sheetHeader}>
+          <Pressable
+            onPress={handleCancel}
+            style={styles.headerSideButton}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
+            <Text style={styles.headerSideButtonText}>Cancel</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>Create Organization</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.contentSheet}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.stepHeading}>Create on the web</Text>
+            <Text style={styles.stepSubhead}>
+              Setting up a new organization is handled in the browser.
+              You&apos;ll come right back to the app once it&apos;s ready.
+            </Text>
+            <Pressable
+              onPress={() =>
+                Linking.openURL("https://www.myteamnetwork.com/app/create-org")
+              }
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed,
+              ]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.primaryButtonText}>Open on web</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
