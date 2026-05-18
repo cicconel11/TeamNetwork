@@ -792,6 +792,7 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
     "list_member_preferences",
+    "find_free_members",
     "list_alumni",
     "list_parents",
     "get_org_stats",
@@ -833,6 +834,7 @@ test("hybrid greeting with events question uses routed events tool set", async (
 
   assert.deepEqual(toolNamesForCall(0), [
     "list_events",
+    "find_free_members",
     "search_org_content",
     "find_navigation_targets",
     "list_members",
@@ -924,6 +926,7 @@ test("ambiguous queries keep fallback surface tool set", async () => {
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
     "list_member_preferences",
+    "find_free_members",
     "list_events",
     "list_announcements",
     "list_discussions",
@@ -1420,6 +1423,7 @@ test("simple event requests use list_events tool_first and skip pass 2", async (
 
   assert.deepEqual(toolNamesForCall(0), [
     "list_events",
+    "find_free_members",
     "search_org_content",
     "find_navigation_targets",
     "list_members",
@@ -1614,6 +1618,7 @@ test("action requests do not get forced into find_navigation_targets", async () 
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
     "list_member_preferences",
+    "find_free_members",
     "list_alumni",
     "list_parents",
     "get_org_stats",
