@@ -30,7 +30,7 @@
   "devDependencies": {
     "prettier": "^3.8.1",
     "turbo": "^2",
-    "typescript": "^5"
+    "typescript": "^6"
   },
   "overrides": {
     "glob": ">=10.4.6",
