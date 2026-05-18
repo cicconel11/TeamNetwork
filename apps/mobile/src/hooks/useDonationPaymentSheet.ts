@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import * as Crypto from "expo-crypto";
 import { useStripe } from "@stripe/stripe-react-native";
 import { supabase } from "@/lib/supabase";
-import { getWebAppUrl } from "@/lib/web-api";
+import { fetchWithAuth } from "@/lib/web-api";
 
 type StartDonationInput = {
   organizationId: string;
@@ -47,7 +47,7 @@ export function useDonationPaymentSheet() {
         const userEmail = sessionData.session?.user?.email || undefined;
 
         const idempotencyKey = Crypto.randomUUID();
-        const response = await fetch(`${getWebAppUrl()}/api/stripe/create-donation`, {
+        const response = await fetchWithAuth("/api/stripe/create-donation", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
