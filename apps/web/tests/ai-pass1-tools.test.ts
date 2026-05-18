@@ -275,6 +275,7 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
       expectedToolNames: [
         "list_members",
         "list_member_preferences",
+        "find_free_members",
         "list_events",
         "list_announcements",
         "list_discussions",
@@ -310,13 +311,22 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
       expectedForcedTool: "list_member_preferences",
     },
     {
-      name: "MEMBER_AVAILABILITY day on general surface → list_member_preferences",
+      name: "MEMBER_AVAILABILITY day on general surface → find_free_members",
       message: "who is free Tuesday evening to grab coffee",
       surface: "general",
       toolPolicy: "surface_read_tools",
       intentType: "knowledge_query",
-      expectedToolNames: ["list_member_preferences"],
-      expectedForcedTool: "list_member_preferences",
+      expectedToolNames: ["find_free_members"],
+      expectedForcedTool: "find_free_members",
+    },
+    {
+      name: "MEMBER_AVAILABILITY + sport on general surface → find_free_members (availability wins)",
+      message: "anyone free Tuesday for tennis",
+      surface: "general",
+      toolPolicy: "surface_read_tools",
+      intentType: "knowledge_query",
+      expectedToolNames: ["find_free_members"],
+      expectedForcedTool: "find_free_members",
     },
     {
       name: "MENTOR on members surface → suggest_mentors",
@@ -704,6 +714,7 @@ describe("getPass1Tools — surface defaults", () => {
     assert.deepEqual(namesOf(tools), [
       "list_members",
       "list_member_preferences",
+      "find_free_members",
       "list_events",
       "list_announcements",
       "list_discussions",
@@ -731,6 +742,7 @@ describe("getPass1Tools — surface defaults", () => {
     assert.deepEqual(namesOf(tools), [
       "list_members",
       "list_member_preferences",
+      "find_free_members",
       "list_alumni",
       "list_parents",
       "get_org_stats",
@@ -768,6 +780,7 @@ describe("getPass1Tools — surface defaults", () => {
     );
     assert.deepEqual(namesOf(tools), [
       "list_events",
+      "find_free_members",
       "search_org_content",
       "find_navigation_targets",
       "list_members",

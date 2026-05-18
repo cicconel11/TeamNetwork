@@ -33,6 +33,7 @@ const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   general: [
     "list_members",
     "list_member_preferences",
+    "find_free_members",
     "list_events",
     "list_announcements",
     "list_discussions",
@@ -49,6 +50,7 @@ const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   members: [
     "list_members",
     "list_member_preferences",
+    "find_free_members",
     "list_alumni",
     "list_parents",
     "get_org_stats",
@@ -57,7 +59,7 @@ const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
     "suggest_mentors",
   ],
   analytics: ["get_org_stats"],
-  events: ["list_events"],
+  events: ["list_events", "find_free_members"],
 };
 
 // Surface-specific tools come first so per-surface biasing is preserved.
@@ -527,15 +529,24 @@ const PASS1_ROUTING_RULES: ReadonlyArray<RoutingRule> = [
         : ["list_enterprise_alumni"],
   },
 
-  // Member interest / personal availability (sport, hobby, free-time) — fires
-  // on any surface. Routes to list_member_preferences which surfaces mentor
-  // profile sports/topics and mentee free-text time_availability.
+  // Structured availability ("who is free Tuesday evening?") — routes to
+  // find_free_members which queries academic_schedules + org schedule_events.
+  // Ordered before member_interest so prompts matching both ("anyone free
+  // Tuesday for tennis?") pick availability as the primary intent.
   {
-    id: "member_interest_or_availability",
+    id: "member_availability",
     when: (ctx) =>
       !MENTOR_PROMPT_PATTERN.test(ctx.message) &&
-      (MEMBER_INTEREST_PROMPT_PATTERN.test(ctx.message) ||
-        MEMBER_AVAILABILITY_PROMPT_PATTERN.test(ctx.message)),
+      MEMBER_AVAILABILITY_PROMPT_PATTERN.test(ctx.message),
+    tools: () => ["find_free_members"],
+  },
+  // Member interest (sport, hobby, topic) — routes to list_member_preferences
+  // which surfaces mentor profile sports/topics and mentee free-text fields.
+  {
+    id: "member_interest",
+    when: (ctx) =>
+      !MENTOR_PROMPT_PATTERN.test(ctx.message) &&
+      MEMBER_INTEREST_PROMPT_PATTERN.test(ctx.message),
     tools: () => ["list_member_preferences"],
   },
 
@@ -762,6 +773,7 @@ export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<
   "prepare_member_role_change",
   "list_members",
   "list_member_preferences",
+  "find_free_members",
   "get_org_stats",
   "get_donation_analytics",
   "get_enterprise_stats",
@@ -863,6 +875,7 @@ export function canBypassPass1(input: CanBypassPass1Input): boolean {
 export const TOOL_FIRST_ELIGIBLE: ReadonlySet<ToolName> = new Set<ToolName>([
   "list_members",
   "list_member_preferences",
+  "find_free_members",
   "get_org_stats",
   "get_donation_analytics",
   "find_navigation_targets",
