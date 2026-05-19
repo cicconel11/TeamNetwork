@@ -171,6 +171,9 @@ const config: ExpoConfig = {
       {
         calendarPermission:
           "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
+        // `false` deletes the NSReminders* keys (we don't use EventKit
+        // Reminders) — Apple flags unused permission strings.
+        remindersPermission: false,
       },
     ],
     [
@@ -178,6 +181,11 @@ const config: ExpoConfig = {
       {
         locationWhenInUsePermission:
           "TeamNetwork uses your location to verify you're at the event venue when checking in, and to tag the location of events you create.",
+        // `false` deletes the NSLocationAlways* keys (we only use
+        // when-in-use, and Apple flags background-location declarations
+        // that have no matching usage).
+        locationAlwaysPermission: false,
+        locationAlwaysAndWhenInUsePermission: false,
       },
     ],
     "expo-quick-actions",
