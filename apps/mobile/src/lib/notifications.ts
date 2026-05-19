@@ -131,7 +131,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 export async function getExpoPushToken(): Promise<string | null> {
   if (Platform.OS === "web") return null;
   if (!Device.isDevice) {
-    console.log("Push tokens only available on physical devices");
+    if (__DEV__) console.log("Push tokens only available on physical devices");
     return null;
   }
 
@@ -212,7 +212,7 @@ export async function registerPushToken(
       return false;
     }
 
-    console.log("Push token registered successfully");
+    if (__DEV__) console.log("Push token registered successfully");
     return true;
   } catch (error) {
     console.error("Error registering push token:", error);

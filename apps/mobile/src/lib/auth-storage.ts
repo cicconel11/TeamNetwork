@@ -1,5 +1,4 @@
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 export const SECURE_AUTH_STORAGE_PREFIX = "teammeet.auth";
@@ -12,38 +11,19 @@ function buildStorageKey(key: string): string {
   return `${SECURE_AUTH_STORAGE_PREFIX}.${key}`;
 }
 
-function isMissingEntitlementError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("required entitlement");
-}
-
+// Auth tokens must live in the Keychain/Android Keystore. If SecureStore
+// throws (e.g. missing entitlement), fail loudly rather than silently
+// degrading to plaintext AsyncStorage — JWT exposure on disk is worse
+// than a sign-in failure the user can recover from.
 export const nativeSecureAuthStorage = {
   async getItem(key: string): Promise<string | null> {
-    const storageKey = buildStorageKey(key);
-    try {
-      return await SecureStore.getItemAsync(storageKey, SECURE_AUTH_STORAGE_OPTIONS);
-    } catch (error) {
-      if (!isMissingEntitlementError(error)) throw error;
-      return AsyncStorage.getItem(storageKey);
-    }
+    return SecureStore.getItemAsync(buildStorageKey(key), SECURE_AUTH_STORAGE_OPTIONS);
   },
   async setItem(key: string, value: string): Promise<void> {
-    const storageKey = buildStorageKey(key);
-    try {
-      await SecureStore.setItemAsync(storageKey, value, SECURE_AUTH_STORAGE_OPTIONS);
-    } catch (error) {
-      if (!isMissingEntitlementError(error)) throw error;
-      await AsyncStorage.setItem(storageKey, value);
-    }
+    await SecureStore.setItemAsync(buildStorageKey(key), value, SECURE_AUTH_STORAGE_OPTIONS);
   },
   async removeItem(key: string): Promise<void> {
-    const storageKey = buildStorageKey(key);
-    try {
-      await SecureStore.deleteItemAsync(storageKey, SECURE_AUTH_STORAGE_OPTIONS);
-    } catch (error) {
-      if (!isMissingEntitlementError(error)) throw error;
-    } finally {
-      await AsyncStorage.removeItem(storageKey);
-    }
+    await SecureStore.deleteItemAsync(buildStorageKey(key), SECURE_AUTH_STORAGE_OPTIONS);
   },
 };
 

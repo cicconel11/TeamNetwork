@@ -23,6 +23,32 @@ function isTransientNetworkError(error: unknown): boolean {
   );
 }
 
+const PII_KEYS = new Set([
+  "email",
+  "userEmail",
+  "password",
+  "token",
+  "accessToken",
+  "refreshToken",
+  "authorization",
+  "apiKey",
+  "secret",
+  "phone",
+  "phoneNumber",
+  "ssn",
+  "creditCard",
+  "cardNumber",
+]);
+
+function scrubPii(data: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (PII_KEYS.has(key)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 export function init(dsn: string): void {
   if (initialized) return;
   Sentry.init({
@@ -44,6 +70,13 @@ export function init(dsn: string): void {
         delete event.user.email;
         delete event.user.username;
         delete event.user.ip_address;
+      }
+      if (event.extra) event.extra = scrubPii(event.extra);
+      if (event.tags) event.tags = scrubPii(event.tags) as typeof event.tags;
+      if (event.breadcrumbs) {
+        event.breadcrumbs = event.breadcrumbs.map((bc) =>
+          bc.data ? { ...bc, data: scrubPii(bc.data) } : bc,
+        );
       }
       return event;
     },

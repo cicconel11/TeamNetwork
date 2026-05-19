@@ -17,6 +17,16 @@ const TURNSTILE_SITE_KEY =
 
 const BASE_URL = process.env.EXPO_PUBLIC_CAPTCHA_BASE_URL || getWebAppUrl();
 
+if (BASE_URL && !BASE_URL.startsWith("https://")) {
+  throw new Error(
+    `[Turnstile] EXPO_PUBLIC_CAPTCHA_BASE_URL must use HTTPS, got: ${BASE_URL}`,
+  );
+}
+
+// Restrict WebView to the captcha origin and Cloudflare's challenge host.
+// Turnstile loads its widget JS from challenges.cloudflare.com.
+const ORIGIN_WHITELIST = [BASE_URL, "https://challenges.cloudflare.com"];
+
 export interface TurnstileRef {
   show: () => void;
   hide: () => void;
@@ -165,12 +175,11 @@ const Turnstile = forwardRef<TurnstileRef, TurnstileProps>(
               )}
               <WebView
                 key={keyTick}
-                originWhitelist={["*"]}
+                originWhitelist={ORIGIN_WHITELIST}
                 source={{ html, baseUrl: BASE_URL }}
                 onMessage={handleMessage}
                 javaScriptEnabled
                 domStorageEnabled
-                mixedContentMode="always"
                 style={[styles.webview, loading && styles.hidden]}
                 containerStyle={styles.webviewContainer}
                 automaticallyAdjustContentInsets={false}
