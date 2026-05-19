@@ -125,6 +125,12 @@ export default function DonationsScreen() {
       ...TYPOGRAPHY.titleSmall,
       color: "#ffffff",
     },
+    verifiedNonprofitCaption: {
+      ...TYPOGRAPHY.caption,
+      color: n.secondary,
+      textAlign: "center" as const,
+      marginTop: -SPACING.xs,
+    },
     webNotice: {
       backgroundColor: n.background,
       borderRadius: RADIUS.lg,
@@ -405,10 +411,17 @@ export default function DonationsScreen() {
           donation-eligible (Apple Guideline 3.2.1(vi)); we surface a neutral
           web-managed notice instead so the screen never dead-ends. */}
       {showDonateCta ? (
-        <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>
-          <Plus size={20} color="#ffffff" />
-          <Text style={styles.donateButtonText}>Make a Donation</Text>
-        </Pressable>
+        <>
+          <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>
+            <Plus size={20} color="#ffffff" />
+            <Text style={styles.donateButtonText}>Make a Donation</Text>
+          </Pressable>
+          {Platform.OS === "ios" && donationEligibleIos && (
+            <Text style={styles.verifiedNonprofitCaption}>
+              Contributions go directly to this verified 501(c)(3) nonprofit.
+            </Text>
+          )}
+        </>
       ) : (
         <View style={styles.webNotice}>
           <Text style={styles.webNoticeTitle}>Donations are managed on the web</Text>

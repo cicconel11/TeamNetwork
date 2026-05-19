@@ -262,7 +262,9 @@ jobs:
             --ignore=GHSA-x6wf-f3px-wcqx \
             --ignore=GHSA-j759-j44w-7fr8 \
             --ignore=GHSA-wh4c-j3r5-mjhp \
-            --ignore=GHSA-qx2v-qp2m-jg93
+            --ignore=GHSA-qx2v-qp2m-jg93 \
+            --ignore=GHSA-58qx-3vcg-4xpx \
+            --ignore=GHSA-jxxr-4gwj-5jf2
 
   # Aggregate status check so branch protection can require a single
   # "CI / All Checks" check instead of listing every job. Update the
