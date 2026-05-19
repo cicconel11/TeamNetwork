@@ -191,6 +191,9 @@ function parseNativeRoute(
       return { kind: "event", orgSlug: orgSlugParam, eventId };
     }
     case "event-checkin": {
+      // `sig` is forwarded as-is; the backend /api/events/checkin route MUST
+      // validate it as an HMAC over (eventId|userId|timestamp) with a server
+      // secret and reject expired tokens. Do NOT trust this client-side.
       const eventId = segments[0] || url.searchParams.get("event") || "";
       const userRaw = url.searchParams.get("user") || segments[1] || "";
       const userId = userRaw.trim() ? userRaw : undefined;
