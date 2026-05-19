@@ -2,10 +2,10 @@ export {
   generateMemberPass,
   generateEventTicketPass,
   generateDonationReceiptPass,
-} from "./generateMemberPass.js";
+} from "./generateMemberPass";
 export type {
   MemberPassInput,
   EventTicketPassInput,
   DonationReceiptPassInput,
   WalletCertificates,
-} from "./generateMemberPass.js";
+} from "./generateMemberPass";
