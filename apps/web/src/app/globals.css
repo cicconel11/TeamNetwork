@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: "Plus Jakarta Sans";
+  /* --font-sans and --font-mono are injected by next/font/local via layout.tsx <body>. */
+  /* TODO(perf-quickwins): wire Bitter via next/font/google if we keep the display family */
   --font-display: "Bitter";
-  --font-mono: "Space Mono";
 
   /* Dynamic org colors - overridden per-org via layout <style> */
   --color-org-primary: #1e3a5f;
