@@ -2,16 +2,17 @@
 
 import dynamic from "next/dynamic";
 
-export const FAQAccordion = dynamic(
-  () => import("@/components/marketing/FAQAccordion").then((mod) => mod.FAQAccordion),
-  { ssr: false },
-);
+// SSR'd: components are "use client" but only touch window/document inside useEffect,
+// so server render matches the initial client tree. Removing the dynamic() indirection
+// gets their HTML into the first RSC payload instead of waiting for hydration.
+export { FAQAccordion } from "@/components/marketing/FAQAccordion";
+export { HeroOrgCard } from "@/components/marketing/HeroOrgCard";
+export { LandingHeader } from "@/components/marketing/LandingHeader";
+export { BackToTop } from "@/components/marketing/BackToTop";
+export { FeaturesGrid } from "@/components/marketing/FeaturesGrid";
 
-export const HeroOrgCard = dynamic(
-  () => import("@/components/marketing/HeroOrgCard").then((mod) => mod.HeroOrgCard),
-  { ssr: false },
-);
-
+// Animation-only chunks stay client-only — they pull framer-motion / anime.js
+// and SSR'ing them would inflate the critical RSC payload without LCP benefit.
 export const LandingAnimations = dynamic(
   () => import("@/components/marketing/LandingAnimations").then((mod) => mod.LandingAnimations),
   { ssr: false },
@@ -27,22 +28,7 @@ export const Confetti = dynamic(
   { ssr: false },
 );
 
-export const LandingHeader = dynamic(
-  () => import("@/components/marketing/LandingHeader").then((mod) => mod.LandingHeader),
-  { ssr: false },
-);
-
-export const BackToTop = dynamic(
-  () => import("@/components/marketing/BackToTop").then((mod) => mod.BackToTop),
-  { ssr: false },
-);
-
 export const BackgroundPaths = dynamic(
   () => import("@/components/marketing/BackgroundPaths").then((mod) => mod.BackgroundPaths),
-  { ssr: false },
-);
-
-export const FeaturesGrid = dynamic(
-  () => import("@/components/marketing/FeaturesGrid").then((mod) => mod.FeaturesGrid),
   { ssr: false },
 );
