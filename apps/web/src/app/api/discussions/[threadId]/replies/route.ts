@@ -5,7 +5,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { createReplySchema } from "@/lib/schemas/discussion";
 import { createDiscussionReply } from "@/lib/discussions/create-reply";
 
-export async function POST(request: NextRequest, { params }: { params: { threadId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   try {
     const { supabase, user } = await createAuthenticatedApiClient(request);
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: { threadI
       return buildRateLimitResponse(rateLimit);
     }
 
-    const { threadId } = params;
+    const { threadId } = await params;
     const { body } = await validateJson(request, createReplySchema);
 
     const result = await createDiscussionReply({

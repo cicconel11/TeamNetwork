@@ -8,7 +8,7 @@ import { ValidationError, validationErrorResponse } from "@/lib/security/validat
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type Params = { params: { albumId: string; mediaItemId: string } };
+type Params = { params: Promise<{ albumId: string; mediaItemId: string }> };
 
 /**
  * DELETE /api/media/albums/[albumId]/items/[mediaItemId]?orgId=
@@ -16,7 +16,7 @@ type Params = { params: { albumId: string; mediaItemId: string } };
  */
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
-    const { albumId, mediaItemId } = params;
+    const { albumId, mediaItemId } = await params;
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

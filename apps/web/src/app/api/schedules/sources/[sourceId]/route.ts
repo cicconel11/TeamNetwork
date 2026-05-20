@@ -8,9 +8,10 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { sourceId: string } }
+  { params }: { params: Promise<{ sourceId: string }> }
 ) {
   try {
+    const { sourceId } = await params;
     // IP-based rate limiting
     const ipRateLimit = checkRateLimit(request, {
       limitPerIp: 15,
@@ -57,7 +58,7 @@ export async function PATCH(
     const { data: source, error } = await supabase
       .from("schedule_sources")
       .select("id, org_id, source_url, status, title")
-      .eq("id", params.sourceId)
+      .eq("id", sourceId)
       .single();
 
     if (error || !source) {
@@ -127,9 +128,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { sourceId: string } }
+  { params }: { params: Promise<{ sourceId: string }> }
 ) {
   try {
+    const { sourceId } = await params;
     // IP-based rate limiting
     const ipRateLimit = checkRateLimit(request, {
       limitPerIp: 15,
@@ -166,7 +168,7 @@ export async function DELETE(
     const { data: source, error } = await supabase
       .from("schedule_sources")
       .select("id, org_id")
-      .eq("id", params.sourceId)
+      .eq("id", sourceId)
       .single();
 
     if (error || !source) {

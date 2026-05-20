@@ -77,23 +77,23 @@ async function handleSync(params: { feedId: string }) {
 
 export async function POST(
   _request: Request,
-  { params }: { params: { feedId: string } }
+  { params }: { params: Promise<{ feedId: string }> }
 ) {
-  return handleSync(params);
+  return handleSync(await params);
 }
 
 export async function GET(
   _request: Request,
-  { params }: { params: { feedId: string } }
+  { params }: { params: Promise<{ feedId: string }> }
 ) {
-  return handleSync(params);
+  return handleSync(await params);
 }
 
 export async function PUT(
   _request: Request,
-  { params }: { params: { feedId: string } }
+  { params }: { params: Promise<{ feedId: string }> }
 ) {
-  return handleSync(params);
+  return handleSync(await params);
 }
 
 export async function OPTIONS() {

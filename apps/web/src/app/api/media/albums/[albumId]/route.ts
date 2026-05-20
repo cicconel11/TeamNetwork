@@ -29,7 +29,7 @@ const patchAlbumSchema = z.object({
   cover_media_id: baseSchemas.uuid.optional().nullable(),
 });
 
-type Params = { params: { albumId: string } };
+type Params = { params: Promise<{ albumId: string }> };
 
 /**
  * GET /api/media/albums/[albumId]?orgId=&cursor=&limit=
@@ -37,7 +37,7 @@ type Params = { params: { albumId: string } };
  */
 export async function GET(request: NextRequest, { params }: Params) {
   try {
-    const { albumId } = params;
+    const { albumId } = await params;
 
     const rateLimit = checkRateLimit(request, {
       feature: "media album items",
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest, { params }: Params) {
  */
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
-    const { albumId } = params;
+    const { albumId } = await params;
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -275,7 +275,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
  */
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
-    const { albumId } = params;
+    const { albumId } = await params;
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

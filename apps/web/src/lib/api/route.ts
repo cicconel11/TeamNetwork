@@ -52,7 +52,7 @@ export function createApiRoute<
   TParamsSchema extends AnySchema | undefined = undefined,
   TAuth = undefined,
 >(options: ApiRouteOptions<TBodySchema, TQuerySchema, TParamsSchema, TAuth>) {
-  return async (request: Request, routeContext?: { params?: unknown }) => {
+  return async (request: Request, routeContext: { params: Promise<unknown> }) => {
     try {
       const earlyResponse = await options.before?.(request);
       if (earlyResponse) return withDefaultHeaders(earlyResponse, options.headers);
@@ -67,9 +67,7 @@ export function createApiRoute<
         : undefined;
       if (query instanceof Response) return handleValidationError(options, request, "query", query);
 
-      const rawParams = routeContext?.params && typeof routeContext.params === "object" && "then" in routeContext.params
-        ? await routeContext.params
-        : routeContext?.params;
+      const rawParams = routeContext?.params ? await routeContext.params : undefined;
       const params = options.params
         ? parseWithSchema(options.params, rawParams ?? {}, "Invalid route parameters")
         : undefined;

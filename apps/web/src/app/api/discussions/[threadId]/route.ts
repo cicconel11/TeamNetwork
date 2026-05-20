@@ -7,7 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { z } from "zod";
 
-export async function GET(request: NextRequest, { params }: { params: { threadId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   try {
     // Rate limit check BEFORE auth
     const rateLimit = checkRateLimit(request, {
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: { threadId
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { threadId } = params;
+    const { threadId } = await params;
 
     // Fetch thread
     const { data: thread, error: threadError } = await supabase
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest, { params }: { params: { threadId
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { threadId: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   try {
     const supabase = await createClient();
     const {
@@ -110,7 +110,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { thread
       return buildRateLimitResponse(rateLimit);
     }
 
-    const { threadId } = params;
+    const { threadId } = await params;
 
     const updateSchema = z.object({
       title: createThreadSchema.shape.title.optional(),
@@ -173,7 +173,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { thread
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { threadId: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   try {
     const supabase = await createClient();
     const {
@@ -195,7 +195,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { threa
       return buildRateLimitResponse(rateLimit);
     }
 
-    const { threadId } = params;
+    const { threadId } = await params;
 
     // Fetch thread
     const { data: thread } = await supabase

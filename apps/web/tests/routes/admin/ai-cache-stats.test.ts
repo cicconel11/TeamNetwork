@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildResponse,
   type ViewRow,
-} from "../../../src/app/api/admin/ai/cache-stats/route.ts";
+} from "../../../src/app/api/admin/ai/cache-stats/aggregate.ts";
 
 // ---------------------------------------------------------------------------
 // buildResponse — pure aggregation

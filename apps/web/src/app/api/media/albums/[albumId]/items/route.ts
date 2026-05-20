@@ -21,7 +21,7 @@ const addItemsSchema = z.object({
   mediaIds: z.array(baseSchemas.uuid).min(1).max(50),
 });
 
-type Params = { params: { albumId: string } };
+type Params = { params: Promise<{ albumId: string }> };
 type AlbumRow = {
   id: string;
   created_by: string;
@@ -35,7 +35,7 @@ type AlbumRow = {
  */
 export async function POST(request: NextRequest, { params }: Params) {
   try {
-    const { albumId } = params;
+    const { albumId } = await params;
 
     const rateLimit = checkRateLimit(request, {
       feature: "media album add items",

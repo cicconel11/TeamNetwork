@@ -6,9 +6,10 @@ export const dynamic = "force-dynamic";
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { feedId: string } }
+  { params }: { params: Promise<{ feedId: string }> }
 ) {
   try {
+    const { feedId } = await params;
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -22,7 +23,7 @@ export async function DELETE(
     const { data: feed, error } = await supabase
       .from("calendar_feeds")
       .select("id, organization_id")
-      .eq("id", params.feedId)
+      .eq("id", feedId)
       .eq("scope", "org")
       .single();
 

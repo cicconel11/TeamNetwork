@@ -11,9 +11,10 @@ const WINDOW_FUTURE_DAYS = 366;
 
 export async function POST(
   request: Request,
-  { params }: { params: { sourceId: string } }
+  { params }: { params: Promise<{ sourceId: string }> }
 ) {
   try {
+    const { sourceId } = await params;
     // IP-based rate limiting (strictest limits for sync operations)
     const ipRateLimit = checkRateLimit(request, {
       limitPerIp: 5,
@@ -50,7 +51,7 @@ export async function POST(
     const { data: source, error } = await supabase
       .from("schedule_sources")
       .select("id, org_id, vendor_id, source_url, connected_user_id")
-      .eq("id", params.sourceId)
+      .eq("id", sourceId)
       .single();
 
     if (error || !source) {

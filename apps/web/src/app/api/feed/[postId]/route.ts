@@ -7,7 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { z } from "zod";
 
-export async function GET(request: NextRequest, { params }: { params: { postId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
     // Rate limit check BEFORE auth
     const rateLimit = checkRateLimit(request, {
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: { postId: 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { postId } = params;
+    const { postId } = await params;
 
     // Fetch post
     const { data: post, error: postError } = await supabase
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest, { params }: { params: { postId: 
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { postId: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
     const supabase = await createClient();
     const {
@@ -118,7 +118,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { postId
       return buildRateLimitResponse(rateLimit);
     }
 
-    const { postId } = params;
+    const { postId } = await params;
 
     const updateSchema = z.object({
       body: createPostSchema.shape.body.optional(),
@@ -172,7 +172,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { postId
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { postId: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
     const supabase = await createClient();
     const {
@@ -194,7 +194,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { postI
       return buildRateLimitResponse(rateLimit);
     }
 
-    const { postId } = params;
+    const { postId } = await params;
 
     // Fetch post
     const { data: post } = await supabase
