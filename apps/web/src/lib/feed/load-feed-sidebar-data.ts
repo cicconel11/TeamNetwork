@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { filterAnnouncementsForUserViaRpc } from "@/lib/announcements";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import type { Announcement, MembershipStatus } from "@/types/database";
+import type { ServerSupabase } from "@/lib/supabase/types";
 
 export interface FeedSidebarData {
   upcomingEvents: { id: string; title: string; start_date: string }[];
@@ -20,9 +21,10 @@ export async function loadFeedSidebarData(params: {
   role: OrgRole | null;
   status: string | null;
   userId: string | null;
+  dataClient?: ServerSupabase;
 }): Promise<FeedSidebarData> {
-  const { orgId, role, status, userId } = params;
-  const supabase = await createClient();
+  const { orgId, role, status, userId, dataClient } = params;
+  const supabase = dataClient ?? (await createClient());
 
   const [
     { data: upcomingEvents, error: eventsError },

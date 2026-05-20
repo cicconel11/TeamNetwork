@@ -37,6 +37,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
   const supabase = await createClient();
   const user = await getCurrentUser();
   const queryClient = resolveDataClient(user, supabase, "view_org");
+  const membersClient = resolveDataClient(user, supabase, "view_members");
 
   // Parse pagination
   const page = parseInt(pageParam || "1", 10);
@@ -72,6 +73,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
       role: orgCtx.role,
       status: orgCtx.status,
       userId: orgCtx.userId,
+      dataClient: membersClient,
     }),
   ]);
 
