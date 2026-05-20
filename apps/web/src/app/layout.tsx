@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { ErrorBoundaryProvider } from "@/components/errors/ErrorBoundaryProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { WebVitalsReporter } from "@/app/_components/WebVitalsReporter";
 import { Toaster } from "sonner";
 import { SITE_DESCRIPTION, SITE_ICON_PATHS, SITE_NAME, SITE_URL } from "@/lib/site-metadata";
 import { NextIntlClientProvider } from "next-intl";
@@ -60,6 +61,7 @@ export default async function RootLayout({
             <Toaster position="bottom-right" richColors closeButton />
           </ThemeProvider>
         </NextIntlClientProvider>
+        <WebVitalsReporter />
       </body>
     </html>
   );
