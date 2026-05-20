@@ -675,8 +675,6 @@
     "unableToStart": "No se pudo iniciar Stripe Checkout"
   },
   "forms": {
-    "manage": "Gestionar {label} de la organizacion",
-    "viewAndFill": "Ver y completar {label} de la organizacion",
     "documentForms": "Formularios de documentos",
     "createForm": "Crear formulario",
     "viewEdit": "Ver / Editar",
@@ -699,8 +697,6 @@
     "backToCalendar": "Volver al calendario"
   },
   "alumni": {
-    "tryAdjusting": "Intenta ajustar tus filtros",
-    "noInDirectory": "Aun no hay {label} en el directorio",
     "tryAdjustingFilters": "Prueba a ajustar los filtros",
     "noAlumniFound": "No se encontró {label}",
     "noAlumniInDirectory": "Aún no hay {label} en el directorio"
@@ -1253,9 +1249,6 @@
     },
     "members": {
       "description": "{count} {status} {label}",
-      "noResults": "No se encontraron {label}",
-      "noActive": "Aun no hay {label} activos",
-      "noInactive": "No hay {label} inactivos",
       "active": "activos",
       "inactive": "inactivos",
       "noMembersFound": "No se encontró {label}",
