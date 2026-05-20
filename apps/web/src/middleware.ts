@@ -133,6 +133,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url, { status: 308 });
   }
 
+  // Fast path: logged-out visitors to public routes skip Supabase JWT validate.
+  // Strict /^sb-.*-auth-token/ — must match Supabase's cookie name, not the
+  // broader cleanup regex at line ~218 (that one's for clearing legacy cookies).
+  if (process.env.AUTH_TEST_MODE !== "true") {
+    const hasAuthCookie = request.cookies
+      .getAll()
+      .some((c) => /^sb-.*-auth-token/.test(c.name));
+    if (!hasAuthCookie && isPublicRouteCheck(pathname)) {
+      const fastResponse = NextResponse.next({ request: { headers: request.headers } });
+      fastResponse.headers.set("x-pathname", pathname);
+      return fastResponse;
+    }
+  }
+
   try {
     validateSiteUrl();
   } catch (e) {
