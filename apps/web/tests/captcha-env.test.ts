@@ -9,10 +9,6 @@ function resetEnv() {
 }
 
 function clearCaptchaEnv() {
-  delete process.env.CAPTCHA_PROVIDER;
-  delete process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER;
-  delete process.env.HCAPTCHA_SECRET_KEY;
-  delete process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
   delete process.env.TURNSTILE_SECRET_KEY;
   delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 }
@@ -20,7 +16,7 @@ function clearCaptchaEnv() {
 describe("captcha env validation", () => {
   afterEach(resetEnv);
 
-  it("uses Turnstile as the production default without requiring hCaptcha keys", () => {
+  it("accepts Turnstile keys in production", () => {
     process.env.NODE_ENV = "production";
     clearCaptchaEnv();
     process.env.TURNSTILE_SECRET_KEY = "turnstile-secret";
@@ -29,15 +25,14 @@ describe("captcha env validation", () => {
     assert.doesNotThrow(() => validateCaptchaEnv());
   });
 
-  it("requires hCaptcha keys only when hCaptcha is explicitly selected", () => {
+  it("throws when Turnstile secret missing in production", () => {
     process.env.NODE_ENV = "production";
     clearCaptchaEnv();
-    process.env.CAPTCHA_PROVIDER = "hcaptcha";
-    process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER = "hcaptcha";
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "turnstile-site";
 
     assert.throws(
       () => validateCaptchaEnv(),
-      /HCAPTCHA_SECRET_KEY/,
+      /TURNSTILE_SECRET_KEY/,
     );
   });
 });

@@ -99,11 +99,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const eventsForForm = (allPhilanthropyEvents || []).map((evt) => ({ id: evt.id, title: evt.title }));
   const isConnected = Boolean(connectStatus?.isReady);
 
-  const orgCaptchaProvider = (org as { captcha_provider?: string | null }).captcha_provider;
-  const captchaProvider =
-    orgCaptchaProvider === "turnstile" || orgCaptchaProvider === "hcaptcha"
-      ? orgCaptchaProvider
-      : undefined;
+  const captchaProvider: "turnstile" | undefined = "turnstile";
   const navConfig = org.nav_config as NavConfig | null;
   const [tNav, locale, tPhilanthropy, , tEvents, tDonations] = await Promise.all([
     getTranslations("nav.items"),

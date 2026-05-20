@@ -158,15 +158,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Verify captcha after org lookup so per-org provider flag can apply.
-  const orgCaptchaProvider = resolvedOrg.captcha_provider;
-  const captchaProvider =
-    orgCaptchaProvider === "turnstile" || orgCaptchaProvider === "hcaptcha"
-      ? orgCaptchaProvider
-      : undefined;
-  const captchaResult = await verifyCaptcha(body.captchaToken, clientIp, {
-    provider: captchaProvider,
-  });
+  const captchaResult = await verifyCaptcha(body.captchaToken, clientIp);
   if (!captchaResult.success) {
     const errorCode = captchaResult.error_codes?.[0];
     if (errorCode === "missing-input-response") {

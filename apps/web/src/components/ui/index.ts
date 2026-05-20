@@ -11,8 +11,6 @@ export { SoftDeleteButton } from "./SoftDeleteButton";
 export { ConfirmationDialog } from "./ConfirmationDialog";
 export type { ConfirmationDialogCopy } from "./ConfirmationDialog";
 export { ConfirmActionButton } from "./ConfirmActionButton";
-export { HCaptcha } from "./HCaptcha";
-export type { HCaptchaProps, HCaptchaRef } from "./HCaptcha";
 export { TurnstileWidget } from "./TurnstileWidget";
 export type { TurnstileWidgetProps, TurnstileWidgetRef } from "./TurnstileWidget";
 export { Captcha } from "./Captcha";
