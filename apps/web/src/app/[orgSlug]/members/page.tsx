@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
@@ -32,6 +32,13 @@ interface MembersPageProps {
 export default async function MembersPage({ params, searchParams }: MembersPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
+
+  // Alumni live in a separate `alumni` table with its own page; redirect so
+  // the role filter can't dead-end on /members with zero results.
+  if (filters.role === "alumni") {
+    redirect(`/${orgSlug}/alumni`);
+  }
+
   const { organization: org, isAdmin } = await getOrgContext(orgSlug);
   if (!org) notFound();
 
@@ -154,7 +161,11 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     (manualMembers?.length ?? 0) >= SOURCE_CAP ||
     (parentProfiles?.length ?? 0) >= SOURCE_CAP;
 
-  const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
+  // Exclude "alumni" — alumni live in a dedicated table/page, so it should
+  // not appear as a role filter option on the members directory.
+  const roles = [
+    ...new Set(allMembers?.map((m) => m.role).filter((r): r is string => Boolean(r) && r !== "alumni")),
+  ];
 
   const navConfig = org.nav_config as NavConfig | null;
   const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
