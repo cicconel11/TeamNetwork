@@ -75,11 +75,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
     : donationRows.length;
   const avgDonation = donationCount > 0 ? totalAmount / donationCount : 0;
 
-  const orgCaptchaProvider = (org as { captcha_provider?: string | null }).captcha_provider;
-  const captchaProvider =
-    orgCaptchaProvider === "turnstile" || orgCaptchaProvider === "hcaptcha"
-      ? orgCaptchaProvider
-      : undefined;
+  const captchaProvider: "turnstile" | undefined = "turnstile";
   const navConfig = org.nav_config as NavConfig | null;
   const [tNav, locale, tDonations] = await Promise.all([
     getTranslations("nav.items"),

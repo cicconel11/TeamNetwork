@@ -14,20 +14,8 @@ export interface UseCaptchaReturn {
 }
 
 /**
- * Custom hook for managing hCaptcha state in forms.
- * Provides token state management and callback handlers for the HCaptcha component.
- *
- * @example
- * ```tsx
- * const { token, isVerified, onVerify, onExpire, onError, reset } = useCaptcha();
- *
- * return (
- *   <form onSubmit={handleSubmit}>
- *     <HCaptcha onVerify={onVerify} onExpire={onExpire} onError={onError} />
- *     <button type="submit" disabled={!isVerified}>Submit</button>
- *   </form>
- * );
- * ```
+ * Custom hook for managing Turnstile state in forms.
+ * Provides token state management and callback handlers for the Captcha component.
  */
 export function useCaptcha(): UseCaptchaReturn {
     const [token, setToken] = useState<string | null>(null);
@@ -37,12 +25,7 @@ export function useCaptcha(): UseCaptchaReturn {
     // Development mode bypass — only when no real site key is configured
     // (mirrors server-side bypass condition: development && !secretKey)
     useEffect(() => {
-        const provider =
-            process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER === "hcaptcha" ? "hcaptcha" : "turnstile";
-        const siteKey =
-            provider === "turnstile"
-                ? process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
-                : process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+        const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
         if (process.env.NODE_ENV === "development" && !siteKey) {
             setToken("dev-bypass-token");
         }

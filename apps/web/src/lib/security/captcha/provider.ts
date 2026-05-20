@@ -1,4 +1,4 @@
-export type CaptchaProvider = "hcaptcha" | "turnstile";
+export type CaptchaProvider = "turnstile";
 
 export interface CaptchaVerifyResult {
     success: boolean;
