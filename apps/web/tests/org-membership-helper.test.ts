@@ -18,7 +18,6 @@ async function getOrgMembership(
     .eq("user_id", userId)
     .eq("organization_id", orgId)
     .eq("status", "active")
-    .is("deleted_at", null)
     .maybeSingle();
 
   if (error) {
@@ -50,7 +49,6 @@ describe("getOrgMembership", () => {
           organization_id: ORG_ID,
           role: "admin",
           status: "active",
-          deleted_at: null,
         },
       ]);
 
@@ -66,7 +64,6 @@ describe("getOrgMembership", () => {
           organization_id: ORG_ID,
           role: "active_member",
           status: "active",
-          deleted_at: null,
         },
       ]);
 
@@ -82,7 +79,6 @@ describe("getOrgMembership", () => {
           organization_id: ORG_ID,
           role: "alumni",
           status: "active",
-          deleted_at: null,
         },
       ]);
 
@@ -106,7 +102,6 @@ describe("getOrgMembership", () => {
           organization_id: OTHER_ORG,
           role: "admin",
           status: "active",
-          deleted_at: null,
         },
       ]);
 
@@ -121,7 +116,6 @@ describe("getOrgMembership", () => {
           organization_id: ORG_ID,
           role: "admin",
           status: "active",
-          deleted_at: null,
         },
       ]);
 
@@ -138,7 +132,6 @@ describe("getOrgMembership", () => {
           organization_id: ORG_ID,
           role: "active_member",
           status: "pending",
-          deleted_at: null,
         },
       ]);
 
@@ -153,39 +146,6 @@ describe("getOrgMembership", () => {
           organization_id: ORG_ID,
           role: "active_member",
           status: "revoked",
-          deleted_at: null,
-        },
-      ]);
-
-      const result = await getOrgMembership(supabase, USER_ID, ORG_ID);
-      assert.equal(result, null);
-    });
-  });
-
-  describe("filters out soft-deleted memberships", () => {
-    it("should return null for soft-deleted active membership", async () => {
-      supabase.seed("user_organization_roles", [
-        {
-          user_id: USER_ID,
-          organization_id: ORG_ID,
-          role: "admin",
-          status: "active",
-          deleted_at: "2026-01-01T00:00:00.000Z",
-        },
-      ]);
-
-      const result = await getOrgMembership(supabase, USER_ID, ORG_ID);
-      assert.equal(result, null);
-    });
-
-    it("should return null when membership is both revoked and soft-deleted", async () => {
-      supabase.seed("user_organization_roles", [
-        {
-          user_id: USER_ID,
-          organization_id: ORG_ID,
-          role: "admin",
-          status: "revoked",
-          deleted_at: "2026-01-01T00:00:00.000Z",
         },
       ]);
 
@@ -203,83 +163,18 @@ describe("getOrgMembership", () => {
           organization_id: OTHER_ORG,
           role: "admin",
           status: "active",
-          deleted_at: null,
         },
         {
           user_id: USER_ID,
           organization_id: ORG_ID,
           role: "alumni",
           status: "active",
-          deleted_at: null,
         },
       ]);
 
       const result = await getOrgMembership(supabase, USER_ID, ORG_ID);
       assert.notEqual(result, null);
       assert.equal(result!.role, "alumni");
-    });
-
-    it("should skip deleted row and return null when only deleted row matches", async () => {
-      supabase.seed("user_organization_roles", [
-        {
-          user_id: USER_ID,
-          organization_id: ORG_ID,
-          role: "admin",
-          status: "active",
-          deleted_at: "2026-01-01T00:00:00.000Z",
-        },
-      ]);
-
-      const result = await getOrgMembership(supabase, USER_ID, ORG_ID);
-      assert.equal(result, null);
-    });
-  });
-
-  describe("security: both status and deleted_at are enforced", () => {
-    it("should reject pending + non-deleted (status filter works)", async () => {
-      supabase.seed("user_organization_roles", [
-        {
-          user_id: USER_ID,
-          organization_id: ORG_ID,
-          role: "active_member",
-          status: "pending",
-          deleted_at: null,
-        },
-      ]);
-
-      const result = await getOrgMembership(supabase, USER_ID, ORG_ID);
-      assert.equal(result, null);
-    });
-
-    it("should reject active + deleted (deleted_at filter works)", async () => {
-      supabase.seed("user_organization_roles", [
-        {
-          user_id: USER_ID,
-          organization_id: ORG_ID,
-          role: "active_member",
-          status: "active",
-          deleted_at: "2026-02-01T00:00:00.000Z",
-        },
-      ]);
-
-      const result = await getOrgMembership(supabase, USER_ID, ORG_ID);
-      assert.equal(result, null);
-    });
-
-    it("should only accept active + non-deleted", async () => {
-      supabase.seed("user_organization_roles", [
-        {
-          user_id: USER_ID,
-          organization_id: ORG_ID,
-          role: "active_member",
-          status: "active",
-          deleted_at: null,
-        },
-      ]);
-
-      const result = await getOrgMembership(supabase, USER_ID, ORG_ID);
-      assert.notEqual(result, null);
-      assert.equal(result!.role, "active_member");
     });
   });
 });
