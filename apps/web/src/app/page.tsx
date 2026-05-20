@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
@@ -48,11 +49,20 @@ const HERO_PROOF_POINTS = [
 ] as const;
 
 export default async function LandingPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Fast path: no Supabase auth cookie → skip JWT validate. Middleware's
+  // public-route fast path already handles the network hop; this avoids
+  // re-paying the same cost inside the server component.
+  const cookieStore = await cookies();
+  const hasAuthCookie = cookieStore
+    .getAll()
+    .some((c) => /^sb-.*-auth-token/.test(c.name));
 
-  if (user) {
-    redirect("/app");
+  if (hasAuthCookie) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      redirect("/app");
+    }
   }
 
   return (
