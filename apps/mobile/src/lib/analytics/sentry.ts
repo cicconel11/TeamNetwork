@@ -38,6 +38,10 @@ const PII_KEYS = new Set([
   "ssn",
   "creditCard",
   "cardNumber",
+  "query",
+  "firstName",
+  "lastName",
+  "name",
 ]);
 
 function scrubPii(data: Record<string, unknown>): Record<string, unknown> {
