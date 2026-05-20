@@ -1,5 +1,9 @@
 import type { NormalizedConstituent, SyncResult } from "./types";
+import type { ServiceSupabase } from "@/lib/supabase/types";
+import type { Database, Json } from "@/types/database";
 import { debugLog } from "@/lib/debug";
+
+type AlumniUpdate = Database["public"]["Tables"]["alumni"]["Update"];
 
 export function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -10,7 +14,7 @@ export function chunkArray<T>(items: T[], size: number): T[][] {
 }
 
 interface UpsertDeps {
-  supabase: any;
+  supabase: ServiceSupabase;
   integrationId: string;
   organizationId: string;
   alumniLimit: number | null;
@@ -91,7 +95,7 @@ export async function upsertConstituents(
             const alumniUpdatedAt = currentAlumni.updated_at ? new Date(currentAlumni.updated_at) : null;
             const userHasEdited = lastSync && alumniUpdatedAt && alumniUpdatedAt > lastSync;
 
-            const updates: Record<string, unknown> = {};
+            const updates: AlumniUpdate = {};
 
             if (!userHasEdited) {
               // No user edits since last sync — safe to overwrite all fields
@@ -129,7 +133,7 @@ export async function upsertConstituents(
             await supabase
               .from("alumni_external_ids")
               .update({
-                external_data: record as unknown,
+                external_data: record as unknown as Json,
                 last_synced_at: new Date().toISOString(),
               })
               .eq("id", existingMapping.id);
@@ -171,7 +175,7 @@ export async function upsertConstituents(
           alumni_id: newAlumni.id,
           integration_id: integrationId,
           external_id: record.external_id,
-          external_data: record as unknown,
+          external_data: record as unknown as Json,
           last_synced_at: new Date().toISOString(),
         });
 
