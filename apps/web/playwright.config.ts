@@ -80,6 +80,16 @@ export default defineConfig({
       },
       dependencies: ['e2e-setup'],
     },
+    /* Perf — runs unauthenticated against a separately-started prod server. */
+    {
+      name: 'perf',
+      testDir: './tests/perf',
+      testMatch: /.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+      },
+    },
   ],
 
   /* Folder for test artifacts such as screenshots, videos, traces, etc. */
