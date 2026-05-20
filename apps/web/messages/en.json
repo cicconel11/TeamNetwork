@@ -691,10 +691,8 @@
     "saving": "Saving…"
   },
   "forms": {
-    "manage": "Manage organization {label}",
     "manageDescription": "Manage organization {label}",
     "viewDescription": "View and fill out organization {label}",
-    "viewAndFill": "View and fill out organization {label}",
     "documentForms": "Document Forms",
     "createForm": "Create Form",
     "viewEdit": "View / Edit",
@@ -715,9 +713,7 @@
     "backToCalendar": "Back to Calendar"
   },
   "alumni": {
-    "tryAdjusting": "Try adjusting your filters",
     "tryAdjustingFilters": "Try adjusting your filters",
-    "noInDirectory": "No {label} in the directory yet",
     "noAlumniFound": "No {label} found",
     "noAlumniInDirectory": "No {label} in the directory yet"
   },
@@ -1279,9 +1275,6 @@
     },
     "members": {
       "description": "{count} {status} {label}",
-      "noResults": "No {label} found",
-      "noActive": "No active {label} yet",
-      "noInactive": "No inactive {label}",
       "noMembersFound": "No {label} found",
       "noActiveMembers": "No active {label} yet",
       "noInactiveMembers": "No inactive {label}",

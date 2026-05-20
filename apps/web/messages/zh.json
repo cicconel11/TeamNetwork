@@ -673,8 +673,6 @@
     "unableToStart": "无法启动 Stripe 结账"
   },
   "forms": {
-    "manage": "管理组织{label}",
-    "viewAndFill": "查看和填写组织{label}",
     "documentForms": "文档表单",
     "createForm": "创建表单",
     "viewEdit": "查看 / 编辑",
@@ -697,8 +695,6 @@
     "backToCalendar": "返回日历"
   },
   "alumni": {
-    "tryAdjusting": "尝试调整筛选条件",
-    "noInDirectory": "目录中暂无{label}",
     "tryAdjustingFilters": "请尝试调整筛选条件",
     "noAlumniFound": "未找到{label}",
     "noAlumniInDirectory": "目录中暂无{label}"
@@ -1251,9 +1247,6 @@
     },
     "members": {
       "description": "{count} {status} {label}",
-      "noResults": "未找到{label}",
-      "noActive": "暂无活跃{label}",
-      "noInactive": "没有不活跃的{label}",
       "active": "活跃",
       "inactive": "不活跃",
       "noMembersFound": "未找到{label}",
