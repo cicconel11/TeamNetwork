@@ -24,6 +24,12 @@ import {
 // (see follow-up: get_org_member_directory).
 const SOURCE_CAP = 500;
 
+// Valid-UUID sentinel for guaranteed-empty `.in("user_id", ...)` filters.
+// Postgres rejects malformed strings ("__no_match__") with an invalid_uuid
+// error and pollutes the logs; the nil UUID parses cleanly and matches
+// nothing in practice.
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
 interface MembersPageProps {
   params: Promise<{ orgSlug: string }>;
   searchParams: Promise<{ status?: string; role?: string }>;
@@ -69,6 +75,14 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     .map((r) => r.user_id) || [];
   const adminUserIds = personCtx.adminUserIds;
 
+  // Gate parent results: empty when filtering by a non-active status or any
+  // role filter (parents have their own role lane), or no parent-role users.
+  const includeParents =
+    parentUserIds.length > 0 &&
+    !filters.role &&
+    (!filters.status || filters.status === "active");
+  const includeLinked = memberUserIds.length > 0;
+
   // Step 2a: Query members WITH user accounts that have correct roles
   // Note: no dev-admin email exclusion here — the user_organization_roles
   // check (memberUserIds) already ensures only real org members appear.
@@ -77,15 +91,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, linkedin_url, user_id, current_company, current_city, school")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
-    .not("user_id", "is", null);
-
-  // Only filter by role-matched user_ids if there are any
-  if (memberUserIds.length > 0) {
-    linkedMembersQuery = linkedMembersQuery.in("user_id", memberUserIds);
-  } else {
-    // No users with active_member/admin role - return no linked members
-    linkedMembersQuery = linkedMembersQuery.in("user_id", ["__no_match__"]);
-  }
+    .not("user_id", "is", null)
+    .in("user_id", includeLinked ? memberUserIds : [NIL_UUID]);
 
   // Step 2b: Query members WITHOUT user accounts (manually added) - always show in members tab
   let manualMembersQuery = dataClient
@@ -101,22 +108,14 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     .select("id, first_name, last_name, email, photo_url, linkedin_url, relationship, student_name, user_id")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
-    .not("user_id", "is", null);
-
-  if (parentUserIds.length > 0) {
-    parentProfilesQuery = parentProfilesQuery.in("user_id", parentUserIds);
-  } else {
-    parentProfilesQuery = parentProfilesQuery.in("user_id", ["__no_match__"]);
-  }
+    .not("user_id", "is", null)
+    .in("user_id", includeParents ? parentUserIds : [NIL_UUID]);
 
   // Apply filters to both queries
   // Default: show active members only unless explicitly filtered
   if (filters.status) {
     linkedMembersQuery = linkedMembersQuery.eq("status", filters.status);
     manualMembersQuery = manualMembersQuery.eq("status", filters.status);
-    if (filters.status !== "active") {
-      parentProfilesQuery = parentProfilesQuery.in("user_id", ["__no_match__"]);
-    }
   } else {
     linkedMembersQuery = linkedMembersQuery.eq("status", "active");
     manualMembersQuery = manualMembersQuery.eq("status", "active");
@@ -125,7 +124,6 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   if (filters.role) {
     linkedMembersQuery = linkedMembersQuery.eq("role", filters.role);
     manualMembersQuery = manualMembersQuery.eq("role", filters.role);
-    parentProfilesQuery = parentProfilesQuery.in("user_id", ["__no_match__"]);
   }
 
   // Apply ordering after all filters. Cap each source at SOURCE_CAP so the
@@ -135,7 +133,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   manualMembersQuery = manualMembersQuery.order("last_name").limit(SOURCE_CAP);
   parentProfilesQuery = parentProfilesQuery.order("last_name").limit(SOURCE_CAP);
 
-  // Run queries in parallel
+  // Run queries in parallel. Postgres handles `IN ()` (empty list) natively
+  // and returns zero rows, so no invalid-UUID sentinel is needed.
   const [{ data: linkedMembers }, { data: manualMembers }, { data: parentProfiles }, { data: allMembers }] = await Promise.all([
     linkedMembersQuery,
     manualMembersQuery,
