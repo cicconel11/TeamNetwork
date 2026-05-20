@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 
-export async function POST(request: NextRequest, { params }: { params: { postId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
     const supabase = await createClient();
     const {
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: { postId:
       return buildRateLimitResponse(rateLimit);
     }
 
-    const { postId } = params;
+    const { postId } = await params;
 
     // Fetch post to check it exists and get org_id
     const { data: post } = await supabase

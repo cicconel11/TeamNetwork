@@ -6,7 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { postId: string; commentId: string } },
+  { params }: { params: Promise<{ postId: string; commentId: string }> },
 ) {
   try {
     const supabase = await createClient();
@@ -28,7 +28,7 @@ export async function PATCH(
       return buildRateLimitResponse(rateLimit);
     }
 
-    const { commentId } = params;
+    const { commentId } = await params;
     const { body } = await validateJson(request, createCommentSchema);
 
     // Fetch comment to verify ownership
@@ -69,7 +69,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { postId: string; commentId: string } },
+  { params }: { params: Promise<{ postId: string; commentId: string }> },
 ) {
   try {
     const supabase = await createClient();
@@ -91,7 +91,7 @@ export async function DELETE(
       return buildRateLimitResponse(rateLimit);
     }
 
-    const { commentId } = params;
+    const { commentId } = await params;
 
     // Fetch comment to verify ownership
     const { data: comment } = await supabase

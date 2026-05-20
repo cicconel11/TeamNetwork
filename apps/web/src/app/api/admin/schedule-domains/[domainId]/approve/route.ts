@@ -7,9 +7,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   request: Request,
-  { params }: { params: { domainId: string } }
+  { params }: { params: Promise<{ domainId: string }> }
 ) {
   try {
+    const { domainId } = await params;
     // IP-based rate limiting
     const ipRateLimit = checkRateLimit(request, {
       limitPerIp: 15,
@@ -81,7 +82,7 @@ export async function POST(
     const { data: domain, error: domainError } = await serviceClient
       .from("schedule_allowed_domains")
       .select("id,hostname,verified_by_org_id,status")
-      .eq("id", params.domainId)
+      .eq("id", domainId)
       .maybeSingle();
 
     if (domainError || !domain) {
