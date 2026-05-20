@@ -6,8 +6,11 @@ import type {
   NormalizedConstituent,
 } from "./types";
 
-function findPrimary<T extends { primary?: boolean; inactive?: boolean; do_not_email?: boolean }>(items: T[]): T | undefined {
-  const active = items.filter((item) => !item.inactive && !item.do_not_email);
+function findPrimary<T extends { primary?: boolean; inactive?: boolean }>(
+  items: T[],
+  isExcluded?: (item: T) => boolean,
+): T | undefined {
+  const active = items.filter((item) => !item.inactive && !(isExcluded?.(item) ?? false));
   return active.find((item) => item.primary) ?? active[0];
 }
 
@@ -32,8 +35,8 @@ export function normalizeConstituent(
   phones: BlackbaudPhone[],
   addresses: BlackbaudAddress[]
 ): NormalizedConstituent {
-  const primaryEmail = findPrimary(emails);
-  const primaryPhone = findPrimary(phones);
+  const primaryEmail = findPrimary(emails, (e) => e.do_not_email === true);
+  const primaryPhone = findPrimary(phones, (p) => p.do_not_call === true);
   const primaryAddress = findPrimary(addresses);
 
   return {

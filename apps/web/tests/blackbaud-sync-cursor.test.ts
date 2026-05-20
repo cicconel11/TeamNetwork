@@ -13,7 +13,14 @@ describe("runSync cursor timing", () => {
     let capturedLastSyncedAt: string | null = null;
     const PAGE_DELAY_MS = 100;
 
-    // Stub Blackbaud client: returns one page then empty
+    // Stub Blackbaud client: returns one page then empty.
+    // Per constituent the sync now fetches 3 sub-resources (emails, phones,
+    // addresses), so callCount sequence is:
+    //   1: constituents page (1 row)
+    //   2: /emailaddresses for c1
+    //   3: /phones for c1
+    //   4: /addresses for c1
+    //   5: empty constituents page → terminate
     let callCount = 0;
     const fakeClient = {
       getList: async () => {
@@ -23,11 +30,11 @@ describe("runSync cursor timing", () => {
           await new Promise((r) => setTimeout(r, PAGE_DELAY_MS));
           return { count: 1, value: [{ id: "c1", type: "Individual", first: "A", last: "B" }] };
         }
-        if (callCount === 2) {
-          // Second call: email sub-resource for constituent c1
+        if (callCount >= 2 && callCount <= 4) {
+          // Sub-resource fetches for constituent c1
           return { count: 0, value: [] };
         }
-        // Third call: empty page (end of pagination)
+        // Final call: empty page (end of pagination)
         return { count: 0, value: [] };
       },
     };

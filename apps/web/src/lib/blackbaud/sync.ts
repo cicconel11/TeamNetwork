@@ -1,6 +1,8 @@
 import type {
   BlackbaudConstituent,
   BlackbaudEmail,
+  BlackbaudPhone,
+  BlackbaudAddress,
   SyncResult,
   NormalizedConstituent,
   SyncError,
@@ -10,11 +12,42 @@ import { normalizeConstituent } from "./normalize";
 import { upsertConstituents } from "./storage";
 import { makeSyncError } from "./oauth";
 import { checkBlackbaudHealth, formatBlackbaudHealthError } from "./health";
+import type { ServiceSupabase } from "@/lib/supabase/types";
+import type { Json } from "@/types/database";
 import { debugLog } from "@/lib/debug";
+
+const SUBRESOURCE_PACING_MS = 50;
+
+/**
+ * Fetches one sub-resource list for a constituent. Quota errors bubble so
+ * runSync can stop the cycle; non-quota failures are logged and degrade to [].
+ */
+async function fetchSubResource<T>(
+  client: BlackbaudClient,
+  constituentId: string,
+  resource: "emailaddresses" | "phones" | "addresses",
+): Promise<T[]> {
+  try {
+    const res = await client.getList<T>(
+      `/constituent/v1/constituents/${constituentId}/${resource}`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, SUBRESOURCE_PACING_MS));
+    return res.value;
+  } catch (err) {
+    if (err instanceof BlackbaudApiError && err.isQuotaExhausted) {
+      throw err;
+    }
+    debugLog("blackbaud-sync", `${resource} fetch error`, {
+      constituentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
+}
 
 export interface SyncDeps {
   client: BlackbaudClient;
-  supabase: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  supabase: ServiceSupabase;
   integrationId: string;
   organizationId: string;
   alumniLimit: number | null;
@@ -187,25 +220,18 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       for (const constituent of constituents) {
         try {
           let emails: BlackbaudEmail[] = [];
+          let phones: BlackbaudPhone[] = [];
+          let addresses: BlackbaudAddress[] = [];
+
+          // skipEmails gates all sub-resource fetches in dev (single flag covers
+          // emails, phones, addresses) to keep quota usage low during local work.
           if (!skipEmails) {
-            try {
-              const emailsRes = await client.getList<BlackbaudEmail>(
-                `/constituent/v1/constituents/${constituent.id}/emailaddresses`
-              );
-              emails = emailsRes.value;
-              await new Promise((resolve) => setTimeout(resolve, 50));
-            } catch (err) {
-              if (err instanceof BlackbaudApiError && err.isQuotaExhausted) {
-                throw err;
-              }
-              debugLog("blackbaud-sync", "email fetch error", {
-                constituentId: constituent.id,
-                error: err instanceof Error ? err.message : String(err),
-              });
-            }
+            emails = await fetchSubResource<BlackbaudEmail>(client, constituent.id, "emailaddresses");
+            phones = await fetchSubResource<BlackbaudPhone>(client, constituent.id, "phones");
+            addresses = await fetchSubResource<BlackbaudAddress>(client, constituent.id, "addresses");
           }
 
-          normalized.push(normalizeConstituent(constituent, emails, [], []));
+          normalized.push(normalizeConstituent(constituent, emails, phones, addresses));
         } catch (err) {
           if (err instanceof BlackbaudApiError && err.isQuotaExhausted) {
             throw new BlackbaudSyncFailure(
@@ -309,7 +335,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     await supabase
       .from("org_integrations")
       .update({
-        last_sync_error: syncError,
+        last_sync_error: syncError as unknown as Json,
         updated_at: new Date().toISOString(),
       })
       .eq("id", integrationId);

@@ -1,4 +1,5 @@
 import { decryptToken, encryptToken, isTokenExpired, refreshAccessToken } from "./oauth";
+import type { ServiceSupabase } from "@/lib/supabase/types";
 
 interface TokenRefreshIntegration {
   id: string;
@@ -21,7 +22,7 @@ const RE_READ_DELAY_MS = 50;
  */
 export async function refreshTokenWithFallback(
   integration: TokenRefreshIntegration,
-  supabase: any // eslint-disable-line @typescript-eslint/no-explicit-any
+  supabase: ServiceSupabase
 ): Promise<string> {
   const tokenExpiresAt = new Date(integration.token_expires_at);
 
@@ -44,8 +45,7 @@ export async function refreshTokenWithFallback(
   }
 
   if (newTokens) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count } = (await (supabase as any)
+    const updateBuilder = supabase
       .from("org_integrations")
       .update({
         access_token_enc: encryptToken(newTokens.access_token),
@@ -54,9 +54,13 @@ export async function refreshTokenWithFallback(
         updated_at: new Date().toISOString(),
       })
       .eq("id", integration.id)
-      .eq("token_expires_at", integration.token_expires_at)
-      // Supabase returns number | null; null treated as 0 (CAS miss)
-      .select("id", { count: "exact", head: true })) as { count: number | null };
+      .eq("token_expires_at", integration.token_expires_at);
+
+    // Supabase typed builder narrows select() to one arg, but the (column, options)
+    // overload exists at runtime and is the canonical CAS-count pattern. Narrow the
+    // cast to this single call. Returns { count: number | null }.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { count } = await (updateBuilder as any).select("id", { count: "exact", head: true });
 
     if ((count ?? 0) > 0) {
       return newTokens.access_token;
@@ -64,17 +68,13 @@ export async function refreshTokenWithFallback(
   }
 
   for (let attempt = 0; attempt < RE_READ_ATTEMPTS; attempt += 1) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: refreshed, error: reReadError } = (await (supabase as any)
+    const { data: refreshed, error: reReadError } = await supabase
       .from("org_integrations")
       .select("access_token_enc, token_expires_at")
       .eq("id", integration.id)
-      .single()) as {
-      data: { access_token_enc: string; token_expires_at?: string } | null;
-      error: { message: string } | null;
-    };
+      .single();
 
-    if (reReadError || !refreshed) {
+    if (reReadError || !refreshed || !refreshed.access_token_enc) {
       throw new Error(
         `Token refresh failed: could not re-read token for integration ${integration.id}` +
           (reReadError ? `: ${reReadError.message}` : "")

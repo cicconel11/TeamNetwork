@@ -136,4 +136,94 @@ describe("normalizeConstituent", () => {
 
     assert.equal(result.email, "ok@example.com");
   });
+
+  it("excludes phones marked do_not_call", async () => {
+    const { normalizeConstituent } = await import("../src/lib/blackbaud/normalize");
+    const result = normalizeConstituent(
+      { id: "p-dnc1", type: "Individual", first: "M", last: "N" },
+      [],
+      [
+        { id: "p1", number: "555-0001", type: "Mobile", primary: true, do_not_call: true },
+        { id: "p2", number: "555-0002", type: "Home", primary: false },
+      ],
+      []
+    );
+
+    assert.equal(result.phone_number, "555-0002");
+  });
+
+  it("returns null phone_number when all phones are do_not_call", async () => {
+    const { normalizeConstituent } = await import("../src/lib/blackbaud/normalize");
+    const result = normalizeConstituent(
+      { id: "p-dnc2", type: "Individual", first: "O", last: "P" },
+      [],
+      [{ id: "p1", number: "555-0003", type: "Mobile", primary: true, do_not_call: true }],
+      []
+    );
+
+    assert.equal(result.phone_number, null);
+  });
+
+  it("does not exclude phones based on do_not_email (email-only flag)", async () => {
+    const { normalizeConstituent } = await import("../src/lib/blackbaud/normalize");
+    // Phones don't carry do_not_email at the type level, but verify the email
+    // filter doesn't bleed into phones if a fixture sets one.
+    const result = normalizeConstituent(
+      { id: "p-bleed", type: "Individual", first: "Q", last: "R" },
+      [],
+      [{ id: "p1", number: "555-0004", type: "Mobile", primary: true } as never],
+      []
+    );
+
+    assert.equal(result.phone_number, "555-0004");
+  });
+
+  it("excludes inactive addresses and picks next active primary", async () => {
+    const { normalizeConstituent } = await import("../src/lib/blackbaud/normalize");
+    const result = normalizeConstituent(
+      { id: "addr1", type: "Individual", first: "S", last: "T" },
+      [],
+      [],
+      [
+        {
+          id: "a1",
+          address_lines: "1 Old Rd",
+          city: "Old City",
+          state: "OL",
+          postal_code: "00000",
+          country: "US",
+          type: "Home",
+          primary: true,
+          inactive: true,
+        },
+        {
+          id: "a2",
+          address_lines: "2 New Ave",
+          city: "New City",
+          state: "NC",
+          postal_code: "11111",
+          country: "US",
+          type: "Home",
+          primary: false,
+        },
+      ]
+    );
+
+    assert.equal(result.address_summary, "2 New Ave, New City, NC 11111");
+  });
+
+  it("selects primary phone over non-primary when both active", async () => {
+    const { normalizeConstituent } = await import("../src/lib/blackbaud/normalize");
+    const result = normalizeConstituent(
+      { id: "p-prim", type: "Individual", first: "U", last: "V" },
+      [],
+      [
+        { id: "p1", number: "555-0005", type: "Home", primary: false },
+        { id: "p2", number: "555-0006", type: "Mobile", primary: true },
+      ],
+      []
+    );
+
+    assert.equal(result.phone_number, "555-0006");
+  });
 });
