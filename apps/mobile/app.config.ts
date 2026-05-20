@@ -94,6 +94,7 @@ const config: ExpoConfig = {
       "android.permission.READ_EXTERNAL_STORAGE",
       "android.permission.WRITE_EXTERNAL_STORAGE",
       "android.permission.SYSTEM_ALERT_WINDOW",
+      "android.permission.USE_FINGERPRINT",
     ],
     intentFilters: [
       {
