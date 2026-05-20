@@ -109,7 +109,8 @@
     "remove": "移除",
     "pause": "暂停",
     "resume": "恢复",
-    "page": "第 {page} 页，共 {totalPages} 页"
+    "page": "第 {page} 页，共 {totalPages} 页",
+    "manage": "管理"
   },
   "roles": {
     "admin": "管理员",
@@ -179,7 +180,8 @@
     "claimLinkPrompt": "被组织邀请或导入了？",
     "claimLinkText": "认领您的账户",
     "claimJoinHeading": "完成账户认领",
-    "claimJoinDescription": "请输入组织提供的邀请码，以完成对导入资料的认领。"
+    "claimJoinDescription": "请输入组织提供的邀请码，以完成对导入资料的认领。",
+    "passwordUpdatedRedirecting": "密码已更新。正在跳转…"
   },
   "settings": {
     "title": "设置",
@@ -680,7 +682,9 @@
     "viewResubmit": "查看 / 重新提交",
     "downloadSubmit": "下载并提交",
     "noFormsAvailable": "暂无可用的{label}",
-    "formsWillAppear": "{label}可用时将显示在此处。"
+    "formsWillAppear": "{label}可用时将显示在此处。",
+    "manageDescription": "管理组织的{label}",
+    "viewDescription": "查看并填写组织的{label}"
   },
   "calendar": {
     "description": "查看所有活动、日程和可用时间",
@@ -694,7 +698,10 @@
   },
   "alumni": {
     "tryAdjusting": "尝试调整筛选条件",
-    "noInDirectory": "目录中暂无{label}"
+    "noInDirectory": "目录中暂无{label}",
+    "tryAdjustingFilters": "请尝试调整筛选条件",
+    "noAlumniFound": "未找到{label}",
+    "noAlumniInDirectory": "目录中暂无{label}"
   },
   "jobs": {
     "title": "职位",
@@ -1000,7 +1007,27 @@
       "industry_match": "行业匹配",
       "location_match": "地点匹配",
       "topic_match": "主题匹配"
-    }
+    },
+    "removeMentee": "移除学员",
+    "yourMentee": "你的学员",
+    "assignMentee": "分配学员",
+    "updateMentee": "更新学员",
+    "availabilityUpdated": "可用状态已更新",
+    "lastSession": "最近一次会面",
+    "noSessionsYet": "暂无会面记录",
+    "myMentor": "我的导师",
+    "lookingForMentor": "正在寻找导师",
+    "availability": "可用状态",
+    "currentlyAvailable": "有空",
+    "currentlyUnavailable": "无空",
+    "archivePair": "归档配对",
+    "sessionSingular": "会面",
+    "sessionPlural": "会面",
+    "archivePairConfirm": "归档此结对？如有需要可在以后重新创建。",
+    "hideLogs": "隐藏日志",
+    "showAllLogs": "显示全部 {count} 条日志",
+    "logSession": "记录会面",
+    "tabMatches": "我的匹配"
   },
   "linkedin": {
     "profileUrl": "LinkedIn 个人资料 URL",
@@ -1228,7 +1255,10 @@
       "noActive": "暂无活跃{label}",
       "noInactive": "没有不活跃的{label}",
       "active": "活跃",
-      "inactive": "不活跃"
+      "inactive": "不活跃",
+      "noMembersFound": "未找到{label}",
+      "noActiveMembers": "暂无活跃的{label}",
+      "noInactiveMembers": "暂无非活跃的{label}"
     },
     "events": {
       "upcoming": "即将举行",

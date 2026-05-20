@@ -109,7 +109,8 @@
     "remove": "Quitar",
     "pause": "Pausar",
     "resume": "Reanudar",
-    "page": "Pagina {page} de {totalPages}"
+    "page": "Pagina {page} de {totalPages}",
+    "manage": "Gestionar"
   },
   "roles": {
     "admin": "Administrador",
@@ -181,7 +182,8 @@
     "claimLinkPrompt": "Tu organizacion te invito o importo?",
     "claimLinkText": "Reclama tu cuenta",
     "claimJoinHeading": "Termina de reclamar tu cuenta",
-    "claimJoinDescription": "Ingresa el codigo de invitacion de tu organizacion para terminar de reclamar tu perfil importado."
+    "claimJoinDescription": "Ingresa el codigo de invitacion de tu organizacion para terminar de reclamar tu perfil importado.",
+    "passwordUpdatedRedirecting": "Contraseña actualizada. Redirigiendo…"
   },
   "settings": {
     "title": "Ajustes",
@@ -682,7 +684,9 @@
     "viewResubmit": "Ver / Reenviar",
     "downloadSubmit": "Descargar y enviar",
     "noFormsAvailable": "No hay {label} disponibles",
-    "formsWillAppear": "{label} aparecera aqui cuando este disponible."
+    "formsWillAppear": "{label} aparecera aqui cuando este disponible.",
+    "manageDescription": "Gestionar {label} de la organización",
+    "viewDescription": "Ver y completar {label} de la organización"
   },
   "calendar": {
     "description": "Ver todos los eventos, horarios y disponibilidad",
@@ -696,7 +700,10 @@
   },
   "alumni": {
     "tryAdjusting": "Intenta ajustar tus filtros",
-    "noInDirectory": "Aun no hay {label} en el directorio"
+    "noInDirectory": "Aun no hay {label} en el directorio",
+    "tryAdjustingFilters": "Prueba a ajustar los filtros",
+    "noAlumniFound": "No se encontró {label}",
+    "noAlumniInDirectory": "Aún no hay {label} en el directorio"
   },
   "jobs": {
     "title": "Empleos",
@@ -1002,7 +1009,27 @@
       "industry_match": "Coincidencia de industria",
       "location_match": "Coincidencia de ubicación",
       "topic_match": "Coincidencia de tema"
-    }
+    },
+    "removeMentee": "Eliminar aprendiz",
+    "yourMentee": "Tu aprendiz",
+    "assignMentee": "Asignar aprendiz",
+    "updateMentee": "Actualizar aprendiz",
+    "availabilityUpdated": "Disponibilidad actualizada",
+    "lastSession": "Última sesión",
+    "noSessionsYet": "Aún no hay sesiones",
+    "myMentor": "Mi mentor",
+    "lookingForMentor": "Buscando un mentor",
+    "availability": "Disponibilidad",
+    "currentlyAvailable": "Disponible",
+    "currentlyUnavailable": "No disponible",
+    "archivePair": "Archivar pareja",
+    "sessionSingular": "sesión",
+    "sessionPlural": "sesiones",
+    "archivePairConfirm": "¿Archivar esta pareja de mentoría? Puedes volver a crearla más tarde si lo necesitas.",
+    "hideLogs": "Ocultar registros",
+    "showAllLogs": "Mostrar los {count} registros",
+    "logSession": "Registrar sesión",
+    "tabMatches": "Mis coincidencias"
   },
   "linkedin": {
     "profileUrl": "URL del perfil de LinkedIn",
@@ -1230,7 +1257,10 @@
       "noActive": "Aun no hay {label} activos",
       "noInactive": "No hay {label} inactivos",
       "active": "activos",
-      "inactive": "inactivos"
+      "inactive": "inactivos",
+      "noMembersFound": "No se encontró {label}",
+      "noActiveMembers": "Aún no hay {label} activos",
+      "noInactiveMembers": "No hay {label} inactivos"
     },
     "events": {
       "upcoming": "proximos",

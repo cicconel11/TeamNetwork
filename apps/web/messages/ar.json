@@ -109,7 +109,8 @@
     "remove": "إزالة",
     "pause": "إيقاف مؤقت",
     "resume": "استئناف",
-    "page": "الصفحة {page} من {totalPages}"
+    "page": "الصفحة {page} من {totalPages}",
+    "manage": "إدارة"
   },
   "roles": {
     "admin": "مسؤول",
@@ -179,7 +180,8 @@
     "claimLinkPrompt": "هل دعتك أو استوردتك مؤسستك؟",
     "claimLinkText": "المطالبة بحسابك",
     "claimJoinHeading": "أكمل المطالبة بحسابك",
-    "claimJoinDescription": "أدخل رمز الدعوة من مؤسستك لإكمال المطالبة بملفك المستورد."
+    "claimJoinDescription": "أدخل رمز الدعوة من مؤسستك لإكمال المطالبة بملفك المستورد.",
+    "passwordUpdatedRedirecting": "تم تحديث كلمة المرور. جارٍ إعادة التوجيه…"
   },
   "settings": {
     "title": "الإعدادات",
@@ -680,7 +682,9 @@
     "viewResubmit": "عرض / إعادة إرسال",
     "downloadSubmit": "تنزيل وإرسال",
     "noFormsAvailable": "لا {label} متاحة",
-    "formsWillAppear": "{label} ستظهر هنا عندما تكون متاحة."
+    "formsWillAppear": "{label} ستظهر هنا عندما تكون متاحة.",
+    "manageDescription": "إدارة {label} الخاصة بالمنظمة",
+    "viewDescription": "عرض وملء {label} الخاصة بالمنظمة"
   },
   "calendar": {
     "description": "عرض جميع الفعاليات والجداول والتوفر",
@@ -694,7 +698,10 @@
   },
   "alumni": {
     "tryAdjusting": "حاول تعديل الفلاتر",
-    "noInDirectory": "لا يوجد {label} في الدليل بعد"
+    "noInDirectory": "لا يوجد {label} في الدليل بعد",
+    "tryAdjustingFilters": "حاول تعديل عوامل التصفية",
+    "noAlumniFound": "لم يتم العثور على {label}",
+    "noAlumniInDirectory": "لا يوجد {label} في الدليل بعد"
   },
   "jobs": {
     "title": "الوظائف",
@@ -1000,7 +1007,27 @@
       "industry_match": "تطابق المجال",
       "location_match": "تطابق الموقع",
       "topic_match": "تطابق الموضوع"
-    }
+    },
+    "removeMentee": "إزالة المتدرّب",
+    "yourMentee": "متدرّبك",
+    "assignMentee": "تعيين متدرّب",
+    "updateMentee": "تحديث المتدرّب",
+    "availabilityUpdated": "تم تحديث التوفر",
+    "lastSession": "آخر جلسة",
+    "noSessionsYet": "لا توجد جلسات بعد",
+    "myMentor": "مرشدي",
+    "lookingForMentor": "أبحث عن مرشد",
+    "availability": "التوفر",
+    "currentlyAvailable": "متاح",
+    "currentlyUnavailable": "غير متاح",
+    "archivePair": "أرشفة الزوج",
+    "sessionSingular": "جلسة",
+    "sessionPlural": "جلسات",
+    "archivePairConfirm": "هل تريد أرشفة هذا الزوج؟ يمكنك إعادة إنشائه لاحقًا إذا احتجت.",
+    "hideLogs": "إخفاء السجلات",
+    "showAllLogs": "عرض كل السجلات ({count})",
+    "logSession": "تسجيل جلسة",
+    "tabMatches": "تطابقاتي"
   },
   "linkedin": {
     "profileUrl": "رابط ملف LinkedIn",
@@ -1228,7 +1255,10 @@
       "noActive": "لا يوجد {label} نشطون بعد",
       "noInactive": "لا يوجد {label} غير نشطين",
       "active": "نشطون",
-      "inactive": "غير نشطين"
+      "inactive": "غير نشطين",
+      "noMembersFound": "لم يتم العثور على {label}",
+      "noActiveMembers": "لا يوجد {label} نشط بعد",
+      "noInactiveMembers": "لا يوجد {label} غير نشط"
     },
     "events": {
       "upcoming": "قادمة",
