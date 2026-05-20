@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
 
+const SYSTEM_ROLE_KEYS: Record<string, string> = {
+  active_member: "activeMember",
+  member: "activeMember",
+  admin: "admin",
+  parent: "parent",
+};
+
 interface MembersFilterProps {
   orgSlug: string;
   orgId: string;
@@ -16,7 +23,13 @@ interface MembersFilterProps {
 export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, roles }: MembersFilterProps) {
   const tCommon = useTranslations("common");
   const tMembers = useTranslations("members");
+  const tRoles = useTranslations("roles");
   const [open, setOpen] = useState(false);
+
+  const formatRoleLabel = (role: string): string => {
+    const key = SYSTEM_ROLE_KEYS[role];
+    return key ? tRoles(key) : role;
+  };
   const buildFilterKeys = (status?: string, role?: string) => {
     const keys: string[] = [];
     if (status && status !== "active") keys.push("status");
@@ -42,7 +55,7 @@ export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, role
     { label: tMembers("allRoles"), value: undefined },
     ...roles
       .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
-      .map((r) => ({ label: r, value: r })),
+      .map((r) => ({ label: formatRoleLabel(r), value: r })),
   ];
 
   return (
