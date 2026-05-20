@@ -109,7 +109,8 @@
     "remove": "Retirer",
     "pause": "Pause",
     "resume": "Reprendre",
-    "page": "Page {page} sur {totalPages}"
+    "page": "Page {page} sur {totalPages}",
+    "manage": "Gérer"
   },
   "roles": {
     "admin": "Administrateur",
@@ -179,7 +180,8 @@
     "claimLinkPrompt": "Invite ou importe par votre organisation ?",
     "claimLinkText": "Reclamez votre compte",
     "claimJoinHeading": "Finalisez la reclamation de votre compte",
-    "claimJoinDescription": "Saisissez le code d'invitation de votre organisation pour finir de reclamer votre profil importe."
+    "claimJoinDescription": "Saisissez le code d'invitation de votre organisation pour finir de reclamer votre profil importe.",
+    "passwordUpdatedRedirecting": "Mot de passe mis à jour. Redirection…"
   },
   "settings": {
     "title": "Parametres",
@@ -680,7 +682,9 @@
     "viewResubmit": "Voir / Resoumettre",
     "downloadSubmit": "Telecharger et soumettre",
     "noFormsAvailable": "Aucun {label} disponible",
-    "formsWillAppear": "{label} apparaitra ici lorsqu'il sera disponible."
+    "formsWillAppear": "{label} apparaitra ici lorsqu'il sera disponible.",
+    "manageDescription": "Gérer les {label} de l'organisation",
+    "viewDescription": "Voir et remplir les {label} de l'organisation"
   },
   "calendar": {
     "description": "Voir tous les evenements, horaires et disponibilites",
@@ -694,7 +698,10 @@
   },
   "alumni": {
     "tryAdjusting": "Essayez d'ajuster vos filtres",
-    "noInDirectory": "Aucun {label} dans l'annuaire pour le moment"
+    "noInDirectory": "Aucun {label} dans l'annuaire pour le moment",
+    "tryAdjustingFilters": "Essayez d'ajuster vos filtres",
+    "noAlumniFound": "Aucun {label} trouvé",
+    "noAlumniInDirectory": "Aucun {label} dans l'annuaire pour l'instant"
   },
   "jobs": {
     "title": "Emplois",
@@ -1000,7 +1007,27 @@
       "industry_match": "Correspondance de secteur",
       "location_match": "Correspondance de lieu",
       "topic_match": "Correspondance de sujet"
-    }
+    },
+    "removeMentee": "Retirer le mentoré",
+    "yourMentee": "Votre mentoré",
+    "assignMentee": "Assigner un mentoré",
+    "updateMentee": "Mettre à jour le mentoré",
+    "availabilityUpdated": "Disponibilité mise à jour",
+    "lastSession": "Dernière séance",
+    "noSessionsYet": "Aucune séance pour l'instant",
+    "myMentor": "Mon mentor",
+    "lookingForMentor": "À la recherche d'un mentor",
+    "availability": "Disponibilité",
+    "currentlyAvailable": "Disponible",
+    "currentlyUnavailable": "Indisponible",
+    "archivePair": "Archiver la paire",
+    "sessionSingular": "séance",
+    "sessionPlural": "séances",
+    "archivePairConfirm": "Archiver cette paire de mentorat ? Vous pourrez la recréer plus tard si besoin.",
+    "hideLogs": "Masquer les journaux",
+    "showAllLogs": "Afficher les {count} journaux",
+    "logSession": "Consigner une séance",
+    "tabMatches": "Mes correspondances"
   },
   "linkedin": {
     "profileUrl": "URL du profil LinkedIn",
@@ -1228,7 +1255,10 @@
       "noActive": "Aucun {label} actif pour le moment",
       "noInactive": "Aucun {label} inactif",
       "active": "actifs",
-      "inactive": "inactifs"
+      "inactive": "inactifs",
+      "noMembersFound": "Aucun {label} trouvé",
+      "noActiveMembers": "Aucun {label} actif pour l'instant",
+      "noInactiveMembers": "Aucun {label} inactif"
     },
     "events": {
       "upcoming": "a venir",

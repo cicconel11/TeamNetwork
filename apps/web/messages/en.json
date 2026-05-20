@@ -109,7 +109,8 @@
     "remove": "Remove",
     "pause": "Pause",
     "resume": "Resume",
-    "page": "Page {page} of {totalPages}"
+    "page": "Page {page} of {totalPages}",
+    "manage": "Manage"
   },
   "roles": {
     "admin": "Admin",
@@ -181,7 +182,8 @@
     "claimLinkPrompt": "Been invited or imported by your organization?",
     "claimLinkText": "Claim your account",
     "claimJoinHeading": "Finish claiming your account",
-    "claimJoinDescription": "Enter the invite code from your organization to finish claiming your imported profile."
+    "claimJoinDescription": "Enter the invite code from your organization to finish claiming your imported profile.",
+    "passwordUpdatedRedirecting": "Password updated. Redirecting…"
   },
   "settings": {
     "title": "Settings",
@@ -690,6 +692,8 @@
   },
   "forms": {
     "manage": "Manage organization {label}",
+    "manageDescription": "Manage organization {label}",
+    "viewDescription": "View and fill out organization {label}",
     "viewAndFill": "View and fill out organization {label}",
     "documentForms": "Document Forms",
     "createForm": "Create Form",
@@ -712,7 +716,10 @@
   },
   "alumni": {
     "tryAdjusting": "Try adjusting your filters",
-    "noInDirectory": "No {label} in the directory yet"
+    "tryAdjustingFilters": "Try adjusting your filters",
+    "noInDirectory": "No {label} in the directory yet",
+    "noAlumniFound": "No {label} found",
+    "noAlumniInDirectory": "No {label} in the directory yet"
   },
   "jobs": {
     "title": "Jobs",
@@ -1028,7 +1035,27 @@
     "remindersSent": "Reminders sent",
     "reminderRateLimited": "Already reminded in last 24h",
     "reminderSkipped": "No reminder sent",
-    "skippedRateLimited": "skipped (24h)"
+    "skippedRateLimited": "skipped (24h)",
+    "removeMentee": "Remove mentee",
+    "yourMentee": "Your mentee",
+    "assignMentee": "Assign mentee",
+    "updateMentee": "Update mentee",
+    "availabilityUpdated": "Availability updated",
+    "lastSession": "Last session",
+    "noSessionsYet": "No sessions yet",
+    "myMentor": "My mentor",
+    "lookingForMentor": "Looking for a mentor",
+    "availability": "Availability",
+    "currentlyAvailable": "Available",
+    "currentlyUnavailable": "Unavailable",
+    "archivePair": "Archive pair",
+    "sessionSingular": "session",
+    "sessionPlural": "sessions",
+    "archivePairConfirm": "Archive this mentorship pair? You can re-create it later if needed.",
+    "hideLogs": "Hide logs",
+    "showAllLogs": "Show all {count} logs",
+    "logSession": "Log session",
+    "tabMatches": "My Matches"
   },
   "linkedin": {
     "profileUrl": "LinkedIn Profile URL",
@@ -1255,6 +1282,9 @@
       "noResults": "No {label} found",
       "noActive": "No active {label} yet",
       "noInactive": "No inactive {label}",
+      "noMembersFound": "No {label} found",
+      "noActiveMembers": "No active {label} yet",
+      "noInactiveMembers": "No inactive {label}",
       "active": "active",
       "inactive": "inactive"
     },
