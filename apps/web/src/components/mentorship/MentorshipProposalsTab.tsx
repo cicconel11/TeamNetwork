@@ -8,6 +8,16 @@ import { toast } from "sonner";
 import { Badge, Button, EmptyState, Textarea } from "@/components/ui";
 import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
 
+const KNOWN_PROPOSAL_STATUSES = new Set([
+  "proposed",
+  "accepted",
+  "declined",
+  "expired",
+  "active",
+  "paused",
+  "completed",
+]);
+
 export interface ProposalSignal {
   code: string;
   weight: number;
@@ -79,6 +89,7 @@ export function MentorshipProposalsTab({
   };
 
   const statusLabel = (status: string): string => {
+    if (!KNOWN_PROPOSAL_STATUSES.has(status)) return status;
     try {
       return t(`status_${status}`);
     } catch {
