@@ -252,7 +252,10 @@ const nextConfig = {
   },
   experimental: {
     staleTimes: {
-      dynamic: 0,
+      // 30s client-side cache for dynamic RSC segments. Pages that need fresh data
+      // on nav should call router.refresh() after mutations (most flows already do —
+      // see LoginClient ~line 118).
+      dynamic: 30,
     },
   },
   webpack(config, { dev }) {
