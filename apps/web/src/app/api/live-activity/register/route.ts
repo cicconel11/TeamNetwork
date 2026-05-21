@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   baseSchemas,
@@ -35,11 +35,8 @@ const schema = z
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
+    const { user } = await createAuthenticatedApiClient(request);
     const service = createServiceClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
