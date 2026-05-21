@@ -24,13 +24,16 @@ if (BASE_URL && !BASE_URL.startsWith("https://")) {
 }
 
 // Restrict WebView to the captcha origin and Cloudflare's challenge hosts.
-// Turnstile's managed challenge probes telemetry/CDN endpoints beyond
-// challenges.cloudflare.com; without these the widget hangs on iOS.
+// Turnstile's managed challenge renders an `about:srcdoc` iframe and probes
+// telemetry/CDN endpoints beyond challenges.cloudflare.com. Without all of
+// these, react-native-webview's passesWhitelist shunts the loads to
+// Linking.openURL and the widget hangs (most visible on iOS Simulator).
 const ORIGIN_WHITELIST = [
   BASE_URL,
   "https://challenges.cloudflare.com",
   "https://*.cloudflare.com",
   "https://*.cloudflareinsights.com",
+  "about:srcdoc",
 ];
 
 export interface TurnstileRef {
