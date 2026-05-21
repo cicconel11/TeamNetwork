@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { ORG_NAV_ITEMS } from "@/lib/navigation/nav-items";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
@@ -131,8 +131,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       sanitizedName = trimmedName;
     }
 
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { supabase, user } = await createAuthenticatedApiClient(req);
 
     const rateLimit = checkRateLimit(req, {
       userId: user?.id ?? null,
@@ -300,17 +299,16 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: RouteParams) {
+export async function DELETE(req: Request, { params }: RouteParams) {
   const { organizationId } = await params;
   const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
   if (!orgIdParsed.success) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await createAuthenticatedApiClient(req);
 
-  const rateLimit = checkRateLimit(_req, {
+  const rateLimit = checkRateLimit(req, {
     userId: user?.id ?? null,
     feature: "organization deletion",
     limitPerIp: 10,
@@ -353,7 +351,7 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
       targetType: "organization",
       targetId: organizationId,
       targetSlug: org?.slug ?? undefined,
-      ...extractRequestContext(_req),
+      ...extractRequestContext(req),
       metadata: { orgName: org?.name },
     });
   }
