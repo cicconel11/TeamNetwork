@@ -49,7 +49,7 @@ test("route rate-limits before auth and service work", () => {
   assert.match(routeSource, /buildRateLimitResponse\(ipRateLimit\)/);
   assert.match(routeSource, /feature: "mentorship proposal reminders"/);
   assert.ok(
-    routeSource.indexOf("checkRateLimit(req") < routeSource.indexOf("createClient()"),
+    routeSource.indexOf("checkRateLimit(req") < routeSource.indexOf("createAuthenticatedApiClient("),
     "IP rate limit should run before auth client creation"
   );
   assert.ok(
