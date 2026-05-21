@@ -170,13 +170,19 @@ function RootLayoutInner() {
     let isMounted = true;
 
     const bootstrapAnalytics = async () => {
-      await hydrateEnabled();
-      if (!isMounted) return;
-
-      initAnalytics({
-        posthogKey: process.env.EXPO_PUBLIC_POSTHOG_KEY || "",
-        sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
-      });
+      try {
+        await hydrateEnabled();
+        if (!isMounted) return;
+        initAnalytics({
+          posthogKey: process.env.EXPO_PUBLIC_POSTHOG_KEY || "",
+          sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
+        });
+      } catch (error) {
+        // Analytics is non-critical. An init failure (bad DSN, blocked host,
+        // AsyncStorage error) must not surface as an unhandled rejection that
+        // App Review sees on cold launch.
+        if (__DEV__) console.warn("Analytics init failed", error);
+      }
     };
 
     void bootstrapAnalytics();
