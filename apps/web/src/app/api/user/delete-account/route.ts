@@ -63,12 +63,10 @@ export async function DELETE(request: Request) {
     | null = null;
 
   try {
-    const { createClient } = await import("@/lib/supabase/server");
+    const { createAuthenticatedApiClient } = await import("@/lib/supabase/api");
     const { createServiceClient } = await import("@/lib/supabase/service");
-    const supabase = await createClient();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
     const serviceSupabase = createServiceClient();
-
-    const { data: { user } } = await supabase.auth.getUser();
 
     // Rate limit: 3 deletion requests per hour per user
     const rateLimit = checkRateLimit(request, {
@@ -273,12 +271,10 @@ Thank you for using TeamNetwork.
  */
 export async function GET(request: Request) {
   try {
-    const { createClient } = await import("@/lib/supabase/server");
+    const { createAuthenticatedApiClient } = await import("@/lib/supabase/api");
     const { createServiceClient } = await import("@/lib/supabase/service");
-    const supabase = await createClient();
+    const { user } = await createAuthenticatedApiClient(request);
     const serviceSupabase = createServiceClient();
-
-    const { data: { user } } = await supabase.auth.getUser();
 
     // Rate limit
     const rateLimit = checkRateLimit(request, {
@@ -353,12 +349,10 @@ export async function POST(request: Request) {
     | null = null;
 
   try {
-    const { createClient } = await import("@/lib/supabase/server");
+    const { createAuthenticatedApiClient } = await import("@/lib/supabase/api");
     const { createServiceClient } = await import("@/lib/supabase/service");
-    const supabase = await createClient();
+    const { user } = await createAuthenticatedApiClient(request);
     const serviceSupabase = createServiceClient();
-
-    const { data: { user } } = await supabase.auth.getUser();
 
     // Rate limit
     const rateLimit = checkRateLimit(request, {
