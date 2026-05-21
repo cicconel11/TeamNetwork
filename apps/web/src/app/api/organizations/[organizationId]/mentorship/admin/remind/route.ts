@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildRateLimitResponse, checkRateLimit } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
@@ -45,8 +45,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
   }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await createAuthenticatedApiClient(req);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: ipRateLimit.headers });
   }
