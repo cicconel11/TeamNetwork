@@ -23,9 +23,15 @@ if (BASE_URL && !BASE_URL.startsWith("https://")) {
   );
 }
 
-// Restrict WebView to the captcha origin and Cloudflare's challenge host.
-// Turnstile loads its widget JS from challenges.cloudflare.com.
-const ORIGIN_WHITELIST = [BASE_URL, "https://challenges.cloudflare.com"];
+// Restrict WebView to the captcha origin and Cloudflare's challenge hosts.
+// Turnstile's managed challenge probes telemetry/CDN endpoints beyond
+// challenges.cloudflare.com; without these the widget hangs on iOS.
+const ORIGIN_WHITELIST = [
+  BASE_URL,
+  "https://challenges.cloudflare.com",
+  "https://*.cloudflare.com",
+  "https://*.cloudflareinsights.com",
+];
 
 export interface TurnstileRef {
   show: () => void;
