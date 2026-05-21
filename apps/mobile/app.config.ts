@@ -38,6 +38,11 @@ const config: ExpoConfig = {
   },
   ios: {
     supportsTablet: true,
+    icon: {
+      light: "./assets/icon.png",
+      dark: "./assets/icon-dark.png",
+      tinted: "./assets/icon-tinted.png",
+    },
     appleTeamId: "5GWLTFG43T",
     bundleIdentifier: "com.myteamnetwork.teammeet",
     buildNumber: "29",
