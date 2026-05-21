@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { extname } from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { uploadIntentSchema } from "@/lib/schemas/media";
 import { validateJson, validationErrorResponse, ValidationError } from "@/lib/security/validation";
@@ -34,8 +34,7 @@ function extensionForMimeType(mimeType: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
