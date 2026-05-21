@@ -172,9 +172,8 @@ const config: ExpoConfig = {
       {
         calendarPermission:
           "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
-        // `false` deletes the NSReminders* keys (we don't use EventKit
-        // Reminders) — Apple flags unused permission strings.
-        remindersPermission: false,
+        remindersPermission:
+          "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
       },
     ],
     [
