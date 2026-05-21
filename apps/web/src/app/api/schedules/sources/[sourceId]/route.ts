@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { maskUrl } from "@/lib/schedule-connectors/fetch";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
@@ -23,10 +23,9 @@ export async function PATCH(
       return buildRateLimitResponse(ipRateLimit);
     }
 
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized", message: "You must be logged in to update sources." },
         { status: 401 }
@@ -143,10 +142,9 @@ export async function DELETE(
       return buildRateLimitResponse(ipRateLimit);
     }
 
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized", message: "You must be logged in to remove sources." },
         { status: 401 }

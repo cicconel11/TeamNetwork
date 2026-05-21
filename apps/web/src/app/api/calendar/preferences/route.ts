@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
@@ -40,9 +40,8 @@ interface SyncPreferences {
  */
 export async function GET(request: Request) {
     try {
-        // Get the authenticated user
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        // Get the authenticated user (Bearer token or cookies)
+        const { supabase, user } = await createAuthenticatedApiClient(request);
 
         const rateLimit = checkRateLimit(request, {
             userId: user?.id ?? null,
@@ -58,7 +57,7 @@ export async function GET(request: Request) {
         const respond = (payload: unknown, status = 200) =>
             NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-        if (authError || !user) {
+        if (!user) {
             return respond(
                 { error: "Unauthorized", message: "You must be logged in to view preferences." },
                 401
@@ -158,9 +157,8 @@ export async function GET(request: Request) {
  */
 export async function PUT(request: Request) {
     try {
-        // Get the authenticated user
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        // Get the authenticated user (Bearer token or cookies)
+        const { supabase, user } = await createAuthenticatedApiClient(request);
 
         const rateLimit = checkRateLimit(request, {
             userId: user?.id ?? null,
@@ -176,7 +174,7 @@ export async function PUT(request: Request) {
         const respond = (payload: unknown, status = 200) =>
             NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-        if (authError || !user) {
+        if (!user) {
             return respond(
                 { error: "Unauthorized", message: "You must be logged in to update preferences." },
                 401
