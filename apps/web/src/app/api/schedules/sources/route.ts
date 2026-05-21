@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { maskUrl } from "@/lib/schedule-connectors/fetch";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
@@ -19,10 +19,9 @@ export async function GET(request: Request) {
       return buildRateLimitResponse(ipRateLimit);
     }
 
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { supabase, user } = await createAuthenticatedApiClient(request);
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized", message: "You must be logged in to view sources." },
         { status: 401 }
