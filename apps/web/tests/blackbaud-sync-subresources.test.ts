@@ -209,8 +209,191 @@ describe("runSync sub-resource fetches", () => {
     assert.equal(state.inserts.length, 1);
     const inserted = state.inserts[0];
     assert.equal(inserted.email, "grace@example.com");
-    assert.equal(inserted.phone_number, null, "phone null after non-quota fetch failure");
+    assert.equal(inserted.phone_number, null, "phone null after non-quota fetch failure on insert");
     assert.equal(inserted.address_summary, "1 Yorktown, Arlington, VA 22202", "address still fetched");
+
+    // R5 / U3: failure surfaces in skippedReasons + partial + warning.
+    assert.equal(result.partial, true, "partial flag set when sub-resource failed");
+    assert.equal(result.skippedReasons?.subresource_phones_failed, 1, "phones failure counted");
+    assert.match(result.warning ?? "", /phones/i, "warning mentions failed resource");
+  });
+
+  it("preserves existing alumni email on UPDATE when /emailaddresses fetch fails (non-quota)", async () => {
+    const { upsertConstituents } = await import("../src/lib/blackbaud/storage");
+
+    // Existing alumni: imported previously, never user-edited, has real email
+    // + phone. /emailaddresses 5xx this pass; phones + addresses returned
+    // updated values. Storage must keep alumni.email, take the new phone +
+    // first_name, NOT null-out email.
+    const alumniUpdates: Record<string, unknown>[] = [];
+    const externalDataUpdates: Record<string, unknown>[] = [];
+
+    const fakeSupabase = {
+      from: (table: string) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const chain: any = {
+          select: () => chain,
+          insert: () => chain,
+          update: (data: Record<string, unknown>) => {
+            if (table === "alumni") alumniUpdates.push(data);
+            if (table === "alumni_external_ids") externalDataUpdates.push(data);
+            return chain;
+          },
+          delete: () => chain,
+          eq: () => chain,
+          is: () => chain,
+          maybeSingle: () => {
+            if (table === "alumni_external_ids") {
+              return Promise.resolve({
+                data: { id: "mapping-1", alumni_id: "alumni-1", last_synced_at: "2025-01-01T00:00:00Z" },
+                error: null,
+              });
+            }
+            return Promise.resolve({ data: null, error: null });
+          },
+          single: () => {
+            if (table === "alumni") {
+              return Promise.resolve({
+                data: {
+                  id: "alumni-1",
+                  first_name: "Old",
+                  last_name: "Name",
+                  email: "alum@example.com",
+                  phone_number: "555-OLD",
+                  address_summary: "Old Address",
+                  graduation_year: 2010,
+                  updated_at: "2025-01-01T00:00:00Z",
+                },
+                error: null,
+              });
+            }
+            return Promise.resolve({ data: null, error: null });
+          },
+        };
+        return chain;
+      },
+    };
+
+    const result = await upsertConstituents(
+      {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        supabase: fakeSupabase as any,
+        integrationId: "int-update-1",
+        organizationId: "org-1",
+        alumniLimit: null,
+        currentAlumniCount: 0,
+      },
+      [
+        {
+          external_id: "bb-1",
+          first_name: "New",
+          last_name: "Name",
+          email: undefined, // emails sub-resource failed
+          phone_number: "555-NEW",
+          address_summary: "New Address",
+          graduation_year: 2010,
+          source: "integration_sync" as const,
+        },
+      ],
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(result.updated, 1, "row updated, not skipped");
+    assert.equal(alumniUpdates.length, 1);
+    const update = alumniUpdates[0];
+
+    // Critical assertion: email must NOT appear in the update (preserved).
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(update, "email"),
+      false,
+      "email must not be overwritten when sub-resource fetch failed",
+    );
+    // Other fields did update.
+    assert.equal(update.first_name, "New");
+    assert.equal(update.phone_number, "555-NEW");
+    assert.equal(update.address_summary, "New Address");
+
+    // external_data snapshot keeps the previous email (last successful import).
+    const snapshot = (externalDataUpdates[0] as { external_data: Record<string, unknown> }).external_data;
+    assert.equal(snapshot.email, "alum@example.com", "snapshot preserves last successful email");
+    assert.equal(snapshot.phone_number, "555-NEW", "snapshot reflects fresh phone");
+  });
+
+  it("nulls alumni email on UPDATE when /emailaddresses returns empty array (Blackbaud says no)", async () => {
+    const { upsertConstituents } = await import("../src/lib/blackbaud/storage");
+
+    const alumniUpdates: Record<string, unknown>[] = [];
+    const fakeSupabase = {
+      from: (table: string) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const chain: any = {
+          select: () => chain,
+          insert: () => chain,
+          update: (data: Record<string, unknown>) => {
+            if (table === "alumni") alumniUpdates.push(data);
+            return chain;
+          },
+          delete: () => chain,
+          eq: () => chain,
+          is: () => chain,
+          maybeSingle: () => {
+            if (table === "alumni_external_ids") {
+              return Promise.resolve({
+                data: { id: "mapping-2", alumni_id: "alumni-2", last_synced_at: "2025-01-01T00:00:00Z" },
+                error: null,
+              });
+            }
+            return Promise.resolve({ data: null, error: null });
+          },
+          single: () => {
+            if (table === "alumni") {
+              return Promise.resolve({
+                data: {
+                  id: "alumni-2",
+                  first_name: "X",
+                  last_name: "Y",
+                  email: "old@example.com",
+                  phone_number: null,
+                  address_summary: null,
+                  graduation_year: null,
+                  updated_at: "2025-01-01T00:00:00Z",
+                },
+                error: null,
+              });
+            }
+            return Promise.resolve({ data: null, error: null });
+          },
+        };
+        return chain;
+      },
+    };
+
+    const result = await upsertConstituents(
+      {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        supabase: fakeSupabase as any,
+        integrationId: "int-update-2",
+        organizationId: "org-1",
+        alumniLimit: null,
+        currentAlumniCount: 0,
+      },
+      [
+        {
+          external_id: "bb-2",
+          first_name: "X",
+          last_name: "Y",
+          email: null, // Blackbaud successfully reported zero emails
+          phone_number: null,
+          address_summary: null,
+          graduation_year: null,
+          source: "integration_sync" as const,
+        },
+      ],
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(alumniUpdates.length, 1);
+    assert.equal(alumniUpdates[0].email, null, "explicit null overwrites — Blackbaud said zero");
   });
 
   it("propagates quota-exhausted error from a phones fetch and stops sync", async () => {
