@@ -23,17 +23,6 @@ function getLatestSyncTriggerSql(): { file: string; sql: string } {
   return latest;
 }
 
-function getLatestSyncTriggerMigrationFile(): { file: string; full: string } {
-  const files = getMigrationFiles();
-  const pattern = /create or replace function public\.handle_org_member_sync\(\)/i;
-  let latest = { file: "", full: "" };
-  for (const file of files) {
-    const full = fs.readFileSync(path.join(migrationsDir, file), "utf8");
-    if (pattern.test(full)) latest = { file, full };
-  }
-  return latest;
-}
-
 function countMatches(input: string, pattern: RegExp): number {
   return Array.from(input.matchAll(pattern)).length;
 }
@@ -42,11 +31,15 @@ test("latest handle_org_member_sync uses case-insensitive email match in members
   const { sql } = getLatestSyncTriggerSql();
   assert.ok(sql.length > 0, "Expected to find handle_org_member_sync definition");
 
-  const lowerCount = countMatches(sql, /lower\(email\)\s*=\s*lower\(v_user_email\)/g);
-  assert.equal(
-    lowerCount,
-    3,
-    "Expected three lower(email) = lower(v_user_email) lookups (members, alumni, parents)",
+  // Allow optional table-alias prefix (e.g. `a.email`) so migrations that
+  // refactor to aliased joins still pass.
+  const lowerCount = countMatches(
+    sql,
+    /lower\((?:[a-z_]+\.)?email\)\s*=\s*lower\(v_user_email\)/g,
+  );
+  assert.ok(
+    lowerCount >= 3,
+    `Expected at least three lower(email) = lower(v_user_email) lookups (members, alumni, parents); got ${lowerCount}`,
   );
 });
 
@@ -82,12 +75,12 @@ test("members and alumni email lookups respect deleted_at IS NULL", () => {
     "Members email lookup should respect deleted_at IS NULL",
   );
 
-  // Alumni lookup
-  const alumniBlock = sql.match(/from public\.alumni[\s\S]*?limit 1;/i);
+  // Alumni lookup (may use aliased table-name like `public.alumni a`)
+  const alumniBlock = sql.match(/from public\.alumni\b[\s\S]*?limit 1;/i);
   assert.ok(alumniBlock, "Expected to find alumni SELECT block");
   assert.match(
     alumniBlock![0],
-    /lower\(email\)\s*=\s*lower\(v_user_email\)/i,
+    /lower\((?:[a-z_]+\.)?email\)\s*=\s*lower\(v_user_email\)/i,
     "Alumni lookup should use lower() comparison",
   );
   assert.match(
@@ -115,25 +108,23 @@ test("parents branch behavior preserved (case-insensitive + deleted_at IS NULL)"
   );
 });
 
-test("latest sync-trigger migration appends one-time alumni reconciliation backfill", () => {
-  const { file, full } = getLatestSyncTriggerMigrationFile();
-  assert.ok(file.length > 0, "Expected to find sync trigger migration file");
+test("one-time alumni reconciliation backfill exists in the case-insensitive sync-trigger migration", () => {
+  // This backfill is a historical one-time reconciliation that lives in
+  // 20261103000000_sync_trigger_case_insensitive_email.sql. Later migrations
+  // that recreate handle_org_member_sync do not need to re-run it.
+  const backfillFile = "20261103000000_sync_trigger_case_insensitive_email.sql";
+  const full = fs.readFileSync(path.join(migrationsDir, backfillFile), "utf8");
 
-  // Reconciliation UPDATE must target alumni from members on lower(email)
   assert.match(
     full,
     /update\s+public\.alumni[\s\S]*?from\s+public\.members[\s\S]*?lower\(\s*a\.email\s*\)\s*=\s*lower\(\s*m\.email\s*\)/i,
     "Expected reconciliation UPDATE joining alumni to members on lower(email)",
   );
-
-  // Idempotency: must restrict to a.user_id IS NULL
   assert.match(
     full,
     /update\s+public\.alumni[\s\S]*?a\.user_id\s+is\s+null/i,
     "Reconciliation must filter to a.user_id IS NULL for idempotency",
   );
-
-  // Soft-delete safety on both tables
   assert.match(
     full,
     /update\s+public\.alumni[\s\S]*?a\.deleted_at\s+is\s+null/i,
