@@ -7,8 +7,8 @@ import {
 
 describe("Feature Flags", () => {
   describe("defaultFeatureFlags", () => {
-    it("should have all features disabled by default", () => {
-      expect(defaultFeatureFlags.alumniEnabled).toBe(false);
+    it("should have expected defaults (alumni on, others off)", () => {
+      expect(defaultFeatureFlags.alumniEnabled).toBe(true);
       expect(defaultFeatureFlags.donationsEnabled).toBe(false);
       expect(defaultFeatureFlags.recordsEnabled).toBe(false);
       expect(defaultFeatureFlags.formsEnabled).toBe(false);

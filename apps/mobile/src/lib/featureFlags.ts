@@ -23,7 +23,7 @@ export interface FeatureFlags {
  * or determined by organization settings.
  */
 export const defaultFeatureFlags: FeatureFlags = {
-  alumniEnabled: false,
+  alumniEnabled: true,
   donationsEnabled: false,
   recordsEnabled: false,
   formsEnabled: false,
@@ -56,11 +56,7 @@ function readLiveActivitiesBuildFlag(): boolean {
  * @returns Feature flags with all features disabled by default
  */
 export function getFeatureFlags(_orgId?: string): FeatureFlags {
-  // Enable alumni in dev builds only for testing; prod stays off until validated
   const flags = { ...defaultFeatureFlags };
-  if (__DEV__) {
-    flags.alumniEnabled = true;
-  }
   flags.liveActivitiesEnabled = readLiveActivitiesBuildFlag();
   return flags;
 }
