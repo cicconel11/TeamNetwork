@@ -99,15 +99,24 @@ export async function upsertConstituents(
             const updates: AlumniUpdate = {};
 
             if (!userHasEdited) {
-              // No user edits since last sync — safe to overwrite all fields
+              // No user edits since last sync — safe to overwrite all fields.
+              // BUT: email/phone/address_summary are tri-state on NormalizedConstituent
+              // (string | null | undefined). undefined ⇒ sub-resource fetch failed;
+              // preserve the existing DB column rather than overwriting with null.
+              // first_name / last_name / graduation_year come from the constituent
+              // endpoint directly, which either succeeded (and we have a value) or
+              // threw and skipped this row — never the undefined sentinel.
               updates.first_name = record.first_name;
               updates.last_name = record.last_name;
-              updates.email = record.email;
-              updates.phone_number = record.phone_number;
-              updates.address_summary = record.address_summary;
+              if (record.email !== undefined) updates.email = record.email;
+              if (record.phone_number !== undefined) updates.phone_number = record.phone_number;
+              if (record.address_summary !== undefined) updates.address_summary = record.address_summary;
               updates.graduation_year = record.graduation_year;
             } else {
-              // User edited since last sync — only fill blank fields
+              // User edited since last sync — only fill blank fields. The
+              // existing truthiness check naturally skips the undefined
+              // sentinel (undefined is falsy), so transient sub-resource
+              // failures cannot overwrite a user-edited field either.
               if (!currentAlumni.email && record.email) updates.email = record.email;
               if (!currentAlumni.phone_number && record.phone_number) updates.phone_number = record.phone_number;
               if (!currentAlumni.address_summary && record.address_summary) updates.address_summary = record.address_summary;
@@ -130,11 +139,26 @@ export async function upsertConstituents(
               continue;
             }
 
-            // Refresh external_data and last_synced_at
+            // Refresh external_data and last_synced_at. For sub-resources that
+            // failed (undefined sentinel), snapshot the value we kept on the
+            // alumni row instead — the snapshot represents "last successful
+            // import" and must not regress to null just because this pass
+            // didn't refresh that resource. Claim-flow fallback (U4) reads
+            // external_data->>'email', so the snapshot must stay populated.
+            const externalDataSnapshot = {
+              ...record,
+              email: record.email === undefined ? currentAlumni.email : record.email,
+              phone_number:
+                record.phone_number === undefined ? currentAlumni.phone_number : record.phone_number,
+              address_summary:
+                record.address_summary === undefined
+                  ? currentAlumni.address_summary
+                  : record.address_summary,
+            };
             await supabase
               .from("alumni_external_ids")
               .update({
-                external_data: record as unknown as Json,
+                external_data: externalDataSnapshot as unknown as Json,
                 last_synced_at: new Date().toISOString(),
               })
               .eq("id", existingMapping.id);
@@ -151,15 +175,19 @@ export async function upsertConstituents(
           continue;
         }
 
+        // INSERT path: brand-new alumni, no existing value to preserve.
+        // Coerce undefined (sub-resource fetch failed) to null — semantically
+        // equivalent on insert. Re-sync will fill the value once Blackbaud's
+        // /emailaddresses (or /phones, /addresses) returns successfully.
         const { data: newAlumni, error: insertError } = await supabase
           .from("alumni")
           .insert({
             organization_id: organizationId,
             first_name: record.first_name,
             last_name: record.last_name,
-            email: record.email,
-            phone_number: record.phone_number,
-            address_summary: record.address_summary,
+            email: record.email ?? null,
+            phone_number: record.phone_number ?? null,
+            address_summary: record.address_summary ?? null,
             graduation_year: record.graduation_year,
             source: "integration_sync",
           })
@@ -172,12 +200,20 @@ export async function upsertConstituents(
           continue;
         }
 
-        // Create external ID mapping — rollback alumni if this fails
+        // Create external ID mapping — rollback alumni if this fails.
+        // Normalize undefined sub-resources to null in the snapshot (no prior
+        // value on insert; matches the row we just inserted).
+        const insertSnapshot = {
+          ...record,
+          email: record.email ?? null,
+          phone_number: record.phone_number ?? null,
+          address_summary: record.address_summary ?? null,
+        };
         const { error: mappingError } = await supabase.from("alumni_external_ids").insert({
           alumni_id: newAlumni.id,
           integration_id: integrationId,
           external_id: record.external_id,
-          external_data: record as unknown as Json,
+          external_data: insertSnapshot as unknown as Json,
           last_synced_at: new Date().toISOString(),
         });
 
