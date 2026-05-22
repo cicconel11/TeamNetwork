@@ -59,14 +59,20 @@ export interface BlackbaudListResponse<T> {
   value: T[];
 }
 
-/** Normalized alumni record ready for upsert */
+/** Normalized alumni record ready for upsert.
+ *
+ * email / phone_number / address_summary tri-state:
+ *   - string : Blackbaud returned a value
+ *   - null   : Blackbaud successfully reported zero records for that resource
+ *   - undefined : the sub-resource fetch FAILED (transient 5xx etc); storage
+ *                 must NOT overwrite the existing DB column with null. */
 export interface NormalizedConstituent {
   external_id: string;
   first_name: string;
   last_name: string;
-  email: string | null;
-  phone_number: string | null;
-  address_summary: string | null;
+  email: string | null | undefined;
+  phone_number: string | null | undefined;
+  address_summary: string | null | undefined;
   graduation_year: number | null;
   source: "integration_sync";
 }

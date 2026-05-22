@@ -22,13 +22,14 @@ const SUBRESOURCE_PACING_MS = 50;
 
 /**
  * Fetches one sub-resource list for a constituent. Quota errors bubble so
- * runSync can stop the cycle; non-quota failures are logged and degrade to [].
+ * runSync can stop the cycle; non-quota failures return undefined so the
+ * caller can preserve the existing DB column instead of overwriting with null.
  */
 async function fetchSubResource<T>(
   client: BlackbaudClient,
   constituentId: string,
   resource: "emailaddresses" | "phones" | "addresses",
-): Promise<T[]> {
+): Promise<T[] | undefined> {
   try {
     const res = await client.getList<T>(
       `/constituent/v1/constituents/${constituentId}/${resource}`,
@@ -43,7 +44,7 @@ async function fetchSubResource<T>(
       constituentId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return [];
+    return undefined;
   }
 }
 
@@ -222,18 +223,32 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       }
 
       const normalized: NormalizedConstituent[] = [];
+      const subresourceFailures = { emails: 0, phones: 0, addresses: 0 };
       for (const constituent of constituents) {
         try {
-          let emails: BlackbaudEmail[] = [];
-          let phones: BlackbaudPhone[] = [];
-          let addresses: BlackbaudAddress[] = [];
+          // undefined here means "skipEmails dev gate active" — distinct from a
+          // failed fetch (also undefined) only because skipEmails skips before
+          // any fetch attempt. Storage treats both the same: preserve existing.
+          let emails: BlackbaudEmail[] | undefined;
+          let phones: BlackbaudPhone[] | undefined;
+          let addresses: BlackbaudAddress[] | undefined;
 
           // skipEmails gates all sub-resource fetches in dev (single flag covers
           // emails, phones, addresses) to keep quota usage low during local work.
-          if (!skipEmails) {
+          if (skipEmails) {
+            // In dev skip mode, treat sub-resources as "Blackbaud said nothing"
+            // (empty arrays → null fields) rather than "fetch failed" — preserves
+            // the historical insert-side semantics for the dev test fixture.
+            emails = [];
+            phones = [];
+            addresses = [];
+          } else {
             emails = await fetchSubResource<BlackbaudEmail>(client, constituent.id, "emailaddresses");
+            if (emails === undefined) subresourceFailures.emails += 1;
             phones = await fetchSubResource<BlackbaudPhone>(client, constituent.id, "phones");
+            if (phones === undefined) subresourceFailures.phones += 1;
             addresses = await fetchSubResource<BlackbaudAddress>(client, constituent.id, "addresses");
+            if (addresses === undefined) subresourceFailures.addresses += 1;
           }
 
           normalized.push(normalizeConstituent(constituent, emails, phones, addresses));
@@ -250,7 +265,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
             constituentId: constituent.id,
             error: err instanceof Error ? err.message : String(err),
           });
-          normalized.push(normalizeConstituent(constituent, [], [], []));
+          normalized.push(normalizeConstituent(constituent, undefined, undefined, undefined));
         }
       }
 
@@ -276,6 +291,21 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
         touchedAlumniIds.push(...batchResult.touchedAlumniIds);
       }
 
+      // R5: surface sub-resource failures so operators can see partial syncs
+      // even when the constituent row itself updated successfully.
+      if (subresourceFailures.emails > 0) {
+        totals.skippedReasons!["subresource_emails_failed"] =
+          (totals.skippedReasons!["subresource_emails_failed"] ?? 0) + subresourceFailures.emails;
+      }
+      if (subresourceFailures.phones > 0) {
+        totals.skippedReasons!["subresource_phones_failed"] =
+          (totals.skippedReasons!["subresource_phones_failed"] ?? 0) + subresourceFailures.phones;
+      }
+      if (subresourceFailures.addresses > 0) {
+        totals.skippedReasons!["subresource_addresses_failed"] =
+          (totals.skippedReasons!["subresource_addresses_failed"] ?? 0) + subresourceFailures.addresses;
+      }
+
       offset += limit;
       pagesFetched += 1;
       partialDueToDevCap = constituents.length === limit && pagesFetched >= maxPages;
@@ -287,6 +317,24 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       totals.warning = "Blackbaud sync stopped early because BLACKBAUD_DEV_MAX_PAGES is set. last_synced_at was not advanced.";
     }
 
+    // R5: any sub-resource failures → mark partial + structured warning.
+    // Existing alumni columns were preserved (storage skips undefined fields).
+    const failedKinds = (["emails", "phones", "addresses"] as const).filter(
+      (kind) => (totals.skippedReasons?.[`subresource_${kind}_failed`] ?? 0) > 0,
+    );
+    const subresourceWarning =
+      failedKinds.length > 0
+        ? `Blackbaud sub-resource fetch failed for: ${failedKinds
+            .map((k) => `${k} (${totals.skippedReasons![`subresource_${k}_failed`]})`)
+            .join(", ")}. Existing alumni values preserved.`
+        : null;
+    if (subresourceWarning) {
+      totals.partial = true;
+      totals.warning = totals.warning
+        ? `${totals.warning} ${subresourceWarning}`
+        : subresourceWarning;
+    }
+
     if (syncLogId) {
       await supabase
         .from("integration_sync_log")
@@ -296,6 +344,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
           records_updated: totals.updated,
           records_unchanged: totals.unchanged,
           records_skipped: totals.skipped,
+          error_message: subresourceWarning,
           completed_at: new Date().toISOString(),
         })
         .eq("id", syncLogId);

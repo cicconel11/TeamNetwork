@@ -31,21 +31,30 @@ function parseClassYear(classOf: string | undefined): number | null {
 
 export function normalizeConstituent(
   constituent: BlackbaudConstituent,
-  emails: BlackbaudEmail[],
-  phones: BlackbaudPhone[],
-  addresses: BlackbaudAddress[]
+  emails: BlackbaudEmail[] | undefined,
+  phones: BlackbaudPhone[] | undefined,
+  addresses: BlackbaudAddress[] | undefined
 ): NormalizedConstituent {
-  const primaryEmail = findPrimary(emails, (e) => e.do_not_email === true);
-  const primaryPhone = findPrimary(phones, (p) => p.do_not_call === true);
-  const primaryAddress = findPrimary(addresses);
+  // undefined sub-resource = fetch failed; propagate as undefined so storage
+  // preserves the existing DB column. Empty array still maps to null.
+  const primaryEmail = emails === undefined ? undefined : findPrimary(emails, (e) => e.do_not_email === true);
+  const primaryPhone = phones === undefined ? undefined : findPrimary(phones, (p) => p.do_not_call === true);
+  const primaryAddress = addresses === undefined ? undefined : findPrimary(addresses);
+
+  const emailField: string | null | undefined =
+    emails === undefined ? undefined : (primaryEmail?.address?.trim().toLowerCase() || null);
+  const phoneField: string | null | undefined =
+    phones === undefined ? undefined : (primaryPhone?.number ?? null);
+  const addressField: string | null | undefined =
+    addresses === undefined ? undefined : (primaryAddress ? formatAddress(primaryAddress) : null);
 
   return {
     external_id: constituent.id,
     first_name: constituent.first ?? "",
     last_name: constituent.last ?? "",
-    email: primaryEmail?.address?.trim().toLowerCase() || null,
-    phone_number: primaryPhone?.number ?? null,
-    address_summary: primaryAddress ? formatAddress(primaryAddress) : null,
+    email: emailField,
+    phone_number: phoneField,
+    address_summary: addressField,
     graduation_year: parseClassYear(constituent.class_of),
     source: "integration_sync",
   };
