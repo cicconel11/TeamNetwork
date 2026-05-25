@@ -24,6 +24,6 @@
     "jose": "^5.9.6"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^6.0.3"
   }
 }
