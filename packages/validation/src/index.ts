@@ -20,5 +20,12 @@ export type {
   CreateOrgForm,
 } from "./organization";
 
+export {
+  claimEmailSchema,
+  claimOtpSchema,
+  claimedOrgRowSchema,
+} from "./claim";
+export type { ClaimEmailForm, ClaimOtpForm, ClaimedOrgRow } from "./claim";
+
 // Re-export zod for consumers
 export { z } from "zod";
