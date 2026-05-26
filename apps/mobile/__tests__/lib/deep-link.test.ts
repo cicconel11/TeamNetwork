@@ -204,6 +204,104 @@ describe("parseTeammeetUrl", () => {
         passUrl: "https://example.com/pass.pkpass",
       });
     });
+
+    it("parses native claim intent with code", () => {
+      const intent = parseTeammeetUrl("teammeet://claim?code=ABC123");
+      expect(intent).toEqual({ kind: "claim", code: "ABC123", redirect: undefined });
+    });
+
+    it("parses native claim intent with sanitized relative redirect", () => {
+      const intent = parseTeammeetUrl(
+        "teammeet://claim?code=ABC&redirect=/acme-hs/events/evt-1",
+      );
+      expect(intent).toEqual({
+        kind: "claim",
+        code: "ABC",
+        redirect: "/acme-hs/events/evt-1",
+      });
+    });
+
+    it("drops protocol-relative redirect on native claim intent", () => {
+      const intent = parseTeammeetUrl(
+        "teammeet://claim?code=ABC&redirect=//evil.com",
+      );
+      expect(intent).toEqual({
+        kind: "claim",
+        code: "ABC",
+        redirect: undefined,
+      });
+    });
+
+    it("drops absolute-url redirect on native claim intent", () => {
+      const intent = parseTeammeetUrl(
+        "teammeet://claim?redirect=https://evil.com",
+      );
+      expect(intent).toEqual({
+        kind: "claim",
+        code: undefined,
+        redirect: undefined,
+      });
+    });
+  });
+
+  describe("claim (trusted web host)", () => {
+    it("parses /auth/claim with code + redirect", () => {
+      const intent = parseTeammeetUrl(
+        "https://www.myteamnetwork.com/auth/claim?code=ABC123&redirect=/acme-hs"
+      );
+      expect(intent).toEqual({
+        kind: "claim",
+        code: "ABC123",
+        redirect: "/acme-hs",
+      });
+    });
+
+    it("treats /auth/claim with code as claim, not as PKCE auth", () => {
+      const intent = parseTeammeetUrl(
+        "https://www.myteamnetwork.com/auth/claim?code=XYZ"
+      );
+      expect(intent.kind).toBe("claim");
+    });
+
+    it("drops protocol-relative redirect (open-redirect defense)", () => {
+      const intent = parseTeammeetUrl(
+        "https://www.myteamnetwork.com/auth/claim?code=A&redirect=//evil.com"
+      );
+      expect(intent).toEqual({ kind: "claim", code: "A", redirect: undefined });
+    });
+
+    it("drops absolute-url redirect (open-redirect defense)", () => {
+      const intent = parseTeammeetUrl(
+        "https://www.myteamnetwork.com/auth/claim?redirect=https://evil.com"
+      );
+      expect(intent).toEqual({
+        kind: "claim",
+        code: undefined,
+        redirect: undefined,
+      });
+    });
+
+    it("matches mixed-case /Auth/Claim path (email-scanner rewrite)", () => {
+      const intent = parseTeammeetUrl(
+        "https://www.myteamnetwork.com/Auth/Claim?code=ABC123",
+      );
+      expect(intent.kind).toBe("claim");
+      expect((intent as { code?: string }).code).toBe("ABC123");
+    });
+
+    it("matches uppercase /AUTH/CLAIM/extra path", () => {
+      const intent = parseTeammeetUrl(
+        "https://www.myteamnetwork.com/AUTH/CLAIM/extra?code=Z",
+      );
+      expect(intent.kind).toBe("claim");
+    });
+
+    it("still routes /auth/callback as PKCE auth (regression guard)", () => {
+      const intent = parseTeammeetUrl(
+        "https://www.myteamnetwork.com/auth/callback?code=PKCE",
+      );
+      expect(intent).toEqual({ kind: "auth-pkce", code: "PKCE" });
+    });
   });
 
   describe("unknown / unparseable", () => {
@@ -264,5 +362,31 @@ describe("routeIntent", () => {
       params: { token: "ABCD1234" },
     });
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("routes claim intents to the (auth)/claim screen with params", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+
+    await routeIntent(router, {
+      kind: "claim",
+      code: "ABC123",
+      redirect: "/acme-hs",
+    });
+
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/(auth)/claim",
+      params: { code: "ABC123", redirect: "/acme-hs" },
+    });
+  });
+
+  it("routes claim intents with no params", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+
+    await routeIntent(router, { kind: "claim" });
+
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/(auth)/claim",
+      params: {},
+    });
   });
 });
