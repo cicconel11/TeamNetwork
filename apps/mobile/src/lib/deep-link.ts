@@ -48,6 +48,7 @@ export type Intent =
       sig?: string;
     }
   | { kind: "announcement"; orgSlug: string; id: string }
+  | { kind: "claim"; code?: string; redirect?: string }
   | { kind: "shortcut"; action: ShortcutAction; orgSlug?: string }
   | { kind: "wallet-add"; passUrl: string }
   // Recognised but not actionable here (e.g. native callback that already
@@ -130,6 +131,15 @@ export function parseTeammeetUrl(url: string): Intent {
     parsed.protocol === "https:" &&
     getTrustedHosts().includes(parsed.hostname)
   ) {
+    // Claim links carry a `code` query param that is NOT an OAuth code — route
+    // by path before auth payload detection to avoid feeding it into
+    // exchangeCodeForSession. Path match is case-insensitive so email-scanner
+    // rewrites (e.g. /Auth/Claim) still resolve to the claim screen.
+    const claimPath = parsed.pathname.toLowerCase();
+    if (claimPath === "/auth/claim" || claimPath.startsWith("/auth/claim/")) {
+      return parseClaimPayload(parsed);
+    }
+
     const looksLikeAuth =
       parsed.searchParams.has("code") ||
       parsed.searchParams.has("access_token") ||
@@ -141,6 +151,17 @@ export function parseTeammeetUrl(url: string): Intent {
   }
 
   return { kind: "unknown" };
+}
+
+function parseClaimPayload(url: URL): Intent {
+  const code = url.searchParams.get("code")?.trim() || undefined;
+  const redirectRaw = url.searchParams.get("redirect")?.trim();
+  // Only accept same-origin relative paths to avoid open-redirect abuse.
+  const redirect =
+    redirectRaw && redirectRaw.startsWith("/") && !redirectRaw.startsWith("//")
+      ? redirectRaw
+      : undefined;
+  return { kind: "claim", code, redirect };
 }
 
 /**
@@ -206,6 +227,8 @@ function parseNativeRoute(
       if (!id || !orgSlugParam) return null;
       return { kind: "announcement", orgSlug: orgSlugParam, id };
     }
+    case "claim":
+      return parseClaimPayload(url);
     case "shortcut": {
       const action = url.searchParams.get("action");
       if (!action || !SHORTCUT_ACTIONS.has(action as ShortcutAction)) return null;
@@ -347,6 +370,17 @@ export async function routeIntent(
     case "announcement":
       router.push(`/(app)/${intent.orgSlug}/announcements/${intent.id}` as never);
       return;
+
+    case "claim": {
+      const params: Record<string, string> = {};
+      if (intent.code) params.code = intent.code;
+      if (intent.redirect) params.redirect = intent.redirect;
+      router.push({
+        pathname: "/(auth)/claim",
+        params,
+      } as never);
+      return;
+    }
 
     case "shortcut": {
       const slug = intent.orgSlug;
