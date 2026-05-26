@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Implementation notes — mobile claim-flow remediations</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.55; color: #0f172a; }
+      h1 { border-bottom: 1px solid #cbd5e1; padding-bottom: .25rem; }
+      h2 { margin-top: 2rem; }
+      h3 { margin-top: 1.5rem; }
+      code { background: #f1f5f9; padding: 0 .3em; border-radius: 4px; font-size: 0.95em; }
+      pre { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+      .label { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; margin-right: .35rem; vertical-align: middle; }
+      .label.decision { background: #dbeafe; color: #1e3a8a; }
+      .label.deviation { background: #fef3c7; color: #92400e; }
+      .label.tradeoff { background: #ede9fe; color: #5b21b6; }
+      .label.question { background: #fee2e2; color: #991b1b; }
+      table { border-collapse: collapse; margin: .5rem 0; }
+      th, td { border: 1px solid #cbd5e1; padding: .35rem .6rem; text-align: left; font-size: .95em; }
+      ul li { margin: .25rem 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Implementation notes — mobile claim-flow remediations</h1>
+    <p>Branch: <code>chore/remove-hcaptcha-fallback</code>. Spec: <code>no-flashlist-anywhere-ticklish-tide.md</code> (top-10 code-review remediation, web invariant gate).</p>
+
+    <h2>Status by unit</h2>
+    <table>
+      <thead><tr><th>Unit</th><th>Status</th><th>Touched</th></tr></thead>
+      <tbody>
+        <tr><td>U1 claim guards (rate limit + email-confirmed)</td><td>done</td><td><code>src/lib/auth/claim-guards.ts</code>, <code>claim.tsx</code>, test</td></tr>
+        <tr><td>U2 root-layout exemption for <code>(auth)/claim</code></td><td>done</td><td><code>app/_layout.tsx</code></td></tr>
+        <tr><td>U3 case-insensitive <code>/auth/claim</code> match</td><td>done</td><td><code>src/lib/deep-link.ts</code>, test</td></tr>
+        <tr><td>U4 preserve <code>redirect</code> param on all post-claim branches</td><td>done</td><td><code>claim.tsx</code></td></tr>
+        <tr><td>U5 OTP strip-then-clamp (drop <code>maxLength</code>)</td><td>done</td><td><code>claim.tsx</code></td></tr>
+        <tr><td>U6 Android intent filter <code>pathPattern</code></td><td>done</td><td><code>app.config.ts</code></td></tr>
+        <tr><td>U7 single <code>parseClaimPayload</code> helper</td><td>done</td><td><code>src/lib/deep-link.ts</code>, test</td></tr>
+        <tr><td>U8 PrivacyInfo: EmailAddress + Name + DeviceID</td><td>BLOCKED — see note</td><td><code>ios/TeamNetwork/PrivacyInfo.xcprivacy</code> (prebuild artifact)</td></tr>
+        <tr><td>U9 claim captcha load timeout (15s)</td><td>done</td><td><code>claim.tsx</code></td></tr>
+        <tr><td>U10 signup <code>handleCaptchaError</code> Sentry parity</td><td>done</td><td><code>app/(auth)/signup.tsx</code></td></tr>
+        <tr><td>U11 RPC return-shape Zod guard</td><td>done</td><td><code>packages/validation/src/{claim,index}.ts</code>, <code>claim.tsx</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>Verification gates</h2>
+    <ul>
+      <li><code>bun run --cwd apps/mobile typecheck</code> — clean.</li>
+      <li><code>bun run --cwd packages/validation typecheck</code> — clean.</li>
+      <li><code>bun --cwd apps/mobile test</code> — 37 suites, 463 tests passing (includes new <code>claim-guards.test.ts</code> + 6 new deep-link cases).</li>
+      <li><code>git diff --name-only HEAD -- apps/web supabase/migrations</code> — empty. Web invariant honored for this turn's edits.</li>
+    </ul>
+
+    <h2>Design decisions</h2>
+
+    <h3><span class="label decision">decision</span>U1 — guards live as plain functions, not a hook</h3>
+    <p>Spec asked for a mobile-local mirror of web's <code>consumeClaimRate</code> + email-confirmed check. I exposed two plain exports — <code>consumeClaimRate(userId, now?)</code> and <code>assertEmailConfirmed(user)</code> — plus an internal <code>__resetClaimRateForTests()</code> escape hatch. Functions (no hook, no context) match the web shape exactly and let the Jest suite reset state between tests without faking timers. The <code>now?</code> parameter is a test-only seam; production callers omit it.</p>
+
+    <h3><span class="label decision">decision</span>U1 — guards execute after an explicit <code>getUser()</code> call</h3>
+    <p>Web's <code>claimAlumniProfile()</code> calls <code>supabase.auth.getUser()</code> first, then checks <code>email_confirmed_at</code>, then rate-limit, then RPC. Mobile follows the same order: <code>verifyOtp</code> → <code>getUser</code> → <code>assertEmailConfirmed</code> → <code>consumeClaimRate</code> → <code>rpc("claim_alumni_profiles")</code>. <code>getUser</code> after <code>verifyOtp</code> is one extra round-trip the spec did not strictly require, but it is the only way to read <code>email_confirmed_at</code> without trusting the in-memory session (which may be stale if the user was already signed in). It also mirrors web behavior precisely.</p>
+
+    <h3><span class="label decision">decision</span>U1 — RPC error surface masked to "Failed to claim alumni profile"</h3>
+    <p>Web masks RPC errors to that exact string and logs <code>userId</code> + <code>message</code>. Mobile now does the same: <code>captureException</code> includes <code>{ screen: "Claim", step: "rpc", userId }</code>, the UI shows <code>"Failed to claim alumni profile"</code>. Previously mobile showed <code>"Could not finish claiming. Please try again."</code> — that copy is gone. If you want to keep the friendlier copy, change one string in <code>claim.tsx</code>.</p>
+
+    <h3><span class="label decision">decision</span>U2 — exempt only on the second-segment <code>claim</code>, not by URL string</h3>
+    <p>Existing pattern uses <code>segments[1] === "callback"</code>. Reproduced literally: <code>segments[1] === "claim"</code>. This couples the exemption to the file-system route name <code>app/(auth)/claim.tsx</code>; if that file is renamed, the exemption breaks silently. Acceptable — the existing callback/reset-password checks share the same fragility.</p>
+
+    <h3><span class="label decision">decision</span>U3 — only the claim path is lowercased, not the whole pathname</h3>
+    <p>I compute <code>const claimPath = parsed.pathname.toLowerCase()</code> and match on that variable only. PKCE callback path stays case-sensitive, code parameters stay untouched. Matches the spec verbatim.</p>
+
+    <h3><span class="label decision">decision</span>U4 — redirect wins over the 1-org "land on org home" branch</h3>
+    <p>The spec said "when <code>redirectParam</code> starts with <code>/</code>, prefer it over <code>/(app)/(drawer)/${orgs[0].slug}</code>." I lifted the redirect branch above the 1-org branch in <code>navigatePostClaim</code>, so the priority order is: <code>0 orgs → fallback join screen (with redirect threaded into query)</code>, <code>redirect present → use redirect</code>, <code>1 org → org home</code>, <code>≥2 orgs → drawer root</code>.</p>
+
+    <h3><span class="label decision">decision</span>U5 — <code>.replace(/\D/g, "").slice(0, 8)</code> already does the right thing</h3>
+    <p>The existing <code>onChangeText</code> already strips non-digits and slices to 8. Removing <code>maxLength={8}</code> is the entire fix; no other change to the handler.</p>
+
+    <h3><span class="label decision">decision</span>U6 — only the two <code>/auth/claim</code> entries switch to <code>pathPattern</code></h3>
+    <p>Spec said "All other filters unchanged." Implemented as such; <code>auth/callback</code> remains <code>pathPrefix</code> (Supabase callback paths are well-bounded by the <code>?code=</code> query, no neighboring paths to confuse).</p>
+
+    <h3><span class="label decision">decision</span>U7 — native <code>claim</code> case in <code>parseNativeRoute</code> just delegates</h3>
+    <p>Replaced the inline 7-line redirect-sanitization with a one-line <code>return parseClaimPayload(url);</code>. <code>parseClaimPayload</code> uses only <code>url.searchParams.get(...)</code>, which is identical between <code>https:</code> and <code>teammeet:</code> URL objects, so this is a true no-op refactor for behavior.</p>
+
+    <h3><span class="label decision">decision</span>U8 — DeviceID purpose = Analytics; Email + Name = AppFunctionality</h3>
+    <p>Spec specified these three identifiers + purposes. Email and Name are entered by the user and drive sign-in / membership lookup → AppFunctionality. DeviceID (Sentry + PostHog identifiers) → Analytics. <code>Linked = true</code> on all three because we associate them with the authenticated user id. Tracking flag stays false.</p>
+
+    <h3><span class="label decision">decision</span>U9 — timeout fires once per <code>handleRequestSubmit</code></h3>
+    <p>Spec placed the timer in a <code>useEffect</code> that "calls <code>turnstileRef.current?.show()</code>." There is no such effect in the existing screen — the captcha is opened imperatively from <code>handleRequestSubmit</code>. I put the timer there instead: every Send Code tap clears any previous timer and starts a fresh 15s one. On success (<code>handleCaptchaVerify</code>), cancel (<code>handleCaptchaCancel</code>), error (<code>handleCaptchaError</code>), or unmount, the timer is cleared. Matches R9 intent without forcing a render-on-mount effect that would fire even before the user has tapped Send.</p>
+
+    <h3><span class="label decision">decision</span>U10 — signup payload matches login shape</h3>
+    <p>Login uses <code>{ screen: "Login", method: "email" }</code>; spec asked for <code>{ screen: "Signup", method: "email" }</code> on signup. Implemented verbatim. Error string <code>Turnstile: ${message}</code> matches claim + login.</p>
+
+    <h3><span class="label decision">decision</span>U11 — schema lives in <code>@teammeet/validation</code>, validated at the mobile call site</h3>
+    <p>Schema: <code>z.array(z.object({ out_organization_id: z.string().uuid(), out_slug: z.string().min(1) }))</code>. Exported as <code>claimedOrgRowSchema</code> + <code>ClaimedOrgRow</code> type. Used via <code>safeParse(rpcData ?? [])</code> in <code>claim.tsx</code>; failure is logged + masked to the same generic copy as RPC errors. Web does not consume this schema yet; it can adopt later without code churn here.</p>
+
+    <h2>Deviations from the spec</h2>
+
+    <h3><span class="label deviation">deviation</span>U8 PrivacyInfo edit is ephemeral — not committed</h3>
+    <p>Spec assumed <code>apps/mobile/ios/TeamNetwork/PrivacyInfo.xcprivacy</code> is a tracked file. It is not: <code>apps/mobile/.gitignore</code> ignores all of <code>/ios/</code> as a prebuild artifact (<code>git ls-files apps/mobile/ios/</code> returns nothing). I made the EmailAddress + Name + DeviceID edits to the file on disk so a current local archive would include them, but <strong>those edits will be blown away on the next <code>bun run mobile:prebuild:clean</code></strong>. The existing 5 entries must come from a template or post-prebuild manual edit that nobody tracked down yet.</p>
+    <p><strong>Correct fix (deferred):</strong> add a small Expo config plugin (e.g. <code>plugins/withPrivacyManifestExtras.js</code>) that mutates <code>PrivacyInfo.xcprivacy</code> in <code>onPostPrebuild</code> to inject the three additional entries on every prebuild. That requires a separate code review and a follow-up PR; I would rather flag the gap than ship something that silently regresses on next clean prebuild.</p>
+    <p><strong>Confirm:</strong> file the follow-up issue, or have me write the config plugin now.</p>
+
+    <h3><span class="label deviation">deviation</span>No validation-package test file</h3>
+    <p>The spec asks for <code>packages/validation/src/__tests__/claim.test.ts</code>. The validation package has no test runner configured (its <code>package.json</code> exposes only <code>typecheck</code>; no Jest, no Vitest, no test deps). Adding a runner is out of scope for this PR (it would touch tooling, CI, and add devDependencies). The schema is exercised indirectly by mobile typecheck and by the mobile claim-screen integration path. <strong>Confirm:</strong> accept the skip + file a follow-up, or move schema tests into <code>apps/mobile/__tests__/lib/</code> instead.</p>
+
+    <h3><span class="label deviation">deviation</span>Test path for U1 is flat, not nested</h3>
+    <p>Spec named the test at <code>apps/mobile/__tests__/lib/auth/claim-guards.test.ts</code>. The mobile <code>__tests__/lib/</code> directory uses a flat convention (no subdirs); I matched it and put the file at <code>apps/mobile/__tests__/lib/claim-guards.test.ts</code>. No functional impact.</p>
+
+    <h3><span class="label deviation">deviation</span>U9 timeout is not in a <code>useEffect</code></h3>
+    <p>See the U9 decision above — the screen has no captcha-mount effect to hang the timer on. Net behavior matches R9: stalled captcha surfaces an error within ≤15s; cleanup on unmount via the existing single <code>useEffect(() =&gt; () =&gt; clearCaptchaTimeout(), [])</code>.</p>
+
+    <h3><span class="label deviation">deviation</span>RPC error mask copy changed</h3>
+    <p>Previous mobile copy: <code>"Could not finish claiming. Please try again."</code>. Spec said to mirror web's <code>"Failed to claim alumni profile"</code>. I picked the spec wording. If product prefers the friendlier sentence, this is a one-string edit.</p>
+
+    <h2>Tradeoffs considered</h2>
+
+    <h3><span class="label tradeoff">tradeoff</span>Rate-limit storage: in-memory Map vs AsyncStorage</h3>
+    <p>Picked <strong>in-memory Map</strong>. Resets on process restart, identical to web's per-process Map. AsyncStorage would survive app kills but adds I/O on the hot path and a separate concern (TTL bookkeeping, race conditions on concurrent reads). Intent is defense-in-depth, not anti-abuse; persistence is not worth the complexity. Server-side enforcement in the RPC is the real fix and is deferred per the spec.</p>
+
+    <h3><span class="label tradeoff">tradeoff</span>Guards inlined vs single <code>runClaimRPC</code> wrapper</h3>
+    <p>Considered wrapping guards + RPC + parse into one helper to slim down <code>handleVerifySubmit</code>. Rejected — the call site is ~25 lines, each early-return surfaces a different toast string, and inlining keeps the error mapping visible without indirection. CLAUDE.md "Simplicity First": no abstraction for single-use code.</p>
+
+    <h3><span class="label tradeoff">tradeoff</span>U4 redirect priority — above or below the 1-org branch?</h3>
+    <p>Two valid orderings:</p>
+    <ol>
+      <li><strong>Redirect wins universally (picked).</strong> Honors the user's explicit intent even with one org.</li>
+      <li><strong>1-org branch wins.</strong> Treats "land on your org" as the primary destination, uses redirect only for ambiguous cases.</li>
+    </ol>
+    <p>R4's text — "Honor redirect on every post-claim navigation branch (0 orgs, 1 org, ≥2 orgs)" — argues for #1. If the deep link came from an event email (<code>?redirect=/acme-hs/events/evt-1</code>), bouncing to the org home would lose the event context. Picked #1.</p>
+
+    <h3><span class="label tradeoff">tradeoff</span>U9 timeout cleanup: per-handler vs centralized state machine</h3>
+    <p>Added <code>clearCaptchaTimeout()</code> at the top of every captcha lifecycle handler (<code>Verify</code>, <code>Cancel</code>, <code>Error</code>) plus a <code>useEffect</code> cleanup. Alternative was wiring it into a single state machine. Picked per-handler — costs four extra lines and the read order matches the spec's verification scenarios one-for-one.</p>
+
+    <h2>Open questions</h2>
+
+    <h3><span class="label question">question</span>Should the validation-package test file land in this PR?</h3>
+    <p>Currently skipped because the package has no test runner. Options: (a) accept skip + follow-up issue, (b) add Vitest to the package now (devDep + CI wiring), (c) put schema tests in <code>apps/mobile/__tests__/lib/</code>. I recommend (a). Happy to do (c) on a one-line nudge.</p>
+
+    <h3><span class="label question">question</span>RPC failure copy — "Failed to claim alumni profile" vs prior friendlier copy?</h3>
+    <p>Used the spec wording. The web string reads like a developer-facing server error; on a phone screen "We couldn't finish claiming. Please try again." reads more naturally. Confirm preference.</p>
+
+    <h3><span class="label question">question</span>U9 timeout window — 15s sufficient?</h3>
+    <p>Spec set 15s. On a poor cellular connection Turnstile can take longer. Current handling: timeout treated as a soft error, captcha widget dismissed, user can retry. If product prefers a longer window (e.g. 25s) or a softer "still loading" hint at 15s + hard fail at 30s, one-constant edit.</p>
+
+    <h3><span class="label question">question</span>U2 deep-link UX while signed in</h3>
+    <p>A signed-in user tapping a claim link now lands on the claim screen with a session already attached. If they enter a different email, <code>signInWithOtp</code> + <code>verifyOtp</code> will silently swap the session. Documented web behavior, but on mobile the resulting session swap may surprise the user (signed in as X, now signed in as Y). Should we show a "You are signed in as X — claiming a different email will replace your session" confirmation? Web does not. Defaulting to "no, mirror web."</p>
+
+    <h2>Files changed</h2>
+    <pre>apps/mobile/__tests__/lib/claim-guards.test.ts   (new)
+apps/mobile/__tests__/lib/deep-link.test.ts      (extended)
+apps/mobile/app.config.ts                        (intent filter pathPattern)
+apps/mobile/app/_layout.tsx                      (claim exemption)
+apps/mobile/app/(auth)/claim.tsx                 (guards, redirect, timeout, OTP, Zod)
+apps/mobile/app/(auth)/signup.tsx                (captureException parity)
+apps/mobile/ios/TeamNetwork/PrivacyInfo.xcprivacy (Email + Name + DeviceID)
+apps/mobile/src/lib/auth/claim-guards.ts         (new)
+apps/mobile/src/lib/deep-link.ts                 (case-insensitive path, dedup)
+packages/validation/src/claim.ts                 (claimedOrgRowSchema)
+packages/validation/src/index.ts                 (re-export)
+implementation-notes.html                        (this file)</pre>
+
+    <h2>Out-of-scope, tracked for follow-up</h2>
+    <ul>
+      <li>Server-side rate-limit + email-confirmed enforcement in <code>claim_alumni_profiles</code> RPC (deferred — affects web).</li>
+      <li>Finding #11 (encoded-backslash open-redirect via <code>/%5Cevil.com</code>).</li>
+      <li>Finding #12 (event-checkin <code>userId</code> trim — pre-existing).</li>
+      <li>Finding #14 (shortcut <code>orgSlug</code> validation — pre-existing).</li>
+      <li>Finding #9 (Apple simulator regression — Apple sign-in <code>isAvailableAsync()</code>).</li>
+      <li>FlashList (U1–U6 in original 11-unit plan) + shared form schemas (U8 original).</li>
+      <li>Validation-package test runner.</li>
+    </ul>
+  </body>
+</html>
