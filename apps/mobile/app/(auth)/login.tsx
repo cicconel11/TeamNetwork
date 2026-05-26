@@ -36,11 +36,7 @@ import {
 } from "@/lib/auth-redirects";
 import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
 import { getWebAppUrl } from "@/lib/web-api";
-import {
-  isAppleAuthAvailable,
-  isAppleAuthCanceled,
-  signInWithApple,
-} from "@/lib/apple-auth";
+import { isAppleAuthCanceled, signInWithApple } from "@/lib/apple-auth";
 import { captureException, track } from "@/lib/analytics";
 import { showToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
@@ -91,7 +87,7 @@ export default function LoginScreen() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<MobileOAuthProvider | null>(null);
   const [appleLoading, setAppleLoading] = useState(false);
-  const [appleAvailable, setAppleAvailable] = useState(false);
+  const showAppleButton = Platform.OS === "ios";
   const isLoading = emailLoading || socialLoading !== null || appleLoading;
 
   // Captcha
@@ -120,20 +116,6 @@ export default function LoginScreen() {
       easing: Easing.out(Easing.quad),
     });
   }, [sheetOpacity, sheetTranslate]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    isAppleAuthAvailable().then((available) => {
-      if (mounted) {
-        setAppleAvailable(available);
-      }
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetTranslate.value }],
@@ -537,7 +519,7 @@ export default function LoginScreen() {
             </View>
 
             {/* Apple */}
-            {appleAvailable ? (
+            {showAppleButton ? (
               <AppleAuthentication.AppleAuthenticationButton
                 buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
                 buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
@@ -557,7 +539,7 @@ export default function LoginScreen() {
               disabled={isLoading}
               style={({ pressed }) => [
                 styles.socialButton,
-                appleAvailable && styles.socialButtonStacked,
+                showAppleButton && styles.socialButtonStacked,
                 isLoading && styles.socialButtonDisabled,
                 pressed && styles.socialButtonPressed,
               ]}

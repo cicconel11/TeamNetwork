@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -19,11 +19,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
-import {
-  isAppleAuthAvailable,
-  isAppleAuthCanceled,
-  signUpWithApple,
-} from "@/lib/apple-auth";
+import { isAppleAuthCanceled, signUpWithApple } from "@/lib/apple-auth";
 import { captureException, track } from "@/lib/analytics";
 import { borderRadius, spacing, fontSize } from "@/lib/theme";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
@@ -127,7 +123,7 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<MobileOAuthProvider | null>(null);
   const [appleLoading, setAppleLoading] = useState(false);
-  const [appleAvailable, setAppleAvailable] = useState(false);
+  const showAppleButton = Platform.OS === "ios";
   const [step, setStep] = useState<SignupStep>("age_gate");
   const [ageGate, setAgeGate] = useState<AgeGateData | null>(null);
   const authBusy = loading || socialLoading !== null || appleLoading;
@@ -141,20 +137,6 @@ export default function SignupScreen() {
     password.length >= 6 &&
     confirmPassword.length > 0 &&
     password === confirmPassword;
-
-  useEffect(() => {
-    let mounted = true;
-
-    isAppleAuthAvailable().then((available) => {
-      if (mounted) {
-        setAppleAvailable(available);
-      }
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const handleAgeGateSelect = async (ageBracket: "under_13" | "13_17" | "18_plus") => {
     setApiError("");
@@ -302,10 +284,14 @@ export default function SignupScreen() {
     setLoading(false);
   };
 
-  const handleCaptchaError = () => {
+  const handleCaptchaError = (message: string) => {
     pendingCredsRef.current = null;
     setLoading(false);
     setApiError("Verification failed. Please try again.");
+    captureException(new Error(`Turnstile: ${message}`), {
+      screen: "Signup",
+      method: "email",
+    });
   };
 
   const handleSocialSignup = async (provider: MobileOAuthProvider) => {
@@ -615,7 +601,7 @@ export default function SignupScreen() {
               )}
             </Pressable>
 
-            {appleAvailable ? (
+            {showAppleButton ? (
               <AppleAuthentication.AppleAuthenticationButton
                 buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
                 buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
@@ -634,7 +620,7 @@ export default function SignupScreen() {
               disabled={authBusy || isWeb}
               style={({ pressed }) => [
                 styles.socialButton,
-                appleAvailable && styles.socialButtonStacked,
+                showAppleButton && styles.socialButtonStacked,
                 (authBusy || isWeb) && styles.socialButtonDisabled,
                 pressed && { opacity: 0.75 },
               ]}
