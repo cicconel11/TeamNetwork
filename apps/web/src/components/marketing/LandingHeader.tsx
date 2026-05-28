@@ -14,6 +14,25 @@ const NAV_LINKS = [
   { href: "/terms", label: "Terms" },
 ] as const;
 
+function useScrolled(threshold = 8): boolean {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    let queued = false;
+    const onScroll = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        setScrolled(window.scrollY > threshold);
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [threshold]);
+  return scrolled;
+}
+
 function useActiveSection(): string | null {
   const [active, setActive] = useState<string | null>(null);
 
@@ -52,6 +71,7 @@ export function LandingHeader() {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const activeSection = useActiveSection();
+  const scrolled = useScrolled();
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -95,11 +115,15 @@ export function LandingHeader() {
 
   return (
     <>
-    <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
+    <header
+      className={`relative z-20 sticky top-0 backdrop-blur-md border-b border-landing-cream/10 transition-colors duration-200 ${
+        scrolled ? "bg-landing-navy/95" : "bg-landing-navy/60"
+      }`}
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4">
         <Link href="#top" className="group flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2.5">
           <Image
-            src="/TeamNetwor.png"
+            src="/TeamNetwork.png"
             alt=""
             width={541}
             height={303}
@@ -133,16 +157,16 @@ export function LandingHeader() {
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           <ButtonLink
             href="/auth/login"
-            variant="custom"
+            variant="landingGhost"
             size="sm"
-            className="hidden whitespace-nowrap px-2 py-2 text-sm text-landing-cream/80 hover:bg-landing-cream/10 hover:text-landing-cream sm:inline-flex sm:px-4 sm:py-2.5"
+            className="hidden whitespace-nowrap px-2 py-2 text-sm sm:inline-flex sm:px-4 sm:py-2.5"
           >
             Sign In
           </ButtonLink>
           <ButtonLink
             href="/auth/signup"
-            variant="custom"
-            className="whitespace-nowrap bg-landing-green-dark px-2 py-2 text-xs font-semibold text-white hover:bg-[#15803d] min-[380px]:px-2.5 min-[380px]:text-sm sm:px-5 sm:text-base"
+            variant="landingPrimary"
+            className="whitespace-nowrap px-2 py-2 text-xs min-[380px]:px-2.5 min-[380px]:text-sm sm:px-5 sm:text-base"
           >
             Get Started
           </ButtonLink>
@@ -190,7 +214,7 @@ export function LandingHeader() {
               aria-label="TeamNetwork home"
             >
               <Image
-                src="/TeamNetwor.png"
+                src="/TeamNetwork.png"
                 alt=""
                 width={541}
                 height={303}
@@ -230,15 +254,15 @@ export function LandingHeader() {
             <div className="border-t border-landing-cream/10 mt-4 pt-4 flex flex-col gap-2">
               <ButtonLink
                 href="/auth/login"
-                variant="custom"
-                className="w-full border border-landing-cream/20 bg-landing-cream/5 text-landing-cream text-center hover:bg-landing-cream/10"
+                variant="landingSecondary"
+                className="w-full text-center"
               >
                 Sign In
               </ButtonLink>
               <ButtonLink
                 href="/auth/signup"
-                variant="custom"
-                className="w-full bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold text-center"
+                variant="landingPrimary"
+                className="w-full text-center"
               >
                 Get Started
               </ButtonLink>

@@ -2,30 +2,48 @@
 
 import { forwardRef, ButtonHTMLAttributes } from "react";
 
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "danger"
+  | "custom"
+  | "landingPrimary"
+  | "landingSecondary"
+  | "landingGhost";
+export type ButtonSize = "sm" | "md" | "lg" | "xl";
+
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger" | "custom";
-  size?: "sm" | "md" | "lg";
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   isLoading?: boolean;
 }
 
-export const buttonVariants = (variant: ButtonProps["variant"] = "primary", size: ButtonProps["size"] = "md") => {
+export const buttonVariants = (variant: ButtonVariant = "primary", size: ButtonSize = "md") => {
   const baseStyles = "inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl";
 
-  const variants = {
+  const variants: Record<ButtonVariant, string> = {
     primary: "bg-org-secondary text-org-secondary-foreground hover:opacity-90 focus:ring-org-secondary",
     secondary: "bg-muted text-foreground hover:bg-border focus:ring-org-secondary",
     ghost: "bg-transparent hover:bg-muted focus:ring-org-secondary",
     danger: "bg-error text-white hover:opacity-90 focus:ring-error",
     custom: "focus:ring-org-secondary",
+    landingPrimary:
+      "landing-primary-cta bg-landing-green-dark text-white font-semibold hover:bg-[#15803d] focus:ring-landing-green",
+    landingSecondary:
+      "landing-secondary-cta border border-landing-cream/20 bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 focus:ring-landing-cream",
+    landingGhost:
+      "bg-transparent text-landing-cream/80 hover:bg-landing-cream/10 hover:text-landing-cream focus:ring-landing-cream",
   };
 
-  const sizes = {
+  const sizes: Record<ButtonSize, string> = {
     sm: "px-3 py-1.5 text-sm",
     md: "px-4 py-2.5 text-sm",
     lg: "px-6 py-3 text-base",
+    xl: "px-8 py-5 text-base sm:py-6 sm:text-lg",
   };
 
-  return `${baseStyles} ${variants[variant || "primary"]} ${sizes[size || "md"]}`;
+  return `${baseStyles} ${variants[variant]} ${sizes[size]}`;
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -33,7 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        className={`${buttonVariants(variant, size)} ${className}`}
+        className={`${buttonVariants(variant as ButtonVariant, size as ButtonSize)} ${className}`}
         disabled={disabled || isLoading}
         {...props}
       >

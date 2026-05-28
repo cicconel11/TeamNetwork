@@ -2,13 +2,13 @@
 
 import Link, { LinkProps } from "next/link";
 import { forwardRef, ReactNode } from "react";
-import { buttonVariants } from "./Button";
+import { buttonVariants, type ButtonVariant, type ButtonSize } from "./Button";
 
 interface ButtonLinkProps extends LinkProps {
   children: ReactNode;
   className?: string;
-  variant?: "primary" | "secondary" | "ghost" | "danger" | "custom";
-  size?: "sm" | "md" | "lg";
+  variant?: ButtonVariant;
+  size?: ButtonSize;
 }
 
 export const ButtonLink = forwardRef<HTMLAnchorElement, ButtonLinkProps>(
