@@ -1,3 +1,7 @@
+export { Container } from "./Container";
+export { Section, SectionEyebrow } from "./Section";
+export { Hero } from "./Hero";
+export { ScrollIndicator } from "./ScrollIndicator";
 export { PricingSection } from "./PricingSection";
 export { LandingAnimations } from "./LandingAnimations";
 export { StadiumLightBeams } from "./StadiumLightBeams";

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Bitter } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundaryProvider } from "@/components/errors/ErrorBoundaryProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
@@ -20,6 +21,13 @@ const geistSans = localFont({
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-mono",
+  display: "swap",
+});
+
+const bitter = Bitter({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -52,7 +60,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} translate="no">
+      <body className={`${geistSans.variable} ${geistMono.variable} ${bitter.variable} antialiased`} translate="no">
         <NextIntlClientProvider messages={messages}>
           <ThemeProvider>
             <ErrorBoundaryProvider>

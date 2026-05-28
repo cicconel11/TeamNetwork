@@ -276,15 +276,15 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
             <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
               <ButtonLink
                 href="/pricing/calculator"
-                variant="custom"
-                className="bg-landing-cream/10 hover:bg-landing-cream/20 text-landing-cream font-semibold px-6 py-3 border border-landing-cream/15"
+                variant="landingSecondary"
+                className="px-6 py-3 font-semibold"
               >
                 Run your own numbers
               </ButtonLink>
               <ButtonLink
                 href="/auth/signup"
-                variant="custom"
-                className="bg-landing-green-dark hover:bg-landing-green-dark/90 text-white font-semibold px-6 py-3"
+                variant="landingPrimary"
+                className="px-6 py-3"
               >
                 Get Started
               </ButtonLink>
