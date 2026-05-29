@@ -356,7 +356,7 @@ export function normalizeApifyItem(data: unknown): ApifyProfileResult | null {
     city: firstString(raw.addressWithoutCountry, raw.addressWithCountry, raw.location, raw.city),
     headline: firstString(raw.headline, raw.occupation, raw.position),
     summary: firstString(raw.about, raw.summary),
-    industry: str(raw.industry),
+    industry: firstString(raw.industry, raw.companyIndustry),
     current_company: firstString(raw.companyName, raw.company, raw.currentCompany),
     photo_url: firstString(raw.profilePicHighQuality, raw.profilePic, raw.profilePicture, raw.avatar),
     experience: normalizeExperience(experienceRaw),
