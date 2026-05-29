@@ -650,6 +650,13 @@ test("list_members returns org-scoped members", async () => {
     created_at: "2026-03-20T12:00:00Z",
     name: "Alice Jones",
     email: "a@b.com",
+    current_company: null,
+    industry: null,
+    headline: null,
+    summary: null,
+    skills: null,
+    certifications: null,
+    languages: null,
   });
 
   const authQuery = stub.queries.find((q) => q.table === "user_organization_roles");
@@ -659,7 +666,7 @@ test("list_members returns org-scoped members", async () => {
 
   const memberQuery = stub.queries.find((q) => q.table === "members");
   assert.ok(memberQuery);
-  assert.equal(memberQuery.columns, "id, user_id, status, role, created_at, first_name, last_name, email");
+  assert.equal(memberQuery.columns, "id, user_id, status, role, created_at, first_name, last_name, email, current_company, industry, headline, summary, skills, certifications, languages");
   assert.ok(memberQuery.filters.some((f: any) => f.col === "organization_id" && f.val === ORG_ID));
   assert.ok(memberQuery.filters.some((f: any) => f.col === "deleted_at" && f.val === null));
   assert.ok(memberQuery.filters.some((f: any) => f.col === "status" && f.val === "active"));
