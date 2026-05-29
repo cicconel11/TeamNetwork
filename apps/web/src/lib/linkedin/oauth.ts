@@ -11,10 +11,11 @@ import {
   decryptToken as sharedDecrypt,
 } from "@/lib/crypto/token-encryption";
 import {
-  fetchBrightDataProfile,
-  mapBrightDataToFields,
-  isBrightDataConfigured,
-} from "@/lib/linkedin/bright-data";
+  startApifyProfileRun,
+  isApifyConfigured,
+  type ApifyFailureKind,
+} from "@/lib/linkedin/apify";
+import { recordRunTargets } from "@/lib/linkedin/enrichment-writeback";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -548,82 +549,68 @@ export async function syncLinkedInProfile(
 }
 
 // ---------------------------------------------------------------------------
-// Bright Data enrichment
+// Apify enrichment (async)
 // ---------------------------------------------------------------------------
 
+export type ApifyEnrichmentFailureKind = ApifyFailureKind | "rpc_error";
+
+export interface StartApifyEnrichmentResult {
+  /** True when an Apify run was started; results land later via the webhook. */
+  started: boolean;
+  runId?: string;
+  error?: string;
+  failureKind?: ApifyEnrichmentFailureKind;
+  upstreamStatus?: number;
+}
+
 /**
- * Runs Bright Data enrichment for a user and writes the results to
- * members/alumni records via the sync_user_linkedin_enrichment RPC.
- *
- * Best-effort enrichment — never throws.
+ * Starts an Apify enrichment run for a single user's LinkedIn URL and marks the
+ * connection `syncing`. Results are written later by the apify-webhook (or the
+ * reconciliation cron). Best-effort — never throws.
  */
-export async function runBrightDataEnrichment(
+export async function runApifyEnrichment(
   supabase: SupabaseClient<Database>,
   userId: string,
   linkedinUrl: string | null | undefined,
-): Promise<{
-  enriched: boolean;
-  error?: string;
-  failureKind?:
-    | "not_configured"
-    | "invalid_url"
-    | "unauthorized"
-    | "provider_unavailable"
-    | "upstream_error"
-    | "malformed_payload"
-    | "network_error"
-    | "rpc_error";
-  upstreamStatus?: number;
-}> {
+): Promise<StartApifyEnrichmentResult> {
   if (!linkedinUrl) {
-    return { enriched: false };
+    return { started: false };
   }
 
-  if (!isBrightDataConfigured()) {
-    return { enriched: false, failureKind: "not_configured", error: "Bright Data sync is not configured in this environment." };
+  if (!isApifyConfigured()) {
+    return {
+      started: false,
+      failureKind: "not_configured",
+      error: "Apify sync is not configured in this environment.",
+    };
   }
 
   try {
-    const fetchResult = await fetchBrightDataProfile(linkedinUrl);
-    if (!fetchResult.ok) {
+    const start = await startApifyProfileRun([linkedinUrl]);
+    if (!start.ok) {
       return {
-        enriched: false,
-        error: fetchResult.error,
-        failureKind: fetchResult.kind,
-        upstreamStatus: fetchResult.upstreamStatus,
+        started: false,
+        error: start.error,
+        failureKind: start.kind,
+        upstreamStatus: start.upstreamStatus,
       };
     }
 
-    const profile = fetchResult.profile;
-    const fields = mapBrightDataToFields(profile);
+    await updateLinkedInConnection(
+      supabase,
+      userId,
+      { enrichment_run_id: start.runId, enrichment_status: "syncing", sync_error: null },
+      "mark LinkedIn enrichment as syncing",
+    );
+    await recordRunTargets(supabase, start.runId, [
+      { kind: "user", userId, linkedinUrl },
+    ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).rpc("sync_user_linkedin_enrichment", {
-      p_user_id: userId,
-      p_job_title: fields.job_title,
-      p_current_company: fields.current_company,
-      p_current_city: fields.current_city,
-      p_school: fields.school,
-      p_major: fields.major,
-      p_position_title: fields.position_title,
-      p_enrichment_json: profile as unknown,
-      p_headline: profile.position || null,
-      p_summary: profile.about || null,
-      p_work_history: profile.experience ?? null,
-      p_education_history: profile.education ?? null,
-      p_overwrite: true, // Manual sync: user expects fresh data to replace stale values
-    });
-
-    if (error) {
-      console.error("[bright-data-enrichment] RPC error:", error);
-      return { enriched: false, error: error.message, failureKind: "rpc_error" };
-    }
-
-    return { enriched: true };
+    return { started: true, runId: start.runId };
   } catch (err) {
-    console.error("[bright-data-enrichment] Unexpected error:", err);
+    console.error("[apify-enrichment] Unexpected error:", err);
     return {
-      enriched: false,
+      started: false,
       error: err instanceof Error ? err.message : "Unknown error",
       failureKind: "network_error",
     };

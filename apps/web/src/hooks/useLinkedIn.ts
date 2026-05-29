@@ -14,7 +14,7 @@ interface LinkedInStatusResponse {
   connection: LinkedInConnection | null;
   integration?: {
     oauthAvailable: boolean;
-    brightDataConfigured?: boolean;
+    enrichmentConfigured?: boolean;
     reason: "not_configured" | null;
   };
   resync?: {
@@ -30,7 +30,7 @@ export interface UseLinkedInReturn {
   connection: LinkedInConnection | null;
   connectionLoading: boolean;
   oauthAvailable: boolean;
-  brightDataConfigured: boolean;
+  enrichmentConfigured: boolean;
   isConnected: boolean;
   resyncEnabled: boolean;
   resyncIsAdmin: boolean;
@@ -38,8 +38,9 @@ export interface UseLinkedInReturn {
   resyncMaxPerMonth: number;
   onLinkedInUrlSave: (url: string) => Promise<void>;
   onConnect: () => void;
-  onOauthSync: () => Promise<{ message: string }>;
-  onBrightDataSync: () => Promise<{ message: string }>;
+  /** One async sync action: OAuth profile refresh + Apify enrichment when
+   *  connected, otherwise URL-only Apify enrichment. */
+  onSync: () => Promise<{ message: string }>;
   onDisconnect: () => Promise<void>;
 }
 
@@ -52,7 +53,7 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
   const [connection, setConnection] = useState<LinkedInConnection | null>(null);
   const [connectionLoading, setConnectionLoading] = useState(true);
   const [oauthAvailable, setOauthAvailable] = useState(true);
-  const [brightDataConfigured, setBrightDataConfigured] = useState(false);
+  const [enrichmentConfigured, setEnrichmentConfigured] = useState(false);
   const [resyncEnabled, setResyncEnabled] = useState(false);
   const [resyncIsAdmin, setResyncIsAdmin] = useState(false);
   const [resyncRemaining, setResyncRemaining] = useState(2);
@@ -111,7 +112,7 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
       setLinkedInUrl(data.linkedin_url ?? "");
       setConnection(data.connection ?? null);
       setOauthAvailable(data.integration?.oauthAvailable ?? true);
-      setBrightDataConfigured(data.integration?.brightDataConfigured ?? false);
+      setEnrichmentConfigured(data.integration?.enrichmentConfigured ?? false);
       if (data.resync) {
         setResyncEnabled(data.resync.enabled);
         setResyncIsAdmin(data.resync.is_admin ?? false);
@@ -224,15 +225,19 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
     return { message: syncData.message ?? "LinkedIn profile synced" };
   }, [refreshLinkedInStatus]);
 
-  const onOauthSync = useCallback(async () => {
-    const res = await fetch("/api/user/linkedin/sync", { method: "POST" });
+  // One sync action. When the user has a usable OAuth connection we hit /sync
+  // (refreshes name/photo from the OAuth token AND starts Apify enrichment);
+  // otherwise we hit the URL-only enrichment route. Both start an async Apify
+  // run whose results land via the webhook.
+  const onSync = useCallback(async () => {
+    const oauthConnected =
+      connection?.source === LINKEDIN_OAUTH_SOURCE && connection?.status === "connected";
+    const endpoint = oauthConnected
+      ? "/api/user/linkedin/sync"
+      : "/api/user/linkedin/bright-data-sync";
+    const res = await fetch(endpoint, { method: "POST" });
     return handleSyncResponse(res);
-  }, [handleSyncResponse]);
-
-  const onBrightDataSync = useCallback(async () => {
-    const res = await fetch("/api/user/linkedin/bright-data-sync", { method: "POST" });
-    return handleSyncResponse(res);
-  }, [handleSyncResponse]);
+  }, [connection, handleSyncResponse]);
 
   const onDisconnect = useCallback(async () => {
     const res = await fetch("/api/user/linkedin/disconnect", { method: "POST" });
@@ -259,7 +264,7 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
     connection,
     connectionLoading,
     oauthAvailable,
-    brightDataConfigured,
+    enrichmentConfigured,
     isConnected,
     resyncEnabled,
     resyncIsAdmin,
@@ -267,8 +272,7 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
     resyncMaxPerMonth,
     onLinkedInUrlSave,
     onConnect,
-    onOauthSync,
-    onBrightDataSync,
+    onSync,
     onDisconnect,
   };
 }

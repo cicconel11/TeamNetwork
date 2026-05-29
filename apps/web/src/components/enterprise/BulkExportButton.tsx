@@ -23,6 +23,13 @@ const EXPORT_FIELDS: ExportField[] = [
   { key: "position_title", label: "Position", default: true },
   { key: "current_city", label: "City", default: true },
   { key: "linkedin_url", label: "LinkedIn URL", default: false },
+  { key: "headline", label: "Headline", default: false },
+  { key: "summary", label: "Summary", default: false },
+  { key: "skills", label: "Skills", default: false },
+  { key: "certifications", label: "Certifications", default: false },
+  { key: "languages", label: "Languages", default: false },
+  { key: "work_history", label: "Work History", default: false },
+  { key: "education_history", label: "Education History", default: false },
   { key: "notes", label: "Notes", default: false },
 ];
 

@@ -177,9 +177,9 @@ function validateBuildEnv() {
     logOptionalEnvWarning(`⚠️  Partial Microsoft Calendar config: missing ${missingMicrosoftVars.join(", ")}. Outlook Calendar integration will not work.`, shouldEmitOptionalEnvLogs);
   }
 
-  // Optional: Bright Data enrichment (enriches member profiles from LinkedIn)
-  if (!process.env.BRIGHT_DATA_API_KEY) {
-    logOptionalEnvInfo("ℹ️  BRIGHT_DATA_API_KEY not set — LinkedIn profile enrichment disabled", shouldEmitOptionalEnvLogs);
+  // Optional: Apify enrichment (enriches member profiles from LinkedIn)
+  if (!process.env.APIFY_API_TOKEN) {
+    logOptionalEnvInfo("ℹ️  APIFY_API_TOKEN not set — LinkedIn profile enrichment disabled", shouldEmitOptionalEnvLogs);
   }
 
   // Optional: warn if z.ai (AI assistant) API key is missing

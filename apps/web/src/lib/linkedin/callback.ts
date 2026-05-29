@@ -8,7 +8,7 @@ import {
   storeLinkedInConnection,
   syncLinkedInProfileFields,
   getLinkedInOAuthErrorMessage,
-  runBrightDataEnrichment,
+  runApifyEnrichment,
   getLinkedInUrlForUser,
 } from "@/lib/linkedin/oauth";
 import {
@@ -171,12 +171,13 @@ export async function handleLinkedInOAuthCallback(
       });
     }
 
-    // Best-effort Bright Data enrichment after successful OAuth connect
+    // Best-effort Apify enrichment after successful OAuth connect (async — the
+    // apify-webhook writes the results when the run finishes).
     const linkedinUrl = await getLinkedInUrlForUser(serviceClient, user.id);
     if (linkedinUrl) {
-      const enrichResult = await runBrightDataEnrichment(serviceClient, user.id, linkedinUrl);
-      if (!enrichResult.enriched && enrichResult.error) {
-        console.warn("[linkedin-callback] Enrichment skipped:", enrichResult.error);
+      const enrichResult = await runApifyEnrichment(serviceClient, user.id, linkedinUrl);
+      if (!enrichResult.started && enrichResult.error) {
+        console.warn("[linkedin-callback] Enrichment not started:", enrichResult.error);
       }
     }
 

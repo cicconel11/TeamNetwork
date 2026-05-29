@@ -16,6 +16,11 @@ interface Alumni {
   job_title: string | null;
   email: string | null;
   linkedin_url: string | null;
+  headline: string | null;
+  summary: string | null;
+  skills: string[] | null;
+  certifications: Array<{ name: string | null; authority: string | null }> | null;
+  languages: string[] | null;
 }
 
 interface UseAlumniDetailReturn {
@@ -70,7 +75,12 @@ export function useAlumniDetail(orgSlug: string, alumniId: string): UseAlumniDet
           position_title,
           job_title,
           email,
-          linkedin_url
+          linkedin_url,
+          headline,
+          summary,
+          skills,
+          certifications,
+          languages
         `
         )
         .eq("id", alumniId)

@@ -84,7 +84,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Build query
   let query = ctx.serviceSupabase
     .from("alumni")
-    .select("id, organization_id, first_name, last_name, email, phone_number, photo_url, linkedin_url, notes, graduation_year, major, industry, current_company, current_city, position_title, job_title", { count: "exact" })
+    .select("id, organization_id, first_name, last_name, email, phone_number, photo_url, linkedin_url, notes, graduation_year, major, industry, current_company, current_city, position_title, job_title, headline, summary, skills, certifications, languages", { count: "exact" })
     .is("deleted_at", null);
 
   // Filter by organization(s)
@@ -157,6 +157,11 @@ export async function GET(req: Request, { params }: RouteParams) {
       current_city: alum.current_city,
       position_title: alum.position_title,
       job_title: alum.job_title,
+      headline: alum.headline,
+      summary: alum.summary,
+      skills: alum.skills,
+      certifications: alum.certifications,
+      languages: alum.languages,
       organization_name: org?.name ?? "Unknown",
       organization_slug: org?.slug ?? "",
     };

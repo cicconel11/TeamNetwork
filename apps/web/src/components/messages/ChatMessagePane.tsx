@@ -274,6 +274,7 @@ export function ChatMessagePane({
       edited_at: null,
       created_at: new Date().toISOString(),
       deleted_at: null,
+      mentioned_user_ids: [],
       author: currentUser,
     };
 

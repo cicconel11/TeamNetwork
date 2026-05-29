@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { isBrightDataConfigured } from "@/lib/linkedin/bright-data";
-import { runBrightDataEnrichment } from "@/lib/linkedin/oauth";
+import { isApifyConfigured, type ApifyFailureKind } from "@/lib/linkedin/apify";
+import { runApifyEnrichment } from "@/lib/linkedin/oauth";
 import { getLinkedInProfileUrlForUser } from "@/lib/linkedin/settings";
 
 export const MAX_LINKEDIN_RESYNCS_PER_MONTH = 2;
@@ -25,7 +25,7 @@ type LinkedInManualSyncReservationResult =
   | { ok: true; attemptId: string; remaining: number | null }
   | { ok: false; status: number; error: string; remaining_syncs?: number };
 
-export type PerformBrightDataSyncResult = {
+export type PerformApifySyncResult = {
   status: number;
   body: {
     message?: string;
@@ -34,24 +34,17 @@ export type PerformBrightDataSyncResult = {
   };
 };
 
-interface PerformBrightDataSyncDependencies {
+interface PerformApifySyncDependencies {
   isConfigured?: () => boolean;
   runEnrichment?: (
     supabase: SupabaseClient<Database>,
     userId: string,
     linkedinUrl: string,
   ) => Promise<{
-    enriched: boolean;
+    started: boolean;
+    runId?: string;
     error?: string;
-    failureKind?:
-      | "not_configured"
-      | "invalid_url"
-      | "unauthorized"
-      | "provider_unavailable"
-      | "upstream_error"
-      | "malformed_payload"
-      | "network_error"
-      | "rpc_error";
+    failureKind?: ApifyFailureKind | "rpc_error";
     upstreamStatus?: number;
   }>;
 }
@@ -258,19 +251,19 @@ async function releaseLinkedInManualSync(
   }
 }
 
-export async function performBrightDataSync(
+export async function performApifySync(
   supabase: SupabaseClient<Database>,
   userId: string,
-  dependencies: PerformBrightDataSyncDependencies = {},
-): Promise<PerformBrightDataSyncResult> {
-  const isConfigured = dependencies.isConfigured ?? isBrightDataConfigured;
-  const runEnrichment = dependencies.runEnrichment ?? runBrightDataEnrichment;
+  dependencies: PerformApifySyncDependencies = {},
+): Promise<PerformApifySyncResult> {
+  const isConfigured = dependencies.isConfigured ?? isApifyConfigured;
+  const runEnrichment = dependencies.runEnrichment ?? runApifyEnrichment;
 
   if (!isConfigured()) {
     return {
       status: 503,
       body: {
-        error: "Bright Data sync is not configured in this environment.",
+        error: "LinkedIn sync is not configured in this environment.",
       },
     };
   }
@@ -297,8 +290,10 @@ export async function performBrightDataSync(
   }
 
   try {
+    // Apify runs are async: starting the run is the rate-limited action, so the
+    // reservation is completed once the run starts. Results land via the webhook.
     const enrichment = await runEnrichment(supabase, userId, linkedinUrl);
-    if (!enrichment.enriched) {
+    if (!enrichment.started) {
       await releaseLinkedInManualSync(supabase, reservation.attemptId);
       const status =
         enrichment.failureKind === "invalid_url"
@@ -312,7 +307,7 @@ export async function performBrightDataSync(
       return {
         status,
         body: {
-          error: enrichment.error || "Unable to sync LinkedIn data right now.",
+          error: enrichment.error || "Unable to start LinkedIn sync right now.",
           remaining_syncs: reservation.remaining ?? undefined,
         },
       };
@@ -322,7 +317,7 @@ export async function performBrightDataSync(
     return {
       status: 200,
       body: {
-        message: "LinkedIn data synced",
+        message: "LinkedIn sync started",
         remaining_syncs: reservation.remaining ?? undefined,
       },
     };
@@ -332,7 +327,7 @@ export async function performBrightDataSync(
     return {
       status: 500,
       body: {
-        error: "An error occurred while syncing LinkedIn data.",
+        error: "An error occurred while starting LinkedIn sync.",
         remaining_syncs: reservation.remaining ?? undefined,
       },
     };
