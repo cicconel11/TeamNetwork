@@ -8,6 +8,7 @@ import type { UserRole } from "@/types/database";
 import { Card } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { BlackbaudSettingsPanel } from "@/components/settings/BlackbaudSettingsPanel";
+import { LinkedInBulkSyncPanel } from "@/components/settings/LinkedInBulkSyncPanel";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 
 interface IntegrationRow {
@@ -188,6 +189,8 @@ export default function IntegrationsPage() {
           blackbaudAvailable={blackbaudAvailable}
         />
       )}
+
+      {!pageError && !loading && orgId && <LinkedInBulkSyncPanel orgId={orgId} />}
     </div>
   );
 }
