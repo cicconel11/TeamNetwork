@@ -136,16 +136,23 @@ export async function processFinishedApifyRun(
   }
 
   // Hybrid supplement: the primary actor leaves education years null, so fetch
-  // them from apimaestro (in parallel, best-effort) and merge in place before
-  // mapping. Only for profiles that actually have an education row missing years.
-  await Promise.all(
-    profiles.map(async (profile) => {
-      if (profile.education.length === 0) return;
-      if (profile.education.every((e) => e.start_year && e.end_year)) return;
-      const years = await fetchApimaestroEducationDates(profile.profile_url);
-      mergeEducationYears(profile, years);
-    }),
+  // them from apimaestro (best-effort) and merge in place before mapping. Only
+  // for profiles that actually have an education row missing years. Throttled —
+  // apimaestro's run-sync counts against the Apify account's concurrent-run cap,
+  // so a wide bulk run would silently fail most calls if fired all at once.
+  const profilesNeedingYears = profiles.filter(
+    (p) => p.education.length > 0 && p.education.some((e) => !e.start_year || !e.end_year),
   );
+  const EDU_DATES_CONCURRENCY = 4;
+  for (let i = 0; i < profilesNeedingYears.length; i += EDU_DATES_CONCURRENCY) {
+    const batch = profilesNeedingYears.slice(i, i + EDU_DATES_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (profile) => {
+        const years = await fetchApimaestroEducationDates(profile.profile_url);
+        mergeEducationYears(profile, years);
+      }),
+    );
+  }
 
   for (const target of targets) {
     let profile = byUrl.get(safeNormalize(target.linkedin_url) ?? "");
