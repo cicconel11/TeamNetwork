@@ -399,7 +399,7 @@ function normalizeEducation(raw: unknown[] | undefined): ApifyEducation[] {
         title: firstString(e.title, e.school, e.schoolName),
         institute_logo_url: firstString(e.logo, e.instituteLogo, e.institute_logo_url),
         // The actor packs degree + major + minor into a single `subtitle` line.
-        degree: firstString(e.subtitle, e.degree, e.degreeName),
+        degree: cleanDegreeSubtitle(firstString(e.subtitle, e.degree, e.degreeName)),
         field_of_study: firstString(e.fieldOfStudy, e.field_of_study),
         start_year: firstString(period.startedOn, e.startYear, e.start_year),
         end_year: firstString(period.endedOn, e.endYear, e.end_year),
@@ -419,6 +419,20 @@ function normalizeCertifications(raw: unknown[] | undefined): ApifyCertification
       logo_url: firstString(e.logo, e.logo_url),
     }))
     .filter((c) => c.name !== null);
+}
+
+/**
+ * The dev_fusion actor packs an education's "degree, field" into one `subtitle`
+ * line and emits literal "None" tokens when those are absent (e.g. "None, None"
+ * for a high school). Strip those so the UI doesn't render "None, None".
+ */
+function cleanDegreeSubtitle(value: string | null): string | null {
+  if (!value) return null;
+  const parts = value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "" && !/^(none|null)$/i.test(s));
+  return parts.length > 0 ? parts.join(", ") : null;
 }
 
 function normalizeStringList(raw: unknown): string[] {

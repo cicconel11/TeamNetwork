@@ -159,6 +159,19 @@ test("normalizeApifyItem still maps generic actor field names (legacy fallback)"
   assert.equal(profile.education[0].start_year, "2010");
 });
 
+test("normalizeEducation strips the actor's literal None tokens from the degree line", () => {
+  const profile = normalizeApifyItem({
+    fullName: "High Schooler",
+    educations: [
+      { title: "Fordham Prep", subtitle: "None, None" },
+      { title: "State College", subtitle: "BS, None" },
+    ],
+  });
+  assert.ok(profile);
+  assert.equal(profile.education[0].degree, null);
+  assert.equal(profile.education[1].degree, "BS");
+});
+
 test("mapApifyToFields nulls empty list fields instead of writing empty arrays", () => {
   const profile = normalizeApifyItem({
     fullName: "No Lists",
