@@ -98,6 +98,14 @@ export interface MemberToolRow {
   first_name: string;
   last_name: string;
   email: string | null;
+  // Enriched LinkedIn fields (optional — only selected by list_members).
+  current_company?: string | null;
+  industry?: string | null;
+  headline?: string | null;
+  summary?: string | null;
+  skills?: unknown;
+  certifications?: unknown;
+  languages?: unknown;
 }
 
 export interface UserNameRow {

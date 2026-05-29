@@ -238,7 +238,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_members" as const,
       description:
-        "List active organization members. Returns the best available human name, email, role, and added date. Prefer real names over raw emails. If a record has no trustworthy human name, treat it as an email-only member or admin account instead of using placeholder labels. Only returns active members — alumni and parents are tracked separately.",
+        "List active organization members. Returns the best available human name, email, role, added date, and (when available from LinkedIn enrichment) current company, industry, headline, summary, skills, certifications, and languages. Prefer real names over raw emails. If a record has no trustworthy human name, treat it as an email-only member or admin account instead of using placeholder labels. Only returns active members — alumni and parents are tracked separately. Use the skill/certification/language/company/industry filters to answer questions like 'which members know Python' or 'who works in finance'.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -248,6 +248,11 @@ const TOOL_BY_NAME = {
             maximum: 50,
             description: "Max results to return (default 20)",
           },
+          company: { type: "string" as const, description: "Filter by current company (substring match)." },
+          industry: { type: "string" as const, description: "Filter by industry (substring match)." },
+          skill: { type: "string" as const, description: "Filter to members listing this skill, e.g. 'Python' (substring match)." },
+          certification: { type: "string" as const, description: "Filter to members holding this certification, e.g. 'AWS' (substring match)." },
+          language: { type: "string" as const, description: "Filter to members who speak this language, e.g. 'Spanish' (substring match)." },
         },
         additionalProperties: false as const,
       },
@@ -884,7 +889,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_alumni" as const,
       description:
-        "List alumni. Returns name, graduation year, company, industry, city, title. Use for alumni directory questions.",
+        "List alumni. Returns name, graduation year, company, industry, city, title, and (when available from LinkedIn enrichment) headline, summary, skills, certifications, and languages. Use for alumni directory questions, including 'which alumni list Spanish', 'who has an AWS certification', or 'find alumni skilled in React' via the skill/certification/language filters.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -911,6 +916,18 @@ const TOOL_BY_NAME = {
           city: {
             type: "string" as const,
             description: "Filter by city (partial match)",
+          },
+          skill: {
+            type: "string" as const,
+            description: "Filter to alumni listing this skill, e.g. 'React' (substring match).",
+          },
+          certification: {
+            type: "string" as const,
+            description: "Filter to alumni holding this certification, e.g. 'AWS' (substring match).",
+          },
+          language: {
+            type: "string" as const,
+            description: "Filter to alumni who speak this language, e.g. 'Spanish' (substring match).",
           },
         },
         additionalProperties: false as const,

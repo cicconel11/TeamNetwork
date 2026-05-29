@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sanitizeIlikeInput } from "@/lib/security/validation";
 import {
   buildMemberName,
   isPlaceholderMemberName,
@@ -12,6 +13,12 @@ import type { ToolModule } from "./types";
 const listMembersSchema = z
   .object({
     limit: z.number().int().min(1).max(50).optional(),
+    company: z.string().trim().min(1).optional(),
+    industry: z.string().trim().min(1).optional(),
+    // Substring match within the enriched jsonb arrays.
+    skill: z.string().trim().min(1).optional(),
+    certification: z.string().trim().min(1).optional(),
+    language: z.string().trim().min(1).optional(),
   })
   .strict();
 
@@ -23,14 +30,34 @@ export const listMembersModule: ToolModule<Args> = {
   async execute(args, { ctx, sb, logContext }) {
     const limit = Math.min(args.limit ?? 20, 50);
     return safeToolQuery(logContext, async () => {
-      const { data, error } = await sb
+      let query = sb
         .from("members")
-        .select("id, user_id, status, role, created_at, first_name, last_name, email")
+        .select(
+          "id, user_id, status, role, created_at, first_name, last_name, email, current_company, industry, headline, summary, skills, certifications, languages"
+        )
         .eq("organization_id", ctx.orgId)
         .is("deleted_at", null)
         .eq("status", "active")
         .order("created_at", { ascending: false })
         .limit(limit);
+
+      if (args.company) {
+        query = query.ilike("current_company", `%${sanitizeIlikeInput(args.company)}%`);
+      }
+      if (args.industry) {
+        query = query.ilike("industry", `%${sanitizeIlikeInput(args.industry)}%`);
+      }
+      if (args.skill) {
+        query = query.ilike("skills::text", `%${sanitizeIlikeInput(args.skill)}%`);
+      }
+      if (args.certification) {
+        query = query.ilike("certifications::text", `%${sanitizeIlikeInput(args.certification)}%`);
+      }
+      if (args.language) {
+        query = query.ilike("languages::text", `%${sanitizeIlikeInput(args.language)}%`);
+      }
+
+      const { data, error } = await query;
 
       if (!Array.isArray(data) || error) {
         return { data, error };
@@ -87,6 +114,13 @@ export const listMembersModule: ToolModule<Args> = {
                 ? memberName
                 : fallbackUserName ?? "",
             email: member.email,
+            current_company: member.current_company ?? null,
+            industry: member.industry ?? null,
+            headline: member.headline ?? null,
+            summary: member.summary ?? null,
+            skills: member.skills ?? null,
+            certifications: member.certifications ?? null,
+            languages: member.languages ?? null,
           };
         }),
         error,
