@@ -102,6 +102,19 @@ test("mapApifyToFields nulls empty list fields instead of writing empty arrays",
   assert.equal(fields.job_title, "Consultant");
 });
 
+test("normalizeApifyItem falls back to companyIndustry when no top-level industry", () => {
+  // The dev_fusion actor returns `companyIndustry` (e.g. "Computer Software"),
+  // not a top-level `industry` — verified against a live run.
+  const profile = normalizeApifyItem({
+    fullName: "Industry Person",
+    headline: "Engineer",
+    companyIndustry: "Computer Software",
+  });
+  assert.ok(profile);
+  assert.equal(profile.industry, "Computer Software");
+  assert.equal(mapApifyToFields(profile).industry, "Computer Software");
+});
+
 test("normalizeApifyItem rejects payloads with no identifying fields", () => {
   assert.equal(normalizeApifyItem({}), null);
   assert.equal(normalizeApifyItem(null), null);
