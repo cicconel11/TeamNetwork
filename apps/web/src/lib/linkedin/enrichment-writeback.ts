@@ -274,6 +274,46 @@ async function markTargetsFailed(
 }
 
 /**
+ * Best-effort: marks alumni rows `pending` so the enrichment-process cron starts
+ * an Apify run for them. Only rows that already have a `linkedin_url` and aren't
+ * already enriched / in-flight are enqueued. Never throws — callers (e.g. the
+ * Blackbaud sync) must not fail because enrichment enqueueing failed.
+ */
+export async function enqueueAlumniForEnrichment(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  organizationId: string,
+  alumniIds: string[],
+): Promise<{ enqueued: number }> {
+  const ids = Array.from(new Set(alumniIds)).filter(Boolean);
+  if (ids.length === 0) return { enqueued: 0 };
+
+  let enqueued = 0;
+  const CHUNK = 200;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    try {
+      const { data, error } = await supabase
+        .from("alumni")
+        .update({ enrichment_status: "pending", enrichment_retry_count: 0, enrichment_error: null })
+        .eq("organization_id", organizationId)
+        .in("id", chunk)
+        .not("linkedin_url", "is", null)
+        .or("enrichment_status.is.null,enrichment_status.eq.failed")
+        .select("id");
+      if (error) {
+        console.error("[enrichment-writeback] enqueueAlumniForEnrichment error:", error);
+        continue;
+      }
+      enqueued += (data ?? []).length;
+    } catch (err) {
+      console.error("[enrichment-writeback] enqueueAlumniForEnrichment failed:", err);
+    }
+  }
+  return { enqueued };
+}
+
+/**
  * Records the rows a freshly-started run will write back to. `targets` describe
  * either a single alumni row or a user_id whose profiles should be synced.
  */
