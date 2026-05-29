@@ -35,12 +35,13 @@ DO $$
 DECLARE
   -- ============ CONFIG — EDIT THESE THREE ============
   v_reviewer_email text := 'test-reviewer@myteamnetwork.com';
-  -- Slug of your REAL founders org in production. Find it with:
-  --   SELECT name, slug FROM organizations ORDER BY created_at LIMIT 20;
-  v_founders_slug  text := 'REPLACE_WITH_FOUNDERS_ORG_SLUG';
-  -- Role to grant in the founders org. 'alumni' = read-only (safe default).
-  -- Use 'admin' only if the reviewer must demo admin features there.
-  v_founders_role  public.user_role := 'alumni';
+  -- Slug of the REAL founders org in production (confirmed live 2026-05-29).
+  -- Re-check with: SELECT name, slug FROM organizations ORDER BY created_at;
+  v_founders_slug  text := 'teamnetwork-founders';
+  -- Role granted in the founders org. 'active_member' = can post to feed /
+  -- discussions but cannot manage members or settings. Use 'alumni' for
+  -- read-only, or 'admin' only if the reviewer must demo admin features.
+  v_founders_role  public.user_role := 'active_member';
   -- ===================================================
 
   v_user_id        uuid;
