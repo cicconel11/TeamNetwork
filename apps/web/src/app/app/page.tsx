@@ -147,6 +147,20 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     })
     .filter(Boolean) as Array<OrganizationSummary & { role: string }>;
 
+  // Auto-redirect to the only org when user has nothing else to choose between.
+  // Skip when banners need to render (checkout, pending approval, revoked access)
+  // or when the user has any enterprise / pending memberships.
+  const hasBanner = Boolean(checkout || pendingOrg || errorParam);
+  if (
+    !hasBanner &&
+    !loadError &&
+    orgs.length === 1 &&
+    enterprises.length === 0 &&
+    pendingDisplayMemberships.length === 0
+  ) {
+    redirect(`/${orgs[0].slug}`);
+  }
+
   // If checkout=success, find the org by slug to get its ID for reconciliation
   let checkoutOrgId: string | undefined;
   if (checkout === "success" && orgSlug) {
