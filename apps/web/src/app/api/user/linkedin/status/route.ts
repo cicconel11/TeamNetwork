@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getLinkedInIntegrationStatus } from "@/lib/linkedin/config.server";
 import { isApifyConfigured } from "@/lib/linkedin/apify";
@@ -13,16 +13,13 @@ export const dynamic = "force-dynamic";
  *
  * Returns the user's LinkedIn connection status, manual linkedin_url,
  * whether OAuth is available, and re-sync rate limit info.
+ * Accepts cookie (web) or Bearer (mobile) auth.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { user } = await createAuthenticatedApiClient(request);
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

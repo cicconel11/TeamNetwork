@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   syncLinkedInProfile,
@@ -31,13 +31,9 @@ export async function POST(request: Request) {
     });
     if (!ipRateLimit.ok) return buildRateLimitResponse(ipRateLimit);
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { user } = await createAuthenticatedApiClient(request);
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: ipRateLimit.headers });
     }
 
