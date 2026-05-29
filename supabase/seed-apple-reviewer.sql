@@ -14,10 +14,14 @@
 --      (alumni) so live founder data is exposed but not editable.
 --
 -- PREREQUISITES (do these first, in order):
---   1. The reviewer account must already exist in auth.users. Sign it up
---      through the normal app signup flow first (email + password), confirm
---      the email, then run this script. This script will NOT create the auth
---      user (password hashing / email confirmation belong to Supabase Auth).
+--   1. The reviewer account must already exist in auth.users. Create it in the
+--      Supabase Dashboard -> Authentication -> Users -> "Add user" -> "Create
+--      new user", set email + password, and CHECK "Auto Confirm User". This
+--      lands the user in auth.users with email_confirmed_at set and sends NO
+--      confirmation email -- so you do NOT need access to the mailbox. Do not
+--      use the app signup flow (it emails a confirmation link you cannot
+--      receive). This script does NOT create the auth user (password hashing
+--      belongs to Supabase Auth).
 --   2. Set the three :var values below before running.
 --
 -- USAGE (Supabase SQL Editor against PRODUCTION):

@@ -111,9 +111,10 @@ Ops-side gates:
 - [ ] Apple Pay Merchant ID `merchant.com.myteamnetwork.teammeet`
       registered in App Store Connect and paired with Stripe-issued
       Payment Processing Certificate
-- [ ] Reviewer account provisioned: sign up `test-reviewer@myteamnetwork.com`
-      via the normal app flow (confirm email), then run
-      `supabase/seed-apple-reviewer.sql` in the prod SQL editor with
+- [ ] Reviewer account provisioned: create `test-reviewer@myteamnetwork.com`
+      via Supabase Dashboard → Authentication → Users → Add user, with
+      **Auto Confirm User** checked (no inbox access needed — does not email).
+      Then run `supabase/seed-apple-reviewer.sql` in the prod SQL editor with
       `v_founders_slug` set. Grants the three orgs above incl. the
       `donation_eligible_ios = true` org.
 - [ ] 30s demo video recorded showing: open app → donate via Apple Pay →
