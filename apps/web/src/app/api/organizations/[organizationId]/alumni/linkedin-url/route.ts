@@ -125,6 +125,11 @@ export async function POST(req: Request, { params }: RouteParams) {
     .from("alumni")
     .update({
       linkedin_url: incomingUrl,
+      // Enqueue enrichment so the new URL is actually scraped — matches the
+      // CSV/bulk-import routes. The enrichment-process cron starts the Apify run.
+      enrichment_status: "pending",
+      enrichment_retry_count: 0,
+      enrichment_error: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", body.alumniId)
