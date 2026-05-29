@@ -128,7 +128,7 @@ Centralized Zod schemas in `src/lib/schemas/` — see `index.ts` for all availab
 Required variables validated at build time in `next.config.mjs` — see that file for the complete list. Key optional vars:
 - `RESEND_API_KEY` — Real email delivery (falls back to stub logging)
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` — Google Calendar
-- `BRIGHT_DATA_API_KEY` — LinkedIn enrichment via Bright Data (~$1.50/1k lookups)
+- `APIFY_API_TOKEN`, `APIFY_LINKEDIN_ACTOR_ID`, `APIFY_WEBHOOK_SECRET` — LinkedIn profile enrichment via Apify (async actor runs; results land via the `/api/linkedin/apify-webhook` completion webhook, reconciled by the `enrichment-process` cron)
 - `SKIP_STRIPE_VALIDATION=true` — Skip Stripe price ID validation in dev
 
 Stored in `.env.local` at repo root (never commit). Vars surfaced to Turbo via `globalPassThroughEnv` in `turbo.json`.

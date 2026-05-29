@@ -412,6 +412,55 @@ export default function AlumniDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* Headline + Summary */}
+        {(alumni.headline || alumni.summary) && (
+          <View style={[styles.aboutSection, isBlocked && styles.dimmed]}>
+            {alumni.headline && <Text style={styles.aboutHeadline}>{alumni.headline}</Text>}
+            {alumni.summary && <Text style={styles.aboutSummary}>{alumni.summary}</Text>}
+          </View>
+        )}
+
+        {/* Skills */}
+        {alumni.skills?.length ? (
+          <View style={[styles.chipsSection, isBlocked && styles.dimmed]}>
+            <Text style={styles.chipsLabel}>Skills</Text>
+            <View style={styles.chipsRow}>
+              {alumni.skills.filter(Boolean).map((skill, i) => (
+                <View key={`${skill}-${i}`} style={styles.chip}>
+                  <Text style={styles.chipText}>{skill}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Languages */}
+        {alumni.languages?.length ? (
+          <View style={[styles.chipsSection, isBlocked && styles.dimmed]}>
+            <Text style={styles.chipsLabel}>Languages</Text>
+            <View style={styles.chipsRow}>
+              {alumni.languages.filter(Boolean).map((lang, i) => (
+                <View key={`${lang}-${i}`} style={styles.chip}>
+                  <Text style={styles.chipText}>{lang}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Certifications */}
+        {alumni.certifications?.length ? (
+          <View style={[styles.chipsSection, isBlocked && styles.dimmed]}>
+            <Text style={styles.chipsLabel}>Certifications</Text>
+            {alumni.certifications.map((cert, i) => (
+              <Text key={`${cert.name ?? "cert"}-${i}`} style={styles.certText}>
+                {cert.name}
+                {cert.authority ? ` • ${cert.authority}` : ""}
+              </Text>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
 
       <ReportBlockSheet
@@ -659,5 +708,58 @@ const createStyles = () =>
     },
     dimmed: {
       opacity: 0.4,
+    },
+
+    // About (headline + summary)
+    aboutSection: {
+      backgroundColor: DETAIL_COLORS.card,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      marginTop: SPACING.md,
+    },
+    aboutHeadline: {
+      ...TYPOGRAPHY.titleSmall,
+      color: DETAIL_COLORS.primaryText,
+    },
+    aboutSummary: {
+      ...TYPOGRAPHY.bodySmall,
+      color: DETAIL_COLORS.secondaryText,
+      marginTop: SPACING.xs,
+      lineHeight: 20,
+    },
+
+    // Skills / languages / certifications
+    chipsSection: {
+      backgroundColor: DETAIL_COLORS.card,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      marginTop: SPACING.md,
+    },
+    chipsLabel: {
+      ...TYPOGRAPHY.overline,
+      color: DETAIL_COLORS.secondaryText,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: SPACING.sm,
+    },
+    chipsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: SPACING.xs,
+    },
+    chip: {
+      backgroundColor: DETAIL_COLORS.mutedSurface,
+      borderRadius: RADIUS.sm,
+      paddingVertical: 4,
+      paddingHorizontal: SPACING.sm,
+    },
+    chipText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: DETAIL_COLORS.primaryText,
+    },
+    certText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: DETAIL_COLORS.primaryText,
+      marginBottom: 4,
     },
   });

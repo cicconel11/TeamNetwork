@@ -717,6 +717,7 @@ export type Database = {
         Row: {
           address_summary: string | null
           birth_year: number | null
+          certifications: Json | null
           created_at: string | null
           current_city: string | null
           current_company: string | null
@@ -734,6 +735,7 @@ export type Database = {
           id: string
           industry: string | null
           job_title: string | null
+          languages: Json | null
           last_name: string
           linkedin_url: string | null
           major: string | null
@@ -743,6 +745,7 @@ export type Database = {
           photo_url: string | null
           position_title: string | null
           school: string | null
+          skills: Json | null
           source: string
           summary: string | null
           updated_at: string | null
@@ -752,6 +755,7 @@ export type Database = {
         Insert: {
           address_summary?: string | null
           birth_year?: number | null
+          certifications?: Json | null
           created_at?: string | null
           current_city?: string | null
           current_company?: string | null
@@ -769,6 +773,7 @@ export type Database = {
           id?: string
           industry?: string | null
           job_title?: string | null
+          languages?: Json | null
           last_name: string
           linkedin_url?: string | null
           major?: string | null
@@ -778,6 +783,7 @@ export type Database = {
           photo_url?: string | null
           position_title?: string | null
           school?: string | null
+          skills?: Json | null
           source?: string
           summary?: string | null
           updated_at?: string | null
@@ -787,6 +793,7 @@ export type Database = {
         Update: {
           address_summary?: string | null
           birth_year?: number | null
+          certifications?: Json | null
           created_at?: string | null
           current_city?: string | null
           current_company?: string | null
@@ -804,6 +811,7 @@ export type Database = {
           id?: string
           industry?: string | null
           job_title?: string | null
+          languages?: Json | null
           last_name?: string
           linkedin_url?: string | null
           major?: string | null
@@ -813,6 +821,7 @@ export type Database = {
           photo_url?: string | null
           position_title?: string | null
           school?: string | null
+          skills?: Json | null
           source?: string
           summary?: string | null
           updated_at?: string | null
@@ -1026,6 +1035,7 @@ export type Database = {
           deleted_at: string | null
           id: string
           is_pinned: boolean | null
+          mentioned_user_ids: string[]
           organization_id: string
           published_at: string | null
           target_user_ids: string[] | null
@@ -1041,6 +1051,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_pinned?: boolean | null
+          mentioned_user_ids?: string[]
           organization_id: string
           published_at?: string | null
           target_user_ids?: string[] | null
@@ -1056,6 +1067,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_pinned?: boolean | null
+          mentioned_user_ids?: string[]
           organization_id?: string
           published_at?: string | null
           target_user_ids?: string[] | null
@@ -1078,6 +1090,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      apify_webhook_events: {
+        Row: {
+          event_type: string | null
+          id: string
+          received_at: string
+          run_id: string | null
+        }
+        Insert: {
+          event_type?: string | null
+          id: string
+          received_at?: string
+          run_id?: string | null
+        }
+        Update: {
+          event_type?: string | null
+          id?: string
+          received_at?: string
+          run_id?: string | null
+        }
+        Relationships: []
+      }
+      badges: {
+        Row: {
+          created_at: string
+          criteria: Json
+          description: string
+          icon: string
+          id: string
+          slug: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          criteria: Json
+          description: string
+          icon: string
+          id?: string
+          slug: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          criteria?: Json
+          description?: string
+          icon?: string
+          id?: string
+          slug?: string
+          title?: string
+        }
+        Relationships: []
       }
       breach_incidents: {
         Row: {
@@ -1427,6 +1490,7 @@ export type Database = {
       }
       chat_groups: {
         Row: {
+          avatar_url: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
@@ -1439,6 +1503,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -1451,6 +1516,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -1483,6 +1549,7 @@ export type Database = {
           deleted_at: string | null
           edited_at: string | null
           id: string
+          mentioned_user_ids: string[]
           message_type: string | null
           metadata: Json | null
           organization_id: string
@@ -1500,6 +1567,7 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           id?: string
+          mentioned_user_ids?: string[]
           message_type?: string | null
           metadata?: Json | null
           organization_id: string
@@ -1517,6 +1585,7 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           id?: string
+          mentioned_user_ids?: string[]
           message_type?: string | null
           metadata?: Json | null
           organization_id?: string
@@ -1771,6 +1840,83 @@ export type Database = {
         }
         Relationships: []
       }
+      content_reports: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          details: string | null
+          id: string
+          organization_id: string
+          reason: string
+          reported_user_id: string | null
+          reporter_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          details?: string | null
+          id?: string
+          organization_id: string
+          reason: string
+          reported_user_id?: string | null
+          reporter_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          details?: string | null
+          id?: string
+          organization_id?: string
+          reason?: string
+          reported_user_id?: string | null
+          reporter_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_reports_reported_user_id_fkey"
+            columns: ["reported_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_reports_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       data_access_log: {
         Row: {
           accessed_at: string
@@ -1867,6 +2013,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           id: string
+          mentioned_user_ids: string[]
           organization_id: string
           thread_id: string
           updated_at: string
@@ -1877,6 +2024,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          mentioned_user_ids?: string[]
           organization_id: string
           thread_id: string
           updated_at?: string
@@ -1887,6 +2035,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          mentioned_user_ids?: string[]
           organization_id?: string
           thread_id?: string
           updated_at?: string
@@ -2580,6 +2729,32 @@ export type Database = {
           },
         ]
       }
+      event_reminder_sends: {
+        Row: {
+          event_id: string
+          kind: string
+          sent_at: string
+        }
+        Insert: {
+          event_id: string
+          kind: string
+          sent_at?: string
+        }
+        Update: {
+          event_id?: string
+          kind?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_reminder_sends_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_rsvps: {
         Row: {
           checked_in_at: string | null
@@ -2589,6 +2764,7 @@ export type Database = {
           id: string
           organization_id: string
           status: string
+          track_on_lock_screen: boolean
           updated_at: string | null
           user_id: string
         }
@@ -2600,6 +2776,7 @@ export type Database = {
           id?: string
           organization_id: string
           status: string
+          track_on_lock_screen?: boolean
           updated_at?: string | null
           user_id: string
         }
@@ -2611,6 +2788,7 @@ export type Database = {
           id?: string
           organization_id?: string
           status?: string
+          track_on_lock_screen?: boolean
           updated_at?: string | null
           user_id?: string
         }
@@ -3314,6 +3492,24 @@ export type Database = {
           },
         ]
       }
+      internal_advisor_snapshots: {
+        Row: {
+          advisors: Json
+          captured_at: string
+          id: number
+        }
+        Insert: {
+          advisors: Json
+          captured_at?: string
+          id?: never
+        }
+        Update: {
+          advisors?: Json
+          captured_at?: string
+          id?: never
+        }
+        Relationships: []
+      }
       job_postings: {
         Row: {
           application_url: string | null
@@ -3434,6 +3630,48 @@ export type Database = {
         }
         Relationships: []
       }
+      linkedin_enrichment_runs: {
+        Row: {
+          alumni_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          linkedin_url: string
+          organization_id: string | null
+          run_id: string
+          status: string
+          target_kind: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          alumni_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          linkedin_url: string
+          organization_id?: string | null
+          run_id: string
+          status?: string
+          target_kind: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          alumni_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          linkedin_url?: string
+          organization_id?: string | null
+          run_id?: string
+          status?: string
+          target_kind?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       linkedin_manual_sync_attempts: {
         Row: {
           completed_at: string | null
@@ -3466,6 +3704,70 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      live_activity_tokens: {
+        Row: {
+          activity_id: string
+          created_at: string
+          device_id: string
+          ended_at: string | null
+          ends_at: string
+          event_id: string
+          organization_id: string
+          push_token: string
+          started_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          device_id: string
+          ended_at?: string | null
+          ends_at: string
+          event_id: string
+          organization_id: string
+          push_token: string
+          started_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          device_id?: string
+          ended_at?: string | null
+          ends_at?: string
+          event_id?: string
+          organization_id?: string
+          push_token?: string
+          started_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_activity_tokens_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_activity_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_activity_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mcp_resources: {
         Row: {
@@ -3779,20 +4081,116 @@ export type Database = {
           },
         ]
       }
+      member_badges: {
+        Row: {
+          badge_id: string
+          earned_at: string
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          earned_at?: string
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          earned_at?: string
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_badges_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_badges_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_streaks: {
+        Row: {
+          created_at: string
+          current_weeks: number
+          last_qualifying_week_start: string | null
+          last_recomputed_at: string
+          longest_weeks: number
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_weeks?: number
+          last_qualifying_week_start?: string | null
+          last_recomputed_at?: string
+          longest_weeks?: number
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_weeks?: number
+          last_qualifying_week_start?: string | null
+          last_recomputed_at?: string
+          longest_weeks?: number
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_streaks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_streaks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       members: {
         Row: {
           bio: string | null
+          certifications: Json | null
           created_at: string | null
           current_city: string | null
           current_company: string | null
           deleted_at: string | null
+          education_history: Json | null
           email: string | null
           expected_graduation_date: string | null
           first_name: string
           graduated_at: string | null
           graduation_warning_sent_at: string | null
           graduation_year: number | null
+          headline: string | null
           id: string
+          industry: string | null
+          languages: Json | null
           last_name: string
           linkedin_url: string | null
           major: string | null
@@ -3800,23 +4198,31 @@ export type Database = {
           photo_url: string | null
           role: string | null
           school: string | null
+          skills: Json | null
           status: Database["public"]["Enums"]["member_status"] | null
+          summary: string | null
           updated_at: string | null
           user_id: string | null
+          work_history: Json | null
         }
         Insert: {
           bio?: string | null
+          certifications?: Json | null
           created_at?: string | null
           current_city?: string | null
           current_company?: string | null
           deleted_at?: string | null
+          education_history?: Json | null
           email?: string | null
           expected_graduation_date?: string | null
           first_name: string
           graduated_at?: string | null
           graduation_warning_sent_at?: string | null
           graduation_year?: number | null
+          headline?: string | null
           id?: string
+          industry?: string | null
+          languages?: Json | null
           last_name: string
           linkedin_url?: string | null
           major?: string | null
@@ -3824,23 +4230,31 @@ export type Database = {
           photo_url?: string | null
           role?: string | null
           school?: string | null
+          skills?: Json | null
           status?: Database["public"]["Enums"]["member_status"] | null
+          summary?: string | null
           updated_at?: string | null
           user_id?: string | null
+          work_history?: Json | null
         }
         Update: {
           bio?: string | null
+          certifications?: Json | null
           created_at?: string | null
           current_city?: string | null
           current_company?: string | null
           deleted_at?: string | null
+          education_history?: Json | null
           email?: string | null
           expected_graduation_date?: string | null
           first_name?: string
           graduated_at?: string | null
           graduation_warning_sent_at?: string | null
           graduation_year?: number | null
+          headline?: string | null
           id?: string
+          industry?: string | null
+          languages?: Json | null
           last_name?: string
           linkedin_url?: string | null
           major?: string | null
@@ -3848,9 +4262,12 @@ export type Database = {
           photo_url?: string | null
           role?: string | null
           school?: string | null
+          skills?: Json | null
           status?: Database["public"]["Enums"]["member_status"] | null
+          summary?: string | null
           updated_at?: string | null
           user_id?: string | null
+          work_history?: Json | null
         }
         Relationships: [
           {
@@ -4517,6 +4934,7 @@ export type Database = {
           competition_emails_enabled: boolean
           competition_push_enabled: boolean
           created_at: string | null
+          digest_push_enabled: boolean
           discussion_emails_enabled: boolean
           discussion_push_enabled: boolean
           donation_push_enabled: boolean
@@ -4526,11 +4944,18 @@ export type Database = {
           event_push_enabled: boolean
           event_reminder_push_enabled: boolean
           id: string
+          job_push_enabled: boolean
+          mention_push_enabled: boolean
           mentorship_emails_enabled: boolean
           mentorship_push_enabled: boolean
           organization_id: string
           phone_number: string | null
           push_enabled: boolean | null
+          quiet_hours_end: string
+          quiet_hours_start: string
+          quiet_hours_timezone: string
+          reaction_push_enabled: boolean
+          reengagement_push_enabled: boolean
           sms_enabled: boolean | null
           updated_at: string | null
           user_id: string
@@ -4544,6 +4969,7 @@ export type Database = {
           competition_emails_enabled?: boolean
           competition_push_enabled?: boolean
           created_at?: string | null
+          digest_push_enabled?: boolean
           discussion_emails_enabled?: boolean
           discussion_push_enabled?: boolean
           donation_push_enabled?: boolean
@@ -4553,11 +4979,18 @@ export type Database = {
           event_push_enabled?: boolean
           event_reminder_push_enabled?: boolean
           id?: string
+          job_push_enabled?: boolean
+          mention_push_enabled?: boolean
           mentorship_emails_enabled?: boolean
           mentorship_push_enabled?: boolean
           organization_id: string
           phone_number?: string | null
           push_enabled?: boolean | null
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          quiet_hours_timezone?: string
+          reaction_push_enabled?: boolean
+          reengagement_push_enabled?: boolean
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id: string
@@ -4571,6 +5004,7 @@ export type Database = {
           competition_emails_enabled?: boolean
           competition_push_enabled?: boolean
           created_at?: string | null
+          digest_push_enabled?: boolean
           discussion_emails_enabled?: boolean
           discussion_push_enabled?: boolean
           donation_push_enabled?: boolean
@@ -4580,11 +5014,18 @@ export type Database = {
           event_push_enabled?: boolean
           event_reminder_push_enabled?: boolean
           id?: string
+          job_push_enabled?: boolean
+          mention_push_enabled?: boolean
           mentorship_emails_enabled?: boolean
           mentorship_push_enabled?: boolean
           organization_id?: string
           phone_number?: string | null
           push_enabled?: boolean | null
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          quiet_hours_timezone?: string
+          reaction_push_enabled?: boolean
+          reengagement_push_enabled?: boolean
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
@@ -4883,6 +5324,80 @@ export type Database = {
           },
         ]
       }
+      org_member_role_audit: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          new_role: Database["public"]["Enums"]["user_role"]
+          new_status: Database["public"]["Enums"]["membership_status"]
+          organization_id: string
+          pending_action_id: string | null
+          previous_role: Database["public"]["Enums"]["user_role"]
+          previous_status: Database["public"]["Enums"]["membership_status"]
+          reason: string | null
+          source: string
+          target_user_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          new_role: Database["public"]["Enums"]["user_role"]
+          new_status: Database["public"]["Enums"]["membership_status"]
+          organization_id: string
+          pending_action_id?: string | null
+          previous_role: Database["public"]["Enums"]["user_role"]
+          previous_status: Database["public"]["Enums"]["membership_status"]
+          reason?: string | null
+          source: string
+          target_user_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          new_role?: Database["public"]["Enums"]["user_role"]
+          new_status?: Database["public"]["Enums"]["membership_status"]
+          organization_id?: string
+          pending_action_id?: string | null
+          previous_role?: Database["public"]["Enums"]["user_role"]
+          previous_status?: Database["public"]["Enums"]["membership_status"]
+          reason?: string | null
+          source?: string
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_member_role_audit_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_member_role_audit_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_member_role_audit_pending_action_id_fkey"
+            columns: ["pending_action_id"]
+            isOneToOne: false
+            referencedRelation: "ai_pending_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_member_role_audit_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_philanthropy_embeds: {
         Row: {
           created_at: string
@@ -5154,11 +5669,13 @@ export type Database = {
           default_language: string
           description: string | null
           discussion_post_roles: string[]
+          donation_eligible_ios: boolean
           donation_embed_url: string | null
           enterprise_adopted_at: string | null
           enterprise_id: string | null
           enterprise_nav_synced_at: string | null
           enterprise_relationship_type: string | null
+          event_settings: Json
           feed_post_roles: string[]
           hide_donor_names: boolean
           id: string
@@ -5187,11 +5704,13 @@ export type Database = {
           default_language?: string
           description?: string | null
           discussion_post_roles?: string[]
+          donation_eligible_ios?: boolean
           donation_embed_url?: string | null
           enterprise_adopted_at?: string | null
           enterprise_id?: string | null
           enterprise_nav_synced_at?: string | null
           enterprise_relationship_type?: string | null
+          event_settings?: Json
           feed_post_roles?: string[]
           hide_donor_names?: boolean
           id?: string
@@ -5220,11 +5739,13 @@ export type Database = {
           default_language?: string
           description?: string | null
           discussion_post_roles?: string[]
+          donation_eligible_ios?: boolean
           donation_embed_url?: string | null
           enterprise_adopted_at?: string | null
           enterprise_id?: string | null
           enterprise_nav_synced_at?: string | null
           enterprise_relationship_type?: string | null
+          event_settings?: Json
           feed_post_roles?: string[]
           hide_donor_names?: boolean
           id?: string
@@ -5309,55 +5830,97 @@ export type Database = {
       }
       parents: {
         Row: {
+          certifications: Json | null
           created_at: string
+          current_city: string | null
+          current_company: string | null
           deleted_at: string | null
+          education_history: Json | null
           email: string | null
           first_name: string
+          headline: string | null
           id: string
+          industry: string | null
+          job_title: string | null
+          languages: Json | null
           last_name: string
           linkedin_url: string | null
+          major: string | null
           notes: string | null
           organization_id: string
           phone_number: string | null
           photo_url: string | null
+          position_title: string | null
           relationship: string | null
+          school: string | null
+          skills: Json | null
           student_name: string | null
+          summary: string | null
           updated_at: string
           user_id: string | null
+          work_history: Json | null
         }
         Insert: {
+          certifications?: Json | null
           created_at?: string
+          current_city?: string | null
+          current_company?: string | null
           deleted_at?: string | null
+          education_history?: Json | null
           email?: string | null
           first_name: string
+          headline?: string | null
           id?: string
+          industry?: string | null
+          job_title?: string | null
+          languages?: Json | null
           last_name: string
           linkedin_url?: string | null
+          major?: string | null
           notes?: string | null
           organization_id: string
           phone_number?: string | null
           photo_url?: string | null
+          position_title?: string | null
           relationship?: string | null
+          school?: string | null
+          skills?: Json | null
           student_name?: string | null
+          summary?: string | null
           updated_at?: string
           user_id?: string | null
+          work_history?: Json | null
         }
         Update: {
+          certifications?: Json | null
           created_at?: string
+          current_city?: string | null
+          current_company?: string | null
           deleted_at?: string | null
+          education_history?: Json | null
           email?: string | null
           first_name?: string
+          headline?: string | null
           id?: string
+          industry?: string | null
+          job_title?: string | null
+          languages?: Json | null
           last_name?: string
           linkedin_url?: string | null
+          major?: string | null
           notes?: string | null
           organization_id?: string
           phone_number?: string | null
           photo_url?: string | null
+          position_title?: string | null
           relationship?: string | null
+          school?: string | null
+          skills?: Json | null
           student_name?: string | null
+          summary?: string | null
           updated_at?: string
           user_id?: string | null
+          work_history?: Json | null
         }
         Relationships: [
           {
@@ -5545,6 +6108,51 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          organization_id: string
+          target_id: string
+          target_kind: Database["public"]["Enums"]["reaction_target_kind"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: string
+          organization_id: string
+          target_id: string
+          target_kind: Database["public"]["Enums"]["reaction_target_kind"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          organization_id?: string
+          target_id?: string
+          target_kind?: Database["public"]["Enums"]["reaction_target_kind"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reactions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -6047,6 +6655,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_calendar_connections: {
         Row: {
           access_token_encrypted: string
@@ -6185,6 +6832,8 @@ export type Database = {
         Row: {
           access_token_encrypted: string
           created_at: string
+          enrichment_run_id: string | null
+          enrichment_status: string | null
           id: string
           last_synced_at: string | null
           linkedin_data: Json
@@ -6207,6 +6856,8 @@ export type Database = {
         Insert: {
           access_token_encrypted: string
           created_at?: string
+          enrichment_run_id?: string | null
+          enrichment_status?: string | null
           id?: string
           last_synced_at?: string | null
           linkedin_data?: Json
@@ -6229,6 +6880,8 @@ export type Database = {
         Update: {
           access_token_encrypted?: string
           created_at?: string
+          enrichment_run_id?: string | null
+          enrichment_status?: string | null
           id?: string
           last_synced_at?: string | null
           linkedin_data?: Json
@@ -6384,6 +7037,7 @@ export type Database = {
           email: string
           id: string
           language_override: string | null
+          last_active_at: string | null
           name: string | null
         }
         Insert: {
@@ -6392,6 +7046,7 @@ export type Database = {
           email: string
           id: string
           language_override?: string | null
+          last_active_at?: string | null
           name?: string | null
         }
         Update: {
@@ -6400,6 +7055,7 @@ export type Database = {
           email?: string
           id?: string
           language_override?: string | null
+          last_active_at?: string | null
           name?: string | null
         }
         Relationships: []
@@ -6924,25 +7580,66 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      dispatch_notification_jobs_lease: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          attempts: number
+          audience: string | null
+          body: string | null
+          category: string | null
+          created_at: string
+          data: Json
+          id: string
+          kind: string
+          last_error: string | null
+          leased_at: string | null
+          organization_id: string
+          priority: number
+          push_resource_id: string | null
+          push_type: string | null
+          scheduled_for: string
+          sent_at: string | null
+          status: string
+          target_user_ids: string[] | null
+          title: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notification_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       enrich_alumni_by_id: {
         Args: {
           p_alumni_id: string
+          p_certifications?: Json
           p_current_city?: string
           p_current_company?: string
           p_education_history?: Json
           p_headline?: string
+          p_industry?: string
           p_job_title?: string
+          p_languages?: Json
           p_major?: string
           p_organization_id: string
+          p_photo_url?: string
           p_position_title?: string
           p_school?: string
+          p_skills?: Json
           p_summary?: string
           p_work_history?: Json
         }
         Returns: Json
       }
       events_with_user_rsvp: {
-        Args: { p_limit?: number; p_offset?: number; p_org_id: string }
+        Args: {
+          p_from?: string
+          p_include_past?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_org_id: string
+        }
         Returns: {
           audience: string
           created_at: string
@@ -6965,6 +7662,21 @@ export type Database = {
           updated_at: string
           user_rsvp_status: string
         }[]
+      }
+      execute_member_role_change: {
+        Args: {
+          p_actor_user_id: string
+          p_new_role: Database["public"]["Enums"]["user_role"]
+          p_new_status: Database["public"]["Enums"]["membership_status"]
+          p_organization_id: string
+          p_pending_action_id: string
+          p_previous_role: Database["public"]["Enums"]["user_role"]
+          p_previous_status: Database["public"]["Enums"]["membership_status"]
+          p_reason: string
+          p_source: string
+          p_target_user_id: string
+        }
+        Returns: string
       }
       filter_announcement_ids_for_user: {
         Args: { p_announcement_ids: string[]; p_org_id: string }
@@ -7204,6 +7916,7 @@ export type Database = {
       purge_old_data_access_logs: { Args: never; Returns: number }
       purge_old_enterprise_audit_logs: { Args: never; Returns: number }
       purge_ops_events: { Args: never; Returns: Json }
+      record_user_activity: { Args: never; Returns: undefined }
       redeem_enterprise_invite: {
         Args: { p_code_or_token: string }
         Returns: Json
@@ -7324,16 +8037,21 @@ export type Database = {
       }
       sync_user_linkedin_enrichment: {
         Args: {
+          p_certifications?: Json
           p_current_city?: string
           p_current_company?: string
           p_education_history?: Json
           p_enrichment_json?: Json
           p_headline?: string
+          p_industry?: string
           p_job_title?: string
+          p_languages?: Json
           p_major?: string
           p_overwrite?: boolean
+          p_photo_url?: string
           p_position_title?: string
           p_school?: string
+          p_skills?: Json
           p_summary?: string
           p_user_id: string
           p_work_history?: Json
@@ -7349,6 +8067,7 @@ export type Database = {
         }
         Returns: Json
       }
+      toggle_block: { Args: { p_blocked_id: string }; Returns: Json }
       transition_member_to_alumni: {
         Args: { p_member_id: string; p_org_id: string; p_user_id: string }
         Returns: Json
@@ -7411,6 +8130,7 @@ export type Database = {
         | "client_error"
         | "auth_fail"
         | "rate_limited"
+      reaction_target_kind: "chat_message" | "discussion_reply" | "announcement"
       user_role:
         | "admin"
         | "member"
@@ -7592,6 +8312,11 @@ export const Constants = {
         "client_error",
         "auth_fail",
         "rate_limited",
+      ],
+      reaction_target_kind: [
+        "chat_message",
+        "discussion_reply",
+        "announcement",
       ],
       user_role: [
         "admin",

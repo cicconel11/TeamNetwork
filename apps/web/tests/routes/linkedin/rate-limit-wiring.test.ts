@@ -63,7 +63,7 @@ test("LinkedIn routes preserve rate-limit headers on handled responses", () => {
   }
 });
 
-test("Bright Data sync applies route limiting before the expensive provider call", () => {
+test("manual sync applies route limiting before the expensive provider call", () => {
   const source = readRoute("src/app/api/user/linkedin/bright-data-sync/route.ts");
 
   assert.ok(
@@ -71,7 +71,7 @@ test("Bright Data sync applies route limiting before the expensive provider call
     "rate limiting should happen before creating the service client"
   );
   assert.ok(
-    source.indexOf("userRateLimit") < source.lastIndexOf("performBrightDataSync"),
-    "user rate limiting should happen before Bright Data sync"
+    source.indexOf("userRateLimit") < source.lastIndexOf("performApifySync"),
+    "user rate limiting should happen before the sync call"
   );
 });

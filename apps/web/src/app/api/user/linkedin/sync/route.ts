@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   syncLinkedInProfile,
-  runBrightDataEnrichment,
+  runApifyEnrichment,
 } from "@/lib/linkedin/oauth";
 import { claimLinkedInResync } from "@/lib/linkedin/resync";
 import { getLinkedInProfileUrlForUser } from "@/lib/linkedin/settings";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  * POST /api/user/linkedin/sync
  *
  * Re-fetches the user's LinkedIn profile data using the stored access token
- * and updates the connection record. Triggers enrichment via Bright Data
+ * and updates the connection record. Triggers enrichment via Apify
  * if a LinkedIn URL is available.
  *
  * Admins can always sync their own profile regardless of the org toggle.
@@ -72,17 +72,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Best-effort enrichment via Bright Data
+    // Best-effort enrichment via Apify (async — results land via the webhook)
     const linkedinUrl = await getLinkedInProfileUrlForUser(serviceClient, user.id);
-    let enriched = false;
+    let enrichmentStarted = false;
 
     if (linkedinUrl) {
-      const enrichResult = await runBrightDataEnrichment(serviceClient, user.id, linkedinUrl);
-      enriched = enrichResult.enriched;
+      const enrichResult = await runApifyEnrichment(serviceClient, user.id, linkedinUrl);
+      enrichmentStarted = enrichResult.started;
     }
 
     return NextResponse.json({
-      message: enriched ? "LinkedIn profile synced and enriched" : "LinkedIn profile synced",
+      message: enrichmentStarted
+        ? "LinkedIn profile synced; enrichment in progress"
+        : "LinkedIn profile synced",
       remaining_syncs: claim.remaining ?? null,
     }, { headers: userRateLimit.headers });
   } catch (error) {

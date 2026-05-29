@@ -23,6 +23,11 @@ interface Alumni {
   linkedin_url: string | null;
   phone_number: string | null;
   notes: string | null;
+  headline: string | null;
+  summary: string | null;
+  skills: string[] | null;
+  certifications: Array<{ name: string | null; authority: string | null }> | null;
+  languages: string[] | null;
 }
 
 interface AlumniContactDrawerProps {
@@ -178,12 +183,13 @@ export function AlumniContactDrawer({ alumni, isOpen, onClose }: AlumniContactDr
             </section>
 
             {/* Career Information */}
-            {(alumni.current_company || position || alumni.industry) && (
+            {(alumni.current_company || position || alumni.industry || alumni.headline) && (
               <section>
                 <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
                   Career
                 </h4>
                 <div className="space-y-3">
+                  {alumni.headline && <DetailRow label="Headline" value={alumni.headline} />}
                   {position && <DetailRow label="Position" value={position} />}
                   {alumni.current_company && (
                     <DetailRow label="Company" value={alumni.current_company} />
@@ -194,6 +200,43 @@ export function AlumniContactDrawer({ alumni, isOpen, onClose }: AlumniContactDr
                 </div>
               </section>
             )}
+
+            {/* Skills & Expertise */}
+            {(alumni.skills?.length || alumni.languages?.length || alumni.summary) && (
+              <section>
+                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
+                  Skills &amp; Expertise
+                </h4>
+                <div className="space-y-3">
+                  {alumni.summary && <DetailRow label="Summary" value={alumni.summary} />}
+                  {alumni.skills?.length ? (
+                    <DetailRow label="Skills" value={alumni.skills.filter(Boolean).join(", ")} />
+                  ) : null}
+                  {alumni.languages?.length ? (
+                    <DetailRow label="Languages" value={alumni.languages.filter(Boolean).join(", ")} />
+                  ) : null}
+                </div>
+              </section>
+            )}
+
+            {/* Certifications */}
+            {alumni.certifications?.length ? (
+              <section>
+                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
+                  Certifications
+                </h4>
+                <div className="space-y-2">
+                  {alumni.certifications.map((cert, i) => (
+                    <div key={i} className="text-sm">
+                      <span className="text-foreground font-medium">{cert.name}</span>
+                      {cert.authority && (
+                        <span className="text-muted-foreground"> • {cert.authority}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {/* Education */}
             {(alumni.graduation_year || alumni.major) && (

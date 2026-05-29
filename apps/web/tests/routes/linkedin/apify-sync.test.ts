@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createSupabaseStub } from "../../utils/supabaseStub.ts";
-import { performBrightDataSync } from "@/lib/linkedin/resync";
+import { performApifySync } from "@/lib/linkedin/resync";
 
 const USER_ID = "33333333-3333-4333-8333-333333333333";
 const ORG_ID = "44444444-4444-4444-8444-444444444444";
@@ -28,7 +28,7 @@ function seedMembershipContext(
   }]);
 }
 
-test("performBrightDataSync succeeds for a URL-only member when Bright Data sync is enabled", async () => {
+test("performApifySync starts a run for a URL-only member when sync is enabled", async () => {
   const supabase = createSupabaseStub();
   seedMembershipContext(supabase);
   supabase.seed("members", [{
@@ -47,27 +47,26 @@ test("performBrightDataSync succeeds for a URL-only member when Bright Data sync
     return { success: true };
   });
 
-  const result = await performBrightDataSync(supabase as never, USER_ID, {
+  const result = await performApifySync(supabase as never, USER_ID, {
     isConfigured: () => true,
     runEnrichment: async (_client, userId, linkedinUrl) => {
       assert.equal(userId, USER_ID);
       assert.equal(linkedinUrl, LINKEDIN_URL);
-      return { enriched: true };
+      return { started: true, runId: "run_123" };
     },
   });
 
   assert.deepEqual(result, {
     status: 200,
     body: {
-      message: "LinkedIn data synced",
+      message: "LinkedIn sync started",
       remaining_syncs: 1,
     },
   });
   assert.equal(completedAttemptId, ATTEMPT_ID);
-  assert.deepEqual(supabase.getRows("user_linkedin_connections"), []);
 });
 
-test("performBrightDataSync allows admins even when the org toggle is disabled", async () => {
+test("performApifySync allows admins even when the org toggle is disabled", async () => {
   const supabase = createSupabaseStub();
   seedMembershipContext(supabase, { role: "admin", enabled: false });
   supabase.seed("alumni", [{
@@ -82,16 +81,16 @@ test("performBrightDataSync allows admins even when the org toggle is disabled",
   }));
   supabase.registerRpc("complete_linkedin_manual_sync", () => ({ success: true }));
 
-  const result = await performBrightDataSync(supabase as never, USER_ID, {
+  const result = await performApifySync(supabase as never, USER_ID, {
     isConfigured: () => true,
-    runEnrichment: async () => ({ enriched: true }),
+    runEnrichment: async () => ({ started: true, runId: "run_123" }),
   });
 
   assert.equal(result.status, 200);
-  assert.equal(result.body.message, "LinkedIn data synced");
+  assert.equal(result.body.message, "LinkedIn sync started");
 });
 
-test("performBrightDataSync rejects non-admin members when the org toggle is disabled", async () => {
+test("performApifySync rejects non-admin members when the org toggle is disabled", async () => {
   const supabase = createSupabaseStub();
   seedMembershipContext(supabase, { enabled: false });
   supabase.seed("parents", [{
@@ -100,9 +99,9 @@ test("performBrightDataSync rejects non-admin members when the org toggle is dis
     deleted_at: null,
   }]);
 
-  const result = await performBrightDataSync(supabase as never, USER_ID, {
+  const result = await performApifySync(supabase as never, USER_ID, {
     isConfigured: () => true,
-    runEnrichment: async () => ({ enriched: true }),
+    runEnrichment: async () => ({ started: true }),
   });
 
   assert.deepEqual(result, {
@@ -114,13 +113,13 @@ test("performBrightDataSync rejects non-admin members when the org toggle is dis
   });
 });
 
-test("performBrightDataSync rejects users without a saved LinkedIn profile URL", async () => {
+test("performApifySync rejects users without a saved LinkedIn profile URL", async () => {
   const supabase = createSupabaseStub();
   seedMembershipContext(supabase);
 
-  const result = await performBrightDataSync(supabase as never, USER_ID, {
+  const result = await performApifySync(supabase as never, USER_ID, {
     isConfigured: () => true,
-    runEnrichment: async () => ({ enriched: true }),
+    runEnrichment: async () => ({ started: true }),
   });
 
   assert.deepEqual(result, {
@@ -131,7 +130,7 @@ test("performBrightDataSync rejects users without a saved LinkedIn profile URL",
   });
 });
 
-test("performBrightDataSync returns 429 when the monthly quota is exhausted", async () => {
+test("performApifySync returns 429 when the monthly quota is exhausted", async () => {
   const supabase = createSupabaseStub();
   seedMembershipContext(supabase);
   supabase.seed("members", [{
@@ -144,9 +143,9 @@ test("performBrightDataSync returns 429 when the monthly quota is exhausted", as
     reason: "rate_limited",
   }));
 
-  const result = await performBrightDataSync(supabase as never, USER_ID, {
+  const result = await performApifySync(supabase as never, USER_ID, {
     isConfigured: () => true,
-    runEnrichment: async () => ({ enriched: true }),
+    runEnrichment: async () => ({ started: true }),
   });
 
   assert.deepEqual(result, {
@@ -158,7 +157,7 @@ test("performBrightDataSync returns 429 when the monthly quota is exhausted", as
   });
 });
 
-test("performBrightDataSync returns 503 when Bright Data is not configured", async () => {
+test("performApifySync returns 503 when enrichment is not configured", async () => {
   const supabase = createSupabaseStub();
   seedMembershipContext(supabase);
   supabase.seed("members", [{
@@ -167,20 +166,20 @@ test("performBrightDataSync returns 503 when Bright Data is not configured", asy
     deleted_at: null,
   }]);
 
-  const result = await performBrightDataSync(supabase as never, USER_ID, {
+  const result = await performApifySync(supabase as never, USER_ID, {
     isConfigured: () => false,
-    runEnrichment: async () => ({ enriched: true }),
+    runEnrichment: async () => ({ started: true }),
   });
 
   assert.deepEqual(result, {
     status: 503,
     body: {
-      error: "Bright Data sync is not configured in this environment.",
+      error: "LinkedIn sync is not configured in this environment.",
     },
   });
 });
 
-test("performBrightDataSync keeps upstream Bright Data failures as 502 with a stable error", async () => {
+test("performApifySync keeps upstream provider failures as 502 and releases the reservation", async () => {
   const supabase = createSupabaseStub();
   seedMembershipContext(supabase);
   supabase.seed("members", [{
@@ -199,26 +198,26 @@ test("performBrightDataSync keeps upstream Bright Data failures as 502 with a st
     return { success: true };
   });
 
-  const result = await performBrightDataSync(supabase as never, USER_ID, {
+  const result = await performApifySync(supabase as never, USER_ID, {
     isConfigured: () => true,
     runEnrichment: async () => ({
-      enriched: false,
+      started: false,
       failureKind: "upstream_error",
-      error: "Bright Data rejected the profile lookup.",
+      error: "Apify rejected the run request.",
     }),
   });
 
   assert.deepEqual(result, {
     status: 502,
     body: {
-      error: "Bright Data rejected the profile lookup.",
+      error: "Apify rejected the run request.",
       remaining_syncs: 1,
     },
   });
   assert.equal(releasedAttemptId, ATTEMPT_ID);
 });
 
-test("performBrightDataSync treats provider-level Bright Data access failures as 503 and releases the reservation", async () => {
+test("performApifySync treats provider access failures as 503 and releases the reservation", async () => {
   const supabase = createSupabaseStub();
   seedMembershipContext(supabase);
   supabase.seed("members", [{
@@ -237,19 +236,19 @@ test("performBrightDataSync treats provider-level Bright Data access failures as
     return { success: true };
   });
 
-  const result = await performBrightDataSync(supabase as never, USER_ID, {
+  const result = await performApifySync(supabase as never, USER_ID, {
     isConfigured: () => true,
     runEnrichment: async () => ({
-      enriched: false,
+      started: false,
       failureKind: "provider_unavailable",
-      error: "Bright Data LinkedIn Profiles API is unavailable for the configured account.",
+      error: "Apify actor not found.",
     }),
   });
 
   assert.deepEqual(result, {
     status: 503,
     body: {
-      error: "Bright Data LinkedIn Profiles API is unavailable for the configured account.",
+      error: "Apify actor not found.",
       remaining_syncs: 1,
     },
   });

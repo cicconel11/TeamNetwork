@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { performBrightDataSync } from "@/lib/linkedin/resync";
+import { performApifySync } from "@/lib/linkedin/resync";
 import { buildRateLimitResponse, checkRateLimit } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     if (!userRateLimit.ok) return buildRateLimitResponse(userRateLimit);
 
     const serviceClient = createServiceClient();
-    const result = await performBrightDataSync(serviceClient, user.id);
+    const result = await performApifySync(serviceClient, user.id);
 
     return NextResponse.json(result.body, { status: result.status, headers: userRateLimit.headers });
   } catch (error) {

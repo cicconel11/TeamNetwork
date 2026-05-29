@@ -26,7 +26,63 @@ const FIELD_LABELS: Record<string, string> = {
   linkedin_url: "LinkedIn URL",
   notes: "Notes",
   birth_year: "Year of Birth",
+  headline: "Headline",
+  summary: "Summary",
+  skills: "Skills",
+  certifications: "Certifications",
+  languages: "Languages",
+  work_history: "Work History",
+  education_history: "Education History",
 };
+
+// Enrichment list/object columns are serialized to readable single-cell strings
+// (escapeCsvCell only String()s values, so raw arrays/objects would be useless).
+function serializeStringList(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  return value.filter((v) => typeof v === "string" && v.trim()).join(", ");
+}
+
+function serializeCertifications(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((c) => {
+      const cert = c as { name?: unknown; authority?: unknown };
+      const name = typeof cert.name === "string" ? cert.name : "";
+      const authority = typeof cert.authority === "string" ? cert.authority : "";
+      if (name && authority) return `${name} (${authority})`;
+      return name || authority;
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
+function serializeWorkHistory(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((e) => {
+      const exp = e as { title?: unknown; company?: unknown };
+      const title = typeof exp.title === "string" ? exp.title : "";
+      const company = typeof exp.company === "string" ? exp.company : "";
+      if (title && company) return `${title} at ${company}`;
+      return title || company;
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
+function serializeEducationHistory(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((e) => {
+      const edu = e as { school?: unknown; degree?: unknown };
+      const school = typeof edu.school === "string" ? edu.school : "";
+      const degree = typeof edu.degree === "string" ? edu.degree : "";
+      if (school && degree) return `${school} (${degree})`;
+      return school || degree;
+    })
+    .filter(Boolean)
+    .join("; ");
+}
 
 const alumniExportSchema = z.object({
   format: z.enum(["csv"]).default("csv"),
@@ -131,7 +187,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Build query
   let query = ctx.serviceSupabase
     .from("alumni")
-    .select("id, organization_id, first_name, last_name, email, phone_number, photo_url, linkedin_url, notes, graduation_year, birth_year, major, industry, current_company, current_city, position_title, job_title")
+    .select("id, organization_id, first_name, last_name, email, phone_number, photo_url, linkedin_url, notes, graduation_year, birth_year, major, industry, current_company, current_city, position_title, job_title, headline, summary, skills, certifications, languages, work_history, education_history")
     .in("organization_id", orgIds)
     .is("deleted_at", null);
 
@@ -206,6 +262,13 @@ export async function GET(req: Request, { params }: RouteParams) {
     current_city: alum.current_city,
     position_title: alum.position_title,
     job_title: alum.job_title,
+    headline: alum.headline,
+    summary: alum.summary,
+    skills: serializeStringList(alum.skills),
+    certifications: serializeCertifications(alum.certifications),
+    languages: serializeStringList(alum.languages),
+    work_history: serializeWorkHistory(alum.work_history),
+    education_history: serializeEducationHistory(alum.education_history),
     organization_name: orgMap.get(alum.organization_id) ?? "Unknown",
   }));
 

@@ -5,7 +5,7 @@ import { getManualLinkedInSyncState } from "@/lib/linkedin/manual-sync-state";
 test("manual LinkedIn sync state is visible and enabled for a valid saved URL with remaining quota", () => {
   const state = getManualLinkedInSyncState({
     linkedInUrl: "https://www.linkedin.com/in/jane-doe",
-    brightDataConfigured: true,
+    enrichmentConfigured: true,
     resyncEnabled: true,
     resyncIsAdmin: false,
     resyncRemaining: 2,
@@ -22,7 +22,7 @@ test("manual LinkedIn sync state is visible and enabled for a valid saved URL wi
 test("manual LinkedIn sync state stays visible but disabled when the org does not allow re-sync", () => {
   const state = getManualLinkedInSyncState({
     linkedInUrl: "https://www.linkedin.com/in/jane-doe",
-    brightDataConfigured: true,
+    enrichmentConfigured: true,
     resyncEnabled: false,
     resyncIsAdmin: false,
     resyncRemaining: 2,
@@ -39,7 +39,7 @@ test("manual LinkedIn sync state stays visible but disabled when the org does no
 test("manual LinkedIn sync state is hidden when no valid saved LinkedIn URL exists", () => {
   const state = getManualLinkedInSyncState({
     linkedInUrl: "",
-    brightDataConfigured: true,
+    enrichmentConfigured: true,
     resyncEnabled: true,
     resyncIsAdmin: false,
     resyncRemaining: 2,
@@ -56,7 +56,7 @@ test("manual LinkedIn sync state is hidden when no valid saved LinkedIn URL exis
 test("manual LinkedIn sync state disables the action when quota is exhausted", () => {
   const state = getManualLinkedInSyncState({
     linkedInUrl: "https://www.linkedin.com/in/jane-doe",
-    brightDataConfigured: true,
+    enrichmentConfigured: true,
     resyncEnabled: true,
     resyncIsAdmin: false,
     resyncRemaining: 0,
@@ -70,10 +70,10 @@ test("manual LinkedIn sync state disables the action when quota is exhausted", (
   });
 });
 
-test("manual LinkedIn sync state disables the action when Bright Data is unavailable", () => {
+test("manual LinkedIn sync state disables the action when enrichment is unavailable", () => {
   const state = getManualLinkedInSyncState({
     linkedInUrl: "https://www.linkedin.com/in/jane-doe",
-    brightDataConfigured: false,
+    enrichmentConfigured: false,
     resyncEnabled: true,
     resyncIsAdmin: false,
     resyncRemaining: 1,
@@ -83,6 +83,6 @@ test("manual LinkedIn sync state disables the action when Bright Data is unavail
   assert.deepEqual(state, {
     visible: true,
     disabled: true,
-    helperText: "Bright Data sync is not configured in this environment.",
+    helperText: "LinkedIn sync is not configured in this environment.",
   });
 });

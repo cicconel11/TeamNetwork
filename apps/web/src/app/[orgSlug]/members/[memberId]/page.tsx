@@ -87,7 +87,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
     }
   }
 
-  // Extract enrichment data from LinkedIn connection (stored by Bright Data sync)
+  // Extract enrichment data from LinkedIn connection (stored by Apify sync)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const linkedinData = (enrichmentResult as any)?.data?.linkedin_data;
   const enrichment = linkedinData?.enrichment;

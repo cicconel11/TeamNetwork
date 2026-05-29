@@ -286,6 +286,7 @@ export default function ThreadDetailScreen() {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       deleted_at: null,
+      mentioned_user_ids: [],
       author: user
         ? { id: user.id, name: user.email || "Unknown", avatar_url: null }
         : undefined,

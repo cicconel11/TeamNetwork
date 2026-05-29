@@ -5,10 +5,6 @@ import {
   getLinkedInConnectionSource,
   type LinkedInConnectionSource,
 } from "@/lib/linkedin/connection-source";
-import {
-  mapBrightDataToFields,
-  type BrightDataProfileResult,
-} from "@/lib/linkedin/bright-data";
 
 type LinkedInProfileTable = "members" | "alumni" | "parents";
 
@@ -17,6 +13,8 @@ export interface LinkedInEnrichmentInfo {
   currentCompany: string | null;
   school: string | null;
 }
+
+export type LinkedInEnrichmentStatus = "pending" | "syncing" | "enriched" | "failed";
 
 export interface LinkedInStatusConnection {
   source: LinkedInConnectionSource;
@@ -27,6 +25,8 @@ export interface LinkedInStatusConnection {
   lastSyncAt: string | null;
   syncError: string | null;
   enrichment: LinkedInEnrichmentInfo | null;
+  /** Async Apify run state, tracked on user_linkedin_connections. */
+  enrichmentStatus: LinkedInEnrichmentStatus | null;
 }
 
 export interface LinkedInStatusResult {
@@ -115,29 +115,36 @@ export async function getLinkedInStatusForUser(
     throw new Error(`Failed to fetch LinkedIn connection: ${connectionError.message}`);
   }
 
-  // Extract enrichment data from linkedin_data JSONB if present
+  // Extract enrichment data from linkedin_data JSONB if present. Tolerant of the
+  // current Apify shape (`experience` singular) and historical payloads — legacy
+  // ProxyCurl (`experiences` plural) and the former Bright Data shape.
   let enrichment: LinkedInEnrichmentInfo | null = null;
   if (connectionRow?.linkedin_data?.enrichment) {
-    const raw = connectionRow.linkedin_data.enrichment;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = connectionRow.linkedin_data.enrichment as any;
 
-    // Detect legacy ProxyCurl format (uses `experiences` plural) vs Bright Data (`experience` singular)
-    const isLegacyFormat = Array.isArray(raw.experiences);
-
-    if (isLegacyFormat) {
-      const currentJob = (raw.experiences as Array<{ ends_at: unknown; title: string | null; company: string | null }>)
-        ?.find((e) => !e.ends_at) ?? raw.experiences?.[0];
-      const latestEdu = (raw.education as Array<{ school: string | null }>)?.[0];
+    if (Array.isArray(raw.experiences)) {
+      // Legacy ProxyCurl
+      const currentJob =
+        raw.experiences.find((e: { ends_at?: unknown }) => !e.ends_at) ?? raw.experiences[0];
+      const latestEdu = raw.education?.[0];
       enrichment = {
         jobTitle: currentJob?.title || raw.occupation || null,
         currentCompany: currentJob?.company || null,
         school: latestEdu?.school || null,
       };
     } else {
-      const fields = mapBrightDataToFields(raw as BrightDataProfileResult);
+      // Apify (and former Bright Data) — `experience` singular
+      const experiences = Array.isArray(raw.experience) ? raw.experience : [];
+      const currentJob =
+        experiences.find(
+          (e: { end_date?: string | null }) => !e.end_date || e.end_date === "Present",
+        ) ?? experiences[0];
+      const latestEdu = Array.isArray(raw.education) ? raw.education[0] : null;
       enrichment = {
-        jobTitle: fields.job_title,
-        currentCompany: fields.current_company,
-        school: fields.school,
+        jobTitle: currentJob?.title || raw.headline || raw.position || null,
+        currentCompany: raw.current_company || raw.current_company_name || currentJob?.company || null,
+        school: latestEdu?.school || latestEdu?.title || raw.educations_details || null,
       };
     }
   }
@@ -152,6 +159,7 @@ export async function getLinkedInStatusForUser(
         lastSyncAt: connectionRow.last_synced_at || null,
         syncError: connectionRow.sync_error || null,
         enrichment,
+        enrichmentStatus: (connectionRow.enrichment_status as LinkedInEnrichmentStatus | null) ?? null,
       }
     : null;
 

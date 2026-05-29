@@ -142,5 +142,6 @@ test("status helper marks OIDC-only rows as oidc_login instead of OAuth connecti
     lastSyncAt: "2026-03-12T12:00:00.000Z",
     syncError: null,
     enrichment: null,
+    enrichmentStatus: null,
   });
 });

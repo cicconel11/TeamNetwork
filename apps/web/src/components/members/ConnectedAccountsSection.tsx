@@ -56,14 +56,13 @@ function ConnectedAccountsSectionContent({
           isConnected={linkedIn.isConnected}
           connectionLoading={linkedIn.connectionLoading}
           oauthAvailable={linkedIn.oauthAvailable}
-          brightDataConfigured={linkedIn.brightDataConfigured}
+          enrichmentConfigured={linkedIn.enrichmentConfigured}
           resyncEnabled={linkedIn.resyncEnabled}
           resyncIsAdmin={linkedIn.resyncIsAdmin}
           resyncRemaining={linkedIn.resyncRemaining}
           resyncMaxPerMonth={linkedIn.resyncMaxPerMonth}
           onConnect={linkedIn.onConnect}
-          onOauthSync={linkedIn.onOauthSync}
-          onBrightDataSync={linkedIn.onBrightDataSync}
+          onSync={linkedIn.onSync}
           onDisconnect={linkedIn.onDisconnect}
         />
         <GoogleCalendarSyncPanel

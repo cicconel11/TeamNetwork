@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getLinkedInIntegrationStatus } from "@/lib/linkedin/config.server";
-import { isBrightDataConfigured } from "@/lib/linkedin/bright-data";
+import { isApifyConfigured } from "@/lib/linkedin/apify";
 import { getLinkedInResyncStatus } from "@/lib/linkedin/resync";
 import { getLinkedInStatusForUser } from "@/lib/linkedin/settings";
 
@@ -36,7 +36,7 @@ export async function GET() {
       connection: status.connection,
       integration: {
         oauthAvailable: integration.oauthAvailable,
-        brightDataConfigured: isBrightDataConfigured(),
+        enrichmentConfigured: isApifyConfigured(),
         reason: integration.reason,
       },
       resync: {

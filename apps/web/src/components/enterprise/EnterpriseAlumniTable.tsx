@@ -23,6 +23,11 @@ interface Alumni {
   linkedin_url: string | null;
   phone_number: string | null;
   notes: string | null;
+  headline: string | null;
+  summary: string | null;
+  skills: string[] | null;
+  certifications: Array<{ name: string | null; authority: string | null }> | null;
+  languages: string[] | null;
 }
 
 interface EnterpriseAlumniTableProps {

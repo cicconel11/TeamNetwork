@@ -430,6 +430,7 @@ export default function ChatRoomScreen() {
       edited_at: null,
       created_at: new Date().toISOString(),
       deleted_at: null,
+      mentioned_user_ids: mentionedUserIds,
       author: currentUser ?? undefined,
     };
     setMessages((prev) => [...prev, optimisticMessage]);

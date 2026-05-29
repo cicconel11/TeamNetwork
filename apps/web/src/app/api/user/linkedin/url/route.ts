@@ -5,7 +5,7 @@ import {
   parseLinkedInUrlPatchBody,
   saveLinkedInUrlForUser,
 } from "@/lib/linkedin/settings";
-import { runBrightDataEnrichment } from "@/lib/linkedin/oauth";
+import { runApifyEnrichment } from "@/lib/linkedin/oauth";
 import { buildRateLimitResponse, checkRateLimit } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * PATCH /api/user/linkedin/url
  *
  * Saves a LinkedIn profile URL to the user's member and alumni records
- * across all organizations. Triggers Bright Data enrichment if a URL is provided.
+ * across all organizations. Triggers Apify enrichment if a URL is provided.
  */
 export async function PATCH(request: Request) {
   try {
@@ -66,9 +66,9 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Best-effort enrichment when a URL is saved
+    // Best-effort enrichment when a URL is saved (async — results land via the webhook)
     if (parsedBody.linkedinUrl) {
-      await runBrightDataEnrichment(serviceClient, user.id, parsedBody.linkedinUrl);
+      await runApifyEnrichment(serviceClient, user.id, parsedBody.linkedinUrl);
     }
 
     return NextResponse.json({ success: true }, { headers: userRateLimit.headers });
