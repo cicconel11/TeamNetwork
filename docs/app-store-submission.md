@@ -14,9 +14,9 @@ use the credentials below.
 Test account
   Email:    test-reviewer@myteamnetwork.com
   Password: [fill in — set during signup]
-  Orgs:     Apple Review Test Org (donation_eligible_ios = true, admin)
-            Test Org (admin)
-            TeamNetwork founders org (read-only)
+  Orgs:     Apple Review Test Org (donation_eligible_ios = true, admin) — fully populated, every feature tab
+            CHSFL - Test Organization (admin) — real org, large roster
+            TeamNetwork founders org (active_member)
 
 Payment flows covered by Apple's exemptions, not StoreKit:
 
@@ -115,8 +115,9 @@ Ops-side gates:
       via Supabase Dashboard → Authentication → Users → Add user, with
       **Auto Confirm User** checked (no inbox access needed — does not email).
       Then run `supabase/seed-apple-reviewer.sql` in the prod SQL editor with
-      `v_founders_slug` set. Grants the three orgs above incl. the
-      `donation_eligible_ios = true` org.
+      `v_founders_slug` and `v_chsfl_slug` set. Grants the three orgs above
+      (incl. the `donation_eligible_ios = true` org) and fully populates the
+      review org's feature tabs.
 - [ ] 30s demo video recorded showing: open app → donate via Apple Pay →
       add receipt to Wallet → add member card to Wallet
 - [ ] All store screenshots regenerated at 6.7", 6.5", 5.5", 12.9"
