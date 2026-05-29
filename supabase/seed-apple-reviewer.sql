@@ -47,6 +47,7 @@ DECLARE
   v_review_org_id  uuid;
   v_test_org_id    uuid;
   v_founders_id    uuid;
+  v_org_id         uuid;  -- loop var for seeding demo content
 BEGIN
   -- ---- Resolve reviewer user ----
   SELECT id INTO v_user_id FROM auth.users WHERE email = v_reviewer_email;
@@ -115,6 +116,59 @@ BEGIN
   ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role;
   RAISE NOTICE 'Added reviewer to founders org % as %', v_founders_slug, v_founders_role;
 
+  -- ============================================================
+  -- Demo content for the two SEEDED test orgs only, so the reviewer can
+  -- actually test through them (directory, calendar, feed, discussions)
+  -- instead of seeing empty shells. The founders org is never touched.
+  --
+  -- members + events need no auth user (user_id nullable / not required).
+  -- feed_posts + discussion_threads require author_id -> auth.users, so they
+  -- are authored by the reviewer (a real auth user in both orgs).
+  -- All inserts guarded so re-running does not duplicate.
+  -- ============================================================
+  FOREACH v_org_id IN ARRAY ARRAY[v_review_org_id, v_test_org_id]
+  LOOP
+    -- Demo directory members (standalone, non-auth people)
+    IF NOT EXISTS (
+      SELECT 1 FROM members WHERE organization_id = v_org_id AND email = 'jordan.demo@example.com'
+    ) THEN
+      INSERT INTO members (organization_id, first_name, last_name, email, role, status) VALUES
+        (v_org_id, 'Jordan', 'Avery',  'jordan.demo@example.com',  'active_member', 'active'),
+        (v_org_id, 'Riley',  'Chen',   'riley.demo@example.com',   'active_member', 'active'),
+        (v_org_id, 'Sam',    'Delgado','sam.demo@example.com',     'alumni',        'active'),
+        (v_org_id, 'Casey',  'Okafor', 'casey.demo@example.com',   'active_member', 'active');
+    END IF;
+
+    -- Demo calendar events (one upcoming, one further out)
+    IF NOT EXISTS (
+      SELECT 1 FROM events WHERE organization_id = v_org_id AND title = 'Team Practice'
+    ) THEN
+      INSERT INTO events (organization_id, title, description, start_date, end_date, location, event_type) VALUES
+        (v_org_id, 'Team Practice', 'Weekly practice session.',
+         now() + interval '2 days', now() + interval '2 days 2 hours', 'Main Field', 'practice'),
+        (v_org_id, 'Alumni Mixer', 'Casual evening meetup for members and alumni.',
+         now() + interval '10 days', now() + interval '10 days 3 hours', 'Clubhouse', 'social');
+    END IF;
+
+    -- Demo feed post (authored by reviewer)
+    IF NOT EXISTS (
+      SELECT 1 FROM feed_posts WHERE organization_id = v_org_id AND author_id = v_user_id
+    ) THEN
+      INSERT INTO feed_posts (organization_id, author_id, body)
+      VALUES (v_org_id, v_user_id, 'Welcome to the org! Check the calendar for upcoming events.');
+    END IF;
+
+    -- Demo discussion thread (authored by reviewer)
+    IF NOT EXISTS (
+      SELECT 1 FROM discussion_threads WHERE organization_id = v_org_id AND author_id = v_user_id
+    ) THEN
+      INSERT INTO discussion_threads (organization_id, author_id, title, body)
+      VALUES (v_org_id, v_user_id, 'Introductions', 'Say hi and tell the group what you are working on.');
+    END IF;
+
+    RAISE NOTICE 'Seeded demo content for org %', v_org_id;
+  END LOOP;
+
   RAISE NOTICE 'SUCCESS: % is now in 3 orgs (Apple Review Test Org=admin, Test Org=admin, %=%)',
     v_reviewer_email, v_founders_slug, v_founders_role;
 END
@@ -134,9 +188,15 @@ WHERE u.email = 'test-reviewer@myteamnetwork.com'  -- keep in sync with v_review
 ORDER BY o.name;
 
 -- =====================================================
--- ROLLBACK (removes reviewer's memberships + the two seeded test orgs;
--- never touches the real founders org's data):
+-- ROLLBACK (removes reviewer's memberships, the seeded demo content, and the
+-- two seeded test orgs; never touches the real founders org's data):
 --
+--   -- demo content in the two seeded orgs
+--   DELETE FROM feed_posts        WHERE organization_id IN (SELECT id FROM organizations WHERE slug IN ('apple-review-test-org','apple-review-demo-org'));
+--   DELETE FROM discussion_threads WHERE organization_id IN (SELECT id FROM organizations WHERE slug IN ('apple-review-test-org','apple-review-demo-org'));
+--   DELETE FROM events            WHERE organization_id IN (SELECT id FROM organizations WHERE slug IN ('apple-review-test-org','apple-review-demo-org'));
+--   DELETE FROM members           WHERE organization_id IN (SELECT id FROM organizations WHERE slug IN ('apple-review-test-org','apple-review-demo-org'));
+--   -- memberships (all orgs incl. founders) + the seeded orgs themselves
 --   DELETE FROM user_organization_roles
 --   WHERE user_id = (SELECT id FROM auth.users WHERE email = 'test-reviewer@myteamnetwork.com');
 --   DELETE FROM organizations WHERE slug IN ('apple-review-test-org', 'apple-review-demo-org');
