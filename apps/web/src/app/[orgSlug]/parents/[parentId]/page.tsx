@@ -8,7 +8,7 @@ import { getOrgContext, getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Organization } from "@/types/database";
-import { LinkedInProfileLink } from "@/components/shared";
+import { LinkedInProfileLink, EnrichmentSections, EnrichmentHistory } from "@/components/shared";
 
 interface ParentRow {
   id: string;
@@ -25,6 +25,15 @@ interface ParentRow {
   relationship: string | null;
   created_at: string;
   deleted_at: string | null;
+  // LinkedIn enrichment (populated by Apify sync)
+  headline: string | null;
+  summary: string | null;
+  industry: string | null;
+  work_history: unknown;
+  education_history: unknown;
+  skills: unknown;
+  certifications: unknown;
+  languages: unknown;
 }
 
 interface ParentDetailPageProps {
@@ -174,6 +183,9 @@ export default async function ParentDetailPage({ params }: ParentDetailPageProps
                     Parent of {parent.student_name}
                   </p>
                 )}
+                {parent.headline && (
+                  <p className="text-muted-foreground text-sm mt-0.5 line-clamp-2">{parent.headline}</p>
+                )}
               </div>
             </div>
 
@@ -183,6 +195,7 @@ export default async function ParentDetailPage({ params }: ParentDetailPageProps
                 <Badge variant="primary">{parent.relationship}</Badge>
               )}
               <Badge variant="muted">Parent</Badge>
+              {parent.industry && <Badge variant="muted">{parent.industry}</Badge>}
             </div>
 
             {/* Contact actions */}
@@ -228,6 +241,32 @@ export default async function ParentDetailPage({ params }: ParentDetailPageProps
             <p className="text-foreground/80 text-sm leading-relaxed whitespace-pre-wrap">{parent.notes}</p>
           </Card>
         )}
+
+        {/* ─── About (LinkedIn summary) ─── */}
+        {parent.summary && (
+          <Card className="p-6">
+            <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+              <svg className="h-5 w-5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+              About
+            </h3>
+            <p className="text-foreground/80 text-sm leading-relaxed whitespace-pre-wrap">{parent.summary}</p>
+          </Card>
+        )}
+
+        {/* ─── Experience / Education ─── */}
+        <EnrichmentHistory
+          workHistory={parent.work_history}
+          educationHistory={parent.education_history}
+        />
+
+        {/* ─── Skills / Certifications / Languages ─── */}
+        <EnrichmentSections
+          skills={parent.skills}
+          certifications={parent.certifications}
+          languages={parent.languages}
+        />
 
         {/* ─── Details ─── */}
         <Card className="p-6">

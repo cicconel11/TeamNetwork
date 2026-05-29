@@ -6,9 +6,11 @@ import {
   getApifyProfileUrlKey,
 } from "@/lib/linkedin/apify";
 
-// Mirrors the dev_fusion/linkedin-profile-scraper output shape that
-// normalizeApifyItem targets. Exercises the richer fields added in the Apify
-// migration (skills, certifications, languages, photo, industry).
+// Mirrors the REAL dev_fusion/linkedin-profile-scraper output shape (verified
+// against a live run): per-entry `logo`, `jobLocation`/`jobStartedOn`/
+// `jobEndedOn`/`jobDescription` on experiences; `title`/`subtitle`/`period`/
+// `logo` on educations; `skills` as `[{title}]`; `licenseAndCertificates` with
+// title/subtitle/caption/logo.
 const APIFY_ITEM = {
   linkedinUrl: "https://www.linkedin.com/in/jane-doe/",
   fullName: "Jane Doe",
@@ -16,7 +18,7 @@ const APIFY_ITEM = {
   lastName: "Doe",
   headline: "Staff Engineer at Acme",
   about: "Builds reliable systems.",
-  industry: "Software Development",
+  companyIndustry: "Software Development",
   companyName: "Acme",
   addressWithoutCountry: "San Francisco, California",
   profilePicHighQuality: "https://media.licdn.com/photo/jane.jpg",
@@ -24,29 +26,43 @@ const APIFY_ITEM = {
     {
       title: "Staff Engineer",
       companyName: "Acme",
-      location: "San Francisco",
-      startDate: "2022",
-      endDate: null,
-      description: "<p>Leads platform work.</p>",
+      logo: "https://media.licdn.com/company/acme.png",
+      jobLocation: "San Francisco",
+      jobStartedOn: "2022",
+      jobEndedOn: null,
+      jobStillWorking: true,
+      jobDescription: "<p>Leads platform work.</p>",
     },
     {
       title: "Senior Engineer",
       companyName: "Globex",
-      startDate: "2018",
-      endDate: "2022",
+      logo: "https://media.licdn.com/company/globex.png",
+      jobStartedOn: "2018",
+      jobEndedOn: "2022",
     },
   ],
   educations: [
-    { title: "MIT", degree: "BSc", fieldOfStudy: "Computer Science", startYear: "2014", endYear: "2018" },
+    {
+      title: "MIT",
+      logo: "https://media.licdn.com/school/mit.png",
+      subtitle: "BSc, Computer Science, Minor in Math",
+      period: { startedOn: "2014", endedOn: "2018" },
+      description: "Dean's list.",
+    },
   ],
-  skills: ["TypeScript", "Distributed Systems", { name: "Postgres" }],
+  skills: [{ title: "TypeScript" }, { title: "Distributed Systems" }, { name: "Postgres" }],
   licenseAndCertificates: [
-    { title: "AWS Solutions Architect", authority: "Amazon Web Services" },
+    {
+      title: "AWS Solutions Architect",
+      subtitle: "Amazon Web Services",
+      caption: "Issued Jan 2021",
+      logo: "https://media.licdn.com/cert/aws.png",
+    },
   ],
-  languages: ["English", "Spanish"],
+  languages: [{ title: "English" }, { title: "Spanish" }],
 };
 
-test("normalizeApifyItem maps the actor payload into the neutral profile shape", () => {
+test("normalizeApifyItem maps the real dev_fusion payload into the neutral profile shape", () => {
   const profile = normalizeApifyItem(APIFY_ITEM);
   assert.ok(profile);
   assert.equal(profile.name, "Jane Doe");
@@ -56,17 +72,41 @@ test("normalizeApifyItem maps the actor payload into the neutral profile shape",
   assert.equal(profile.current_company, "Acme");
   assert.equal(profile.city, "San Francisco, California");
   assert.equal(profile.photo_url, "https://media.licdn.com/photo/jane.jpg");
+
+  // Experience: company logo, location, dates, and sanitized description.
   assert.equal(profile.experience.length, 2);
-  // Rich HTML descriptions are sanitized to plain text.
-  assert.equal(profile.experience[0].description, "Leads platform work.");
+  const [current] = profile.experience;
+  assert.equal(current.title, "Staff Engineer");
+  assert.equal(current.company, "Acme");
+  assert.equal(current.company_logo_url, "https://media.licdn.com/company/acme.png");
+  assert.equal(current.location, "San Francisco");
+  assert.equal(current.start_date, "2022");
+  assert.equal(current.end_date, null);
+  assert.equal(current.description_html, "Leads platform work.");
+
+  // Education: school name in title, degree from subtitle, years from period, logo.
+  assert.equal(profile.education.length, 1);
+  const [edu] = profile.education;
+  assert.equal(edu.title, "MIT");
+  assert.equal(edu.institute_logo_url, "https://media.licdn.com/school/mit.png");
+  assert.equal(edu.degree, "BSc, Computer Science, Minor in Math");
+  assert.equal(edu.start_year, "2014");
+  assert.equal(edu.end_year, "2018");
+  assert.equal(edu.description, "Dean's list.");
+
   assert.deepEqual(profile.skills, ["TypeScript", "Distributed Systems", "Postgres"]);
   assert.deepEqual(profile.certifications, [
-    { name: "AWS Solutions Architect", authority: "Amazon Web Services" },
+    {
+      name: "AWS Solutions Architect",
+      authority: "Amazon Web Services",
+      issued_on: "Issued Jan 2021",
+      logo_url: "https://media.licdn.com/cert/aws.png",
+    },
   ]);
   assert.deepEqual(profile.languages, ["English", "Spanish"]);
 });
 
-test("mapApifyToFields derives current role from the open-ended experience", () => {
+test("mapApifyToFields derives current role + school detail from the profile", () => {
   const profile = normalizeApifyItem(APIFY_ITEM);
   assert.ok(profile);
   const fields = mapApifyToFields(profile);
@@ -76,14 +116,47 @@ test("mapApifyToFields derives current role from the open-ended experience", () 
   assert.equal(fields.current_company, "Acme");
   assert.equal(fields.industry, "Software Development");
   assert.equal(fields.current_city, "San Francisco, California");
+  // School comes from the education `title`, major from the subtitle line.
   assert.equal(fields.school, "MIT");
-  assert.equal(fields.major, "BSc");
+  assert.equal(fields.major, "BSc, Computer Science, Minor in Math");
   assert.equal(fields.photo_url, "https://media.licdn.com/photo/jane.jpg");
   assert.equal(fields.work_history?.length, 2);
+  assert.equal(fields.work_history?.[0]?.company_logo_url, "https://media.licdn.com/company/acme.png");
   assert.equal(fields.education_history?.length, 1);
+  assert.equal(fields.education_history?.[0]?.institute_logo_url, "https://media.licdn.com/school/mit.png");
   assert.deepEqual(fields.skills, ["TypeScript", "Distributed Systems", "Postgres"]);
   assert.deepEqual(fields.languages, ["English", "Spanish"]);
   assert.equal(fields.certifications?.[0]?.name, "AWS Solutions Architect");
+});
+
+test("normalizeApifyItem still maps generic actor field names (legacy fallback)", () => {
+  // A different actor may use flat field names — the fallbacks must keep working.
+  const profile = normalizeApifyItem({
+    fullName: "Legacy Shape",
+    headline: "Engineer",
+    experiences: [
+      {
+        title: "Engineer",
+        company: "Initech",
+        location: "Austin",
+        startDate: "2019",
+        endDate: "Present",
+        description: "Wrote code.",
+      },
+    ],
+    educations: [
+      { school: "State U", degree: "BS", fieldOfStudy: "EE", startYear: "2010", endYear: "2014" },
+    ],
+  });
+  assert.ok(profile);
+  assert.equal(profile.experience[0].company, "Initech");
+  assert.equal(profile.experience[0].location, "Austin");
+  assert.equal(profile.experience[0].start_date, "2019");
+  assert.equal(profile.experience[0].end_date, "Present");
+  assert.equal(profile.education[0].title, "State U");
+  assert.equal(profile.education[0].degree, "BS");
+  assert.equal(profile.education[0].field_of_study, "EE");
+  assert.equal(profile.education[0].start_year, "2010");
 });
 
 test("mapApifyToFields nulls empty list fields instead of writing empty arrays", () => {

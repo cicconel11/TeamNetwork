@@ -37,6 +37,8 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import { openEmailAddress, openHttpsUrl } from "@/lib/url-safety";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
+import { EnrichmentHistory } from "@/components/profile/EnrichmentHistory";
+import { EnrichmentSections } from "@/components/profile/EnrichmentSections";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 
@@ -421,46 +423,22 @@ export default function AlumniDetailScreen() {
           </View>
         )}
 
-        {/* Skills */}
-        {alumni.skills?.length ? (
-          <View style={[styles.chipsSection, isBlocked && styles.dimmed]}>
-            <Text style={styles.chipsLabel}>Skills</Text>
-            <View style={styles.chipsRow}>
-              {alumni.skills.filter(Boolean).map((skill, i) => (
-                <View key={`${skill}-${i}`} style={styles.chip}>
-                  <Text style={styles.chipText}>{skill}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
+        {/* Experience + Education */}
+        <View style={isBlocked && styles.dimmed}>
+          <EnrichmentHistory
+            workHistory={alumni.work_history}
+            educationHistory={alumni.education_history}
+          />
+        </View>
 
-        {/* Languages */}
-        {alumni.languages?.length ? (
-          <View style={[styles.chipsSection, isBlocked && styles.dimmed]}>
-            <Text style={styles.chipsLabel}>Languages</Text>
-            <View style={styles.chipsRow}>
-              {alumni.languages.filter(Boolean).map((lang, i) => (
-                <View key={`${lang}-${i}`} style={styles.chip}>
-                  <Text style={styles.chipText}>{lang}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {/* Certifications */}
-        {alumni.certifications?.length ? (
-          <View style={[styles.chipsSection, isBlocked && styles.dimmed]}>
-            <Text style={styles.chipsLabel}>Certifications</Text>
-            {alumni.certifications.map((cert, i) => (
-              <Text key={`${cert.name ?? "cert"}-${i}`} style={styles.certText}>
-                {cert.name}
-                {cert.authority ? ` • ${cert.authority}` : ""}
-              </Text>
-            ))}
-          </View>
-        ) : null}
+        {/* Skills / Languages / Certifications */}
+        <View style={isBlocked && styles.dimmed}>
+          <EnrichmentSections
+            skills={alumni.skills}
+            languages={alumni.languages}
+            certifications={alumni.certifications}
+          />
+        </View>
       </ScrollView>
 
       <ReportBlockSheet
@@ -728,38 +706,4 @@ const createStyles = () =>
       lineHeight: 20,
     },
 
-    // Skills / languages / certifications
-    chipsSection: {
-      backgroundColor: DETAIL_COLORS.card,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      marginTop: SPACING.md,
-    },
-    chipsLabel: {
-      ...TYPOGRAPHY.overline,
-      color: DETAIL_COLORS.secondaryText,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginBottom: SPACING.sm,
-    },
-    chipsRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: SPACING.xs,
-    },
-    chip: {
-      backgroundColor: DETAIL_COLORS.mutedSurface,
-      borderRadius: RADIUS.sm,
-      paddingVertical: 4,
-      paddingHorizontal: SPACING.sm,
-    },
-    chipText: {
-      ...TYPOGRAPHY.labelSmall,
-      color: DETAIL_COLORS.primaryText,
-    },
-    certText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: DETAIL_COLORS.primaryText,
-      marginBottom: 4,
-    },
   });

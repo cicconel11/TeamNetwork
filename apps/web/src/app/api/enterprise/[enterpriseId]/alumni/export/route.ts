@@ -74,8 +74,9 @@ function serializeEducationHistory(value: unknown): string {
   if (!Array.isArray(value)) return "";
   return value
     .map((e) => {
-      const edu = e as { school?: unknown; degree?: unknown };
-      const school = typeof edu.school === "string" ? edu.school : "";
+      const edu = e as { title?: unknown; school?: unknown; degree?: unknown };
+      const school =
+        typeof edu.title === "string" ? edu.title : typeof edu.school === "string" ? edu.school : "";
       const degree = typeof edu.degree === "string" ? edu.degree : "";
       if (school && degree) return `${school} (${degree})`;
       return school || degree;

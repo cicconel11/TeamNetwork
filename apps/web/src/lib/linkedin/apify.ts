@@ -22,23 +22,28 @@ import { sanitizeRichTextToPlainText } from "@/lib/security/rich-text";
 export interface ApifyExperience {
   title: string | null;
   company: string | null;
+  company_logo_url: string | null;
   location: string | null;
   start_date: string | null;
   end_date: string | null; // null/"Present" for current roles
-  description: string | null;
+  description_html: string | null;
 }
 
 export interface ApifyEducation {
-  school: string | null;
+  title: string | null; // school name
+  institute_logo_url: string | null;
   degree: string | null;
   field_of_study: string | null;
   start_year: string | null;
   end_year: string | null;
+  description: string | null;
 }
 
 export interface ApifyCertification {
   name: string | null;
   authority: string | null;
+  issued_on: string | null;
+  logo_url: string | null;
 }
 
 /** Normalized profile consumed by the rest of the app (provider-neutral). */
@@ -374,10 +379,13 @@ function normalizeExperience(raw: unknown[] | undefined): ApifyExperience[] {
     .map((e) => ({
       title: firstString(e.title, e.position),
       company: firstString(e.companyName, e.company, e.subtitle),
-      location: str(e.location),
-      start_date: firstString(e.startDate, e.start_date),
-      end_date: firstString(e.endDate, e.end_date),
-      description: sanitizeRichTextToPlainText(firstString(e.description, e.descriptionHtml)),
+      company_logo_url: firstString(e.logo, e.companyLogo, e.company_logo_url),
+      location: firstString(e.jobLocation, e.location),
+      start_date: firstString(e.jobStartedOn, e.startDate, e.start_date),
+      end_date: firstString(e.jobEndedOn, e.endDate, e.end_date),
+      description_html: sanitizeRichTextToPlainText(
+        firstString(e.jobDescription, e.description, e.descriptionHtml),
+      ),
     }));
 }
 
@@ -385,13 +393,19 @@ function normalizeEducation(raw: unknown[] | undefined): ApifyEducation[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
-    .map((e) => ({
-      school: firstString(e.title, e.school, e.schoolName, e.subtitle),
-      degree: firstString(e.degree, e.degreeName),
-      field_of_study: firstString(e.fieldOfStudy, e.field_of_study),
-      start_year: firstString(e.startYear, e.start_year),
-      end_year: firstString(e.endYear, e.end_year),
-    }));
+    .map((e) => {
+      const period = (e.period && typeof e.period === "object" ? e.period : {}) as Record<string, unknown>;
+      return {
+        title: firstString(e.title, e.school, e.schoolName),
+        institute_logo_url: firstString(e.logo, e.instituteLogo, e.institute_logo_url),
+        // The actor packs degree + major + minor into a single `subtitle` line.
+        degree: firstString(e.subtitle, e.degree, e.degreeName),
+        field_of_study: firstString(e.fieldOfStudy, e.field_of_study),
+        start_year: firstString(period.startedOn, e.startYear, e.start_year),
+        end_year: firstString(period.endedOn, e.endYear, e.end_year),
+        description: sanitizeRichTextToPlainText(firstString(e.description, e.descriptionHtml)),
+      };
+    });
 }
 
 function normalizeCertifications(raw: unknown[] | undefined): ApifyCertification[] {
@@ -401,6 +415,8 @@ function normalizeCertifications(raw: unknown[] | undefined): ApifyCertification
     .map((e) => ({
       name: firstString(e.title, e.name),
       authority: firstString(e.authority, e.issuer, e.subtitle),
+      issued_on: firstString(e.caption, e.issuedOn, e.issued_on),
+      logo_url: firstString(e.logo, e.logo_url),
     }))
     .filter((c) => c.name !== null);
 }
@@ -440,7 +456,7 @@ export function mapApifyToFields(profile: ApifyProfileResult): EnrichmentFields 
     current_company: derivedCompany,
     industry: profile.industry,
     current_city: profile.city || currentJob?.location || null,
-    school: latestEdu?.school || null,
+    school: latestEdu?.title || null,
     major: latestEdu?.degree || latestEdu?.field_of_study || null,
     position_title: derivedTitle,
     headline: profile.headline,

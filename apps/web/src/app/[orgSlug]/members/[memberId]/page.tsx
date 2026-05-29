@@ -7,7 +7,7 @@ import { ReinstateCard } from "@/components/members/ReinstateCard";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { getPersonAdminContext } from "@/lib/people/permissions";
 import type { Member } from "@/types/database";
-import { LinkedInProfileLink, formatPersonHeadline } from "@/components/shared";
+import { LinkedInProfileLink, formatPersonHeadline, EnrichmentSections } from "@/components/shared";
 import { ConnectedAccountsSection } from "@/components/members/ConnectedAccountsSection";
 import { sanitizeRichTextToPlainText } from "@/lib/security/rich-text";
 
@@ -263,6 +263,9 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
               {member.graduation_year && (
                 <Badge variant="primary">Class of {member.graduation_year}</Badge>
               )}
+              {(enrichment?.industry || m.industry) && (
+                <Badge variant="muted">{enrichment?.industry || m.industry}</Badge>
+              )}
             </div>
 
             {/* Contact actions */}
@@ -436,6 +439,13 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
             </div>
           </Card>
         )}
+
+        {/* ─── Skills / Certifications / Languages ─── */}
+        <EnrichmentSections
+          skills={enrichment?.skills ?? m.skills}
+          certifications={enrichment?.certifications ?? m.certifications}
+          languages={enrichment?.languages ?? m.languages}
+        />
 
         {/* ─── Details ─── */}
         <Card className="p-6">
