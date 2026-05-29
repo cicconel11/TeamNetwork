@@ -6953,6 +6953,7 @@ export type Database = {
       user_organization_roles: {
         Row: {
           created_at: string | null
+          feed_last_seen_at: string | null
           id: string
           organization_id: string
           role: Database["public"]["Enums"]["user_role"]
@@ -6961,6 +6962,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          feed_last_seen_at?: string | null
           id?: string
           organization_id: string
           role?: Database["public"]["Enums"]["user_role"]
@@ -6969,6 +6971,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          feed_last_seen_at?: string | null
           id?: string
           organization_id?: string
           role?: Database["public"]["Enums"]["user_role"]
