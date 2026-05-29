@@ -12,9 +12,11 @@ their members. Reviewers need a test org to see the app populated; please
 use the credentials below.
 
 Test account
-  Email:    [fill in test-reviewer@myteamnetwork.com]
-  Password: [fill in]
-  Org:      Apple Review Test Org (donation_eligible_ios = true)
+  Email:    test-reviewer@myteamnetwork.com
+  Password: [fill in — set during signup]
+  Orgs:     Apple Review Test Org (donation_eligible_ios = true, admin)
+            Test Org (admin)
+            TeamNetwork founders org (read-only)
 
 Payment flows covered by Apple's exemptions, not StoreKit:
 
@@ -109,8 +111,11 @@ Ops-side gates:
 - [ ] Apple Pay Merchant ID `merchant.com.myteamnetwork.teammeet`
       registered in App Store Connect and paired with Stripe-issued
       Payment Processing Certificate
-- [ ] Test org flagged `donation_eligible_ios = true` exists for the
-      reviewer to use
+- [ ] Reviewer account provisioned: sign up `test-reviewer@myteamnetwork.com`
+      via the normal app flow (confirm email), then run
+      `supabase/seed-apple-reviewer.sql` in the prod SQL editor with
+      `v_founders_slug` set. Grants the three orgs above incl. the
+      `donation_eligible_ios = true` org.
 - [ ] 30s demo video recorded showing: open app → donate via Apple Pay →
       add receipt to Wallet → add member card to Wallet
 - [ ] All store screenshots regenerated at 6.7", 6.5", 5.5", 12.9"
