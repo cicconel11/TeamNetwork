@@ -134,30 +134,6 @@ export function useScrollReveal(selector: string) {
   }, [selector, reduced]);
 }
 
-export function useChipDrift(selector: string) {
-  const reduced = prefersReducedMotion();
-
-  useEffect(() => {
-    if (reduced) return;
-    let anim: { pause?: () => void } | null = null;
-
-    loadAnime().then((anime) => {
-      anim = anime.animate(selector, {
-        translateY: [0, -10, 0],
-        rotate: [0, 2, 0, -2, 0],
-        duration: 4000,
-        ease: "inOutSine",
-        loop: true,
-        delay: anime.stagger(300),
-      });
-    });
-
-    return () => {
-      anim?.pause?.();
-    };
-  }, [selector, reduced]);
-}
-
 // New hook for section-specific pop-out effects
 export function useSectionPop(selector: string) {
   const reduced = prefersReducedMotion();
@@ -284,37 +260,6 @@ export function useReducedMotion() {
   return prefersReducedMotion();
 }
 
-// Stadium light sweep animation
-export function useStadiumLights(beamSelector: string) {
-  const reduced = prefersReducedMotion();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const beams = document.querySelectorAll<HTMLElement>(beamSelector);
-    if (!beams.length) return;
-
-    if (reduced) {
-      beams.forEach((beam) => {
-        beam.style.opacity = "0.15";
-        beam.style.transform = "rotate(5deg) translateY(0)";
-      });
-      return;
-    }
-
-    loadAnime().then((anime) => {
-      anime.animate(beamSelector, {
-        opacity: [0, 0.25, 0.15],
-        rotate: [-25, 8],
-        translateY: ["-30%", "0%"],
-        duration: 1800,
-        ease: "out(3)",
-        delay: anime.stagger(200, { start: 200 }),
-      });
-    });
-  }, [beamSelector, reduced]);
-}
-
 // Banner drop animation with swing physics
 export function useBannerDrop(selector: string) {
   const reduced = prefersReducedMotion();
@@ -404,58 +349,5 @@ export function useConfettiBurst(containerRef: React.RefObject<HTMLElement | nul
   }, [containerRef]);
 
   return shouldBurst;
-}
-
-// Trophy bounce animation
-export function useTrophyBounce(selector: string) {
-  const reduced = prefersReducedMotion();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const elements = document.querySelectorAll<HTMLElement>(selector);
-    if (!elements.length) return;
-
-    if (reduced) {
-      elements.forEach((el) => {
-        el.style.opacity = "1";
-        el.style.transform = "scale(1)";
-      });
-      return;
-    }
-
-    // Set initial state
-    elements.forEach((el) => {
-      el.style.opacity = "0";
-      el.style.transform = "scale(0) rotate(-10deg)";
-    });
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const target = entry.target as HTMLElement;
-
-            loadAnime().then((anime) => {
-              anime.animate(target, {
-                opacity: [0, 1],
-                scale: [0, 1.2, 0.9, 1],
-                rotate: ["-10deg", "5deg", "-2deg", "0"],
-                duration: 800,
-                ease: "spring(1, 80, 12, 0)",
-              });
-            });
-
-            observer.unobserve(target);
-          }
-        });
-      },
-      { threshold: 0.3 }
-    );
-
-    elements.forEach((el) => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, [selector, reduced]);
 }
 
