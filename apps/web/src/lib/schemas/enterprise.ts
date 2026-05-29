@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { baseSchemas, optionalSafeString, safeString, allowedImageUrl } from "@/lib/security/validation";
+import {
+  baseSchemas,
+  optionalSafeString,
+  safeString,
+  allowedImageUrl,
+} from "@/lib/security/validation";
 
 export const enterprisePatchSchema = z
   .object({
@@ -10,6 +15,17 @@ export const enterprisePatchSchema = z
     billing_contact_email: baseSchemas.email.optional().nullable(),
   })
   .strict();
+
+export const enterpriseDeleteSchema = z
+  .object({
+    confirmation: z.string().min(1).max(200),
+    confirmationRepeat: z.string().min(1).max(200),
+  })
+  .strict()
+  .refine((d) => d.confirmation === d.confirmationRepeat, {
+    message: "Both confirmation phrases must match",
+    path: ["confirmationRepeat"],
+  });
 
 export const batchCreateOrgsSchema = z
   .object({
@@ -49,9 +65,7 @@ export const batchCreateOrgsSchema = z
                 z
                   .object({
                     email: z.string().email().max(320),
-                    role: z
-                      .enum(["admin", "active_member", "alumni"])
-                      .default("active_member"),
+                    role: z.enum(["admin", "active_member", "alumni"]).default("active_member"),
                   })
                   .strict()
               )

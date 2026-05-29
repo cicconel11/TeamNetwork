@@ -4,3 +4,4 @@ export { EnterpriseBrandingCard } from "./EnterpriseBrandingCard";
 export { SubOrgList } from "./SubOrgList";
 export { AlumniUsageBar } from "./AlumniUsageBar";
 export { CreateSubOrgForm } from "./CreateSubOrgForm";
+export { EnterpriseDangerZoneCard } from "./EnterpriseDangerZoneCard";

@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations, useFormatter } from "next-intl";
 import { Card, Button, Input, Badge, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { EnterpriseBrandingCard } from "@/components/enterprise";
+import { EnterpriseBrandingCard, EnterpriseDangerZoneCard } from "@/components/enterprise";
+import type { EnterpriseDeletionStatus } from "@/types/enterprise";
 
 interface EnterpriseAdmin {
   user_id: string;
@@ -23,8 +25,16 @@ interface EnterpriseSettings {
   billing_contact_email: string | null;
 }
 
-export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId: string; enterpriseSlug: string }) {
+export function SettingsClient({
+  enterpriseId,
+  enterpriseSlug,
+}: {
+  enterpriseId: string;
+  enterpriseSlug: string;
+}) {
   const router = useRouter();
+  const tDelete = useTranslations("settings.enterpriseDelete");
+  const format = useFormatter();
   const [, setSettings] = useState<EnterpriseSettings | null>(null);
   const [admins, setAdmins] = useState<EnterpriseAdmin[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -32,6 +42,10 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Enterprise deletion (soft-delete grace) state
+  const [deletion, setDeletion] = useState<EnterpriseDeletionStatus | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -74,9 +88,49 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
     }
   }, [enterpriseId]);
 
+  const loadDeletion = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/enterprise/${enterpriseId}/deletion`);
+      if (!response.ok) {
+        // Non-owners get 403 here — silently skip; the card is owner-gated anyway.
+        setDeletion(null);
+        return;
+      }
+      const data = (await response.json()) as EnterpriseDeletionStatus;
+      setDeletion(data);
+    } catch {
+      setDeletion(null);
+    }
+  }, [enterpriseId]);
+
   useEffect(() => {
     loadSettings();
-  }, [loadSettings]);
+    loadDeletion();
+  }, [loadSettings, loadDeletion]);
+
+  const handleRestore = async () => {
+    setIsRestoring(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/enterprise/${enterpriseId}/deletion`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || tDelete("unableToRestore"));
+      }
+      setSuccessMessage(tDelete("restored"));
+      loadDeletion();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : tDelete("unableToRestore"));
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const formatDeletionDate = (iso: string) =>
+    format.dateTime(new Date(iso), { year: "numeric", month: "long", day: "numeric" });
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -221,6 +275,22 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
         </div>
       )}
 
+      {deletion?.status === "pending" && deletion.scheduledDeletionAt && (
+        <div className="mb-6 p-4 rounded-xl border border-red-300 dark:border-red-700/50 bg-red-50 dark:bg-red-900/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">
+            {tDelete("pendingBanner", { date: formatDeletionDate(deletion.scheduledDeletionAt) })}
+          </p>
+          <Button
+            variant="secondary"
+            onClick={handleRestore}
+            isLoading={isRestoring}
+            disabled={isRestoring}
+          >
+            {tDelete("restore")}
+          </Button>
+        </div>
+      )}
+
       {/* Branding */}
       <EnterpriseBrandingCard
         enterpriseId={enterpriseId}
@@ -244,9 +314,7 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
           />
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Description
-            </label>
+            <label className="block text-sm font-medium text-foreground mb-2">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -277,9 +345,7 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-semibold text-foreground">Enterprise Administrators</h3>
-            <p className="text-sm text-muted-foreground">
-              People who can manage this enterprise
-            </p>
+            <p className="text-sm text-muted-foreground">People who can manage this enterprise</p>
           </div>
         </div>
 
@@ -300,9 +366,7 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
                   </p>
                   <p className="text-xs text-muted-foreground truncate">{admin.user_email}</p>
                 </div>
-                <Badge variant={getRoleBadgeVariant(admin.role)}>
-                  {getRoleLabel(admin.role)}
-                </Badge>
+                <Badge variant={getRoleBadgeVariant(admin.role)}>{getRoleLabel(admin.role)}</Badge>
                 {isOwner && admin.role !== "owner" && (
                   <Button
                     variant="ghost"
@@ -353,13 +417,28 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
           </div>
         )}
       </Card>
+
+      {isOwner && deletion?.status !== "pending" && (
+        <EnterpriseDangerZoneCard
+          enterpriseId={enterpriseId}
+          enterpriseName={name}
+          attachedOrgCount={deletion?.attachedOrgCount ?? 0}
+          onInitiated={loadDeletion}
+        />
+      )}
     </div>
   );
 }
 
 function UsersIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
       <path
         strokeLinecap="round"
         strokeLinejoin="round"

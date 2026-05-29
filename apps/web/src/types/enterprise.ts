@@ -140,6 +140,14 @@ export function getEnterprisePermissions(role: EnterpriseRole): EnterpriseRolePe
   }
 }
 
+// Enterprise deletion (soft-delete grace window) status payload
+export interface EnterpriseDeletionStatus {
+  status: "none" | "pending";
+  requestedAt: string | null;
+  scheduledDeletionAt: string | null;
+  attachedOrgCount: number;
+}
+
 // Organization with enterprise info
 export interface OrganizationWithEnterprise {
   id: string;

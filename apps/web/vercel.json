@@ -58,6 +58,10 @@
       "schedule": "0 2 * * *"
     },
     {
+      "path": "/api/cron/enterprise-deletion",
+      "schedule": "30 2 * * *"
+    },
+    {
       "path": "/api/cron/audit-log-retention",
       "schedule": "0 3 * * *"
     },

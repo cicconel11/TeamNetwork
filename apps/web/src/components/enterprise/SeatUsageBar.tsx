@@ -1,6 +1,14 @@
 import { Button } from "@/components/ui";
-import { type BillingInterval } from "@/types/enterprise";
-import { getFreeSubOrgCount } from "@/lib/enterprise/pricing";
+import { ENTERPRISE_SEAT_PRICING, type BillingInterval } from "@/types/enterprise";
+import { getFreeSubOrgCount, formatSeatPrice } from "@/lib/enterprise/pricing";
+
+function formatPaidOrgPrice(interval: BillingInterval): string {
+  const cents =
+    interval === "month"
+      ? ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly
+      : ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
+  return `${formatSeatPrice(cents)}/${interval === "month" ? "mo" : "yr"}`;
+}
 
 interface SeatUsageBarProps {
   currentSeats: number;
@@ -26,9 +34,7 @@ function PerSubOrgUsageBar({
   const paidOrgsUsed = Math.max(0, currentSeats - freeOrgs);
   const allFreeUsed = freeOrgsUsed >= freeOrgs;
 
-  const freeBarColor = allFreeUsed
-    ? "bg-amber-500"
-    : "bg-green-500";
+  const freeBarColor = allFreeUsed ? "bg-amber-500" : "bg-green-500";
   const freeTextColor = allFreeUsed
     ? "text-amber-600 dark:text-amber-400"
     : "text-green-600 dark:text-green-400";
@@ -48,7 +54,10 @@ function PerSubOrgUsageBar({
           {/* Segmented bar */}
           <div className="flex gap-1 h-3">
             {/* Free tier segment */}
-            <div className="flex-1 bg-muted rounded-full overflow-hidden" title={`${freeOrgsUsed} of ${freeOrgs} free`}>
+            <div
+              className="flex-1 bg-muted rounded-full overflow-hidden"
+              title={`${freeOrgsUsed} of ${freeOrgs} free`}
+            >
               <div
                 className={`h-full ${freeBarColor} transition-all duration-300 rounded-full`}
                 style={{ width: `${freeSegmentPercent}%` }}
@@ -57,7 +66,10 @@ function PerSubOrgUsageBar({
 
             {/* Paid segment indicator */}
             {paidOrgsUsed > 0 && (
-              <div className="flex-1 bg-muted rounded-full overflow-hidden" title={`${paidOrgsUsed} paid`}>
+              <div
+                className="flex-1 bg-muted rounded-full overflow-hidden"
+                title={`${paidOrgsUsed} paid`}
+              >
                 <div
                   className="h-full bg-purple-500 transition-all duration-300 rounded-full"
                   style={{ width: "100%" }}
@@ -73,7 +85,7 @@ function PerSubOrgUsageBar({
             </span>
             {paidOrgsUsed > 0 && (
               <span className="text-purple-600 dark:text-purple-400">
-                + {paidOrgsUsed} paid @ {billingInterval === "month" ? "$15/mo" : "$150/yr"} each
+                + {paidOrgsUsed} paid @ {formatPaidOrgPrice(billingInterval)} each
               </span>
             )}
           </div>
