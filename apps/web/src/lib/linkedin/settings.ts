@@ -116,8 +116,8 @@ export async function getLinkedInStatusForUser(
   }
 
   // Extract enrichment data from linkedin_data JSONB if present. Tolerant of the
-  // current Apify shape (`experience` singular) and historical payloads — legacy
-  // ProxyCurl (`experiences` plural) and the former Bright Data shape.
+  // current Apify shape (`experience` singular) and legacy ProxyCurl-shaped
+  // payloads (`experiences` plural) that may still be stored.
   let enrichment: LinkedInEnrichmentInfo | null = null;
   if (connectionRow?.linkedin_data?.enrichment) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -134,7 +134,7 @@ export async function getLinkedInStatusForUser(
         school: latestEdu?.school || null,
       };
     } else {
-      // Apify (and former Bright Data) — `experience` singular
+      // Apify — `experience` singular
       const experiences = Array.isArray(raw.experience) ? raw.experience : [];
       const currentJob =
         experiences.find(

@@ -5,8 +5,8 @@ import { resolve } from "node:path";
 
 const ROUTES = [
   {
-    path: "src/app/api/user/linkedin/bright-data-sync/route.ts",
-    feature: "linkedin bright data sync",
+    path: "src/app/api/user/linkedin/enrichment-sync/route.ts",
+    feature: "linkedin enrichment sync",
     methodArg: "request",
     userLimit: 3,
   },
@@ -64,7 +64,7 @@ test("LinkedIn routes preserve rate-limit headers on handled responses", () => {
 });
 
 test("manual sync applies route limiting before the expensive provider call", () => {
-  const source = readRoute("src/app/api/user/linkedin/bright-data-sync/route.ts");
+  const source = readRoute("src/app/api/user/linkedin/enrichment-sync/route.ts");
 
   assert.ok(
     source.indexOf("checkRateLimit(request") < source.indexOf("createServiceClient()"),

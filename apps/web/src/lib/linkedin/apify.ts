@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Apify LinkedIn enrichment (replaces the former Bright Data integration).
+// Apify LinkedIn enrichment provider.
 //
 // Apify runs are ASYNCHRONOUS: we start an actor run (returns a runId), attach a
 // run-finished webhook, and read the run's dataset items when it completes. A

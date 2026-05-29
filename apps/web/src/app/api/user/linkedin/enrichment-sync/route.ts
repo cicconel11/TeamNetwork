@@ -7,7 +7,7 @@ import { buildRateLimitResponse, checkRateLimit } from "@/lib/security/rate-limi
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/user/linkedin/bright-data-sync
+ * POST /api/user/linkedin/enrichment-sync
  *
  * Refreshes the user's LinkedIn enrichment data from their saved public
  * LinkedIn profile URL via Apify. Accepts cookie (web) or Bearer (mobile) auth.
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const ipRateLimit = checkRateLimit(request, {
-      feature: "linkedin bright data sync",
+      feature: "linkedin enrichment sync",
       limitPerIp: 10,
       limitPerUser: 0,
     });
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     const userRateLimit = checkRateLimit(request, {
-      feature: "linkedin bright data sync",
+      feature: "linkedin enrichment sync",
       limitPerIp: 0,
       limitPerUser: 3,
       userId: user.id,
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result.body, { status: result.status, headers: userRateLimit.headers });
   } catch (error) {
-    console.error("[linkedin-bright-data-sync] Error syncing profile:", error);
+    console.error("[linkedin-enrichment-sync] Error syncing profile:", error);
     return NextResponse.json(
       { error: "An error occurred while syncing LinkedIn data." },
       { status: 500 },

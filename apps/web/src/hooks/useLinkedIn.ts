@@ -234,7 +234,7 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
       connection?.source === LINKEDIN_OAUTH_SOURCE && connection?.status === "connected";
     const endpoint = oauthConnected
       ? "/api/user/linkedin/sync"
-      : "/api/user/linkedin/bright-data-sync";
+      : "/api/user/linkedin/enrichment-sync";
     const res = await fetch(endpoint, { method: "POST" });
     return handleSyncResponse(res);
   }, [connection, handleSyncResponse]);
