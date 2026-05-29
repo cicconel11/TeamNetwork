@@ -493,3 +493,102 @@ export function getApifyProfileUrlKey(profile: ApifyProfileResult): string | nul
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Education-dates supplement (hybrid).
+//
+// The primary actor (dev_fusion) returns rich skills/certs/languages but leaves
+// education `period` null for every profile. apimaestro's profile-detail actor
+// returns education start/end years (as `{year, month?}`) but only top-5 skills
+// and no certs/languages. So we keep dev_fusion as primary and call apimaestro
+// solely to backfill the missing education years, merged by school name.
+// Same Apify token; best-effort (never blocks a write-back).
+// ---------------------------------------------------------------------------
+
+const DEFAULT_EDU_DATES_ACTOR_ID = "apimaestro~linkedin-profile-detail";
+
+function getEduDatesActorId(): string {
+  const id = process.env.APIFY_EDU_DATES_ACTOR_ID;
+  return id && id.trim() !== "" ? id.trim() : DEFAULT_EDU_DATES_ACTOR_ID;
+}
+
+interface EducationYears {
+  start_year: string | null;
+  end_year: string | null;
+}
+
+/** apimaestro emits dates as `{year:number, month?:string}`; we keep the year. */
+function extractYear(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const year = (value as Record<string, unknown>).year;
+  if (typeof year === "number" && Number.isFinite(year)) return String(year);
+  return str(year);
+}
+
+/** Case/space-insensitive school name key for matching across the two actors. */
+function normalizeSchoolKey(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Fetches education start/end years from the apimaestro detail actor for a
+ * single profile URL, keyed by normalized school name. Best-effort: returns an
+ * empty map on any failure or missing config.
+ */
+export async function fetchApimaestroEducationDates(
+  profileUrl: string | null,
+  options: ApifyFetchOptions = {},
+): Promise<Map<string, EducationYears>> {
+  const out = new Map<string, EducationYears>();
+  const token = getApifyToken();
+  const fetchFn = options.fetchFn ?? fetch;
+  if (!token || !profileUrl) return out;
+
+  try {
+    const url = `${APIFY_BASE_URL}/acts/${getEduDatesActorId()}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}&format=json`;
+    const res = await fetchFn(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: profileUrl }),
+    });
+    if (!res.ok) return out;
+    const data = await res.json().catch(() => null);
+    const item = Array.isArray(data) ? data[0] : data;
+    const educations = item && typeof item === "object" ? (item as Record<string, unknown>).education : null;
+    if (!Array.isArray(educations)) return out;
+
+    for (const e of educations) {
+      if (!e || typeof e !== "object") continue;
+      const row = e as Record<string, unknown>;
+      const school = str(row.school);
+      if (!school) continue;
+      const start_year = extractYear(row.start_date);
+      const end_year = extractYear(row.end_date);
+      if (!start_year && !end_year) continue;
+      out.set(normalizeSchoolKey(school), { start_year, end_year });
+    }
+  } catch {
+    // best-effort supplement; the primary record is already written from dev_fusion.
+  }
+  return out;
+}
+
+/**
+ * Fills missing `start_year`/`end_year` on a normalized profile's education
+ * entries from an apimaestro school→years map (matched by school name). Mutates
+ * the profile in place; only fills gaps, never overwrites existing years.
+ */
+export function mergeEducationYears(
+  profile: ApifyProfileResult,
+  yearsBySchool: Map<string, EducationYears>,
+): void {
+  if (yearsBySchool.size === 0) return;
+  for (const edu of profile.education) {
+    if (edu.start_year && edu.end_year) continue;
+    if (!edu.title) continue;
+    const match = yearsBySchool.get(normalizeSchoolKey(edu.title));
+    if (!match) continue;
+    if (!edu.start_year && match.start_year) edu.start_year = match.start_year;
+    if (!edu.end_year && match.end_year) edu.end_year = match.end_year;
+  }
+}
