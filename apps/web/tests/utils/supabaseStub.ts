@@ -31,6 +31,7 @@ type TableName =
   | "user_calendar_connections"
   | "event_calendar_entries"
   | "events"
+  | "event_rsvps"
   | "discussion_threads"
   | "discussion_replies"
   | "job_postings"
@@ -149,6 +150,7 @@ export function createSupabaseStub() {
     user_calendar_connections: [],
     event_calendar_entries: [],
     events: [],
+    event_rsvps: [],
     discussion_threads: [],
     discussion_replies: [],
     job_postings: [],
