@@ -37,6 +37,7 @@ import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { LinkedInSyncCard } from "@/components/profile/LinkedInSyncCard";
 import {
   INITIAL_PROFILE_FORM_VALUES,
   buildAlumniProfileUpdate,
@@ -1081,6 +1082,8 @@ export default function ProfileScreen() {
               </Animated.View>
 
               {renderRoleFields()}
+
+              <LinkedInSyncCard />
 
               <View style={styles.groupedListWrap}>
                 <Text style={styles.groupedListHeader}>Account</Text>

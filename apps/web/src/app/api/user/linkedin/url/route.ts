@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   parseLinkedInUrlPatchBody,
@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
  *
  * Saves a LinkedIn profile URL to the user's member and alumni records
  * across all organizations. Triggers Apify enrichment if a URL is provided.
+ * Accepts cookie (web) or Bearer (mobile) auth.
  */
 export async function PATCH(request: Request) {
   try {
@@ -25,13 +26,9 @@ export async function PATCH(request: Request) {
     });
     if (!ipRateLimit.ok) return buildRateLimitResponse(ipRateLimit);
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { user } = await createAuthenticatedApiClient(request);
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: ipRateLimit.headers });
     }
 
