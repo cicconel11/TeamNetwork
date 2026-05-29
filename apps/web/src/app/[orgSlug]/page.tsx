@@ -8,8 +8,10 @@ import { fetchMediaForEntities } from "@/lib/media/fetch";
 
 import { getCachedDonationStats } from "@/lib/cached-queries";
 import { loadFeedSidebarData } from "@/lib/feed/load-feed-sidebar-data";
+import { loadJumpBackInData } from "@/lib/feed/load-jump-back-in";
 
 import { FeedComposer } from "@/components/feed/FeedComposer";
+import { JumpBackIn } from "@/components/feed/JumpBackIn";
 import { FeedList } from "@/components/feed/FeedList";
 import { FeedSidebar } from "@/components/feed/FeedSidebar";
 import { FeedSidebarWidgets } from "@/components/feed/FeedSidebarWidgets";
@@ -53,6 +55,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
     { data: posts, error: postsError, count: postsCount },
     userName,
     feedSidebarData,
+    jumpBackInData,
   ] = await Promise.all([
     queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).is("graduated_at", null).eq("status", "active"),
     queryClient.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
@@ -74,6 +77,11 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
       status: orgCtx.status,
       userId: orgCtx.userId,
       dataClient: membersClient,
+    }),
+    loadJumpBackInData({
+      orgId: org.id,
+      userId: orgCtx.userId,
+      dataClient: queryClient,
     }),
   ]);
 
@@ -208,6 +216,10 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         {/* Main feed column */}
         <div className="mx-auto w-full max-w-3xl xl:max-w-none">
+          {jumpBackInData && jumpBackInData.total > 0 && (
+            <JumpBackIn orgId={org.id} data={jumpBackInData} />
+          )}
+
           {canPost && (
             <div className="mb-5">
               <FeedComposer orgId={org.id} userName={userName?.name || undefined} />
