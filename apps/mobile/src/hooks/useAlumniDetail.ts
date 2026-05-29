@@ -19,8 +19,30 @@ interface Alumni {
   headline: string | null;
   summary: string | null;
   skills: string[] | null;
-  certifications: Array<{ name: string | null; authority: string | null }> | null;
+  certifications: Array<{ name: string | null; authority: string | null; issued_on?: string | null }> | null;
   languages: string[] | null;
+  work_history: WorkHistoryEntry[] | null;
+  education_history: EducationEntry[] | null;
+}
+
+export interface WorkHistoryEntry {
+  title?: string | null;
+  company?: string | null;
+  company_logo_url?: string | null;
+  location?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  description_html?: string | null;
+}
+
+export interface EducationEntry {
+  title?: string | null; // school name
+  institute_logo_url?: string | null;
+  degree?: string | null;
+  field_of_study?: string | null;
+  start_year?: string | null;
+  end_year?: string | null;
+  description?: string | null;
 }
 
 interface UseAlumniDetailReturn {
@@ -80,7 +102,9 @@ export function useAlumniDetail(orgSlug: string, alumniId: string): UseAlumniDet
           summary,
           skills,
           certifications,
-          languages
+          languages,
+          work_history,
+          education_history
         `
         )
         .eq("id", alumniId)

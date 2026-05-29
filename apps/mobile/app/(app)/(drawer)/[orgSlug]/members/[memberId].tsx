@@ -17,6 +17,9 @@ import { showToast } from "@/components/ui/Toast";
 import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { ReportBlockSheet } from "@/components/moderation/ReportBlockSheet";
+import { EnrichmentHistory } from "@/components/profile/EnrichmentHistory";
+import { EnrichmentSections } from "@/components/profile/EnrichmentSections";
+import type { WorkHistoryEntry, EducationEntry } from "@/hooks/useAlumniDetail";
 import * as sentry from "@/lib/analytics/sentry";
 
 const DETAIL_COLORS = {
@@ -42,6 +45,17 @@ interface Member {
   role: string | null;
   linkedin_url: string | null;
   user_id: string | null;
+  // LinkedIn enrichment
+  headline: string | null;
+  summary: string | null;
+  industry: string | null;
+  current_company: string | null;
+  current_city: string | null;
+  skills: string[] | null;
+  certifications: Array<{ name: string | null; authority: string | null; issued_on?: string | null }> | null;
+  languages: string[] | null;
+  work_history: WorkHistoryEntry[] | null;
+  education_history: EducationEntry[] | null;
 }
 
 export default function MemberProfileScreen() {
@@ -130,7 +144,9 @@ export default function MemberProfileScreen() {
         setLoading(true);
         const { data, error: memberError } = await supabase
           .from("members")
-          .select("id, first_name, last_name, email, photo_url, graduation_year, role, linkedin_url, user_id")
+          .select(
+            "id, first_name, last_name, email, photo_url, graduation_year, role, linkedin_url, user_id, headline, summary, industry, current_company, current_city, skills, certifications, languages, work_history, education_history",
+          )
           .eq("id", memberId)
           .eq("organization_id", orgId)
           .is("deleted_at", null)
@@ -276,6 +292,9 @@ export default function MemberProfileScreen() {
           )}
           <Text style={styles.name}>{getDisplayName()}</Text>
           <Text style={styles.role}>{getRoleLabel(member.role)}</Text>
+          {(member.headline || member.current_company) && (
+            <Text style={styles.year}>{member.headline || member.current_company}</Text>
+          )}
           {member.graduation_year && (
             <Text style={styles.year}>Class of {member.graduation_year}</Text>
           )}
@@ -396,6 +415,31 @@ export default function MemberProfileScreen() {
             <Text style={styles.noContactText}>No contact information available</Text>
           )}
         </View>
+
+        {/* About (LinkedIn summary) */}
+        {member.summary && (
+          <View style={[styles.aboutSection, isBlocked && styles.dimmed]}>
+            <Text style={styles.sectionTitle}>About</Text>
+            <Text style={styles.aboutSummary}>{member.summary}</Text>
+          </View>
+        )}
+
+        {/* Experience + Education */}
+        <View style={isBlocked && styles.dimmed}>
+          <EnrichmentHistory
+            workHistory={member.work_history}
+            educationHistory={member.education_history}
+          />
+        </View>
+
+        {/* Skills / Languages / Certifications */}
+        <View style={isBlocked && styles.dimmed}>
+          <EnrichmentSections
+            skills={member.skills}
+            languages={member.languages}
+            certifications={member.certifications}
+          />
+        </View>
       </ScrollView>
 
       <ReportBlockSheet
@@ -511,6 +555,17 @@ const createStyles = () =>
       backgroundColor: DETAIL_COLORS.card,
       borderRadius: RADIUS.lg,
       padding: SPACING.md,
+    },
+    aboutSection: {
+      backgroundColor: DETAIL_COLORS.card,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      marginTop: SPACING.md,
+    },
+    aboutSummary: {
+      ...TYPOGRAPHY.bodySmall,
+      color: DETAIL_COLORS.secondaryText,
+      lineHeight: 20,
     },
     moderationActions: {
       flexDirection: "row" as const,

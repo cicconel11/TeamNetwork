@@ -10,7 +10,7 @@ import { getPersonAdminContext } from "@/lib/people/permissions";
 import type { Organization, Alumni } from "@/types/database";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DeleteAlumniButton } from "@/components/alumni/DeleteAlumniButton";
-import { LinkedInProfileLink, formatPersonHeadline } from "@/components/shared";
+import { LinkedInProfileLink, formatPersonHeadline, EnrichmentSections } from "@/components/shared";
 
 interface AlumniDetailPageProps {
   params: Promise<{ orgSlug: string; alumniId: string }>;
@@ -399,6 +399,13 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
             </div>
           </Card>
         )}
+
+        {/* ─── Skills / Certifications / Languages ─── */}
+        <EnrichmentSections
+          skills={alum.skills}
+          certifications={alum.certifications}
+          languages={alum.languages}
+        />
 
         {/* ─── Contact & Details ─── */}
         <Card className="p-6">
