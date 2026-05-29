@@ -15,6 +15,8 @@ import { checkBlackbaudHealth, formatBlackbaudHealthError } from "./health";
 import type { ServiceSupabase } from "@/lib/supabase/types";
 import type { Json } from "@/types/database";
 import { debugLog } from "@/lib/debug";
+import { isApifyConfigured } from "@/lib/linkedin/apify";
+import { enqueueAlumniForEnrichment } from "@/lib/linkedin/enrichment-writeback";
 
 const SUBRESOURCE_PACING_MS = 50;
 
@@ -172,6 +174,9 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
   const totals: SyncResult = { ok: true, created: 0, updated: 0, unchanged: 0, skipped: 0, skippedReasons: {} };
   const syncStartedAt = new Date().toISOString();
   let partialDueToDevCap = false;
+  // Existing alumni updated by this sync — candidates for LinkedIn enrichment if
+  // they already carry a linkedin_url (Blackbaud itself never supplies one).
+  const touchedAlumniIds: string[] = [];
 
   try {
     const health = await checkBlackbaudHealth(client);
@@ -267,6 +272,9 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       for (const [reason, count] of Object.entries(batchResult.skippedReasons ?? {})) {
         totals.skippedReasons![reason] = (totals.skippedReasons![reason] ?? 0) + count;
       }
+      if (batchResult.touchedAlumniIds?.length) {
+        touchedAlumniIds.push(...batchResult.touchedAlumniIds);
+      }
 
       offset += limit;
       pagesFetched += 1;
@@ -302,6 +310,25 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
         updated_at: new Date().toISOString(),
       })
       .eq("id", integrationId);
+
+    // Best-effort: enqueue LinkedIn enrichment for synced alumni that already
+    // have a URL. Must never fail or roll back the Blackbaud sync itself.
+    if (touchedAlumniIds.length > 0 && isApifyConfigured()) {
+      try {
+        const { enqueued } = await enqueueAlumniForEnrichment(
+          supabase,
+          deps.organizationId,
+          touchedAlumniIds,
+        );
+        if (enqueued > 0) {
+          debugLog("blackbaud-sync", "queued linkedin enrichment", { enqueued });
+        }
+      } catch (enrichErr) {
+        debugLog("blackbaud-sync", "linkedin enrichment enqueue failed", {
+          error: enrichErr instanceof Error ? enrichErr.message : String(enrichErr),
+        });
+      }
+    }
 
     return totals;
   } catch (err) {

@@ -40,6 +40,7 @@ export async function upsertConstituents(
   let skipped = 0;
   let runningCount = currentAlumniCount;
   const skippedReasons: Record<string, number> = {};
+  const touchedAlumniIds: string[] = [];
 
   function markSkipped(reason: string) {
     skipped += 1;
@@ -139,6 +140,7 @@ export async function upsertConstituents(
               .eq("id", existingMapping.id);
 
             updated += 1;
+            touchedAlumniIds.push(existingMapping.alumni_id);
             continue;
           }
         }
@@ -201,5 +203,5 @@ export async function upsertConstituents(
     }
   }
 
-  return { ok: true, created, updated, unchanged, skipped, skippedReasons };
+  return { ok: true, created, updated, unchanged, skipped, skippedReasons, touchedAlumniIds };
 }

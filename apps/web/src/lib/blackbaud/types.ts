@@ -98,4 +98,11 @@ export interface SyncResult {
   warning?: string;
   partial?: boolean;
   skippedReasons?: Record<string, number>;
+  /**
+   * IDs of existing alumni rows updated by this batch. Used to enqueue LinkedIn
+   * enrichment for synced alumni that already carry a linkedin_url. Newly-created
+   * rows are omitted — Blackbaud never supplies a LinkedIn URL, so they cannot be
+   * enrichment candidates until a URL is attached by other means.
+   */
+  touchedAlumniIds?: string[];
 }
