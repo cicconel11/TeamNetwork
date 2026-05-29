@@ -10,6 +10,11 @@ const listAlumniSchema = z
     industry: z.string().trim().min(1).optional(),
     company: z.string().trim().min(1).optional(),
     city: z.string().trim().min(1).optional(),
+    // Substring match within the enriched jsonb arrays (e.g. skill "AWS",
+    // language "Spanish", certification "PMP").
+    skill: z.string().trim().min(1).optional(),
+    certification: z.string().trim().min(1).optional(),
+    language: z.string().trim().min(1).optional(),
   })
   .strict();
 
@@ -24,7 +29,7 @@ export const listAlumniModule: ToolModule<Args> = {
       let query = sb
         .from("alumni")
         .select(
-          "id, first_name, last_name, graduation_year, current_company, industry, current_city, position_title, job_title, linkedin_url, email"
+          "id, first_name, last_name, graduation_year, current_company, industry, current_city, position_title, job_title, linkedin_url, email, headline, summary, skills, certifications, languages"
         )
         .eq("organization_id", ctx.orgId)
         .is("deleted_at", null)
@@ -42,6 +47,16 @@ export const listAlumniModule: ToolModule<Args> = {
       }
       if (args.city) {
         query = query.ilike("current_city", `%${sanitizeIlikeInput(args.city)}%`);
+      }
+      // jsonb arrays: cast to text so substring matching works across elements.
+      if (args.skill) {
+        query = query.ilike("skills::text", `%${sanitizeIlikeInput(args.skill)}%`);
+      }
+      if (args.certification) {
+        query = query.ilike("certifications::text", `%${sanitizeIlikeInput(args.certification)}%`);
+      }
+      if (args.language) {
+        query = query.ilike("languages::text", `%${sanitizeIlikeInput(args.language)}%`);
       }
 
       const { data, error } = await query;
@@ -61,6 +76,11 @@ export const listAlumniModule: ToolModule<Args> = {
           title: row.position_title ?? row.job_title ?? null,
           linkedin_url: row.linkedin_url ?? null,
           email: row.email ?? null,
+          headline: row.headline ?? null,
+          summary: row.summary ?? null,
+          skills: row.skills ?? null,
+          certifications: row.certifications ?? null,
+          languages: row.languages ?? null,
         })),
         error: null,
       };
