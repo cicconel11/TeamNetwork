@@ -172,7 +172,19 @@ export async function startApifyProfileRun(
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      console.error("[apify] start run error:", res.status, body.substring(0, 200));
+      console.error("[apify] start run error:", res.status, body.substring(0, 300));
+      // The actor needs a one-time permissions approval in the Apify console
+      // before it can run via the API — distinct from a bad token. Surface an
+      // actionable message instead of "rejected the credentials".
+      if (body.includes("full-permission-actor-not-approved")) {
+        return {
+          ok: false,
+          kind: "provider_unavailable",
+          error:
+            "The Apify LinkedIn actor needs a one-time permissions approval in the Apify console before it can run.",
+          upstreamStatus: res.status,
+        };
+      }
       if (res.status === 401 || res.status === 403) {
         return { ok: false, kind: "unauthorized", error: "Apify rejected the credentials.", upstreamStatus: res.status };
       }
