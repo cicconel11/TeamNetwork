@@ -15,9 +15,10 @@ Covers:
 > every EAS build, so this doc lives under `apps/mobile/docs/` to survive
 > rebuilds. Do not move it back under `android/`.
 
-**Last reviewed:** 2026-05-19
-**Status:** RESOLVED — §1.9 open questions answered (see below). Doc now
-also informs the iOS App Store privacy nutrition labels for build 29.
+**Last reviewed:** 2026-05-29
+**Status:** RESOLVED — §1.9 open questions answered, and the §4
+notifications-on-launch audit closed (push perms now requested in-context,
+not at launch). Doc also informs the iOS App Store privacy nutrition labels.
 
 ---
 
@@ -86,10 +87,16 @@ without installing the app.
 - **In-app:** Confirmed at `apps/mobile/app/(app)/(drawer)/delete-account.tsx`,
   entered from `profile.tsx:1153`. 30-day grace, DELETE
   `/api/user/delete-account`.
-- **Public URL:** `https://www.myteamnetwork.com/account/delete` — **MISSING**.
-  Only auth-gated `apps/web/src/app/settings/account/page.tsx` exists today.
-  Play Store requires the public URL — blocker for Android launch, not iOS.
-  Tracked as Android launch prereq.
+- **Public URL:** `https://www.myteamnetwork.com/account/delete` — still
+  **MISSING** (as of 2026-05-29). Only auth-gated
+  `apps/web/src/app/settings/account/page.tsx` exists. Play Store requires the
+  public URL — blocker for Android launch, not iOS. Tracked as Android launch
+  prereq.
+- **Enterprise self-service deletion** (separate from per-user deletion) now
+  exists: `apps/web/src/lib/enterprise/delete-enterprise.ts`,
+  `api/cron/enterprise-deletion`, and the `EnterpriseDangerZoneCard` UI. This
+  is an admin-facing org-level flow and does NOT satisfy the public per-user
+  deletion-URL requirement above.
 - **SLA:** hard-delete within 30 days of request.
 
 ### 1.7 Explicit "No" answers (Play will ask)
@@ -133,19 +140,24 @@ Resolved 2026-05-19 during App Store build 29 submission prep.
 - [x] **In-app search query text** — NOT captured by PostHog. Search errors
   hit Sentry with `query` as extra
   (`apps/mobile/src/hooks/useGlobalSearch.ts:122-126`). `query`,
-  `firstName`, `lastName`, `name` now added to `PII_KEYS` in
-  `apps/mobile/src/lib/analytics/sentry.ts` so error-path captures are
-  scrubbed.
+  `firstName`, `lastName`, `name` are among the `PII_KEYS` scrubbed in
+  `apps/mobile/src/lib/analytics/sentry.ts:26-45` so error-path captures are
+  redacted. Full set: `email`, `userEmail`, `password`, `token`,
+  `accessToken`, `refreshToken`, `authorization`, `apiKey`, `secret`, `phone`,
+  `phoneNumber`, `ssn`, `creditCard`, `cardNumber`, `query`, `firstName`,
+  `lastName`, `name`.
 - [x] **In-app account deletion screen** — Exists at
   `apps/mobile/app/(app)/(drawer)/delete-account.tsx`, entered from
-  `profile.tsx:1153`. 30-day grace, DELETE `/api/user/delete-account`.
-- [x] **Public deletion URL** — MISSING. `https://www.myteamnetwork.com/account/delete`
-  does not exist; only auth-gated `apps/web/src/app/settings/account/page.tsx`.
-  iOS does NOT require this. Play Store DOES — Android-launch blocker.
-- [x] **Sentry PII scrubbing** — Implemented at
-  `apps/mobile/src/lib/analytics/sentry.ts:67-82`. Strips
-  `email`/`username`/`ip_address` from `event.user`; scrubs `PII_KEYS`
-  from `extra`/`tags`/`breadcrumbs`; `sendDefaultPii: false`.
+  `profile.tsx:1156`. 30-day grace, DELETE `/api/user/delete-account`.
+- [x] **Public deletion URL** — still MISSING (2026-05-29).
+  `https://www.myteamnetwork.com/account/delete` does not exist; only
+  auth-gated `apps/web/src/app/settings/account/page.tsx`. The new enterprise
+  self-service deletion flow (see §1.6) does not satisfy this. iOS does NOT
+  require it. Play Store DOES — Android-launch blocker.
+- [x] **Sentry PII scrubbing** — Implemented in
+  `apps/mobile/src/lib/analytics/sentry.ts`: `sendDefaultPii: false` (line 63);
+  strips `email`/`username`/`ip_address` from `event.user` (lines 74-76);
+  scrubs `PII_KEYS` (lines 26-45) from `extra`/`tags`/`breadcrumbs`.
 - [x] **PostHog opt-out toggle** — `setEnabled()` exists at
   `apps/mobile/src/lib/analytics/index.ts:181-196` but NO Settings UI
   calls it. Not strictly required by ASC. Tracked as post-launch issue.
@@ -263,7 +275,7 @@ build:
 
 ## 4. Biometric + camera audit
 
-### Status: ✅ Resolved 2026-05-19 (camera + biometric). ⚠️ Notifications-on-launch audit still open.
+### Status: ✅ Resolved — camera + biometric (2026-05-19), notifications-on-launch (2026-05-29).
 
 ### Camera — IS used at runtime
 
@@ -294,21 +306,21 @@ Resolved in §3. `expo-local-authentication` powers biometric unlock
 `SettingsSecuritySection`). Merged manifest now declares `USE_BIOMETRIC`
 only — `USE_FINGERPRINT` blocked.
 
-### Notifications — ⚠️ Open
+### Notifications — ✅ Resolved (in-context, not at launch)
 
-Confirm `POST_NOTIFICATIONS` is requested at the right moment.
-Expected:
+`POST_NOTIFICATIONS` is requested in-context, gated on authentication — not
+at cold launch. In `apps/mobile/src/hooks/usePushNotifications.ts`:
 
-1. First app open → no prompt.
-2. User enters a screen where notifications matter (org join, settings).
-3. Call `Notifications.requestPermissionsAsync()` there, not at launch.
+- The registration effect (lines 133-140) returns early unless `enabled` is
+  true and only calls `register()` when `userId` is present (i.e. after the
+  user is authenticated).
+- `register()` (lines 96-118) itself early-returns unless `userId && enabled`
+  (line 97), then calls `requestNotificationPermissions()` (line 100).
 
-Prompting at launch is the most common reason users deny push, and Play
-reviewers have flagged it as "unclear purpose." iOS reviewers usually
-accept either pattern but in-context prompting has higher accept rates.
-
-Check: `apps/mobile/src/hooks/usePushNotifications.ts`. Not blocking
-iOS build 29 submission.
+So there is no prompt on first app open; the permission request fires only
+for an authenticated user via the registration path. This was the preferred
+pattern (in-context prompting has higher accept rates and avoids Play's
+"unclear purpose" flag).
 
 ---
 
@@ -345,3 +357,4 @@ lost.
 | 2026-04-08 | Initial draft scoped to the four follow-ups: data safety, camera non-required feature, USE_FINGERPRINT cleanup, biometric+camera audit. Camera non-required feature implemented via `plugins/withOptionalHardwareFeatures.js`. |
 | 2026-05-19 | Closed §1.9 open questions during iOS App Store build 29 submission prep. Phone declared as collected/optional/profile-only. Sentry `PII_KEYS` expanded to include `query`/`firstName`/`lastName`/`name`. In-app delete confirmed at `delete-account.tsx`. Public delete URL flagged as Play-only blocker. PostHog opt-out UI deferred post-launch. `USE_FINGERPRINT` added to `android.blockedPermissions` in `app.config.ts`. `apps/mobile/posthog-setup-report.md` removed. Status flipped DRAFT → RESOLVED. |
 | 2026-05-19 | Title and intro reworded — doc now covers both Play Data Safety and iOS ASC App Privacy. §3 flipped to ✅ Blocked (`USE_FINGERPRINT` now in `android.blockedPermissions`; biometric usage confirmed in `src/lib/biometric.ts` + `SettingsSecuritySection` + `BiometricLockContext`; verify on next Android EAS build). §4 flipped to ✅ for camera (QR scanner only — `QRScanner.tsx` + `events/[eventId]/scan.tsx`, no `launchCameraAsync`) and biometric. Notifications-on-launch audit remains the only §4 open item. §5 stale items resolved: `.claude/skills/` and `posthog-setup-report.md` confirmed absent. Sentry opt-out UI kept (code path present, UI absent). |
+| 2026-05-29 | Reconciled against `chore/remove-hcaptcha-fallback`. §4 notifications-on-launch audit CLOSED — `usePushNotifications.ts` requests `POST_NOTIFICATIONS` in-context gated on auth (`register()` early-returns unless `userId && enabled`, lines 96-118/133-140), not at launch; §4 status + subsection updated. §1.9/§1.6 Sentry refs corrected — `PII_KEYS` at `sentry.ts:26-45` (full set documented), `sendDefaultPii:false` line 63, `event.user` strip lines 74-76. delete-account entry corrected to `profile.tsx:1156`. Noted new enterprise self-service deletion flow (`lib/enterprise/delete-enterprise.ts`, `api/cron/enterprise-deletion`, `EnterpriseDangerZoneCard`) while confirming the public per-user `/account/delete` URL is STILL missing (Play Android blocker stands). Confirmed unchanged: Turnstile captcha, `blockedPermissions` list, `NSCameraUsageDescription`, third-party SDK list. |
