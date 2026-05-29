@@ -4,6 +4,8 @@ import {
   normalizeApifyItem,
   mapApifyToFields,
   getApifyProfileUrlKey,
+  fetchApimaestroEducationDates,
+  mergeEducationYears,
 } from "@/lib/linkedin/apify";
 
 // Mirrors the REAL dev_fusion/linkedin-profile-scraper output shape (verified
@@ -205,6 +207,105 @@ test("normalizeApifyItem rejects payloads with no identifying fields", () => {
   assert.equal(normalizeApifyItem({}), null);
   assert.equal(normalizeApifyItem(null), null);
   assert.equal(normalizeApifyItem("nope"), null);
+});
+
+// Mirrors the apimaestro/linkedin-profile-detail shape (verified live): a single
+// dataset item with `education[]` carrying `{school, start_date:{year,month?},
+// end_date:{year,month?}}`. We only consume the years.
+const APIMAESTRO_ITEM = [
+  {
+    basic_info: { fullname: "Jane Doe" },
+    education: [
+      {
+        school: "MIT",
+        start_date: { year: 2014 },
+        end_date: { year: 2018 },
+      },
+      {
+        school: "Phillips Academy",
+        start_date: { year: 2010, month: "Sep" },
+        end_date: { year: 2014, month: "May" },
+      },
+    ],
+  },
+];
+
+function stubFetch(payload: unknown): typeof fetch {
+  return (async () =>
+    new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as unknown as typeof fetch;
+}
+
+// The fetch helper guards on APIFY_API_TOKEN; provide a dummy for these tests
+// and restore the original so other suites in the shared process are unaffected.
+async function withApifyToken<T>(fn: () => Promise<T>): Promise<T> {
+  const original = process.env.APIFY_API_TOKEN;
+  process.env.APIFY_API_TOKEN = "test-token";
+  try {
+    return await fn();
+  } finally {
+    if (original === undefined) delete process.env.APIFY_API_TOKEN;
+    else process.env.APIFY_API_TOKEN = original;
+  }
+}
+
+test("fetchApimaestroEducationDates keys years by normalized school name", async () => {
+  await withApifyToken(async () => {
+    const dates = await fetchApimaestroEducationDates("https://www.linkedin.com/in/jane-doe/", {
+      fetchFn: stubFetch(APIMAESTRO_ITEM),
+    });
+    assert.equal(dates.size, 2);
+    assert.deepEqual(dates.get("mit"), { start_year: "2014", end_year: "2018" });
+    assert.deepEqual(dates.get("phillips academy"), { start_year: "2010", end_year: "2014" });
+  });
+});
+
+test("fetchApimaestroEducationDates returns empty map on a missing URL", async () => {
+  await withApifyToken(async () => {
+    const dates = await fetchApimaestroEducationDates(null, { fetchFn: stubFetch(APIMAESTRO_ITEM) });
+    assert.equal(dates.size, 0);
+  });
+});
+
+test("fetchApimaestroEducationDates is best-effort on a failed run", async () => {
+  await withApifyToken(async () => {
+    const failing = (async () => new Response("err", { status: 500 })) as unknown as typeof fetch;
+    const dates = await fetchApimaestroEducationDates("https://www.linkedin.com/in/jane-doe/", {
+      fetchFn: failing,
+    });
+    assert.equal(dates.size, 0);
+  });
+});
+
+test("mergeEducationYears fills missing years by school name without overwriting", () => {
+  // dev_fusion gives the school + degree + logo but null years (verified live).
+  const profile = normalizeApifyItem({
+    fullName: "Jane Doe",
+    educations: [
+      { title: "MIT", subtitle: "BSc, Computer Science", period: { startedOn: null, endedOn: null } },
+      { title: "Phillips Academy", subtitle: "High School Diploma", period: { startedOn: "2009", endedOn: "2013" } },
+    ],
+  });
+  assert.ok(profile);
+  assert.equal(profile.education[0].start_year, null);
+  assert.equal(profile.education[1].start_year, "2009");
+
+  mergeEducationYears(
+    profile,
+    new Map([
+      ["mit", { start_year: "2014", end_year: "2018" }],
+      ["phillips academy", { start_year: "2010", end_year: "2014" }],
+    ]),
+  );
+
+  // MIT had no years → filled from apimaestro.
+  assert.equal(profile.education[0].start_year, "2014");
+  assert.equal(profile.education[0].end_year, "2018");
+  // Phillips already had dev_fusion years → left untouched.
+  assert.equal(profile.education[1].start_year, "2009");
+  assert.equal(profile.education[1].end_year, "2013");
 });
 
 test("getApifyProfileUrlKey normalizes the profile URL for run matching", () => {

@@ -8,7 +8,14 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { fetchApifyRunDataset, mapApifyToFields, getApifyProfileUrlKey, type ApifyProfileResult } from "@/lib/linkedin/apify";
+import {
+  fetchApifyRunDataset,
+  mapApifyToFields,
+  getApifyProfileUrlKey,
+  fetchApimaestroEducationDates,
+  mergeEducationYears,
+  type ApifyProfileResult,
+} from "@/lib/linkedin/apify";
 import { normalizeLinkedInProfileUrl } from "@/lib/alumni/linkedin-url";
 
 interface RunTargetRow {
@@ -127,6 +134,18 @@ export async function processFinishedApifyRun(
     const key = getApifyProfileUrlKey(profile);
     if (key) byUrl.set(key, profile);
   }
+
+  // Hybrid supplement: the primary actor leaves education years null, so fetch
+  // them from apimaestro (in parallel, best-effort) and merge in place before
+  // mapping. Only for profiles that actually have an education row missing years.
+  await Promise.all(
+    profiles.map(async (profile) => {
+      if (profile.education.length === 0) return;
+      if (profile.education.every((e) => e.start_year && e.end_year)) return;
+      const years = await fetchApimaestroEducationDates(profile.profile_url);
+      mergeEducationYears(profile, years);
+    }),
+  );
 
   for (const target of targets) {
     let profile = byUrl.get(safeNormalize(target.linkedin_url) ?? "");
