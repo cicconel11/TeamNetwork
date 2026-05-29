@@ -82,7 +82,7 @@ export function useLinkedInSync(): UseLinkedInSyncReturn {
   }, []);
 
   const sync = useCallback(async () => {
-    const res = await fetchWithAuth("/api/user/linkedin/bright-data-sync", { method: "POST" });
+    const res = await fetchWithAuth("/api/user/linkedin/enrichment-sync", { method: "POST" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       await refetch();
