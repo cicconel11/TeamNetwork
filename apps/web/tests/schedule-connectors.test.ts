@@ -14,6 +14,44 @@ function fixturePath(name: string) {
   return new URL(`../src/lib/schedule-connectors/__fixtures__/${name}`, import.meta.url);
 }
 
+function icsStamp(date: Date) {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+// Generates a VCALENDAR with two events ~20 and ~22 days out, keeping the
+// fixture inside the connector preview window regardless of the current date.
+function buildSampleIcs() {
+  const now = new Date();
+  const day = 24 * 60 * 60 * 1000;
+  const e1Start = new Date(now.getTime() + 20 * day);
+  const e1End = new Date(e1Start.getTime() + 2 * 60 * 60 * 1000);
+  const e2Start = new Date(now.getTime() + 22 * day);
+  const e2End = new Date(e2Start.getTime() + 2 * 60 * 60 * 1000);
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//TeamMeet//Schedule Connector Test//EN",
+    "BEGIN:VEVENT",
+    "UID:vendor-1@example.com",
+    `DTSTAMP:${icsStamp(now)}`,
+    `DTSTART:${icsStamp(e1Start)}`,
+    `DTEND:${icsStamp(e1End)}`,
+    "SUMMARY:Home Game",
+    "LOCATION:Field A",
+    "END:VEVENT",
+    "BEGIN:VEVENT",
+    "UID:vendor-2@example.com",
+    `DTSTAMP:${icsStamp(now)}`,
+    `DTSTART:${icsStamp(e2Start)}`,
+    `DTEND:${icsStamp(e2End)}`,
+    "RRULE:FREQ=WEEKLY;COUNT=2",
+    "SUMMARY:Practice",
+    "END:VEVENT",
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n");
+}
+
 const originalFetch = globalThis.fetch;
 const BASE_URL = "https://203.0.113.10";
 
@@ -53,7 +91,10 @@ test("vendorB canHandle recognizes fixture HTML", async () => {
 test("preview returns normalized events for vendor connectors", async () => {
   const vendorAHtml = await readFile(fixturePath("vendorA_sample.html"), "utf-8");
   const vendorBHtml = await readFile(fixturePath("vendorB_sample.html"), "utf-8");
-  const icsText = await readFile(fixturePath("sample.ics"), "utf-8");
+  // Build the ICS payload with dates relative to now so the preview window
+  // (now - 30d .. now + 180d) always contains the events. A static fixture
+  // silently falls out of the window as wall-clock time advances.
+  const icsText = buildSampleIcs();
 
   const mockFetch = async (url: RequestInfo | URL) => {
     const urlString = url.toString();
