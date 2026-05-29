@@ -3,8 +3,12 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui";
-import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
-import { getFreeSubOrgCount } from "@/lib/enterprise/pricing";
+import {
+  ALUMNI_BUCKET_PRICING,
+  ENTERPRISE_SEAT_PRICING,
+  type BillingInterval,
+} from "@/types/enterprise";
+import { getFreeSubOrgCount, formatSeatPrice } from "@/lib/enterprise/pricing";
 
 export interface PendingOrgData {
   name: string;
@@ -27,6 +31,7 @@ interface SubOrgUpgradeProps extends BaseUpgradeModalProps {
   currentCount: number;
   maxAllowed: number;
   bucketQuantity?: number;
+  billingInterval?: BillingInterval;
 }
 
 interface AlumniBucketUpgradeProps extends BaseUpgradeModalProps {
@@ -88,6 +93,15 @@ export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
   const isSubOrgUpgrade = upgradeType === "sub_org";
   const title = isSubOrgUpgrade ? "Organization Limit Reached" : "Alumni Bucket Upgrade";
 
+  const subOrgInterval: BillingInterval = isSubOrgUpgrade
+    ? (props.billingInterval ?? "year")
+    : "year";
+  const additionalOrgPrice = `${formatSeatPrice(
+    subOrgInterval === "month"
+      ? ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly
+      : ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly
+  )}/${subOrgInterval === "month" ? "mo" : "yr"}`;
+
   return (
     <div
       className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -121,11 +135,7 @@ export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
               stroke="currentColor"
               strokeWidth={1.5}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -152,14 +162,17 @@ export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
                   </svg>
                 </div>
                 <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  You&apos;ve reached your organization limit ({props.currentCount} of {props.maxAllowed})
+                  You&apos;ve reached your organization limit ({props.currentCount} of{" "}
+                  {props.maxAllowed})
                 </p>
               </div>
 
               {/* Pricing info */}
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  First {getFreeSubOrgCount(props.bucketQuantity ?? 1)} organizations are free (3 per alumni bucket). Additional organizations are $150/year each.
+                  First {getFreeSubOrgCount(props.bucketQuantity ?? 1)} organizations are free (
+                  {ENTERPRISE_SEAT_PRICING.freeSubOrgsPerBucket} per alumni bucket). Additional
+                  organizations are {additionalOrgPrice} each.
                 </p>
               </div>
 
@@ -206,7 +219,14 @@ export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
                   Current Bucket: {props.currentBucket}
                 </p>
                 <p className="text-xs text-purple-700 dark:text-purple-300">
-                  Capacity: {((props.currentBucket - 1) * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()} - {(props.currentBucket * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()} alumni
+                  Capacity:{" "}
+                  {(
+                    (props.currentBucket - 1) *
+                    ALUMNI_BUCKET_PRICING.capacityPerBucket
+                  ).toLocaleString()}{" "}
+                  -{" "}
+                  {(props.currentBucket * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()}{" "}
+                  alumni
                 </p>
               </div>
 
@@ -231,7 +251,9 @@ export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
                   Next Bucket: {props.currentBucket + 1}
                 </p>
                 <p className="text-xs text-green-700 dark:text-green-300">
-                  Capacity: {(props.currentBucket * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()} - {props.nextBucketCapacity.toLocaleString()} alumni
+                  Capacity:{" "}
+                  {(props.currentBucket * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()}{" "}
+                  - {props.nextBucketCapacity.toLocaleString()} alumni
                 </p>
                 <p className="text-sm font-semibold text-green-800 dark:text-green-200 mt-2">
                   Price: ${props.nextBucketPrice}/{props.billingInterval === "month" ? "mo" : "yr"}

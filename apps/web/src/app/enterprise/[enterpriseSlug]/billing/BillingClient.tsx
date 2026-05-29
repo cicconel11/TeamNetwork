@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Card, Button, Badge, Select } from "@/components/ui";
+import { Card, Button, Badge, ButtonLink } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniUsageBar } from "@/components/enterprise/AlumniUsageBar";
 import { SeatUsageBar } from "@/components/enterprise/SeatUsageBar";
-import { ALUMNI_BUCKET_PRICING, ENTERPRISE_SEAT_PRICING, type BillingInterval } from "@/types/enterprise";
-import { isSalesLed, getFreeSubOrgCount } from "@/lib/enterprise/pricing";
-import { resolveCurrentQuantity } from "@/lib/enterprise/quota-logic";
+import { type BillingInterval } from "@/types/enterprise";
+
+const SALES_EMAIL = "sales@myteamnetwork.com";
 
 interface BillingInfo {
   billingInterval: BillingInterval;
@@ -22,31 +22,17 @@ interface BillingInfo {
   subOrgQuantity: number | null;
 }
 
-const BUCKET_OPTIONS: { value: number; label: string }[] = [
-  { value: 1, label: "Bucket 1 - Up to 2,500 alumni" },
-  { value: 2, label: "Bucket 2 - Up to 5,000 alumni" },
-  { value: 3, label: "Bucket 3 - Up to 7,500 alumni" },
-  { value: 4, label: "Bucket 4 - Up to 10,000 alumni" },
-];
-
-function formatBucketPrice(quantity: number, interval: BillingInterval): string {
-  const amount = interval === "month"
-    ? (quantity * ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket) / 100
-    : (quantity * ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket) / 100;
-  return `$${amount.toLocaleString()}/${interval === "month" ? "mo" : "yr"}`;
-}
-
-export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: string; enterpriseSlug: string }) {
+export function BillingClient({
+  enterpriseId,
+  enterpriseSlug,
+}: {
+  enterpriseId: string;
+  enterpriseSlug: string;
+}) {
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  const [selectedBucketQuantity, setSelectedBucketQuantity] = useState(1);
-  const [selectedInterval, setSelectedInterval] = useState<BillingInterval>("year");
-  const [isUpdatingBucket, setIsUpdatingBucket] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
-  const [isAddingSeats, setIsAddingSeats] = useState(false);
 
   const loadBilling = useCallback(async () => {
     setIsLoading(true);
@@ -70,8 +56,6 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
         subOrgCount: usage.subOrgCount ?? billingPayload?.subOrgCount ?? 0,
         subOrgQuantity: billingPayload?.subOrgQuantity ?? null,
       });
-      setSelectedBucketQuantity(billingPayload?.alumniBucketQuantity ?? 1);
-      setSelectedInterval(billingPayload?.billingInterval || "year");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load billing");
     } finally {
@@ -82,54 +66,6 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
   useEffect(() => {
     loadBilling();
   }, [loadBilling]);
-
-  const handleUpgradeBucket = async () => {
-    if (!billing) return;
-
-    // Validate: new quantity must be > current
-    if (selectedBucketQuantity <= billing.alumniBucketQuantity) {
-      setError("Choose a higher bucket quantity to upgrade.");
-      return;
-    }
-
-    setIsUpdatingBucket(true);
-    setError(null);
-    setSuccessMessage(null);
-
-    try {
-      const adjustBody: Record<string, unknown> = {
-        adjustType: "alumni_bucket",
-        newQuantity: selectedBucketQuantity,
-        expectedCurrentQuantity: billing.alumniBucketQuantity,
-      };
-      // Only include billingInterval if the user is changing it
-      if (selectedInterval !== billing.billingInterval) {
-        adjustBody.billingInterval = selectedInterval;
-      }
-
-      const response = await fetch(`/api/enterprise/${enterpriseId}/billing/adjust`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(adjustBody),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 409) {
-          loadBilling();
-        }
-        throw new Error(data.error || "Failed to upgrade bucket");
-      }
-
-      setSuccessMessage("Alumni bucket upgraded successfully");
-      loadBilling();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upgrade bucket");
-    } finally {
-      setIsUpdatingBucket(false);
-    }
-  };
 
   const handleOpenPortal = async () => {
     setIsOpeningPortal(true);
@@ -159,48 +95,9 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
     }
   };
 
-  const handleAddSeats = async () => {
-    setIsAddingSeats(true);
-    setError(null);
-
-    try {
-      const rawQuantity = billing?.subOrgQuantity;
-      const currentQuantity = resolveCurrentQuantity(rawQuantity, billing?.subOrgCount ?? 0, getFreeSubOrgCount(billing?.alumniBucketQuantity ?? 1));
-
-      const response = await fetch(`/api/enterprise/${enterpriseId}/billing/adjust`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          adjustType: "sub_org",
-          newQuantity: currentQuantity + 1,
-          expectedCurrentQuantity: rawQuantity != null ? rawQuantity : undefined,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 409) {
-          loadBilling();
-        }
-        throw new Error(data.error || "Failed to add seats");
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-        return;
-      }
-
-      setSuccessMessage("Seats added successfully");
-      loadBilling();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add seats");
-    } finally {
-      setIsAddingSeats(false);
-    }
-  };
-
-  const getStatusVariant = (status: string | undefined): "success" | "warning" | "error" | "muted" => {
+  const getStatusVariant = (
+    status: string | undefined
+  ): "success" | "warning" | "error" | "muted" => {
     if (!status) return "muted";
     switch (status) {
       case "active":
@@ -227,7 +124,7 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
     );
   }
 
-  const isSalesManaged = isSalesLed(billing?.alumniBucketQuantity ?? 0);
+  const hasSubscription = Boolean(billing?.status);
 
   return (
     <div className="animate-fade-in">
@@ -243,54 +140,21 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
         </div>
       )}
 
-      {successMessage && (
-        <div className="mb-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
-          {successMessage}
-        </div>
-      )}
-
       {/* Current Plan */}
       <Card className="p-6 mb-6">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
           <div>
             <h3 className="font-semibold text-foreground">Current Plan</h3>
-            <p className="text-sm text-muted-foreground">
-              Your enterprise subscription details
-            </p>
+            <p className="text-sm text-muted-foreground">Your enterprise subscription details</p>
           </div>
           {billing?.status && (
-            <div className="flex items-center gap-2">
-              <Badge variant={getStatusVariant(billing.status)} className="uppercase tracking-wide">
-                {billing.status}
-              </Badge>
-              {isSalesManaged && (
-                <Badge variant="muted" className="uppercase tracking-wide">
-                  Sales-Managed
-                </Badge>
-              )}
-            </div>
+            <Badge variant={getStatusVariant(billing.status)} className="uppercase tracking-wide">
+              {billing.status}
+            </Badge>
           )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3 mb-6">
-          <div>
-            <p className="text-sm text-muted-foreground">Alumni Buckets</p>
-            {isSalesManaged ? (
-              <>
-                <p className="text-lg font-semibold text-foreground">Sales-managed</p>
-                <p className="text-xs text-muted-foreground">Contact support for adjustments</p>
-              </>
-            ) : (
-              <>
-                <p className="text-lg font-semibold text-foreground">
-                  {billing?.alumniBucketQuantity ?? 1} bucket{(billing?.alumniBucketQuantity ?? 1) !== 1 ? "s" : ""}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {((billing?.alumniBucketQuantity ?? 1) * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()} alumni capacity
-                </p>
-              </>
-            )}
-          </div>
+        <div className="grid gap-4 sm:grid-cols-2 mb-6">
           <div>
             <p className="text-sm text-muted-foreground">Billing Interval</p>
             <p className="text-lg font-semibold text-foreground capitalize">
@@ -310,13 +174,7 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
         <AlumniUsageBar
           currentCount={billing?.alumniCount ?? 0}
           bucketQuantity={billing?.alumniBucketQuantity ?? 1}
-          isSalesManaged={isSalesManaged}
-          onUpgrade={!isSalesManaged ? () => {
-            const next = (billing?.alumniBucketQuantity ?? 1) + 1;
-            if (next <= 4) {
-              setSelectedBucketQuantity(next);
-            }
-          } : undefined}
+          isSalesManaged
         />
 
         <div className="mt-6">
@@ -324,125 +182,53 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
             currentSeats={billing?.subOrgCount ?? 0}
             billingInterval={billing?.billingInterval ?? "year"}
             bucketQuantity={billing?.alumniBucketQuantity ?? 1}
-            onAddSeats={!isAddingSeats ? handleAddSeats : undefined}
           />
-        </div>
-
-        {/* Pricing breakdown */}
-        <div className="mt-6 p-4 rounded-xl bg-muted/50">
-          <h4 className="text-sm font-medium text-foreground mb-2">Pricing</h4>
-          <ul className="text-sm text-muted-foreground space-y-1">
-            {isSalesManaged ? (
-              <li>Alumni: Sales-managed plan (contact support for adjustments)</li>
-            ) : (
-              <li>
-                Alumni: {billing?.alumniBucketQuantity ?? 1} bucket{(billing?.alumniBucketQuantity ?? 1) !== 1 ? "s" : ""} @ {formatBucketPrice(1, billing?.billingInterval ?? "year")} each
-              </li>
-            )}
-            <li>
-              <span className="text-green-600 dark:text-green-400">First {getFreeSubOrgCount(billing?.alumniBucketQuantity ?? 1)} organizations: Free (3 per alumni bucket)</span>
-            </li>
-            <li>
-              Additional organizations: ${billing?.billingInterval === "month"
-                ? (ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly / 100).toFixed(0)
-                : (ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly / 100).toFixed(0)
-              }/{billing?.billingInterval === "month" ? "mo" : "yr"} each
-            </li>
-          </ul>
         </div>
       </Card>
 
-      {/* Upgrade Alumni Bucket */}
+      {/* Contact Sales — enterprise pricing is sales-led */}
       <Card className="p-6 mb-6">
-        <h3 className="font-semibold text-foreground mb-4">
-          {isSalesManaged ? "Alumni Capacity" : "Upgrade Alumni Bucket"}
-        </h3>
-
-        {isSalesManaged ? (
-          <div className="p-4 rounded-xl bg-muted/50">
-            <p className="text-sm text-muted-foreground">
-              Your alumni capacity is managed by the sales team. To adjust your plan, please contact support or your account representative.
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-xl">
+            <h3 className="font-semibold text-foreground">Enterprise plans are sales-led</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Enterprise pricing is tailored to your organization&apos;s alumni, active members, and
+              sub-organizations. To change your plan, add capacity, or get a quote, reach out to our
+              team and we&apos;ll get you set up.
             </p>
           </div>
-        ) : (
-          <>
-            <div className="grid gap-4 sm:grid-cols-3 mb-4">
-              <div className="sm:col-span-2">
-                <Select
-                  label="Alumni Bucket Quantity"
-                  value={selectedBucketQuantity.toString()}
-                  onChange={(e) => setSelectedBucketQuantity(parseInt(e.target.value, 10))}
-                  options={BUCKET_OPTIONS.map((option) => ({
-                    value: option.value.toString(),
-                    label: option.label,
-                    disabled: billing
-                      ? option.value < billing.alumniBucketQuantity
-                      : false,
-                  }))}
-                />
-              </div>
-              <div>
-                <Select
-                  label="Billing Interval"
-                  value={selectedInterval}
-                  onChange={(e) => setSelectedInterval(e.target.value as BillingInterval)}
-                  options={[
-                    { value: "month", label: "Monthly" },
-                    { value: "year", label: "Yearly (save ~17%)" },
-                  ]}
-                />
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-muted/50 mb-4">
-              <p className="text-sm text-muted-foreground">New alumni price:</p>
-              <p className="text-xl font-bold text-foreground">
-                {formatBucketPrice(selectedBucketQuantity, selectedInterval)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Alumni capacity: {(selectedBucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()}
-              </p>
-            </div>
-
-            <Button
-              onClick={handleUpgradeBucket}
-              isLoading={isUpdatingBucket}
-              disabled={
-                isUpdatingBucket ||
-                !billing ||
-                selectedBucketQuantity <= billing.alumniBucketQuantity
-              }
-            >
-              Upgrade Bucket
-            </Button>
-          </>
-        )}
+          <ButtonLink href={`mailto:${SALES_EMAIL}`} variant="primary" className="flex-shrink-0">
+            Contact Sales
+          </ButtonLink>
+        </div>
       </Card>
 
       {/* Billing Portal */}
-      <Card className="p-6">
-        <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
-          <div>
-            <h3 className="font-semibold text-foreground">Billing Portal</h3>
-            <p className="text-sm text-muted-foreground">
-              Manage payment methods, view invoices, and update billing details.
-            </p>
+      {hasSubscription && (
+        <Card className="p-6">
+          <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+            <div>
+              <h3 className="font-semibold text-foreground">Billing Portal</h3>
+              <p className="text-sm text-muted-foreground">
+                Manage payment methods, view invoices, and update billing details.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handleOpenPortal}
+              isLoading={isOpeningPortal}
+              disabled={isOpeningPortal || !billing?.stripeCustomerId}
+            >
+              Open Portal
+            </Button>
+            {!billing?.stripeCustomerId && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Stripe billing is not yet configured for this enterprise.
+              </p>
+            )}
           </div>
-          <Button
-            variant="secondary"
-            onClick={handleOpenPortal}
-            isLoading={isOpeningPortal}
-            disabled={isOpeningPortal}
-          >
-            Open Portal
-          </Button>
-          {!billing?.stripeCustomerId && !isLoading && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Stripe billing is not yet configured for this enterprise.
-            </p>
-          )}
-        </div>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }

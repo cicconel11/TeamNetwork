@@ -185,6 +185,23 @@
   },
   "settings": {
     "title": "Impostazioni",
+    "enterpriseDelete": {
+      "title": "Delete Enterprise",
+      "description": "Permanently delete this enterprise. This starts a 30-day grace period during which you can restore it.",
+      "button": "Delete Enterprise",
+      "blockedByOrgs": "Remove all {count} organizations before you can delete this enterprise.",
+      "gracePeriodNote": "Deletion runs as a 30-day soft delete. Billing continues until the enterprise is purged.",
+      "confirmTitle": "Confirm Enterprise Deletion",
+      "confirmDesc": "This schedules {name} for permanent deletion in 30 days. All sub-data is removed when the grace period ends. Billing continues until then.",
+      "typeToConfirm": "Type {phrase} to confirm:",
+      "typeAgain": "Type it again to confirm:",
+      "deleteForever": "Schedule Deletion",
+      "unableToDelete": "Unable to delete enterprise",
+      "pendingBanner": "This enterprise is scheduled for deletion on {date}.",
+      "restore": "Restore enterprise",
+      "restored": "Enterprise deletion cancelled.",
+      "unableToRestore": "Unable to restore enterprise"
+    },
     "tabs": {
       "connectedAccounts": "Account collegati",
       "notifications": "Notifiche",
