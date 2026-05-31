@@ -113,6 +113,8 @@ Client POST /api/ai/{orgId}/chat
   ├─ 5.  Abandoned stream cleanup (mark pending/streaming msgs >5 min as error)
   ├─ 6.  Idempotency check (by idempotencyKey → ai_messages unique index)
   │       ├─ Complete duplicate with assistant reply → SSE done event (replayed: true), return early
+  │       ├─ Refusal duplicates can match the assistant refusal row directly because skipped-user
+  │       │  refusal turns store the idempotency key on that assistant row without storing user content
   │       ├─ Complete duplicate before assistant reply exists → 409 { error, threadId }
   │       └─ In-flight duplicate → 409 { error, threadId }
   ├─ 7.  Upsert thread (insert new if no threadId, title = first 100 chars)
@@ -120,7 +122,7 @@ Client POST /api/ai/{orgId}/chat
   │       └─ `init_ai_chat(p_skip_user_message)` skips the user-message insert when the turn is
   │          already resolved to a terminal refusal (message-safety block or `out_of_scope_unrelated`),
   │          so refused user content is never persisted; the thread is still created/touched for the
-  │          refusal assistant row
+  │          refusal assistant row, which carries the idempotency key for retries
   │
   ├─ 8.25 Safety short-circuit
   │       ├─ `suspicious` / `blocked` → insert assistant refusal, skip model/tools/RAG/cache write

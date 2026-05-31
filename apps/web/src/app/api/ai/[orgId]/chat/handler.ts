@@ -295,6 +295,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         rateLimit,
         requestLogContext,
         insertAssistantMessage,
+        idempotencyKey,
         logAiRequestFn,
         trackOpsEventServerFn,
       });
@@ -326,6 +327,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         rateLimit,
         requestLogContext,
         insertAssistantMessage,
+        idempotencyKey,
         logAiRequestFn,
         trackOpsEventServerFn,
       });

@@ -144,7 +144,14 @@ function createSupabaseStub(options: { failHistoryQueries?: boolean } = {}) {
           query.op === "select" &&
           query.filters.some((filter) => filter.kind === "eq" && filter.column === "idempotency_key")
         ) {
-          return { data: null, error: null };
+          const idempotencyFilter = query.filters.find(
+            (filter) => filter.kind === "eq" && filter.column === "idempotency_key"
+          );
+          const row =
+            state.messages.find(
+              (message) => message.idempotency_key === idempotencyFilter?.value
+            ) ?? null;
+          return { data: row, error: null };
         }
 
         if (query.op === "select") {
@@ -172,7 +179,11 @@ function createSupabaseStub(options: { failHistoryQueries?: boolean } = {}) {
         if (query.op === "insert" && query.inserted) {
           if (query.inserted.role === "assistant") {
             const id = `assistant-${++state.assistantCount}`;
-            state.messages.push({ id, ...query.inserted });
+            state.messages.push({
+              id,
+              ...query.inserted,
+              created_at: new Date().toISOString(),
+            });
             return { data: { id }, error: null };
           }
           state.messages.push({
@@ -1137,6 +1148,42 @@ test("POST /api/ai/[orgId]/chat treats governance document asks as out_of_scope"
   assert.equal(cacheServiceSupabase.insertedRows.length, 0);
   assert.equal(auditEntries[0].cacheStatus, "ineligible");
   assert.equal(auditEntries[0].cacheBypassReason, "out_of_scope_request");
+});
+
+test("POST /api/ai/[orgId]/chat replays refused turns without persisting user content", async () => {
+  const makeRefusalRequest = () =>
+    new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "What's the weather in Paris tomorrow?",
+        surface: "general",
+        idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      }),
+    });
+
+  const firstResponse = await POST(makeRefusalRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  assert.equal(firstResponse.status, 200);
+  await firstResponse.text();
+
+  const secondResponse = await POST(makeRefusalRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  assert.equal(secondResponse.status, 200);
+  const replayBody = await secondResponse.text();
+
+  const userRows = supabaseStub.state.messages.filter((message) => message.role === "user");
+  const assistantRows = supabaseStub.state.messages.filter(
+    (message) => message.role === "assistant"
+  );
+
+  assert.equal(userRows.length, 0, "refused content must not persist as a user row");
+  assert.equal(assistantRows.length, 1, "idempotent refused retry should replay");
+  assert.equal(assistantRows[0].idempotency_key, VALID_IDEMPOTENCY_KEY);
+  assert.equal(initChatCalls.length, 1, "retry should not initialize another chat");
+  assert.match(replayBody, /"replayed":true/);
 });
 
 test("POST /api/ai/[orgId]/chat logs grounding failures for unsupported tool summaries without failing the stream", async () => {
