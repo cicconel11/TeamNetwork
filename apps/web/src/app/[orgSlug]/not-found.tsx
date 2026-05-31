@@ -14,9 +14,14 @@ export default function OrgNotFound() {
         <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
           We couldn&apos;t find the organization you&apos;re looking for. It may have been removed or the URL is incorrect.
         </p>
-        <Link href="/">
-          <Button>Browse Organizations</Button>
-        </Link>
+        <div className="flex items-center justify-center gap-2">
+          <Link href="/">
+            <Button>Browse Organizations</Button>
+          </Link>
+          <Link href="/support">
+            <Button variant="secondary">Contact Support</Button>
+          </Link>
+        </div>
       </div>
     </div>
   );

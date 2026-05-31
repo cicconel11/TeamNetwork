@@ -57,6 +57,9 @@ export default function OrgError({ error, reset }: OrgErrorProps) {
           <Link href="/">
             <Button variant="secondary">Go home</Button>
           </Link>
+          <Link href="/support">
+            <Button variant="secondary">Support</Button>
+          </Link>
         </div>
       </div>
     </div>

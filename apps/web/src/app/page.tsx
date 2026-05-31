@@ -311,6 +311,7 @@ export default async function LandingPage() {
                 <nav className="flex flex-col gap-2 text-sm">
                   <Link href="/terms" className="text-landing-cream/65 hover:text-landing-cream transition-colors">Terms</Link>
                   <Link href="/privacy" className="text-landing-cream/65 hover:text-landing-cream transition-colors">Privacy</Link>
+                  <Link href="/support" className="text-landing-cream/65 hover:text-landing-cream transition-colors">Support</Link>
                 </nav>
               </div>
             </div>

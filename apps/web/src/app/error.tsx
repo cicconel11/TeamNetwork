@@ -57,6 +57,9 @@ export default function AppError({ error, reset }: AppErrorProps) {
           <Link href="/">
             <Button variant="secondary">Go home</Button>
           </Link>
+          <Link href="/support">
+            <Button variant="secondary">Support</Button>
+          </Link>
         </div>
       </div>
     </div>
