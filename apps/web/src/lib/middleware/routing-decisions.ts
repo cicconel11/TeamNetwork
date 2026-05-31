@@ -24,6 +24,7 @@ const PUBLIC_ROUTES = [
   "/auth/signout",
   "/terms",
   "/privacy",
+  "/support",
   "/app/parents-join",
   "/pricing/calculator",
 ];
