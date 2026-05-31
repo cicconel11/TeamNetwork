@@ -116,7 +116,7 @@ BEGIN
   -- MEMBERS: top up to 10 active (reviewer's synced row counts).
   SELECT count(*) INTO v_member_count FROM members WHERE organization_id = org AND deleted_at IS NULL;
   INSERT INTO members (organization_id, first_name, last_name, email, role, status)
-  SELECT org, m.fn, m.ln, m.em, 'member', 'active'::member_status
+  SELECT org, m.fn, m.ln, m.em, 'active_member', 'active'::member_status
   FROM (VALUES
     ('Jordan','Avery','jordan.avery@example.com'),
     ('Riley','Brooks','riley.brooks@example.com'),
