@@ -23,6 +23,13 @@ interface PendingAlumni {
   enrichment_retry_count: number | null;
 }
 
+interface RunTarget {
+  id: string;
+  target_kind: "user" | "alumni";
+  user_id: string | null;
+  alumni_id: string | null;
+}
+
 export interface EnrichmentProcessRouteDeps {
   createServiceClient?: typeof createServiceClient;
   validateCronAuth?: typeof validateCronAuth;
@@ -38,6 +45,56 @@ function safeNormalize(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+async function markTimedOutRunsFailed(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  hardCutoff: string,
+): Promise<number> {
+  const { data: timedOutRows, error: selectError } = await supabase
+    .from("linkedin_enrichment_runs")
+    .select("id, target_kind, user_id, alumni_id")
+    .eq("status", "syncing")
+    .lt("created_at", hardCutoff)
+    .limit(200);
+
+  if (selectError) {
+    console.error("[enrichment-process] hard-timeout select error:", selectError);
+    return 0;
+  }
+
+  const targets = (timedOutRows as RunTarget[] | null) ?? [];
+  if (targets.length === 0) return 0;
+
+  const now = new Date().toISOString();
+  await supabase
+    .from("linkedin_enrichment_runs")
+    .update({ status: "failed", error: "timed_out", updated_at: now })
+    .in("id", targets.map((t) => t.id));
+
+  const alumniIds = targets
+    .filter((t) => t.target_kind === "alumni" && t.alumni_id)
+    .map((t) => t.alumni_id);
+  if (alumniIds.length > 0) {
+    await supabase.rpc("increment_enrichment_retry", {
+      p_alumni_ids: alumniIds,
+      p_error: "timed_out",
+      p_max_retries: MAX_RETRIES,
+    });
+  }
+
+  const userIds = targets
+    .filter((t) => t.target_kind === "user" && t.user_id)
+    .map((t) => t.user_id);
+  if (userIds.length > 0) {
+    await supabase
+      .from("user_linkedin_connections")
+      .update({ enrichment_status: "failed", enrichment_run_id: null, sync_error: "timed_out" })
+      .in("user_id", userIds);
+  }
+
+  return targets.length;
 }
 
 export function createEnrichmentProcessGetHandler(deps: EnrichmentProcessRouteDeps = {}) {
@@ -63,6 +120,7 @@ export function createEnrichmentProcessGetHandler(deps: EnrichmentProcessRouteDe
     let startFailed = 0;
     let reconciledEnriched = 0;
     let reconciledFailed = 0;
+    let hardTimedOut = 0;
 
     try {
       // --- 1. Start runs for the pending queue -----------------------------
@@ -150,11 +208,7 @@ export function createEnrichmentProcessGetHandler(deps: EnrichmentProcessRouteDe
 
       // Hard-timeout: runs still 'syncing' long past completion are abandoned.
       const hardCutoff = new Date(Date.now() - HARD_TIMEOUT_MS).toISOString();
-      await supabase
-        .from("linkedin_enrichment_runs")
-        .update({ status: "failed", error: "timed_out", updated_at: new Date().toISOString() })
-        .eq("status", "syncing")
-        .lt("created_at", hardCutoff);
+      hardTimedOut = await markTimedOutRunsFailed(supabase, hardCutoff);
 
       return NextResponse.json({
         ok: true,
@@ -162,6 +216,7 @@ export function createEnrichmentProcessGetHandler(deps: EnrichmentProcessRouteDe
         start_failed: startFailed,
         reconciled_enriched: reconciledEnriched,
         reconciled_failed: reconciledFailed,
+        hard_timed_out: hardTimedOut,
       });
     } catch (error) {
       console.error("[enrichment-process] Error:", error);

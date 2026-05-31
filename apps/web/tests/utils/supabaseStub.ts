@@ -41,6 +41,7 @@ type TableName =
   | "feed_likes"
   | "media_uploads"
   | "user_linkedin_connections"
+  | "linkedin_enrichment_runs"
   | "parents"
   | "parent_invites"
   | "chat_poll_votes"
@@ -104,6 +105,7 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   feed_likes: ["post_id", "user_id"],
   media_uploads: [],
   user_linkedin_connections: ["user_id"],
+  linkedin_enrichment_runs: [],
   parents: [],
   parent_invites: ["code"],
   chat_poll_votes: [["message_id", "user_id"]],
@@ -160,6 +162,7 @@ export function createSupabaseStub() {
     feed_likes: [],
     media_uploads: [],
     user_linkedin_connections: [],
+    linkedin_enrichment_runs: [],
     parents: [],
     parent_invites: [],
     chat_poll_votes: [],
