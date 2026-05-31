@@ -7,7 +7,9 @@
 -- history -- polluting threads, inflating analytics, and retaining content
 -- (often the PII/jailbreak messages that were refused) that should not be
 -- stored. The thread itself is still created/touched so the refusal assistant
--- row has somewhere to live; only the user-message insert is skipped.
+-- row has somewhere to live; only the user-message insert is skipped. The
+-- handler stores the idempotency key on the complete assistant refusal row so
+-- retries can replay without using refused user content as the retry anchor.
 --
 -- Recreated as a single 11-param overload. Drop the prior 10-param version so
 -- no stale overload remains (matches the consolidation in 20260713000000).

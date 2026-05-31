@@ -20,7 +20,11 @@ import type { StageOutcome } from "./state";
 type ValidatedBody = ReturnType<typeof sendMessageSchema.parse>;
 
 export interface AssistantInserter {
-  (input: { content: string | null; status: "pending" | "complete" }): Promise<{
+  (input: {
+    content: string | null;
+    status: "pending" | "complete";
+    idempotencyKey?: string;
+  }): Promise<{
     data: { id: string } | null;
     error: unknown;
   }>;
@@ -103,6 +107,7 @@ export async function runInitChatRpcStage(
         context_surface: input.effectiveSurface,
         status: insertInput.status,
         content: insertInput.content,
+        idempotency_key: insertInput.idempotencyKey ?? null,
       })
       .select("id")
       .single();

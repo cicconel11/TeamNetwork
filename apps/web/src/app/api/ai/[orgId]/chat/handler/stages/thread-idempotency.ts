@@ -227,7 +227,7 @@ export async function runThreadIdempotencyStage(
     async () =>
       ctx.supabase
         .from("ai_messages")
-        .select("id, status, thread_id, created_at")
+        .select("id, role, status, thread_id, created_at, content")
         .eq("idempotency_key", idempotencyKey)
         .maybeSingle(),
   );
@@ -253,16 +253,25 @@ export async function runThreadIdempotencyStage(
       };
       skipRemainingStages(stageTimings, "cache_lookup");
 
-      const { data: assistantReplay, error: assistantReplayError } = await ctx.supabase
-        .from("ai_messages")
-        .select("content")
-        .eq("thread_id", existingMsg.thread_id)
-        .eq("role", "assistant")
-        .eq("status", "complete")
-        .gt("created_at", existingMsg.created_at)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+      let assistantReplay: { content: string | null } | null = null;
+      let assistantReplayError: unknown = null;
+
+      if (existingMsg.role === "assistant") {
+        assistantReplay = { content: existingMsg.content };
+      } else {
+        const replayResult = await ctx.supabase
+          .from("ai_messages")
+          .select("content")
+          .eq("thread_id", existingMsg.thread_id)
+          .eq("role", "assistant")
+          .eq("status", "complete")
+          .gt("created_at", existingMsg.created_at)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        assistantReplay = replayResult.data;
+        assistantReplayError = replayResult.error;
+      }
 
       if (assistantReplayError) {
         aiLog("error", "ai-chat", "idempotency replay lookup failed", {
@@ -288,11 +297,13 @@ export async function runThreadIdempotencyStage(
         };
       }
 
+      const replayContent = assistantReplay.content;
+
       return {
         ok: false,
         response: buildSseResponse(
           createSSEStream(async (enqueue) => {
-            enqueue({ type: "chunk", content: assistantReplay.content });
+            enqueue({ type: "chunk", content: replayContent });
             enqueue({
               type: "done",
               threadId: existingMsg.thread_id,

@@ -59,6 +59,11 @@ export interface ServeTerminalRefusalInput {
   rateLimit: { headers: Record<string, string> | undefined };
   requestLogContext: AiLogContext;
   insertAssistantMessage: AssistantInserter;
+  /**
+   * Refused turns skip the role='user' row, so the complete assistant refusal
+   * carries the idempotency key as a content-free retry anchor.
+   */
+  idempotencyKey: string;
   logAiRequestFn: typeof logAiRequestDefault;
   trackOpsEventServerFn: typeof trackOpsEventServerDefault;
   /** Optional: include `bypassReason` only when truthy (matches today's behavior for safety where it's always set, scope where it's also always set). */
@@ -78,6 +83,7 @@ export async function serveTerminalRefusal(
     await input.insertAssistantMessage({
       content: input.fallbackContent,
       status: "complete",
+      idempotencyKey: input.idempotencyKey,
     });
 
   if (assistantError || !assistantMsg) {
