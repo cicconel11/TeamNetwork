@@ -13,7 +13,7 @@ use the credentials below.
 
 Test account
   Email:    test-reviewer@myteamnetwork.com
-  Password: [fill in — set during signup]
+  Password: AppleReview2026!
   Orgs:     Apple Review Test Org (donation_eligible_ios = true, admin) — fully populated, every feature tab
             CHSFL - Test Organization (admin) — real org, large roster
             TeamNetwork founders org (active_member)
