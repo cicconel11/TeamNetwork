@@ -7827,6 +7827,7 @@ export type Database = {
           p_intent_type?: string
           p_message: string
           p_org_id: string
+          p_skip_user_message?: boolean
           p_surface: string
           p_thread_id?: string
           p_title: string

@@ -217,23 +217,29 @@ function rebuildHandler(opts: BuildHandlerOpts = {}): void {
               title: params.p_title,
             });
           }
-          supabaseStub.state.messages.push({
-            id: `user-${supabaseStub.state.messages.length + 1}`,
-            thread_id: threadId,
-            org_id: params.p_org_id,
-            user_id: params.p_user_id,
-            role: "user",
-            content: params.p_message,
-            intent: params.p_intent ?? null,
-            intent_type: params.p_intent_type ?? null,
-            context_surface: params.p_context_surface ?? params.p_surface,
-            status: "complete",
-            idempotency_key: params.p_idempotency_key,
-          });
+          // Mirror the real RPC: skip the user-message insert when the turn is
+          // destined for a terminal refusal (p_skip_user_message).
+          let userMsgId: string | null = null;
+          if (!params.p_skip_user_message) {
+            userMsgId = `user-${supabaseStub.state.messages.length + 1}`;
+            supabaseStub.state.messages.push({
+              id: userMsgId,
+              thread_id: threadId,
+              org_id: params.p_org_id,
+              user_id: params.p_user_id,
+              role: "user",
+              content: params.p_message,
+              intent: params.p_intent ?? null,
+              intent_type: params.p_intent_type ?? null,
+              context_surface: params.p_context_surface ?? params.p_surface,
+              status: "complete",
+              idempotency_key: params.p_idempotency_key,
+            });
+          }
           return {
             data: {
               thread_id: threadId,
-              user_msg_id: `user-${supabaseStub.state.messages.length}`,
+              user_msg_id: userMsgId,
             },
             error: null,
           };
@@ -378,6 +384,46 @@ test("snapshot: scope-refusal (out_of_scope_unrelated terminal)", async () => {
         idempotencyKey: VALID_IDEMPOTENCY_KEY,
       }),
   );
+});
+
+// Refused turns must not persist a role='user' row (init_ai_chat is called
+// with p_skip_user_message=true). The thread is still created so the refusal
+// assistant row has a home.
+test("scope-refusal does not persist a user message", async () => {
+  rebuildHandler();
+  const response = await POST(
+    makeRequest({
+      message: "What's the weather in Paris tomorrow?",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }) as any,
+    { params: Promise.resolve({ orgId: ORG_ID }) },
+  );
+  await captureSse(response as Response);
+
+  const userRows = supabaseStub.state.messages.filter((m) => m.role === "user");
+  assert.equal(userRows.length, 0, "refused turn must not write a user message");
+  assert.ok(
+    supabaseStub.state.threads.length >= 1,
+    "thread should still be created for the refusal assistant row",
+  );
+});
+
+// Positive control: a normal (non-refused) turn still persists the user row.
+test("normal turn persists the user message", async () => {
+  rebuildHandler();
+  const response = await POST(
+    makeRequest({
+      message: "Compare members, donations, and events",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }) as any,
+    { params: Promise.resolve({ orgId: ORG_ID }) },
+  );
+  await captureSse(response as Response);
+
+  const userRows = supabaseStub.state.messages.filter((m) => m.role === "user");
+  assert.equal(userRows.length, 1, "normal turn must write exactly one user message");
 });
 
 // Pass1 yields N tool_call_requested events, no text. Pass2 (detected via

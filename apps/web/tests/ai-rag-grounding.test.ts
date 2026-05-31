@@ -119,6 +119,22 @@ test("verifyRagGrounding uses judge for prose-check and respects `no`", async ()
   assert.ok(judgeCalls > 0);
 });
 
+test("verifyRagGrounding treats judge `partial` as uncovered", async () => {
+  // `partial` means peripheral terms match but the key claim is unsupported —
+  // it must flag uncovered, not pass as grounded.
+  let judgeCalls = 0;
+  const result = await verifyRagGrounding({
+    content: "Our CEO announced a $4.2M donation yesterday.",
+    ragChunks: [chunkAnnouncement],
+    judge: async () => {
+      judgeCalls++;
+      return "partial";
+    },
+  });
+  assert.equal(result.grounded, false);
+  assert.ok(judgeCalls > 0);
+});
+
 test("verifyRagGrounding marks claim uncovered on judge error", async () => {
   const result = await verifyRagGrounding({
     content: "Our CEO announced record revenue growth yesterday.",
