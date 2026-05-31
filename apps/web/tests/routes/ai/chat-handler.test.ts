@@ -344,22 +344,27 @@ beforeEach(() => {
             surface: params.p_surface,
             title: params.p_title,
           });
-          supabaseStub.state.messages.push({
-            id: `user-${supabaseStub.state.messages.length + 1}`,
-            thread_id: threadId,
-            org_id: params.p_org_id,
-            user_id: params.p_user_id,
-            role: "user",
-            content: params.p_message,
-            intent: params.p_intent ?? null,
-            intent_type: params.p_intent_type ?? null,
-            context_surface: params.p_context_surface ?? params.p_surface,
-            status: "complete",
-            idempotency_key: params.p_idempotency_key,
-            created_at: new Date().toISOString(),
-          });
+          // Mirror the real RPC: skip the user-message insert for refused turns.
+          let userMsgId: string | null = null;
+          if (!params.p_skip_user_message) {
+            userMsgId = `user-${supabaseStub.state.messages.length + 1}`;
+            supabaseStub.state.messages.push({
+              id: userMsgId,
+              thread_id: threadId,
+              org_id: params.p_org_id,
+              user_id: params.p_user_id,
+              role: "user",
+              content: params.p_message,
+              intent: params.p_intent ?? null,
+              intent_type: params.p_intent_type ?? null,
+              context_surface: params.p_context_surface ?? params.p_surface,
+              status: "complete",
+              idempotency_key: params.p_idempotency_key,
+              created_at: new Date().toISOString(),
+            });
+          }
           return {
-            data: { thread_id: threadId, user_msg_id: `user-${supabaseStub.state.messages.length}` },
+            data: { thread_id: threadId, user_msg_id: userMsgId },
             error: null,
           };
         }

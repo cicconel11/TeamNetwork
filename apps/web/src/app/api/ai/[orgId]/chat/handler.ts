@@ -246,7 +246,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     if (preInitLookup.cacheStatus) cacheStatus = preInitLookup.cacheStatus;
     if (preInitLookup.cacheBypassReason) cacheBypassReason = preInitLookup.cacheBypassReason;
 
-    // 7+8. Atomically create/reuse thread and insert user message via RPC
+    // 7+8. Atomically create/reuse thread and insert user message via RPC.
+    // When this turn is already resolved to a terminal refusal (handled just
+    // below), skip persisting the user message: the thread is still created so
+    // the refusal assistant row has a home, but refused content (often the
+    // PII/jailbreak messages we block) never lands in conversation history.
+    const willRefuse =
+      messageSafety.riskLevel !== "none" ||
+      executionPolicy.profile === "out_of_scope_unrelated";
     const initOutcome = await runInitChatRpcStage({
       ctx,
       rateLimit,
@@ -259,6 +266,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       resolvedIntent,
       resolvedIntentType,
       effectiveSurface,
+      skipUserMessage: willRefuse,
     });
     if (!initOutcome.ok) return initOutcome.response;
     threadId = initOutcome.value.threadId;

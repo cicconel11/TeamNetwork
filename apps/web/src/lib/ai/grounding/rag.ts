@@ -324,7 +324,9 @@ export async function verifyRagGrounding(
       try {
         usedJudge = true;
         const verdict = await judge(combined, sentence);
-        if (verdict === "no") uncovered.push(sentence);
+        // `partial` means key claim is unsupported (peripheral terms only) — treat as
+        // uncovered alongside `no`, otherwise hallucinated specifics pass grounding.
+        if (verdict === "no" || verdict === "partial") uncovered.push(sentence);
       } catch (err) {
         const code =
           err instanceof RagJudgeCapReachedSignal

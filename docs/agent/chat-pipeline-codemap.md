@@ -29,7 +29,7 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/message-safety.ts` | Transport-noise cleanup, prompt-injection assessment, history sanitization | `assessAiMessageSafety`, `sanitizeHistoryMessageForPrompt` |
 | `src/lib/ai/turn-execution-policy.ts` | Internal execution-policy builder | `buildTurnExecutionPolicy` |
 | `src/lib/ai/grounding/tool/verifier.ts` | Deterministic verifier for current read-tool summaries, including connection-template validation against `suggest_connections` payload states, names, order, and reasons | `verifyToolBackedResponse` |
-| `src/lib/ai/grounding/rag.ts` | Freeform response grounding against retrieved RAG chunks, with deterministic claim coverage plus optional prose judge | `verifyRagGrounding` |
+| `src/lib/ai/grounding/rag.ts` | Freeform response grounding against retrieved RAG chunks, with deterministic claim coverage plus optional prose judge (judge `no` and `partial` verdicts both count as uncovered) | `verifyRagGrounding` |
 | `src/lib/ai/grounding/primitives.ts` | Shared claim-parsing primitives used by tool and RAG grounding validators | `extractQuotedTitles`, `parseCurrencyClaim` |
 | `src/lib/ai/tools/executor.ts` | Thin tool runner: access policy, org/enterprise gates, argument validation via `getToolModule`, and `dispatchToolModule` into the registry (per-tool timeouts and `extract_schedule_pdf` image/PDF timeout mapping) | `executeToolCall`, `ToolExecutionResult`, `ToolExecutionContext` |
 | `src/lib/ai/tools/registry/` | **All** AI tool implementations: each `ToolModule` owns its Zod `argsSchema` and `execute` (including schedule import, reads, and prepare-* tools) | `dispatchToolModule`, `getToolModule`, `isRegisteredTool` |
@@ -117,6 +117,10 @@ Client POST /api/ai/{orgId}/chat
   │       └─ In-flight duplicate → 409 { error, threadId }
   ├─ 7.  Upsert thread (insert new if no threadId, title = first 100 chars)
   ├─ 8.  Insert user message (status: complete) + touch thread updated_at
+  │       └─ `init_ai_chat(p_skip_user_message)` skips the user-message insert when the turn is
+  │          already resolved to a terminal refusal (message-safety block or `out_of_scope_unrelated`),
+  │          so refused user content is never persisted; the thread is still created/touched for the
+  │          refusal assistant row
   │
   ├─ 8.25 Safety short-circuit
   │       ├─ `suspicious` / `blocked` → insert assistant refusal, skip model/tools/RAG/cache write

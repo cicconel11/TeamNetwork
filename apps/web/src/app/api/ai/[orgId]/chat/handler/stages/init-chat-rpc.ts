@@ -38,6 +38,13 @@ export interface InitChatRpcInput {
   resolvedIntent: string;
   resolvedIntentType: string;
   effectiveSurface: CacheSurface;
+  /**
+   * When true, the thread is created/touched but the user message is NOT
+   * persisted. Set for turns already resolved to a terminal refusal
+   * (message-safety block or out-of-scope scope refusal) so refused user
+   * content never lands in conversation history.
+   */
+  skipUserMessage: boolean;
 }
 
 export interface InitChatRpcSlice {
@@ -64,6 +71,7 @@ export async function runInitChatRpcStage(
         p_intent: input.resolvedIntent,
         p_context_surface: input.effectiveSurface,
         p_intent_type: input.resolvedIntentType,
+        p_skip_user_message: input.skipUserMessage,
       }),
   );
 
