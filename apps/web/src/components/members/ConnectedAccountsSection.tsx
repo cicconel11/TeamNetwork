@@ -170,6 +170,7 @@ function ConnectedAccountsSectionContent({
           statusNotConnectedLabel={statusNotConnected}
         >
           <LinkedInSettingsPanel
+            nested
             linkedInUrl={linkedIn.linkedInUrl}
             onLinkedInUrlSave={linkedIn.onLinkedInUrlSave}
             connection={linkedIn.connection}
@@ -196,6 +197,7 @@ function ConnectedAccountsSectionContent({
           statusNotConnectedLabel={statusNotConnected}
         >
           <GoogleCalendarSyncPanel
+            nested
             orgName={orgName}
             organizationId={orgId}
             connection={calendarSync.connection}
@@ -225,6 +227,7 @@ function ConnectedAccountsSectionContent({
           statusNotConnectedLabel={statusNotConnected}
         >
           <OutlookCalendarSyncPanel
+            nested
             orgName={orgName}
             organizationId={orgId}
             connection={outlookSync.connection}

@@ -47,6 +47,12 @@ interface GoogleCalendarSyncPanelProps {
   onReconnect: () => void;
   onTargetCalendarChange: (calendarId: string) => Promise<void>;
   onPreferenceChange: (prefs: SyncPreferences) => Promise<void>;
+  /**
+   * When rendered inside a parent that already shows the icon, name, and
+   * connection status (e.g. the member-profile Connected Accounts accordion),
+   * suppress this panel's redundant icon-title header and status badge.
+   */
+  nested?: boolean;
 }
 
 const EVENT_TYPE_KEYS: (keyof SyncPreferences)[] = [
@@ -133,6 +139,7 @@ export function GoogleCalendarSyncPanel({
   onReconnect,
   onTargetCalendarChange,
   onPreferenceChange,
+  nested = false,
 }: GoogleCalendarSyncPanelProps) {
   const tGCal = useTranslations("googleCalendar");
   const tCommon = useTranslations("common");
@@ -248,10 +255,12 @@ export function GoogleCalendarSyncPanel({
   if (!isConnected) {
     return (
       <Card className="p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <CalendarIcon />
-          <p className="font-medium text-foreground">{tGCal("title")}</p>
-        </div>
+        {!nested && (
+          <div className="flex items-center gap-2">
+            <CalendarIcon />
+            <p className="font-medium text-foreground">{tGCal("title")}</p>
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">
           {tGCal("description", { orgName })}
         </p>
@@ -285,13 +294,15 @@ export function GoogleCalendarSyncPanel({
     <Card className="divide-y divide-border/60">
       {/* Section 1: Connection status */}
       <div className="p-5 space-y-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <CalendarIcon />
-            <p className="font-medium text-foreground">{tGCal("title")}</p>
+        {!nested && (
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <CalendarIcon />
+              <p className="font-medium text-foreground">{tGCal("title")}</p>
+            </div>
+            {connection && getStatusBadge(connection.status, tCommon("connected"), tGCal("disconnected"), tCommon("error"))}
           </div>
-          {connection && getStatusBadge(connection.status, tCommon("connected"), tGCal("disconnected"), tCommon("error"))}
-        </div>
+        )}
 
         <div className="space-y-1 text-sm">
           <div className="flex items-center gap-2">

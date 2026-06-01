@@ -47,6 +47,12 @@ export interface LinkedInSettingsPanelProps {
   onConnect: () => void;
   onSync: () => Promise<{ message: string }>;
   onDisconnect: () => Promise<void>;
+  /**
+   * When rendered inside a parent that already shows the brand icon, name, and
+   * connection status (e.g. the member-profile Connected Accounts accordion),
+   * suppress this panel's redundant icon-title headers and status badges.
+   */
+  nested?: boolean;
 }
 
 function formatLastSync(lastSyncAt: string | null, neverLabel: string): string {
@@ -69,6 +75,7 @@ export function LinkedInSettingsPanel({
   onConnect,
   onSync,
   onDisconnect,
+  nested = false,
 }: LinkedInSettingsPanelProps) {
   const tLinkedin = useTranslations("linkedin");
   const tCommon = useTranslations("common");
@@ -212,13 +219,15 @@ export function LinkedInSettingsPanel({
     <Card className="divide-y divide-border/60">
       {/* Section 1: Profile URL + single Sync action */}
       <div className="p-5 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <LinkedInIcon />
-            <p className="font-medium text-foreground">{tLinkedin("profileUrl")}</p>
+        {!nested && (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <LinkedInIcon />
+              <p className="font-medium text-foreground">{tLinkedin("profileUrl")}</p>
+            </div>
+            {renderStatusBadge()}
           </div>
-          {renderStatusBadge()}
-        </div>
+        )}
         <p className="text-sm text-muted-foreground">
           {tLinkedin("profileUrlDesc")}
         </p>
@@ -331,13 +340,15 @@ export function LinkedInSettingsPanel({
       {/* Section 2: Connection status (connected) */}
       {isConnected && connection && (
         <div className="p-5 space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <LinkedInIcon />
-              <p className="font-medium text-foreground">{tLinkedin("connectedAccount")}</p>
+          {!nested && (
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <LinkedInIcon />
+                <p className="font-medium text-foreground">{tLinkedin("connectedAccount")}</p>
+              </div>
+              <Badge variant="success">{tCommon("connected")}</Badge>
             </div>
-            <Badge variant="success">{tCommon("connected")}</Badge>
-          </div>
+          )}
 
           <div className="flex items-center gap-3">
             <Avatar
@@ -374,11 +385,17 @@ export function LinkedInSettingsPanel({
       {/* Section 3: Connect prompt (disconnected) */}
       {!isConnected && (
         <div className="p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <LinkedInIcon />
-            <p className="font-medium text-foreground">{tLinkedin("connection")}</p>
-            {!oauthAvailable && <Badge variant="muted">{tCommon("unavailable")}</Badge>}
-          </div>
+          {nested ? (
+            !oauthAvailable && (
+              <Badge variant="muted">{tCommon("unavailable")}</Badge>
+            )
+          ) : (
+            <div className="flex items-center gap-2">
+              <LinkedInIcon />
+              <p className="font-medium text-foreground">{tLinkedin("connection")}</p>
+              {!oauthAvailable && <Badge variant="muted">{tCommon("unavailable")}</Badge>}
+            </div>
+          )}
 
           {!oauthAvailable ? (
             <p className="text-sm text-muted-foreground">
