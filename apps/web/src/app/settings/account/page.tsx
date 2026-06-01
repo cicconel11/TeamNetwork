@@ -5,6 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Card } from "@/components/ui";
 
+const SUPPORT_EMAIL = "mleonard@myteamnetwork.com";
+
 type DeletionStatus = "none" | "pending" | "completed";
 
 interface DeletionInfo {
@@ -137,6 +139,25 @@ export default function AccountPage() {
           Language
         </Link>
       </div>
+
+      {/* Support */}
+      <Card className="p-5 space-y-3">
+        <p className="font-medium text-foreground">Support</p>
+        <p className="text-sm text-muted-foreground">
+          Need help with TeamNetwork? Email our support team and we&apos;ll get
+          back to you within one business day.
+        </p>
+        <a
+          href={`mailto:${SUPPORT_EMAIL}?subject=TeamNetwork%20Support%20Request`}
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+          </svg>
+          Email Support
+        </a>
+        <p className="text-xs text-muted-foreground/60">{SUPPORT_EMAIL}</p>
+      </Card>
 
       {/* Data Export */}
       <Card className="p-5 space-y-3">

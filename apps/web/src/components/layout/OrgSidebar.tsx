@@ -311,16 +311,6 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                 )}
               </Link>
 
-              <Link
-                href="/support"
-                title={isCollapsed ? "Support" : undefined}
-                aria-label={isCollapsed ? "Support" : undefined}
-                className={`flex items-center text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isCollapsed ? "justify-center w-10 h-10 rounded-xl" : "gap-3 px-3 py-2.5 rounded-xl"}`}
-              >
-                <GridIcon className="h-5 w-5 flex-shrink-0" />
-                {!isCollapsed && <span className="whitespace-nowrap">Support</span>}
-              </Link>
-
               <form action="/auth/signout" method="POST" className={isCollapsed ? "" : "w-full"}>
                 <button
                   type="submit"
