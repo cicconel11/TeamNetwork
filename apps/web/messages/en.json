@@ -1293,6 +1293,20 @@
       "upcomingEvents": "Upcoming Events",
       "totalDonations": "Total Donations"
     },
+    "feed": {
+      "emptyTitle": "No posts yet",
+      "emptyDescription": "Share an update, ask a question, or celebrate a win — your first post sets the tone for everyone.",
+      "emptyCta": "Share the first post",
+      "eventsTitle": "Upcoming Events",
+      "eventsEmpty": "No events on the calendar yet",
+      "eventsSeeAll": "See all events",
+      "announcementsTitle": "Announcements",
+      "announcementsEmpty": "No announcements yet",
+      "announcementsSeeAll": "See all announcements",
+      "membersTitle": "New Members",
+      "membersEmpty": "No new members yet",
+      "membersSeeAll": "See all members"
+    },
     "members": {
       "description": "{count} {status} {label}",
       "noMembersFound": "No {label} found",

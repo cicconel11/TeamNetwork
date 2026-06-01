@@ -1265,6 +1265,20 @@
       "upcomingEvents": "Prossimi eventi",
       "totalDonations": "Totale donazioni"
     },
+    "feed": {
+      "emptyTitle": "Ancora nessun post",
+      "emptyDescription": "Condividi un aggiornamento, fai una domanda o festeggia un successo: il tuo primo post da il tono a tutti.",
+      "emptyCta": "Pubblica il primo post",
+      "eventsTitle": "Prossimi eventi",
+      "eventsEmpty": "Ancora nessun evento nel calendario",
+      "eventsSeeAll": "Vedi tutti gli eventi",
+      "announcementsTitle": "Annunci",
+      "announcementsEmpty": "Ancora nessun annuncio",
+      "announcementsSeeAll": "Vedi tutti gli annunci",
+      "membersTitle": "Nuovi membri",
+      "membersEmpty": "Ancora nessun nuovo membro",
+      "membersSeeAll": "Vedi tutti i membri"
+    },
     "members": {
       "description": "{count} {status} {label}",
       "active": "attivi",

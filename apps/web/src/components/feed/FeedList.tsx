@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { MessageSquarePlus } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { FeedPost } from "./FeedPost";
 import type { PostWithAuthor } from "./types";
 
@@ -8,6 +11,7 @@ interface FeedListProps {
   orgSlug: string;
   currentUserId: string;
   isAdmin: boolean;
+  canPost?: boolean;
   basePath?: string;
   pagination?: {
     page: number;
@@ -16,12 +20,22 @@ interface FeedListProps {
   };
 }
 
-export function FeedList({ posts, orgSlug, currentUserId, isAdmin, basePath, pagination }: FeedListProps) {
+export async function FeedList({ posts, orgSlug, currentUserId, isAdmin, canPost, basePath, pagination }: FeedListProps) {
   if (posts.length === 0) {
+    const t = await getTranslations("pages.feed");
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">No posts yet. Be the first to share something!</p>
-      </div>
+      <EmptyState
+        icon={<MessageSquarePlus className="h-12 w-12" />}
+        title={t("emptyTitle")}
+        description={t("emptyDescription")}
+        action={
+          canPost ? (
+            <Link href="?compose=1">
+              <Button>{t("emptyCta")}</Button>
+            </Link>
+          ) : undefined
+        }
+      />
     );
   }
 

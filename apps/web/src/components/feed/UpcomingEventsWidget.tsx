@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { CalendarClock } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Card } from "@/components/ui/Card";
 import { calendarEventDetailPath, calendarEventsPath } from "@/lib/calendar/routes";
 
@@ -24,18 +26,22 @@ function getDateParts(dateString: string) {
 }
 
 export function UpcomingEventsWidget({ events, orgSlug }: UpcomingEventsWidgetProps) {
+  const t = useTranslations("pages.feed");
   if (events.length === 0) {
     return (
       <Card className="rounded-xl border-border/70 bg-card/75 p-4 shadow-none backdrop-blur-sm">
-        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Upcoming Events</h3>
-        <p className="text-sm text-muted-foreground/60 mt-3">No upcoming events</p>
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{t("eventsTitle")}</h3>
+        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground/60">
+          <CalendarClock className="h-4 w-4 shrink-0" />
+          <span>{t("eventsEmpty")}</span>
+        </div>
       </Card>
     );
   }
 
   return (
     <Card className="rounded-xl border-border/70 bg-card/75 p-4 shadow-none backdrop-blur-sm">
-      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Upcoming Events</h3>
+      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{t("eventsTitle")}</h3>
       <ul className="mt-3 space-y-2.5 stagger-children">
         {events.map((event) => {
           const { month, day } = getDateParts(event.start_date);
@@ -59,7 +65,7 @@ export function UpcomingEventsWidget({ events, orgSlug }: UpcomingEventsWidgetPr
         href={calendarEventsPath(orgSlug)}
         className="mt-3 flex items-center gap-1 border-t border-border/40 pt-3 text-xs text-muted-foreground transition-colors duration-200 hover:text-foreground"
       >
-        See all events <span aria-hidden="true">→</span>
+        {t("eventsSeeAll")} <span aria-hidden="true">→</span>
       </Link>
     </Card>
   );
