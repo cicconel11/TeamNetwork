@@ -1265,6 +1265,20 @@
       "upcomingEvents": "الفعاليات القادمة",
       "totalDonations": "إجمالي التبرعات"
     },
+    "feed": {
+      "emptyTitle": "لا توجد منشورات بعد",
+      "emptyDescription": "شارك تحديثا أو اطرح سؤالا أو احتفل بإنجاز - منشورك الأول يحدد الأجواء للجميع.",
+      "emptyCta": "انشر أول منشور",
+      "eventsTitle": "الفعاليات القادمة",
+      "eventsEmpty": "لا توجد فعاليات في التقويم بعد",
+      "eventsSeeAll": "عرض كل الفعاليات",
+      "announcementsTitle": "الإعلانات",
+      "announcementsEmpty": "لا توجد إعلانات بعد",
+      "announcementsSeeAll": "عرض كل الإعلانات",
+      "membersTitle": "الأعضاء الجدد",
+      "membersEmpty": "لا يوجد أعضاء جدد بعد",
+      "membersSeeAll": "عرض كل الأعضاء"
+    },
     "members": {
       "description": "{count} {status} {label}",
       "active": "نشطون",

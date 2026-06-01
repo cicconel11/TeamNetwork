@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
@@ -24,7 +24,10 @@ interface FeedComposerProps {
 
 export function FeedComposer({ orgId, userName }: FeedComposerProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [body, setBody] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,6 +55,28 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
       previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
+
+  // Deep-link: ?compose=1 auto-expands the composer, flags a pending focus, then
+  // strips only that param so a refresh/back doesn't re-trigger.
+  const pendingFocusRef = useRef(false);
+  useEffect(() => {
+    if (searchParams.get("compose") !== "1") return;
+    setIsExpanded(true);
+    pendingFocusRef.current = true;
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("compose");
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [searchParams, pathname, router]);
+
+  // Focus the textarea once it has actually mounted after expansion.
+  useEffect(() => {
+    if (isExpanded && pendingFocusRef.current) {
+      pendingFocusRef.current = false;
+      textareaRef.current?.focus();
+    }
+  }, [isExpanded]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -262,6 +287,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
           </div>
         )}
         <Textarea
+          ref={textareaRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="What's on your mind?"

@@ -242,6 +242,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
             orgSlug={orgSlug}
             currentUserId={orgCtx.userId || ""}
             isAdmin={orgCtx.isAdmin}
+            canPost={canPost}
             basePath={`/${orgSlug}`}
             pagination={{ page, total, totalPages }}
           />

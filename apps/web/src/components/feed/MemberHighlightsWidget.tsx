@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { UserPlus } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 
@@ -27,19 +29,23 @@ function formatJoinDate(dateString: string): { text: string; isRecent: boolean }
   return { text: `Joined ${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, isRecent: false };
 }
 
-export function MemberHighlightsWidget({ members, orgSlug }: MemberHighlightsWidgetProps) {
+export async function MemberHighlightsWidget({ members, orgSlug }: MemberHighlightsWidgetProps) {
+  const t = await getTranslations("pages.feed");
   if (members.length === 0) {
     return (
       <Card className="rounded-xl border-border/70 bg-card/75 p-4 shadow-none backdrop-blur-sm">
-        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">New Members</h3>
-        <p className="text-sm text-muted-foreground/60 mt-3">No recent members</p>
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{t("membersTitle")}</h3>
+        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground/60">
+          <UserPlus className="h-4 w-4 shrink-0" />
+          <span>{t("membersEmpty")}</span>
+        </div>
       </Card>
     );
   }
 
   return (
     <Card className="rounded-xl border-border/70 bg-card/75 p-4 shadow-none backdrop-blur-sm">
-      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">New Members</h3>
+      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{t("membersTitle")}</h3>
       <ul className="space-y-1 mt-3 stagger-children">
         {members.map((member) => {
           const joinInfo = member.created_at ? formatJoinDate(member.created_at) : null;
@@ -76,7 +82,7 @@ export function MemberHighlightsWidget({ members, orgSlug }: MemberHighlightsWid
         href={`/${orgSlug}/members`}
         className="mt-3 flex items-center gap-1 border-t border-border/40 pt-3 text-xs text-muted-foreground transition-colors duration-200 hover:text-foreground"
       >
-        See all members <span aria-hidden="true">→</span>
+        {t("membersSeeAll")} <span aria-hidden="true">→</span>
       </Link>
     </Card>
   );

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Megaphone } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Card } from "@/components/ui/Card";
 
 interface AnnouncementSummary {
@@ -18,19 +20,23 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function RecentAnnouncementsWidget({ announcements, orgSlug }: RecentAnnouncementsWidgetProps) {
+export async function RecentAnnouncementsWidget({ announcements, orgSlug }: RecentAnnouncementsWidgetProps) {
+  const t = await getTranslations("pages.feed");
   if (announcements.length === 0) {
     return (
       <Card className="rounded-xl border-border/70 bg-card/75 p-4 shadow-none backdrop-blur-sm">
-        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Announcements</h3>
-        <p className="text-sm text-muted-foreground/60 mt-3">No recent announcements</p>
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{t("announcementsTitle")}</h3>
+        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground/60">
+          <Megaphone className="h-4 w-4 shrink-0" />
+          <span>{t("announcementsEmpty")}</span>
+        </div>
       </Card>
     );
   }
 
   return (
     <Card className="rounded-xl border-border/70 bg-card/75 p-4 shadow-none backdrop-blur-sm">
-      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Announcements</h3>
+      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{t("announcementsTitle")}</h3>
       <ul className="space-y-3 mt-3 stagger-children">
         {announcements.map((announcement) => (
           <li key={announcement.id}>
@@ -53,7 +59,7 @@ export function RecentAnnouncementsWidget({ announcements, orgSlug }: RecentAnno
         href={`/${orgSlug}/announcements`}
         className="mt-3 flex items-center gap-1 border-t border-border/40 pt-3 text-xs text-muted-foreground transition-colors duration-200 hover:text-foreground"
       >
-        See all announcements <span aria-hidden="true">→</span>
+        {t("announcementsSeeAll")} <span aria-hidden="true">→</span>
       </Link>
     </Card>
   );

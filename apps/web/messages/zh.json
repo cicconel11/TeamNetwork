@@ -1265,6 +1265,20 @@
       "upcomingEvents": "即将举行的活动",
       "totalDonations": "捐款总额"
     },
+    "feed": {
+      "emptyTitle": "还没有帖子",
+      "emptyDescription": "分享动态、提出问题或庆祝成就——你的第一篇帖子为大家定下基调。",
+      "emptyCta": "发布第一篇帖子",
+      "eventsTitle": "即将举行的活动",
+      "eventsEmpty": "日历上还没有活动",
+      "eventsSeeAll": "查看所有活动",
+      "announcementsTitle": "公告",
+      "announcementsEmpty": "还没有公告",
+      "announcementsSeeAll": "查看所有公告",
+      "membersTitle": "新成员",
+      "membersEmpty": "还没有新成员",
+      "membersSeeAll": "查看所有成员"
+    },
     "members": {
       "description": "{count} {status} {label}",
       "active": "活跃",
