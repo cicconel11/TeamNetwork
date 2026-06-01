@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   let totalProcessed = 0;
   let totalSkipped = 0;
   let totalFailed = 0;
+  let totalPurgedWhileDisabled = 0;
   let iterations = 0;
   let drainState: "processed" | "empty" | "unavailable" | "degraded" = "empty";
   let drainReason: string | null = null;
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
       totalProcessed += stats.processed;
       totalSkipped += stats.skipped;
       totalFailed += stats.failed;
+      totalPurgedWhileDisabled += stats.purgedWhileDisabled ?? 0;
       iterations++;
       drainState = stats.drainState;
       drainReason = stats.reason ?? null;
@@ -53,6 +55,7 @@ export async function GET(request: Request) {
       drainState,
       drainReason,
       purgedQueueRows: purgedCount ?? 0,
+      purgedWhileDisabled: totalPurgedWhileDisabled,
       durationMs: Date.now() - startTime,
     });
   } catch (error) {

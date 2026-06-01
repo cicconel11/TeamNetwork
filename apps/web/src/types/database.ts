@@ -2008,7 +2008,7 @@ export type Database = {
       }
       discussion_replies: {
         Row: {
-          author_id: string
+          author_id: string | null
           body: string
           created_at: string
           deleted_at: string | null
@@ -2019,7 +2019,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          author_id: string
+          author_id?: string | null
           body: string
           created_at?: string
           deleted_at?: string | null
@@ -2030,7 +2030,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          author_id?: string
+          author_id?: string | null
           body?: string
           created_at?: string
           deleted_at?: string | null
@@ -2066,7 +2066,7 @@ export type Database = {
       }
       discussion_threads: {
         Row: {
-          author_id: string
+          author_id: string | null
           body: string
           created_at: string
           deleted_at: string | null
@@ -2080,7 +2080,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          author_id: string
+          author_id?: string | null
           body: string
           created_at?: string
           deleted_at?: string | null
@@ -2094,7 +2094,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          author_id?: string
+          author_id?: string | null
           body?: string
           created_at?: string
           deleted_at?: string | null
@@ -2284,7 +2284,7 @@ export type Database = {
           id: string
           organization_id: string
           requested_at: string
-          requested_by: string
+          requested_by: string | null
           responded_at: string | null
           responded_by: string | null
           status: string
@@ -2295,7 +2295,7 @@ export type Database = {
           id?: string
           organization_id: string
           requested_at?: string
-          requested_by: string
+          requested_by?: string | null
           responded_at?: string | null
           responded_by?: string | null
           status?: string
@@ -2306,7 +2306,7 @@ export type Database = {
           id?: string
           organization_id?: string
           requested_at?: string
-          requested_by?: string
+          requested_by?: string | null
           responded_at?: string | null
           responded_by?: string | null
           status?: string
@@ -2386,11 +2386,59 @@ export type Database = {
         }
         Relationships: []
       }
+      enterprise_deletion_requests: {
+        Row: {
+          cancelled_at: string | null
+          completed_at: string | null
+          enterprise_id: string
+          id: string
+          requested_at: string
+          requested_by: string | null
+          scheduled_deletion_at: string
+          status: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          completed_at?: string | null
+          enterprise_id: string
+          id?: string
+          requested_at?: string
+          requested_by?: string | null
+          scheduled_deletion_at: string
+          status?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          completed_at?: string | null
+          enterprise_id?: string
+          id?: string
+          requested_at?: string
+          requested_by?: string | null
+          scheduled_deletion_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enterprise_deletion_requests_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: true
+            referencedRelation: "enterprise_alumni_counts"
+            referencedColumns: ["enterprise_id"]
+          },
+          {
+            foreignKeyName: "enterprise_deletion_requests_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: true
+            referencedRelation: "enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enterprise_invites: {
         Row: {
           code: string
           created_at: string
-          created_by_user_id: string
+          created_by_user_id: string | null
           enterprise_id: string
           expires_at: string | null
           id: string
@@ -2403,7 +2451,7 @@ export type Database = {
         Insert: {
           code: string
           created_at?: string
-          created_by_user_id: string
+          created_by_user_id?: string | null
           enterprise_id: string
           expires_at?: string | null
           id?: string
@@ -2416,7 +2464,7 @@ export type Database = {
         Update: {
           code?: string
           created_at?: string
-          created_by_user_id?: string
+          created_by_user_id?: string | null
           enterprise_id?: string
           expires_at?: string | null
           id?: string
@@ -3526,7 +3574,7 @@ export type Database = {
           location: string | null
           location_type: string | null
           organization_id: string
-          posted_by: string
+          posted_by: string | null
           title: string
           updated_at: string
         }
@@ -3545,7 +3593,7 @@ export type Database = {
           location?: string | null
           location_type?: string | null
           organization_id: string
-          posted_by: string
+          posted_by?: string | null
           title: string
           updated_at?: string
         }
@@ -3564,7 +3612,7 @@ export type Database = {
           location?: string | null
           location_type?: string | null
           organization_id?: string
-          posted_by?: string
+          posted_by?: string | null
           title?: string
           updated_at?: string
         }
@@ -5792,7 +5840,7 @@ export type Database = {
           email: string | null
           expires_at: string
           id: string
-          invited_by: string
+          invited_by: string | null
           organization_id: string
           status: string
         }
@@ -5803,7 +5851,7 @@ export type Database = {
           email?: string | null
           expires_at?: string
           id?: string
-          invited_by: string
+          invited_by?: string | null
           organization_id: string
           status?: string
         }
@@ -5814,7 +5862,7 @@ export type Database = {
           email?: string | null
           expires_at?: string
           id?: string
-          invited_by?: string
+          invited_by?: string | null
           organization_id?: string
           status?: string
         }
@@ -7441,7 +7489,7 @@ export type Database = {
         Returns: {
           code: string
           created_at: string
-          created_by_user_id: string
+          created_by_user_id: string | null
           enterprise_id: string
           expires_at: string | null
           id: string
@@ -7915,6 +7963,7 @@ export type Database = {
       purge_expired_ai_semantic_cache: { Args: never; Returns: number }
       purge_expired_usage_events: { Args: never; Returns: Json }
       purge_graph_sync_queue: { Args: never; Returns: number }
+      purge_graph_sync_queue_disabled: { Args: never; Returns: number }
       purge_mentor_bio_backfill_queue: { Args: never; Returns: number }
       purge_old_data_access_logs: { Args: never; Returns: number }
       purge_old_enterprise_audit_logs: { Args: never; Returns: number }
