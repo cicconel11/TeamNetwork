@@ -28,6 +28,8 @@ export interface GraphQueueStats {
   failed: number;
   drainState: GraphQueueDrainState;
   reason?: string | null;
+  /** Rows drained by the disabled-Falkor purge in this pass (0 when Falkor is available). */
+  purgedWhileDisabled?: number;
 }
 
 interface GraphQueueItem {
@@ -519,6 +521,26 @@ export async function processGraphSyncQueue(
   if (!graphClient.isAvailable()) {
     stats.drainState = "unavailable";
     stats.reason = graphClient.getUnavailableReason?.() ?? "unavailable";
+
+    // Falkor is off (prod default). The trg_graph_sync_* triggers keep enqueuing rows that this
+    // consumer can never process, and the normal purge can't reap them (processed_at IS NULL,
+    // attempts < 3). Drain them here so the queue doesn't grow unbounded. Safe to discard: the
+    // people-graph is optional and reconstructable via backfill_graph_sync_queue if Falkor returns.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: purged, error: purgeError } = await (serviceSupabase as any).rpc(
+        "purge_graph_sync_queue_disabled"
+      );
+      // 42883 = function not yet migrated; tolerate so deploy can precede the migration.
+      if (purgeError && purgeError.code !== "42883") {
+        console.error("[graph-sync] disabled-purge failed:", purgeError);
+      } else {
+        stats.purgedWhileDisabled = typeof purged === "number" ? purged : 0;
+      }
+    } catch (error) {
+      console.error("[graph-sync] disabled-purge threw:", error);
+    }
+
     recordGraphDrainResult({
       state: stats.drainState,
       reason: stats.reason,
