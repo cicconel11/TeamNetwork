@@ -1296,5 +1296,14 @@
       "filtered": "مفلترة",
       "inOurNetwork": "في شبكتنا"
     }
+  },
+  "connectedAccounts": {
+    "title": "الحسابات المتصلة",
+    "subtitle": "اربط حساباتك لمزامنة ملفك الشخصي وتقويمك.",
+    "linkedin": "لينكدإن",
+    "googleCalendar": "تقويم جوجل",
+    "outlook": "Outlook",
+    "statusConnected": "متصل",
+    "statusNotConnected": "غير متصل"
   }
 }

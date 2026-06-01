@@ -1324,5 +1324,14 @@
       "filtered": "filtered",
       "inOurNetwork": "in our network"
     }
+  },
+  "connectedAccounts": {
+    "title": "Connected Accounts",
+    "subtitle": "Link your accounts to sync your profile and calendar.",
+    "linkedin": "LinkedIn",
+    "googleCalendar": "Google Calendar",
+    "outlook": "Outlook",
+    "statusConnected": "Connected",
+    "statusNotConnected": "Not connected"
   }
 }
