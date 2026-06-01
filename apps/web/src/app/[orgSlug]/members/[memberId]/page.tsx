@@ -296,6 +296,17 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
                   User Settings
                 </Link>
               )}
+              {isOwnProfile && (
+                <a
+                  href="#connected-accounts"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-[var(--muted)]/50 text-foreground hover:bg-[var(--muted)] transition-colors"
+                >
+                  <svg className="h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                  </svg>
+                  Connected Accounts
+                </a>
+              )}
             </div>
           </div>
         </Card>
@@ -524,7 +535,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
 
       {/* Connected Accounts (own profile only) */}
       {isOwnProfile && (
-        <div className="max-w-4xl mt-6">
+        <div id="connected-accounts" className="max-w-4xl mt-6 scroll-mt-20">
           <ConnectedAccountsSection orgSlug={orgSlug} orgId={org.id} orgName={org.name} />
         </div>
       )}

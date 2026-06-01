@@ -1298,5 +1298,14 @@
       "filtered": "filtrados",
       "inOurNetwork": "en nuestra red"
     }
+  },
+  "connectedAccounts": {
+    "title": "Cuentas conectadas",
+    "subtitle": "Vincula tus cuentas para sincronizar tu perfil y calendario.",
+    "linkedin": "LinkedIn",
+    "googleCalendar": "Google Calendar",
+    "outlook": "Outlook",
+    "statusConnected": "Conectado",
+    "statusNotConnected": "No conectado"
   }
 }

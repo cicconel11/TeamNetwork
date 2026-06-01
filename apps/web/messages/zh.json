@@ -1296,5 +1296,14 @@
       "filtered": "已筛选",
       "inOurNetwork": "在我们的网络中"
     }
+  },
+  "connectedAccounts": {
+    "title": "关联账户",
+    "subtitle": "关联你的账户以同步个人资料和日历。",
+    "linkedin": "领英",
+    "googleCalendar": "谷歌日历",
+    "outlook": "Outlook",
+    "statusConnected": "已关联",
+    "statusNotConnected": "未关联"
   }
 }

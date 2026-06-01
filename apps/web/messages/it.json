@@ -1296,5 +1296,14 @@
       "filtered": "filtrati",
       "inOurNetwork": "nella nostra rete"
     }
+  },
+  "connectedAccounts": {
+    "title": "Account collegati",
+    "subtitle": "Collega i tuoi account per sincronizzare profilo e calendario.",
+    "linkedin": "LinkedIn",
+    "googleCalendar": "Google Calendar",
+    "outlook": "Outlook",
+    "statusConnected": "Collegato",
+    "statusNotConnected": "Non collegato"
   }
 }

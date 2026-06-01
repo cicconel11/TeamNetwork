@@ -1296,5 +1296,14 @@
       "filtered": "filtres",
       "inOurNetwork": "dans notre reseau"
     }
+  },
+  "connectedAccounts": {
+    "title": "Comptes connectes",
+    "subtitle": "Liez vos comptes pour synchroniser votre profil et votre agenda.",
+    "linkedin": "LinkedIn",
+    "googleCalendar": "Google Agenda",
+    "outlook": "Outlook",
+    "statusConnected": "Connecte",
+    "statusNotConnected": "Non connecte"
   }
 }
