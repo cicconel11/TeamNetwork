@@ -31,6 +31,12 @@ interface OutlookCalendarSyncPanelProps {
   onReconnect: () => void;
   onTargetCalendarChange: (calendarId: string) => Promise<void>;
   onPreferenceChange: (prefs: SyncPreferences) => Promise<void>;
+  /**
+   * When rendered inside a parent that already shows the icon, name, and
+   * connection status (e.g. the member-profile Connected Accounts accordion),
+   * suppress this panel's redundant icon-title header and status badge.
+   */
+  nested?: boolean;
 }
 
 const EVENT_TYPE_KEYS: (keyof SyncPreferences)[] = [
@@ -111,6 +117,7 @@ export function OutlookCalendarSyncPanel({
   onReconnect,
   onTargetCalendarChange,
   onPreferenceChange,
+  nested = false,
 }: OutlookCalendarSyncPanelProps) {
   const tGCal = useTranslations("googleCalendar");
   const tCommon = useTranslations("common");
@@ -213,10 +220,12 @@ export function OutlookCalendarSyncPanel({
   if (!isConnected) {
     return (
       <Card className="p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <MicrosoftIcon />
-          <p className="font-medium text-foreground">Outlook Calendar</p>
-        </div>
+        {!nested && (
+          <div className="flex items-center gap-2">
+            <MicrosoftIcon />
+            <p className="font-medium text-foreground">Outlook Calendar</p>
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">
           Connect your Microsoft Outlook account to automatically sync {orgName} events to your personal Outlook calendar.
         </p>
@@ -253,13 +262,15 @@ export function OutlookCalendarSyncPanel({
     <Card className="divide-y divide-border/60">
       {/* Section 1: Connection status */}
       <div className="p-5 space-y-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <MicrosoftIcon />
-            <p className="font-medium text-foreground">Outlook Calendar</p>
+        {!nested && (
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <MicrosoftIcon />
+              <p className="font-medium text-foreground">Outlook Calendar</p>
+            </div>
+            {connection && getStatusBadge(connection.status, tCommon("connected"), "Disconnected", tCommon("error"))}
           </div>
-          {connection && getStatusBadge(connection.status, tCommon("connected"), "Disconnected", tCommon("error"))}
-        </div>
+        )}
 
         <div className="space-y-1 text-sm">
           <div className="flex items-center gap-2">
