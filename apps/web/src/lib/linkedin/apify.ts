@@ -49,6 +49,8 @@ export interface ApifyCertification {
 /** Normalized profile consumed by the rest of the app (provider-neutral). */
 export interface ApifyProfileResult {
   profile_url: string | null;
+  /** Canonical URL the actor returns (dev_fusion `linkedinPublicUrl`); a second match key. */
+  public_url: string | null;
   name: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -355,6 +357,7 @@ export function normalizeApifyItem(data: unknown): ApifyProfileResult | null {
 
   return {
     profile_url: firstString(raw.linkedinUrl, raw.url, raw.profileUrl, raw.inputUrl),
+    public_url: firstString(raw.linkedinPublicUrl, raw.publicUrl, raw.publicProfileUrl),
     name: firstString(raw.fullName, raw.name),
     first_name: str(raw.firstName),
     last_name: str(raw.lastName),
@@ -484,14 +487,24 @@ export function mapApifyToFields(profile: ApifyProfileResult): EnrichmentFields 
   };
 }
 
-/** Normalized URL key used to match a dataset item back to an input row. */
-export function getApifyProfileUrlKey(profile: ApifyProfileResult): string | null {
-  if (!profile.profile_url) return null;
-  try {
-    return normalizeLinkedInProfileUrl(profile.profile_url);
-  } catch {
-    return null;
+/**
+ * Normalized URL keys used to match a dataset item back to an input row. The
+ * actor can echo the input URL (`linkedinUrl`) and/or a canonical form
+ * (`linkedinPublicUrl`); we index the profile under every distinct key so a
+ * target matches whichever shape the actor returned.
+ */
+export function getApifyProfileUrlKeys(profile: ApifyProfileResult): string[] {
+  const keys = new Set<string>();
+  for (const raw of [profile.profile_url, profile.public_url]) {
+    if (!raw) continue;
+    try {
+      const key = normalizeLinkedInProfileUrl(raw);
+      if (key) keys.add(key);
+    } catch {
+      // skip an unparseable URL; the other key (if any) still applies.
+    }
   }
+  return Array.from(keys);
 }
 
 // ---------------------------------------------------------------------------

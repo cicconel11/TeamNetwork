@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   normalizeApifyItem,
   mapApifyToFields,
-  getApifyProfileUrlKey,
+  getApifyProfileUrlKeys,
   fetchApimaestroEducationDates,
   mergeEducationYears,
 } from "@/lib/linkedin/apify";
@@ -308,11 +308,24 @@ test("mergeEducationYears fills missing years by school name without overwriting
   assert.equal(profile.education[1].end_year, "2013");
 });
 
-test("getApifyProfileUrlKey normalizes the profile URL for run matching", () => {
+test("getApifyProfileUrlKeys normalizes the profile URL for run matching", () => {
   const profile = normalizeApifyItem(APIFY_ITEM);
   assert.ok(profile);
-  const key = getApifyProfileUrlKey(profile);
-  assert.ok(key);
+  const keys = getApifyProfileUrlKeys(profile);
   // Trailing slash + scheme/host casing are normalized away.
-  assert.match(key, /linkedin\.com\/in\/jane-doe$/);
+  assert.ok(keys.some((k) => /linkedin\.com\/in\/jane-doe$/.test(k)));
+});
+
+test("getApifyProfileUrlKeys indexes both linkedinUrl and linkedinPublicUrl", () => {
+  const profile = normalizeApifyItem({
+    fullName: "Jane Doe",
+    linkedinUrl: "https://www.linkedin.com/in/jane-doe?trk=public",
+    linkedinPublicUrl: "https://www.linkedin.com/in/jane-doe-canonical",
+  });
+  assert.ok(profile);
+  const keys = getApifyProfileUrlKeys(profile);
+  assert.deepEqual(keys.sort(), [
+    "https://www.linkedin.com/in/jane-doe",
+    "https://www.linkedin.com/in/jane-doe-canonical",
+  ]);
 });

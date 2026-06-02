@@ -1,7 +1,28 @@
 import { z } from "zod";
 
-const LINKEDIN_PROFILE_PATH = /^\/in\/[a-zA-Z0-9_-]+$/;
+const LINKEDIN_PROFILE_PATH = /^\/in\/[a-z0-9_-]+$/;
 
+/** Matches a `*.linkedin.com` host (with a leading locale/country/sub label). */
+const LINKEDIN_SUBDOMAIN_HOST = /^[a-z0-9-]+\.linkedin\.com$/;
+
+/**
+ * Canonicalizes a LinkedIn profile URL to a single matching key.
+ *
+ * This value is the join key between a stored alumni/user `linkedin_url` and the
+ * URL the Apify scraper echoes back, so cosmetic differences that denote the
+ * SAME profile must collapse to one string — otherwise the scraped profile is
+ * dropped and the row fails with `no_matching_profile` (the sole cause of every
+ * production enrichment failure observed). We therefore:
+ *   - upgrade http -> https
+ *   - lowercase the host and collapse any `*.linkedin.com` locale subdomain
+ *     (e.g. `de.linkedin.com`) to `www.linkedin.com`
+ *   - lowercase the `/in/<slug>` path (slugs are case-insensitive on LinkedIn)
+ *   - drop the query string and fragment (tracking params like `?trk=...`)
+ *   - strip the trailing slash
+ *
+ * Genuinely different slugs stay distinct. On a non-URL input we return the
+ * trimmed original (callers treat that as "not a valid profile URL").
+ */
 export function normalizeLinkedInProfileUrl(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return trimmed;
@@ -13,11 +34,15 @@ export function normalizeLinkedInProfileUrl(value: string): string {
       url.protocol = "https:";
     }
 
-    if (url.hostname === "linkedin.com") {
-      url.hostname = "www.linkedin.com";
-    }
+    const host = url.hostname.toLowerCase();
+    url.hostname =
+      host === "linkedin.com" || LINKEDIN_SUBDOMAIN_HOST.test(host)
+        ? "www.linkedin.com"
+        : host;
 
-    url.pathname = url.pathname.replace(/\/+$/, "");
+    url.pathname = url.pathname.toLowerCase().replace(/\/+$/, "");
+    url.search = "";
+    url.hash = "";
 
     return url.toString();
   } catch {

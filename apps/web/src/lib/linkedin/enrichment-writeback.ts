@@ -11,7 +11,7 @@ import type { Database } from "@/types/database";
 import {
   fetchApifyRunDataset,
   mapApifyToFields,
-  getApifyProfileUrlKey,
+  getApifyProfileUrlKeys,
   fetchApimaestroEducationDates,
   mergeEducationYears,
   type ApifyProfileResult,
@@ -131,8 +131,9 @@ export async function processFinishedApifyRun(
   const profiles = dataset.profiles;
   const byUrl = new Map<string, ApifyProfileResult>();
   for (const profile of profiles) {
-    const key = getApifyProfileUrlKey(profile);
-    if (key) byUrl.set(key, profile);
+    for (const key of getApifyProfileUrlKeys(profile)) {
+      byUrl.set(key, profile);
+    }
   }
 
   // Hybrid supplement: the primary actor leaves education years null, so fetch
@@ -162,6 +163,16 @@ export async function processFinishedApifyRun(
     }
 
     if (!profile) {
+      // Diagnostic: a finished run returned profiles but none matched this
+      // target's URL key. Log both sides so a recurring URL-shape divergence is
+      // visible instead of silently failing the row (no PII — keys only).
+      console.error("[enrichment-writeback] no_matching_profile", {
+        runId,
+        targetId: target.id,
+        targetKind: target.target_kind,
+        targetKey: safeNormalize(target.linkedin_url),
+        availableKeys: Array.from(byUrl.keys()),
+      });
       await markTargetsFailed(supabase, [target], "no_matching_profile");
       result.unmatched += 1;
       result.failed += 1;
