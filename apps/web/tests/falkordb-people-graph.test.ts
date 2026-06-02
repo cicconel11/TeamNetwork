@@ -1755,6 +1755,51 @@ test("processGraphSyncQueue merges shared-user people and syncs mentorship edges
   assert.equal(rpcCalls.some((call) => call.name === "increment_graph_sync_attempts"), false);
 });
 
+test("processGraphSyncQueue preserves pending queue rows while Falkor is unavailable", async () => {
+  const stub = createSupabaseStub();
+  const rpcCalls: Array<{ name: string; params: Record<string, unknown> }> = [];
+
+  stub.seed("graph_sync_queue", [
+    {
+      id: "pending-during-blip",
+      org_id: ORG_ID,
+      source_table: "members",
+      source_id: "member-during-blip",
+      action: "upsert",
+      payload: {},
+      attempts: 0,
+      processed_at: null,
+    },
+  ]);
+  stub.registerRpc("purge_graph_sync_queue_disabled", () => {
+    throw new Error("disabled purge must not run during unavailable passes");
+  });
+
+  const originalRpc = stub.rpc;
+  (stub as any).rpc = async (name: string, params: Record<string, unknown> = {}) => {
+    rpcCalls.push({ name, params });
+    return originalRpc(name, params);
+  };
+
+  const stats = await processGraphSyncQueue(stub as any, {
+    graphClient: {
+      isAvailable: () => false,
+      getUnavailableReason: () => "disabled",
+      query: async () => [],
+    },
+  });
+
+  assert.deepEqual(stats, {
+    processed: 0,
+    skipped: 0,
+    failed: 0,
+    drainState: "unavailable",
+    reason: "disabled",
+  });
+  assert.deepEqual(rpcCalls, []);
+  assert.equal(stub.getRows("graph_sync_queue").length, 1);
+});
+
 // ---------------------------------------------------------------------------
 // VAL-IDENTITY-001: Shared user_id projects to exactly one canonical identity
 // ---------------------------------------------------------------------------

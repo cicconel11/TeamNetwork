@@ -124,16 +124,16 @@ ALTER TABLE public.job_postings              DROP CONSTRAINT IF EXISTS job_posti
 -- ----------------------------------------------------------------------------
 -- 4. FKs -> auth.users
 -- ----------------------------------------------------------------------------
--- CASCADE: row is personal to the user (their own pending AI action)
+-- CASCADE: rows are personal to the user (their own pending AI action / member profile)
 ALTER TABLE public.ai_pending_actions        DROP CONSTRAINT IF EXISTS ai_pending_actions_user_id_fkey,
   ADD CONSTRAINT ai_pending_actions_user_id_fkey
   FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
--- SET NULL: membership / actor / audit columns (anonymize, keep the row)
 ALTER TABLE public.members                   DROP CONSTRAINT IF EXISTS members_user_id_fkey,
   ADD CONSTRAINT members_user_id_fkey
-  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
+-- SET NULL: actor / audit columns (anonymize, keep the row)
 ALTER TABLE public.alumni                    DROP CONSTRAINT IF EXISTS alumni_user_id_fkey,
   ADD CONSTRAINT alumni_user_id_fkey
   FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;

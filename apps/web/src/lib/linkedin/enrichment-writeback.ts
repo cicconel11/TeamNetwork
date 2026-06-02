@@ -274,7 +274,8 @@ async function writeTarget(
       last_synced_at: new Date().toISOString(),
       sync_error: null,
     })
-    .eq("user_id", target.user_id);
+    .eq("user_id", target.user_id)
+    .eq("enrichment_run_id", target.run_id);
 
   return true;
 }
@@ -301,12 +302,13 @@ async function markTargetsFailed(
       p_max_retries: 3,
     });
   }
-  const userIds = targets.filter((t) => t.target_kind === "user" && t.user_id).map((t) => t.user_id);
-  if (userIds.length > 0) {
+  const userTargets = targets.filter((t) => t.target_kind === "user" && t.user_id);
+  for (const target of userTargets) {
     await supabase
       .from("user_linkedin_connections")
       .update({ enrichment_status: "failed", enrichment_run_id: null, sync_error: error })
-      .in("user_id", userIds);
+      .eq("user_id", target.user_id)
+      .eq("enrichment_run_id", target.run_id);
   }
 }
 

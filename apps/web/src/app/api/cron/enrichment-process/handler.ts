@@ -25,6 +25,7 @@ interface PendingAlumni {
 
 interface RunTarget {
   id: string;
+  run_id: string;
   target_kind: "user" | "alumni";
   user_id: string | null;
   alumni_id: string | null;
@@ -54,7 +55,7 @@ async function markTimedOutRunsFailed(
 ): Promise<number> {
   const { data: timedOutRows, error: selectError } = await supabase
     .from("linkedin_enrichment_runs")
-    .select("id, target_kind, user_id, alumni_id")
+    .select("id, run_id, target_kind, user_id, alumni_id")
     .eq("status", "syncing")
     .lt("created_at", hardCutoff)
     .limit(200);
@@ -84,14 +85,13 @@ async function markTimedOutRunsFailed(
     });
   }
 
-  const userIds = targets
-    .filter((t) => t.target_kind === "user" && t.user_id)
-    .map((t) => t.user_id);
-  if (userIds.length > 0) {
+  const userTargets = targets.filter((t) => t.target_kind === "user" && t.user_id);
+  for (const target of userTargets) {
     await supabase
       .from("user_linkedin_connections")
       .update({ enrichment_status: "failed", enrichment_run_id: null, sync_error: "timed_out" })
-      .in("user_id", userIds);
+      .eq("user_id", target.user_id)
+      .eq("enrichment_run_id", target.run_id);
   }
 
   return targets.length;
