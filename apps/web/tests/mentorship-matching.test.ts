@@ -458,3 +458,316 @@ describe("rankMentorsForMentee", () => {
     });
   });
 });
+
+describe("enriched-data signals", () => {
+  describe("career_trajectory", () => {
+    it("fires on a PAST role even when the current role does not match the aspiration", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: ["Technology"],
+        preferredRoleFamilies: [],
+      };
+      // Current employer is Finance; only the mentor's PAST role at Google
+      // covers the mentee's Technology aspiration.
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "ex-googler",
+          currentCompany: "Goldman Sachs",
+          workHistory: [
+            { company: "Google", title: "Software Engineer" },
+            { company: "Goldman Sachs", title: "Analyst" },
+          ],
+        }),
+      ]);
+      assert.strictEqual(ranked.length, 1);
+      const codes = ranked[0].signals.map((s) => s.code);
+      assert.ok(codes.includes("career_trajectory"), "past Technology role should fire career_trajectory");
+      assert.ok(!codes.includes("shared_industry"), "current snapshot does not match Technology");
+    });
+
+    it("does not double-count when the current role already covers the aspiration", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: ["Technology"],
+        preferredRoleFamilies: [],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "current-techie",
+          nativeIndustries: ["Technology"],
+          // Work history adds no NEW industry beyond the current Technology one.
+          workHistory: [{ company: "Google", title: "Software Engineer" }],
+        }),
+      ]);
+      assert.strictEqual(ranked.length, 1);
+      const codes = ranked[0].signals.map((s) => s.code);
+      assert.ok(codes.includes("shared_industry"));
+      assert.ok(
+        !codes.includes("career_trajectory"),
+        "career_trajectory must subtract current-role hits to stay additive"
+      );
+    });
+
+    it("coverage: covering more aspirations outscores covering fewer", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: ["Technology", "Healthcare"],
+        preferredRoleFamilies: [],
+      };
+      const broad = mentor({
+        userId: "broad",
+        workHistory: [
+          { company: "Google", title: "Engineer" }, // Technology
+          { company: "Pfizer", title: "Analyst" }, // Healthcare
+        ],
+      });
+      const narrow = mentor({
+        userId: "narrow",
+        workHistory: [{ company: "Google", title: "Engineer" }], // Technology only
+      });
+      const ranked = rankMentorsForMentee(mentee, [broad, narrow]);
+      assert.strictEqual(ranked[0].mentorUserId, "broad");
+      assert.ok(ranked[0].score > ranked[1].score);
+    });
+  });
+
+  describe("shared_school", () => {
+    it("matches same school at full weight", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+        educationHistory: [{ title: "Stanford University", field_of_study: "Economics" }],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "stanford-alum",
+          educationHistory: [{ title: "Stanford University", field_of_study: "Computer Science" }],
+        }),
+      ]);
+      const signal = ranked[0]?.signals.find((s) => s.code === "shared_school");
+      assert.ok(signal, "shared_school should fire");
+      assert.strictEqual(signal!.weight, 14);
+    });
+
+    it("falls back to field-of-study at half weight when schools differ", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+        educationHistory: [{ title: "Stanford University", field_of_study: "Computer Science" }],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "mit-alum",
+          educationHistory: [{ title: "MIT", field_of_study: "Computer Science" }],
+        }),
+      ]);
+      const signal = ranked[0]?.signals.find((s) => s.code === "shared_school");
+      assert.ok(signal, "field-of-study overlap should fire shared_school");
+      assert.strictEqual(signal!.weight, 7);
+    });
+
+    // Real data: education_history[].field_of_study is ~always null; the field
+    // lives in the noisy `degree` line. The matcher must recover it from degree.
+    it("recovers field of study from the degree line when field_of_study is null", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+        educationHistory: [
+          { title: "Stockton University", field_of_study: null, degree: "Bachelor of Science - BS, Computer Science" },
+        ],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "fdu-cs",
+          educationHistory: [
+            { title: "Fairleigh Dickinson University", field_of_study: null, degree: "BSI, Data Analysis, Minor in Computer Science" },
+          ],
+        }),
+      ]);
+      const signal = ranked[0]?.signals.find((s) => s.code === "shared_school");
+      assert.ok(signal, "computer science recovered from both degree lines should match");
+      assert.strictEqual(signal!.weight, 7);
+    });
+
+    // Real data: degree lines are polluted with clubs/sports/honor societies.
+    // Keyword whitelist must NOT manufacture a field match from that noise.
+    it("does not invent a field match from extracurricular noise in degree", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+        educationHistory: [
+          { title: "Mt Lebanon Senior High School", field_of_study: null, degree: "All-Division Football (Team Captain), National Honor Society" },
+        ],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "noisy-degree",
+          educationHistory: [
+            { title: "Cornwall Central High School", field_of_study: null, degree: "11 Varsity Letter Recipient in Baseball, Swimming, and Football, Special Olympics" },
+          ],
+        }),
+      ]);
+      assert.ok(
+        !ranked.some((r) => r.signals.some((s) => s.code === "shared_school")),
+        "no real academic field present — shared_school must not fire"
+      );
+    });
+
+    // Real data: LinkedIn appends the sub-school ("University of Pennsylvania -
+    // The Wharton School"); same-university alumni must still match.
+    it("matches the same university across sub-school suffixes", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+        educationHistory: [{ title: "University of Pennsylvania", field_of_study: null }],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "wharton-alum",
+          educationHistory: [
+            { title: "University of Pennsylvania - The Wharton School", field_of_study: null },
+          ],
+        }),
+      ]);
+      const signal = ranked[0]?.signals.find((s) => s.code === "shared_school");
+      assert.ok(signal, "Penn should match Penn-Wharton at the institution level");
+      assert.strictEqual(signal!.weight, 14, "institution match is full weight, not the field fallback");
+    });
+  });
+
+  describe("aspirational_skill", () => {
+    it("matches mentor skills against mentee focus areas with overlap scaling", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: ["finance", "recruiting"],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({ userId: "skilled", skills: ["Finance", "Recruiting"] }),
+      ]);
+      const signal = ranked[0]?.signals.find((s) => s.code === "aspirational_skill");
+      assert.ok(signal, "aspirational_skill should fire");
+      // 2 overlaps -> 0.6 + 0.2*2 = 1.0 -> weight 20
+      assert.strictEqual(signal!.weight, 20);
+    });
+  });
+
+  describe("past_employer_overlap", () => {
+    it("fires on a shared past employer", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+        workHistory: [{ company: "Deloitte", title: "Analyst" }],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "ex-deloitte",
+          currentCompany: "Google",
+          workHistory: [{ company: "Deloitte", title: "Consultant" }],
+        }),
+      ]);
+      const codes = ranked[0]?.signals.map((s) => s.code) ?? [];
+      assert.ok(codes.includes("past_employer_overlap"));
+    });
+
+    it("does not double-count the shared CURRENT employer (shared_company owns it)", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: [],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+        currentCompany: "Goldman Sachs",
+        workHistory: [{ company: "Goldman Sachs", title: "Analyst" }],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({
+          userId: "gs-colleague",
+          currentCompany: "Goldman Sachs",
+          workHistory: [{ company: "Goldman Sachs", title: "Associate" }],
+        }),
+      ]);
+      const codes = ranked[0]?.signals.map((s) => s.code) ?? [];
+      assert.ok(codes.includes("shared_company"));
+      assert.ok(
+        !codes.includes("past_employer_overlap"),
+        "the only shared employer is the current one — past_employer must not fire"
+      );
+    });
+  });
+
+  describe("backward compatibility", () => {
+    it("none of the enriched signals fire when no enriched data is present", () => {
+      const ranked = rankMentorsForMentee(menteeBase, [
+        mentor({ userId: "legacy", topics: ["finance"] }),
+      ]);
+      const codes = ranked[0].signals.map((s) => s.code);
+      for (const enriched of [
+        "career_trajectory",
+        "shared_school",
+        "aspirational_skill",
+        "past_employer_overlap",
+      ]) {
+        assert.ok(!codes.includes(enriched as never), `${enriched} must not fire without data`);
+      }
+    });
+
+    it("tolerates dirty jsonb (null company / non-array) without throwing", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        preferredIndustries: ["Technology"],
+        // @ts-expect-error — simulate a dirty row reaching the matcher
+        workHistory: "not-an-array",
+        educationHistory: [{ title: null, field_of_study: null }],
+      };
+      assert.doesNotThrow(() => {
+        rankMentorsForMentee(mentee, [
+          mentor({
+            userId: "dirty",
+            topics: ["finance"],
+            // @ts-expect-error — simulate a dirty row reaching the matcher
+            workHistory: [{ company: null, title: 42 }],
+            // @ts-expect-error — simulate a dirty row reaching the matcher
+            skills: [null, "Finance", 7],
+          }),
+        ]);
+      });
+    });
+  });
+
+  it("respects org-level weight override for a new signal", () => {
+    const mentee: MenteeInput = {
+      ...menteeBase,
+      focusAreas: [],
+      preferredIndustries: ["Technology"],
+      preferredRoleFamilies: [],
+    };
+    const mentors: MentorInput[] = [
+      mentor({
+        userId: "ex-googler",
+        currentCompany: "Goldman Sachs",
+        workHistory: [{ company: "Google", title: "Software Engineer" }],
+      }),
+    ];
+    const base = rankMentorsForMentee(mentee, mentors);
+    const boosted = rankMentorsForMentee(mentee, mentors, {
+      orgSettings: { mentorship_weights: { career_trajectory: 100 } },
+    });
+    assert.ok(boosted[0].score > base[0].score);
+  });
+});

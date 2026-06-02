@@ -1,6 +1,30 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
+/**
+ * Coerce a jsonb column into a typed array. supabase-js returns jsonb already
+ * parsed, but rows can be dirty (null, object, string) — guard defensively so a
+ * single bad row never breaks matching.
+ */
+function asJsonArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    : [];
+}
+
+/**
+ * Alumni-wins merge: prefer the alumni value, fall back to the members value
+ * only when the alumni side is empty. Mirrors the people-graph projection rule
+ * where alumni career data is authoritative over members.
+ */
+function pickEnriched<T>(alumniValue: T[], membersValue: T[]): T[] {
+  return alumniValue.length > 0 ? alumniValue : membersValue;
+}
+
 export interface PairableOrgMember {
   user_id: string;
   name: string | null;
@@ -122,7 +146,9 @@ export async function loadMentorInputs(
 
   const alumniRes = await sb
     .from("alumni")
-    .select("user_id, industry, job_title, position_title, current_company, current_city, graduation_year")
+    .select(
+      "user_id, industry, job_title, position_title, current_company, current_city, graduation_year, work_history, education_history, skills"
+    )
     .eq("organization_id", orgId)
     .in("user_id", mentorUserIds);
 
@@ -148,6 +174,13 @@ export async function loadMentorInputs(
       currentCompany: (alumni.current_company as string | null) ?? null,
       currentCity: (alumni.current_city as string | null) ?? null,
       graduationYear: (alumni.graduation_year as number | null) ?? null,
+      workHistory: asJsonArray<import("@/lib/mentorship/matching-signals").EnrichedWorkEntry>(
+        alumni.work_history
+      ),
+      educationHistory: asJsonArray<
+        import("@/lib/mentorship/matching-signals").EnrichedEducationEntry
+      >(alumni.education_history),
+      skills: asStringArray(alumni.skills),
       maxMentees: (p.max_mentees as number | null) ?? 3,
       currentMenteeCount: (p.current_mentee_count as number | null) ?? 0,
       acceptingNew: (p.accepting_new as boolean | null) ?? true,
@@ -185,7 +218,7 @@ export async function loadMenteePreferences(
     };
   };
 
-  const [prefsRes, alumniRes] = await Promise.all([
+  const [prefsRes, alumniRes, memberRes] = await Promise.all([
     sb
       .from("mentee_preferences")
       .select(
@@ -196,7 +229,14 @@ export async function loadMenteePreferences(
       .maybeSingle(),
     sb
       .from("alumni")
-      .select("current_city, current_company, graduation_year")
+      .select("current_city, current_company, graduation_year, work_history, education_history")
+      .eq("organization_id", orgId)
+      .eq("user_id", menteeUserId)
+      .maybeSingle(),
+    // Mentees are active members — their enriched data lives on `members`.
+    sb
+      .from("members")
+      .select("work_history, education_history")
       .eq("organization_id", orgId)
       .eq("user_id", menteeUserId)
       .maybeSingle(),
@@ -204,21 +244,30 @@ export async function loadMenteePreferences(
 
   const prefs = (prefsRes.data as Record<string, unknown> | null) ?? null;
   const alumni = (alumniRes.data as Record<string, unknown> | null) ?? null;
+  const member = (memberRes.data as Record<string, unknown> | null) ?? null;
 
-  const stringArr = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
+  type WorkEntry = import("@/lib/mentorship/matching-signals").EnrichedWorkEntry;
+  type EduEntry = import("@/lib/mentorship/matching-signals").EnrichedEducationEntry;
 
   return {
     userId: menteeUserId,
     orgId,
-    focusAreas: stringArr(prefs?.preferred_topics),
-    preferredIndustries: stringArr(prefs?.preferred_industries),
-    preferredRoleFamilies: stringArr(prefs?.preferred_role_families),
-    preferredSports: stringArr(prefs?.preferred_sports),
-    preferredPositions: stringArr(prefs?.preferred_positions),
-    requiredMentorAttributes: stringArr(prefs?.required_attributes),
+    focusAreas: asStringArray(prefs?.preferred_topics),
+    preferredIndustries: asStringArray(prefs?.preferred_industries),
+    preferredRoleFamilies: asStringArray(prefs?.preferred_role_families),
+    preferredSports: asStringArray(prefs?.preferred_sports),
+    preferredPositions: asStringArray(prefs?.preferred_positions),
+    requiredMentorAttributes: asStringArray(prefs?.required_attributes),
     currentCity: (alumni?.current_city as string | null) ?? null,
     graduationYear: (alumni?.graduation_year as number | null) ?? null,
     currentCompany: (alumni?.current_company as string | null) ?? null,
+    workHistory: pickEnriched(
+      asJsonArray<WorkEntry>(alumni?.work_history),
+      asJsonArray<WorkEntry>(member?.work_history)
+    ),
+    educationHistory: pickEnriched(
+      asJsonArray<EduEntry>(alumni?.education_history),
+      asJsonArray<EduEntry>(member?.education_history)
+    ),
   };
 }

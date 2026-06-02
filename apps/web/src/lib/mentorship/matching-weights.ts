@@ -10,7 +10,12 @@ export type BuiltInReasonCode =
   | "shared_position"
   | "graduation_gap_fit"
   | "shared_city"
-  | "shared_company";
+  | "shared_company"
+  // Signals derived from rich LinkedIn-enriched profile data.
+  | "career_trajectory"
+  | "shared_school"
+  | "aspirational_skill"
+  | "past_employer_overlap";
 
 export type CustomReasonCode = `custom:${string}`;
 
@@ -29,6 +34,10 @@ export interface BuiltInMentorshipWeights {
   graduation_gap_fit: number;
   shared_city: number;
   shared_company: number;
+  career_trajectory: number;
+  shared_school: number;
+  aspirational_skill: number;
+  past_employer_overlap: number;
 }
 
 export type MentorshipWeights = BuiltInMentorshipWeights & {
@@ -44,16 +53,24 @@ export const DEFAULT_MENTORSHIP_WEIGHTS: BuiltInMentorshipWeights = {
   graduation_gap_fit: 12,
   shared_city: 4,
   shared_company: 6,
+  career_trajectory: 30,
+  shared_school: 14,
+  aspirational_skill: 20,
+  past_employer_overlap: 8,
 };
 
 export const MENTORSHIP_REASON_ORDER: BuiltInReasonCode[] = [
+  "career_trajectory",
   "shared_sport",
   "shared_position",
   "shared_topics",
+  "aspirational_skill",
   "shared_industry",
   "shared_role_family",
+  "shared_school",
   "graduation_gap_fit",
   "shared_company",
+  "past_employer_overlap",
   "shared_city",
 ];
 

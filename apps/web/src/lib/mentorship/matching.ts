@@ -288,6 +288,114 @@ export function scoreMentorForMentee(
     });
   }
 
+  // career_trajectory — the mentor has WALKED THE PATH the mentee wants. Credits
+  // aspiration coverage that comes from the mentor's PAST/other roles, beyond
+  // what the current-snapshot signals (shared_industry / shared_role_family)
+  // already credit. Subtracting the current-role hits keeps this strictly
+  // additive — no double-counting with those signals.
+  {
+    const currentIndustryHits = new Set(industryOverlap);
+    const currentRoleFamilyHits = new Set(roleFamilyOverlap);
+    const trajIndustryHits = intersectNormalized(
+      mentor.trajectoryIndustries,
+      mentee.preferredIndustries
+    ).filter((v) => !currentIndustryHits.has(v));
+    const trajRoleFamilyHits = intersectNormalized(
+      mentor.trajectoryRoleFamilies,
+      mentee.preferredRoleFamilies
+    ).filter((v) => !currentRoleFamilyHits.has(v));
+    const trajHits = [...trajIndustryHits, ...trajRoleFamilyHits];
+
+    if (trajHits.length > 0) {
+      let bestMultiplier = 1;
+      for (const v of trajIndustryHits) {
+        const m = rarityMultiplier(rarity?.industryCounts.get(v), total);
+        if (m > bestMultiplier) bestMultiplier = m;
+      }
+      for (const v of trajRoleFamilyHits) {
+        const m = rarityMultiplier(rarity?.roleFamilyCounts.get(v), total);
+        if (m > bestMultiplier) bestMultiplier = m;
+      }
+      // Reward covering more of the mentee's stated goals (0.6..1.0).
+      const goalCount =
+        mentee.preferredIndustries.length + mentee.preferredRoleFamilies.length;
+      const coverage =
+        goalCount > 0 ? 0.6 + 0.4 * Math.min(trajHits.length / goalCount, 1) : 0.6;
+      signals.push({
+        code: "career_trajectory",
+        weight: Math.round(weights.career_trajectory * bestMultiplier * coverage),
+        value: trajHits.join(","),
+      });
+    }
+  }
+
+  // shared_school — same school (full weight) or, failing that, same field of
+  // study (half weight). No same-school signal existed before enrichment.
+  {
+    const schoolOverlap = intersectNormalized(mentor.schoolsNorm, mentee.schoolsNorm);
+    if (schoolOverlap.length > 0) {
+      signals.push({
+        code: "shared_school",
+        weight: weights.shared_school,
+        value: schoolOverlap.join(","),
+      });
+    } else {
+      const fieldOverlap = intersectNormalized(
+        mentor.fieldsOfStudyNorm,
+        mentee.fieldsOfStudyNorm
+      );
+      if (fieldOverlap.length > 0) {
+        signals.push({
+          code: "shared_school",
+          weight: Math.round(weights.shared_school * 0.5),
+          value: fieldOverlap.join(","),
+        });
+      }
+    }
+  }
+
+  // aspirational_skill — mentor has skills the mentee wants to develop. Overlap
+  // scaling mirrors shared_topics (1 -> 0.8, 2 -> 1.0, 3+ -> 1.2). No rarity
+  // bucket: the LinkedIn skill vocabulary is too noisy to weight by frequency.
+  {
+    const skillOverlap = intersectNormalized(mentor.skillsNorm, mentee.desiredSkillsNorm);
+    if (skillOverlap.length > 0) {
+      const overlapFactor = Math.min(skillOverlap.length, 3);
+      signals.push({
+        code: "aspirational_skill",
+        weight: Math.round(weights.aspirational_skill * (0.6 + 0.2 * overlapFactor)),
+        value: skillOverlap.join(","),
+      });
+    }
+  }
+
+  // past_employer_overlap — worked at the same companies over time. The shared
+  // CURRENT employer is excluded so this never double-counts shared_company.
+  {
+    const sharedCurrentCompany =
+      mentor.currentCompanyNorm &&
+      mentee.currentCompanyNorm &&
+      mentor.currentCompanyNorm === mentee.currentCompanyNorm
+        ? mentor.currentCompanyNorm
+        : null;
+    const employerOverlap = intersectNormalized(
+      mentor.allCompaniesNorm,
+      mentee.companiesNorm
+    ).filter((c) => c !== sharedCurrentCompany);
+    if (employerOverlap.length > 0) {
+      let bestMultiplier = 1;
+      for (const c of employerOverlap) {
+        const m = rarityMultiplier(rarity?.companyCounts.get(c), total);
+        if (m > bestMultiplier) bestMultiplier = m;
+      }
+      signals.push({
+        code: "past_employer_overlap",
+        weight: Math.round(weights.past_employer_overlap * bestMultiplier),
+        value: employerOverlap.join(","),
+      });
+    }
+  }
+
   // Custom attributes — iterate org-defined defs (not stored keys) to avoid
   // scoring orphaned attributes from deleted defs
   if (customAttributeDefs) {
