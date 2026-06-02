@@ -168,6 +168,6 @@ test("native mentee preferences do not fall back to alumni position_title", () =
   assert.doesNotMatch(loadMenteePreferencesBlock, /position_title/);
   assert.match(
     loadMenteePreferencesBlock,
-    /preferredPositions: stringArr\(prefs\?\.preferred_positions\)/
+    /preferredPositions: asStringArray\(prefs\?\.preferred_positions\)/
   );
 });

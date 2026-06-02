@@ -2,7 +2,29 @@ import {
   canonicalizeIndustry,
   canonicalizeRoleFamily,
   normalizeCareerText,
+  parseMemberCareerString,
 } from "@/lib/falkordb/career-signals";
+
+/**
+ * Shape of a single `work_history` jsonb entry (LinkedIn/Apify enrichment).
+ * Only the fields the matcher reads are declared; everything is optional/dirty.
+ */
+export interface EnrichedWorkEntry {
+  title?: string | null;
+  company?: string | null;
+}
+
+/**
+ * Shape of a single `education_history` jsonb entry. `title` holds the school
+ * name in the Apify payload. `field_of_study` is almost always null on real
+ * data (the dev_fusion actor packs the field into the noisy `degree` line), so
+ * the matcher falls back to keyword-extracting the field from `degree`.
+ */
+export interface EnrichedEducationEntry {
+  title?: string | null;
+  field_of_study?: string | null;
+  degree?: string | null;
+}
 
 export interface MenteeSignals {
   userId: string;
@@ -18,6 +40,15 @@ export interface MenteeSignals {
   graduationYear: number | null;
   currentCompany: string | null;
   currentCompanyNorm: string | null;
+  /** Skills the mentee wants to develop. Proxied from focusAreas until a
+   * dedicated `skills_to_develop` field exists. Normalized. */
+  desiredSkillsNorm: string[];
+  /** Schools attended (from education_history). Normalized. */
+  schoolsNorm: string[];
+  /** Fields of study (from education_history). Normalized. */
+  fieldsOfStudyNorm: string[];
+  /** All employers (work_history + current). Normalized. */
+  companiesNorm: string[];
   customAttributes: Record<string, string[]>; // always string[], normalized
 }
 
@@ -36,6 +67,18 @@ export interface MentorSignals {
   graduationYear: number | null;
   currentCompany: string | null;
   currentCompanyNorm: string | null;
+  /** Canonical industries spanning the FULL work history (past + current). */
+  trajectoryIndustries: string[];
+  /** Canonical role families spanning the FULL work history (past + current). */
+  trajectoryRoleFamilies: string[];
+  /** Schools attended (from education_history). Normalized. */
+  schoolsNorm: string[];
+  /** Fields of study (from education_history). Normalized. */
+  fieldsOfStudyNorm: string[];
+  /** All employers (work_history + current). Normalized. */
+  allCompaniesNorm: string[];
+  /** LinkedIn-derived skills. Normalized. */
+  skillsNorm: string[];
   maxMentees: number;
   currentMenteeCount: number;
   acceptingNew: boolean;
@@ -55,6 +98,10 @@ export interface MenteeInput {
   currentCity?: string | null;
   graduationYear?: number | null;
   currentCompany?: string | null;
+  /** Raw `work_history` jsonb (members/alumni). */
+  workHistory?: EnrichedWorkEntry[] | null;
+  /** Raw `education_history` jsonb (members/alumni). */
+  educationHistory?: EnrichedEducationEntry[] | null;
   customAttributes?: Record<string, string | string[]> | null;
 }
 
@@ -74,6 +121,12 @@ export interface MentorInput {
   currentCompany?: string | null;
   currentCity?: string | null;
   graduationYear?: number | null;
+  /** Raw `work_history` jsonb (alumni). */
+  workHistory?: EnrichedWorkEntry[] | null;
+  /** Raw `education_history` jsonb (alumni). */
+  educationHistory?: EnrichedEducationEntry[] | null;
+  /** Raw `skills` jsonb (alumni) — array of strings. */
+  skills?: string[] | null;
   maxMentees?: number | null;
   currentMenteeCount?: number | null;
   acceptingNew?: boolean | null;
@@ -82,10 +135,11 @@ export interface MentorInput {
 }
 
 function uniqueNormalizedList(values: Array<string | null | undefined> | null | undefined): string[] {
-  if (!values) return [];
+  if (!Array.isArray(values)) return [];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const v of values) {
+    if (v != null && typeof v !== "string") continue; // tolerate dirty jsonb
     const n = normalizeCareerText(v);
     if (n && !seen.has(n)) {
       seen.add(n);
@@ -156,11 +210,154 @@ function normalizeCustomAttributes(
   return result;
 }
 
+/**
+ * School-name normalization. LinkedIn appends the sub-school after a " - "
+ * separator ("University of Pennsylvania - The Wharton School"), which would
+ * otherwise prevent a match against the bare institution. Split on that
+ * separator FIRST (before `normalizeCareerText` strips the hyphen), keep the
+ * institution, then normalize and drop a leading "the ".
+ */
+function normalizeSchool(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const institution = value.split(/\s[-–—]\s/)[0];
+  const base = normalizeCareerText(institution);
+  if (!base) return null;
+  return base.replace(/^the\s+/, "") || base;
+}
+
+/**
+ * Curated academic fields. The matcher keyword-matches these against the noisy
+ * `degree` line, which avoids false matches on the extracurricular text the
+ * scraper dumps there (club names, sports captaincies, honor societies).
+ * More specific terms precede the generic ones they contain.
+ */
+const FIELD_OF_STUDY_TERMS: readonly string[] = [
+  "computer engineering",
+  "computer science",
+  "data science",
+  "data analysis",
+  "electrical engineering",
+  "mechanical engineering",
+  "chemical engineering",
+  "biomedical engineering",
+  "civil engineering",
+  "industrial engineering",
+  "systems engineering",
+  "bioengineering",
+  "engineering",
+  "applied mathematics",
+  "mathematics",
+  "statistics",
+  "physics",
+  "chemistry",
+  "biology",
+  "neuroscience",
+  "economics",
+  "finance",
+  "accounting",
+  "business administration",
+  "marketing",
+  "management",
+  "business",
+  "political science",
+  "international relations",
+  "philosophy",
+  "psychology",
+  "sociology",
+  "history",
+  "communications",
+  "legal studies",
+  "nursing",
+  "public health",
+];
+
+/**
+ * Extract normalized field-of-study tokens from an education entry: prefer the
+ * structured `field_of_study`, fall back to keyword-matching the `degree` line.
+ */
+function extractFieldsOfStudy(entry: EnrichedEducationEntry): string[] {
+  const direct = normalizeCareerText(
+    typeof entry?.field_of_study === "string" ? entry.field_of_study : null
+  );
+  if (direct) return [direct];
+
+  const degreeNorm = normalizeCareerText(typeof entry?.degree === "string" ? entry.degree : null);
+  if (!degreeNorm) return [];
+  const padded = ` ${degreeNorm} `;
+  const fields: string[] = [];
+  for (const term of FIELD_OF_STUDY_TERMS) {
+    if (!padded.includes(` ${term} `)) continue;
+    // Specific terms come first; skip a generic term already covered by a more
+    // specific match (e.g. don't add "engineering" after "computer engineering").
+    if (fields.some((f) => f !== term && f.includes(term))) continue;
+    if (!fields.includes(term)) fields.push(term);
+  }
+  return fields;
+}
+
+/**
+ * Derive canonical career-trajectory sets from a full work history, reusing the
+ * same employer/title canonicalization the people-graph uses. Companies cover
+ * every role; industries/role-families are resolved per entry and unioned.
+ */
+function deriveTrajectory(
+  work: EnrichedWorkEntry[] | null | undefined,
+  currentCompanyNorm: string | null
+): { industries: string[]; roleFamilies: string[]; companies: string[] } {
+  const industries = new Set<string>();
+  const roleFamilies = new Set<string>();
+  const companies = new Set<string>();
+  if (currentCompanyNorm) companies.add(currentCompanyNorm);
+
+  for (const entry of Array.isArray(work) ? work : []) {
+    const company = typeof entry?.company === "string" ? entry.company : null;
+    const title = typeof entry?.title === "string" ? entry.title : null;
+
+    const companyNorm = normalizeCareerText(company);
+    if (companyNorm) companies.add(companyNorm);
+
+    const composed = company
+      ? title
+        ? `${company} — ${title}`
+        : company
+      : title ?? "";
+    const parsed = parseMemberCareerString(composed);
+    if (parsed.canonicalIndustry) industries.add(parsed.canonicalIndustry);
+    const roleFamily =
+      parsed.roleFamily ?? canonicalizeRoleFamily(title, company, parsed.canonicalIndustry);
+    if (roleFamily) roleFamilies.add(roleFamily);
+  }
+
+  return {
+    industries: Array.from(industries),
+    roleFamilies: Array.from(roleFamilies),
+    companies: Array.from(companies),
+  };
+}
+
+function deriveEducation(
+  education: EnrichedEducationEntry[] | null | undefined
+): { schools: string[]; fields: string[] } {
+  const schools = new Set<string>();
+  const fields = new Set<string>();
+  for (const entry of Array.isArray(education) ? education : []) {
+    const school = normalizeSchool(typeof entry?.title === "string" ? entry.title : null);
+    if (school) schools.add(school);
+    for (const field of extractFieldsOfStudy(entry ?? {})) fields.add(field);
+  }
+  return { schools: Array.from(schools), fields: Array.from(fields) };
+}
+
 export function extractMenteeSignals(input: MenteeInput): MenteeSignals {
+  const focusAreas = uniqueNormalizedList(input.focusAreas);
+  const currentCompanyNorm = normalizeCareerText(input.currentCompany);
+  const { companies } = deriveTrajectory(input.workHistory, currentCompanyNorm);
+  const { schools, fields } = deriveEducation(input.educationHistory);
+
   return {
     userId: input.userId,
     orgId: input.orgId,
-    focusAreas: uniqueNormalizedList(input.focusAreas),
+    focusAreas,
     preferredIndustries: canonicalIndustryList(input.preferredIndustries),
     preferredRoleFamilies: canonicalRoleFamilyList(input.preferredRoleFamilies),
     preferredSports: uniqueNormalizedList(input.preferredSports),
@@ -170,7 +367,12 @@ export function extractMenteeSignals(input: MenteeInput): MenteeSignals {
     currentCityNorm: normalizeCareerText(input.currentCity),
     graduationYear: input.graduationYear ?? null,
     currentCompany: input.currentCompany?.trim() || null,
-    currentCompanyNorm: normalizeCareerText(input.currentCompany),
+    currentCompanyNorm,
+    // No dedicated "skills to develop" field yet — focus areas are the proxy.
+    desiredSkillsNorm: focusAreas,
+    schoolsNorm: schools,
+    fieldsOfStudyNorm: fields,
+    companiesNorm: companies,
     customAttributes: normalizeCustomAttributes(input.customAttributes),
   };
 }
@@ -182,6 +384,9 @@ export function extractMentorSignals(input: MentorInput): MentorSignals {
   ];
   const industries = canonicalIndustryList(input.nativeIndustries);
   const roleFamilies = canonicalRoleFamilyList(input.nativeRoleFamilies);
+  const currentCompanyNorm = normalizeCareerText(input.currentCompany);
+  const trajectory = deriveTrajectory(input.workHistory, currentCompanyNorm);
+  const { schools, fields } = deriveEducation(input.educationHistory);
 
   return {
     userId: input.userId,
@@ -197,7 +402,13 @@ export function extractMentorSignals(input: MentorInput): MentorSignals {
     currentCityNorm: normalizeCareerText(input.currentCity),
     graduationYear: input.graduationYear ?? null,
     currentCompany: input.currentCompany?.trim() || null,
-    currentCompanyNorm: normalizeCareerText(input.currentCompany),
+    currentCompanyNorm,
+    trajectoryIndustries: trajectory.industries,
+    trajectoryRoleFamilies: trajectory.roleFamilies,
+    schoolsNorm: schools,
+    fieldsOfStudyNorm: fields,
+    allCompaniesNorm: trajectory.companies,
+    skillsNorm: uniqueNormalizedList(input.skills),
     maxMentees: input.maxMentees ?? 3,
     currentMenteeCount: input.currentMenteeCount ?? 0,
     acceptingNew: input.acceptingNew ?? true,
