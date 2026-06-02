@@ -429,3 +429,19 @@ This doc is currently hand-maintained. Drift is inevitable. Two small scripts wo
 2. **Policy + index matrix** — dump `pg_policies` and `pg_indexes` from a staging DB to `docs/db/rls-matrix.generated.md` and `docs/db/indexes.generated.md`. Link from this audit. Keeps "who can SELECT on X" and "is column Y indexed" out of human memory.
 
 Both are deferred (YAGNI) until drift becomes painful again.
+
+---
+
+## Production Incidents
+
+### 2026-06-02 — v2 org checkout provisioning broken by an unapplied migration
+
+**Symptom.** A customer paid for an org (`New York Edge MS 127X – THE CASTLE HILL`, slug `new-york-edge-ms-127x-the-castle-hill`) via the v2 self-serve flow, was charged on Stripe, but the org never appeared on their orgs page. The org row existed with **zero `user_organization_roles`** and **no `organization_subscriptions` row**, and the `payment_attempts` row was stuck in `processing`.
+
+**Root cause.** Migration `20260429120000_pricing_v2_subscription_columns.sql` (adds `pricing_model_version` + `pricing_v2_snapshot` to `organization_subscriptions` **and** `enterprise_subscriptions`) was committed to the repo but **never applied to production**. The `org_v2` / `enterprise_v2` branches in `apps/web/src/app/api/stripe/webhook/handler.ts` write those columns via `ensureSubscriptionSeedV2`. With the columns missing, `checkout.session.completed` threw `Could not find the 'pricing_model_version' column of 'organization_subscriptions' in the schema cache` *after* the org was created but *before* the subscription row, the admin-role grant, and the `payment_attempts` finalization. The failure is deterministic, so every Stripe retry hit the same wall and the `stripe_events` row never reached `processed_at`. Net effect: **every actually-paid v2 checkout would half-provision** (blast radius at the time was a single live paid org; all other stuck `*_v2_checkout` attempts were unpaid/abandoned dev tests).
+
+**Fix.** Applied the missing migration to production, then manually replayed the webhook's provisioning steps for the affected org (insert the v2 `organization_subscriptions` row, grant the purchaser `admin`/`active`, mark the `payment_attempts` row `succeeded` + linked to the org, mark the `stripe_events` row processed). `stripe_customer_id` and `current_period_end` were backfilled approximately and will be corrected by the next subscription webhook (noted in `pricing_v2_snapshot.backfilled_by`).
+
+**Follow-ups to look into.**
+- **Migration-ledger drift.** `supabase_migrations.schema_migrations` is missing ~116 repo migration *version strings*. This is **mostly renumbering noise, not missing schema** — the repo's migration history appears to have been rebased/renumbered to later dates, and spot-checked "missing" migrations (`reactions`, `enterprise_deletion_requests`, `bulk_import_alumni_rich` birth_year, `enterprise_hard_org_limit`) already exist in prod under their original version numbers. The pricing_v2 migration is the one case confirmed to be *genuinely* unapplied schema. Worth a proper reconciliation pass (`supabase migration repair`) plus an object-level audit to confirm nothing else is truly missing, and a CI guard so a committed-but-unapplied migration can't silently ship again.
+- **Webhook resilience.** A deterministic handler error half-provisions a paid org with no alerting surfaced to an operator. Consider failing *before* org creation when required schema is absent, and/or an alert when a `checkout.session.completed` for a paid session never reaches `processed_at`.
