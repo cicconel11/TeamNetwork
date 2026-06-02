@@ -129,7 +129,12 @@ function bypassStatus(): SpendStatus {
 }
 
 function isTestSkip(): boolean {
-  return process.env.NODE_ENV !== "production" && !process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return (
+    process.env.NODE_ENV !== "production" &&
+    (!process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      !process.env.SUPABASE_SERVICE_ROLE_KEY)
+  );
 }
 
 interface RpcRow {

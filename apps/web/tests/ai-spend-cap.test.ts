@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   AiCapReachedError,
+  checkAiSpend,
   isAiSpendBypassed,
   __test,
   type SpendStatus,
@@ -76,4 +77,17 @@ test("isAiSpendBypassed: true for DEV_ADMIN_EMAILS, false otherwise", () => {
   assert.equal(isAiSpendBypassed(null), false);
   assert.equal(isAiSpendBypassed(undefined), false);
   assert.equal(isAiSpendBypassed({ email: null }), false);
+});
+
+test("checkAiSpend: non-production bypasses when service role env is absent", async () => {
+  resetEnv();
+  process.env.NODE_ENV = "test";
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://rytsziwekhtjdqzzpdso.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-placeholder";
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const status = await checkAiSpend("00000000-0000-4000-8000-000000000001");
+
+  assert.equal(status.allowed, true);
+  assert.equal(status.spendCents, 0);
 });
