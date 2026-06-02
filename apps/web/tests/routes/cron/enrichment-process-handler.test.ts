@@ -107,3 +107,54 @@ test("hard-timeout failures clear source alumni and user sync state", async () =
     sync_error: "timed_out",
   });
 });
+
+test("hard-timeout failure does not clobber a newer user enrichment run", async () => {
+  const supabase = createSupabaseStub();
+  const old = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+  const userId = "22222222-2222-4222-8222-222222222222";
+
+  supabase.seed("linkedin_enrichment_runs", [
+    {
+      id: "55555555-5555-4555-8555-555555555555",
+      run_id: "stale_run",
+      target_kind: "user",
+      user_id: userId,
+      linkedin_url: "https://www.linkedin.com/in/member",
+      status: "syncing",
+      created_at: old,
+    },
+  ]);
+  supabase.seed("user_linkedin_connections", [
+    {
+      user_id: userId,
+      enrichment_status: "syncing",
+      enrichment_run_id: "fresh_run",
+      sync_error: null,
+    },
+  ]);
+
+  const handler = createEnrichmentProcessGetHandler({
+    createServiceClient: () => supabase as never,
+    validateCronAuth: () => null,
+    isApifyConfigured: () => true,
+    getApifyRunStatus: async () => "RUNNING",
+    processFinishedApifyRun: async () => {
+      throw new Error("terminal reconciliation should not run");
+    },
+  });
+
+  const response = await handler(new Request("https://example.com/api/cron/enrichment-process"));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.hard_timed_out, 1);
+  assert.deepEqual(supabase.getRows("user_linkedin_connections")[0], {
+    id: supabase.getRows("user_linkedin_connections")[0].id,
+    created_at: supabase.getRows("user_linkedin_connections")[0].created_at,
+    updated_at: supabase.getRows("user_linkedin_connections")[0].updated_at,
+    user_id: userId,
+    enrichment_status: "syncing",
+    enrichment_run_id: "fresh_run",
+    sync_error: null,
+  });
+});
