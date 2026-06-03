@@ -76,7 +76,9 @@ opencode-auth/
 
 # Gas Town (added by gt)
 .runtime/
-.claude/
+.claude/*
+# but keep shared agent definitions under version control
+!.claude/agents/
 .beads/
 .logs/
 
