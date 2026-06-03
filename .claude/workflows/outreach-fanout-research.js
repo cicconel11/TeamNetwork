@@ -44,6 +44,7 @@ HARD RULES (Tier B — absolute):
 - NEVER fabricate, guess, or pattern-fill an address (no firstname@domain, no assumed info@/athletics@).
 - EMAIL and PHONE are both top priority — capture both when shown; a phone-only row is a valid phone-first prospect, not a dead row.
 - Targets must be ADULT staff/coaches/ADs — never students/minors.
+- Record jurisdiction, lawful basis for non-US contacts, verified_on, verify_method, priority, and source URL per channel. Empty string is better than missing metadata.
 - Mark each row's channel (email for collegiate, phone for HS) per the segment.
 `
 
@@ -60,17 +61,45 @@ const PROSPECT_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['institution', 'person', 'role', 'email', 'phone', 'source_url', 'confidence', 'status'],
+        required: [
+          'institution',
+          'league_conf',
+          'location',
+          'org_domain',
+          'person',
+          'role',
+          'email',
+          'phone',
+          'email_source_url',
+          'phone_source_url',
+          'source_url',
+          'jurisdiction',
+          'lawful_basis',
+          'verified_on',
+          'verify_method',
+          'confidence',
+          'priority',
+          'status',
+        ],
         properties: {
           institution: { type: 'string' },
+          league_conf: { type: 'string' },
           location: { type: 'string' },
+          org_domain: { type: 'string', description: 'normalized official org domain, without protocol, when known; else empty string' },
           person: { type: 'string', description: 'decision-maker name, or note if not found' },
           role: { type: 'string' },
           email: { type: 'string', description: 'EXACT email literally seen on official page, else empty string' },
           phone: { type: 'string', description: 'official phone literally seen, else empty string' },
-          source_url: { type: 'string', description: 'the official page where the contact/role was seen' },
+          email_source_url: { type: 'string', description: 'official page where email was literally seen, else empty string' },
+          phone_source_url: { type: 'string', description: 'official page where phone was literally seen, else empty string' },
+          source_url: { type: 'string', description: 'official page where the contact/role was seen; may equal email_source_url or phone_source_url' },
+          jurisdiction: { type: 'string', description: 'US, Canada, EU/UK/EEA, non-US, or unknown' },
+          lawful_basis: { type: 'string', description: 'required for non-US ready rows; empty string for US or unresolved rows' },
+          verified_on: { type: 'string', description: 'YYYY-MM-DD date this row was fetched/verified, else empty string' },
+          verify_method: { type: 'string', description: 'how the contact was confirmed, e.g. fetched staff page and value present' },
           confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-          status: { type: 'string', enum: ['ready_email', 'ready_phone', 'lookup_needed', 'not_researched'] },
+          priority: { type: 'string', enum: ['P1', 'P2', 'P3'] },
+          status: { type: 'string', enum: ['ready_email', 'ready_phone', 'lookup_needed', 'not_researched', 'held_jurisdiction', 'held_minor'] },
         },
       },
     },
@@ -85,8 +114,14 @@ const VERDICT_SCHEMA = {
     institution: { type: 'string' },
     verdict: { type: 'string', enum: ['confirmed', 'downgrade', 'reject'] },
     corrected_email: { type: 'string', description: 'empty unless the email was wrong/unverifiable, in which case empty it' },
-    corrected_status: { type: 'string', enum: ['ready_email', 'ready_phone', 'lookup_needed', 'not_researched', 'rejected'] },
-    reason: { type: 'string', description: 'why — esp. if a contact could not be confirmed on an official source or role is non-adult' },
+    corrected_phone: { type: 'string', description: 'empty unless the phone was wrong/unverifiable, in which case empty it' },
+    corrected_email_source_url: { type: 'string', description: 'official email source if changed, else empty string' },
+    corrected_phone_source_url: { type: 'string', description: 'official phone source if changed, else empty string' },
+    corrected_source_url: { type: 'string', description: 'official role/contact source if changed, else empty string' },
+    corrected_jurisdiction: { type: 'string', description: 'jurisdiction if corrected, else empty string' },
+    corrected_lawful_basis: { type: 'string', description: 'lawful basis if corrected, else empty string' },
+    corrected_status: { type: 'string', enum: ['ready_email', 'ready_phone', 'lookup_needed', 'not_researched', 'held_jurisdiction', 'held_minor', 'rejected'] },
+    reason: { type: 'string', description: 'why — esp. if a contact channel could not be confirmed on an official source, legal basis is missing, or role is non-adult' },
   },
 }
 
@@ -103,23 +138,28 @@ PRIMARY CHANNEL: ${seg.channel}
 
 ${TRUSTED_RULES}
 
-Enumerate the segment's member institutions from the official league/conference page (cite it + season year). For each non-customer member, find the decision-maker and their official email and/or phone, following the trusted-source priority order. Return structured prospects. Be honest: many rows will be phone-only or lookup_needed — that is correct, do not invent emails to fill gaps.`,
+Enumerate the segment's member institutions from the official league/conference page (cite it + season year). For each non-customer member, find the decision-maker and their official email and/or phone, following the trusted-source priority order. Return structured prospects with every schema field populated. Be honest: many rows will be phone-only or lookup_needed — that is correct, do not invent emails to fill gaps.`,
     { label: `research:${seg.key}`, phase: 'Research', schema: PROSPECT_SCHEMA, agentType: 'general-purpose' }
   ),
-  // Stage 2 — VERIFY each contact in this segment (adversarial #3, as a sub-step)
+  // Stage 2 — VERIFY each contact/source claim in this segment (adversarial #3, as a sub-step)
   (res, seg) => {
     if (!res || !res.prospects || res.prospects.length === 0) return { segment: seg.key, recommended_channel: seg.channel, prospects: [] }
-    const withEmail = res.prospects.filter(p => p.email && p.email.includes('@'))
-    if (withEmail.length === 0) return res // nothing to verify (phone-only/lookup rows pass through)
-    return parallel(withEmail.map(p => () =>
+    const withContactOrSource = res.prospects.filter(p => p.email || p.phone || p.source_url || p.email_source_url || p.phone_source_url)
+    if (withContactOrSource.length === 0) return res
+    return parallel(withContactOrSource.map(p => () =>
       agent(
-        `Adversarially verify ONE outreach contact. Default to skepticism: only "confirmed" if you can re-confirm the email is on the org's OWN official domain.
+        `Adversarially verify ONE outreach contact. Default to skepticism: only "confirmed" if you can re-confirm every non-empty contact channel on an official source.
 
 CONTACT: ${p.person} (${p.role}) at ${p.institution}
 CLAIMED EMAIL: ${p.email}
-CLAIMED SOURCE: ${p.source_url}
+CLAIMED PHONE: ${p.phone}
+CLAIMED EMAIL SOURCE: ${p.email_source_url}
+CLAIMED PHONE SOURCE: ${p.phone_source_url}
+CLAIMED ROLE/CONTACT SOURCE: ${p.source_url}
+CLAIMED JURISDICTION: ${p.jurisdiction}
+CLAIMED LAWFUL BASIS: ${p.lawful_basis}
 
-Re-fetch the source URL (or the org's official staff/athletics directory). Confirm: (1) the email literally appears there, (2) it's on the org's own primary domain (not a broker/aggregator/cache), (3) the person is an ADULT staff/coach/AD (not a student/minor). If you cannot re-confirm the email on an official page, verdict=downgrade and empty the email (status ready_phone if a phone exists, else lookup_needed). If the contact looks fabricated or non-adult, verdict=reject. Otherwise verdict=confirmed.`,
+Re-fetch the source URLs (or the org's official staff/athletics directory). Confirm: (1) each non-empty email/phone literally appears on an official page, (2) the source is the org's own primary domain or the league's own official platform, not a broker/aggregator/cache, (3) the person is an ADULT staff/coach/AD, not a student/minor, and (4) non-US rows have a recorded lawful basis before ready status. If a channel cannot be re-confirmed, verdict=downgrade and empty only that channel. If both channels fail, status=lookup_needed unless the row should be held for jurisdiction. If the contact looks fabricated or non-adult, verdict=reject (or held_minor when the row should remain as a non-actionable note). Otherwise verdict=confirmed.`,
         { label: `verify:${p.institution.slice(0, 24)}`, phase: 'Verify', schema: VERDICT_SCHEMA, agentType: 'general-purpose' }
       ).then(v => ({ prospect: p, verdict: v }))
     )).then(verdicts => {
@@ -129,7 +169,18 @@ Re-fetch the source URL (or the org's official staff/athletics directory). Confi
         const v = vByInst.get(p.institution + p.person)
         if (!v) return p
         if (v.verdict === 'reject') return null
-        if (v.verdict === 'downgrade') return { ...p, email: '', status: v.corrected_status || (p.phone ? 'ready_phone' : 'lookup_needed') }
+        if (v.verdict === 'downgrade') {
+          const updated = { ...p }
+          if (typeof v.corrected_email === 'string') updated.email = v.corrected_email
+          if (typeof v.corrected_phone === 'string') updated.phone = v.corrected_phone
+          if (v.corrected_email_source_url) updated.email_source_url = v.corrected_email_source_url
+          if (v.corrected_phone_source_url) updated.phone_source_url = v.corrected_phone_source_url
+          if (v.corrected_source_url) updated.source_url = v.corrected_source_url
+          if (v.corrected_jurisdiction) updated.jurisdiction = v.corrected_jurisdiction
+          if (v.corrected_lawful_basis) updated.lawful_basis = v.corrected_lawful_basis
+          updated.status = v.corrected_status || (updated.email ? 'ready_email' : (updated.phone ? 'ready_phone' : 'lookup_needed'))
+          return updated
+        }
         return p
       }).filter(Boolean)
       return { ...res, prospects: merged }
@@ -144,13 +195,15 @@ log(`Research+verify done: ${allProspects.length} prospects across ${segResults.
 // ---- Phase 3 (Synthesize): dedup across ALL segments — genuine barrier (needs everything at once) ----
 phase('Synthesize')
 
-// Code-level dedup by normalized institution+person (the agent's dedup key analog)
+// Code-level dedup by durable prospect key when possible, with institution+role fallback.
 const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^the/, '')
 const seen = new Set()
 const deduped = []
 let dupes = 0
 for (const p of allProspects) {
-  const key = norm(p.institution) + '|' + norm(p.person || p.role)
+  const key = p.email
+    ? `${norm(p.org_domain || p.institution)}|${norm(p.email)}`
+    : `${norm(p.org_domain || p.institution)}|${norm(p.role || p.person)}`
   if (seen.has(key)) { dupes++; continue }
   seen.add(key); deduped.push(p)
 }
