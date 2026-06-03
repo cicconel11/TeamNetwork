@@ -8,9 +8,71 @@ export const meta = {
   ],
 }
 
+const getWorkflowArgs = () => {
+  const raw = typeof args === 'undefined' ? {} : args
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return { raw }
+    }
+  }
+  if (raw && typeof raw === 'object' && typeof raw.args === 'string') {
+    try {
+      return { ...raw, args: JSON.parse(raw.args) }
+    } catch {
+      return raw
+    }
+  }
+  return raw || {}
+}
+
+const normalizeSegmentsArg = (value) => {
+  if (typeof value === 'string') {
+    try {
+      return normalizeSegmentsArg(JSON.parse(value))
+    } catch {
+      return normalizeSegmentList([value])
+    }
+  }
+  if (Array.isArray(value)) return normalizeSegmentList(value)
+  if (value && typeof value === 'object') {
+    for (const candidate of [value.segments, value.input, value.args, value.params, value.workflowArgs]) {
+      const normalized = normalizeSegmentsArg(candidate)
+      if (normalized.length > 0) return normalized
+    }
+  }
+  return []
+}
+
+const normalizeSegmentList = (segments) => segments
+  .map((segment, index) => {
+    if (typeof segment === 'string') {
+      return {
+        key: `segment-${index + 1}`,
+        anchor: segment,
+        channel: 'mixed',
+        brief: segment,
+      }
+    }
+    if (!segment || typeof segment !== 'object') return null
+    const anchor = segment.anchor || segment.name || segment.key || `Segment ${index + 1}`
+    const brief = segment.brief || segment.description || segment.query || anchor
+    return {
+      ...segment,
+      key: segment.key || `segment-${index + 1}`,
+      anchor,
+      channel: segment.channel || 'mixed',
+      brief,
+    }
+  })
+  .filter(Boolean)
+
+const WORKFLOW_ARGS = getWorkflowArgs()
+
 // Real segments derived from live paying-customer anchors (queried from the DB).
 // Each is a look-alike pool of an actual TeamNetwork customer.
-const SEGMENTS = (args && args.segments) ? args.segments : [
+const DEFAULT_SEGMENTS = [
   {
     key: 'mac-freedom-baseball',
     anchor: 'FDU-Florham Baseball (NCAA D-III, MAC Freedom)',
@@ -30,6 +92,11 @@ const SEGMENTS = (args && args.segments) ? args.segments : [
     brief: 'University of Pennsylvania and Ivy/peer collegiate club-sport & student-org alumni networks similar to the Penn customer cluster (sprint football, club martial arts, cultural performance alumni, undergrad sports-business clubs). Look-alikes: peer Ivy/NESCAC club programs and similar cultural/alumni student orgs. Decision-maker: club president or alumni-relations officer who is an ADULT (never a current student officer who may be under a relevant threshold — but these are college, so adult is typical; still prefer staff alumni-relations contacts). Capture email + phone from official .edu/club pages only.',
   },
 ]
+
+const PROVIDED_SEGMENTS = normalizeSegmentsArg(WORKFLOW_ARGS)
+const SEGMENTS = PROVIDED_SEGMENTS.length > 0
+  ? PROVIDED_SEGMENTS
+  : DEFAULT_SEGMENTS
 
 const TRUSTED_RULES = `
 TRUSTED SOURCES (use in this priority order, highest contact-yield first):
@@ -189,7 +256,11 @@ Re-fetch the source URLs (or the org's official staff/athletics directory). Conf
 )
 
 const segResults = researched.filter(Boolean)
-const allProspects = segResults.flatMap(s => (s.prospects || []).map(p => ({ ...p, segment: s.segment, channel: s.recommended_channel })))
+const allProspects = segResults.flatMap(s => (s.prospects || []).map(p => ({
+  ...p,
+  segment: s.segment,
+  segment_channel: s.recommended_channel,
+})))
 log(`Research+verify done: ${allProspects.length} prospects across ${segResults.length} segments`)
 
 // ---- Phase 3 (Synthesize): dedup across ALL segments — genuine barrier (needs everything at once) ----
@@ -208,20 +279,70 @@ for (const p of allProspects) {
   seen.add(key); deduped.push(p)
 }
 
-const summary = await agent(
-  `You are synthesizing the final outreach prospect list from ${segResults.length} segments (${deduped.length} deduplicated prospects; ${dupes} cross-segment duplicates removed).
+const hasEmail = p => Boolean((p.email || '').trim())
+const hasPhone = p => Boolean((p.phone || '').trim())
+const heldStatuses = new Set(['held_jurisdiction', 'held_minor'])
+const deriveActionChannel = p => {
+  if (heldStatuses.has(p.status)) return 'held'
+  if (hasEmail(p)) return 'email'
+  if (hasPhone(p)) return 'phone'
+  return 'lookup_needed'
+}
+const deriveStatus = p => {
+  if (heldStatuses.has(p.status) || p.status === 'not_researched') return p.status
+  if (hasEmail(p)) return 'ready_email'
+  if (hasPhone(p)) return 'ready_phone'
+  return 'lookup_needed'
+}
+const actionableProspects = deduped.map(p => ({
+  ...p,
+  action_channel: deriveActionChannel(p),
+  status: deriveStatus(p),
+}))
+const stats = actionableProspects.reduce((acc, p) => {
+  acc.total += 1
+  const segmentKey = p.segment || 'unknown'
+  if (!acc.by_segment[segmentKey]) {
+    acc.by_segment[segmentKey] = { total: 0, ready_email: 0, ready_phone: 0, lookup_needed: 0, held: 0 }
+  }
+  const segmentStats = acc.by_segment[segmentKey]
+  segmentStats.total += 1
+  if (p.action_channel === 'email') {
+    acc.ready_email += 1
+    segmentStats.ready_email += 1
+  } else if (p.action_channel === 'phone') {
+    acc.ready_phone += 1
+    segmentStats.ready_phone += 1
+  } else if (p.action_channel === 'held') {
+    acc.held += 1
+    segmentStats.held += 1
+  } else {
+    acc.lookup_needed += 1
+    segmentStats.lookup_needed += 1
+  }
+  return acc
+}, { total: 0, ready_email: 0, ready_phone: 0, lookup_needed: 0, held: 0, by_segment: {} })
 
-Produce a tight markdown summary: a scoreboard line (total, ready_email, ready_phone, lookup_needed by segment), the channel recommendation per segment, and an honest note on data gaps (lookup_needed rows, any rejected/downgraded contacts from verification). Do NOT list every row — the CSV has those. Lead with what's actionable today.
+const summary = await agent(
+  `You are synthesizing the final outreach prospect list from ${segResults.length} segments (${actionableProspects.length} deduplicated prospects; ${dupes} cross-segment duplicates removed).
+
+Use the computed stats below as authoritative. Do NOT recompute ready_email from segment channel. A row with any verified email is ready_email even when its segment_channel is phone.
+
+COMPUTED STATS (authoritative):
+${JSON.stringify(stats, null, 2)}
+
+Produce a tight markdown summary: a scoreboard line using the computed stats, per-segment counts, the segment channel recommendation, and an honest note on data gaps (lookup_needed rows, any rejected/downgraded contacts from verification). Do NOT list every row — the CSV has those. Lead with what's actionable today.
 
 PROSPECTS (JSON):
-${JSON.stringify(deduped, null, 2)}`,
+${JSON.stringify(actionableProspects, null, 2)}`,
   { label: 'synthesize:summary', phase: 'Synthesize' }
 )
 
 return {
   segment_count: segResults.length,
-  prospect_count: deduped.length,
+  prospect_count: actionableProspects.length,
   duplicates_removed: dupes,
-  prospects: deduped,
+  stats,
+  prospects: actionableProspects,
   summary,
 }
