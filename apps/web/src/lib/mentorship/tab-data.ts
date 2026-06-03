@@ -1,5 +1,6 @@
 import { canLogMentorshipActivity } from "@/lib/mentorship/presentation";
 import { decryptToken } from "@/lib/crypto/token-encryption";
+import { resolveEnrichedProfiles } from "@/lib/profile/enriched-fields";
 import { createClient } from "@/lib/supabase/server";
 import type { MembershipStatus, Database } from "@/types/database";
 import type { MentorshipTab } from "@/lib/mentorship/view-state";
@@ -31,15 +32,6 @@ type MentorshipLogRow = Database["public"]["Tables"]["mentorship_logs"]["Row"];
 type MentorshipTaskRow = Database["public"]["Tables"]["mentorship_tasks"]["Row"];
 type MentorshipMeetingRow = Database["public"]["Tables"]["mentorship_meetings"]["Row"];
 type UserRow = { id: string; name: string | null; email: string | null };
-type AlumniDirectoryRow = Pick<
-  Database["public"]["Tables"]["alumni"]["Row"],
-  | "user_id"
-  | "photo_url"
-  | "industry"
-  | "graduation_year"
-  | "current_company"
-  | "current_city"
->;
 type ActivityTask = {
   id: string;
   pair_id: string;
@@ -484,33 +476,23 @@ export async function loadMentorshipTabView({
     ).sort();
     const orgHasAthleticData = sportOptions.length > 0 || positionOptions.length > 0;
 
-    const { data: mentorAlumniRaw } =
-      mentorUserIds.length > 0
-        ? await db
-            .from("alumni")
-            .select(
-              "user_id, photo_url, industry, graduation_year, current_company, current_city"
-            )
-            .eq("organization_id", orgId)
-            .is("deleted_at", null)
-            .in("user_id", mentorUserIds)
-        : { data: [] as AlumniDirectoryRow[] };
-
-    const alumniMap = new Map(
-      ((mentorAlumniRaw ?? []) as AlumniDirectoryRow[]).map((alumni) => [alumni.user_id, alumni])
-    );
+    // Source each mentor's company/industry from the row that backs THEIR OWN
+    // profile (members → alumni → parents), never an alumni row that merely
+    // shares their user_id. Keeps the card consistent with the profile page and
+    // prevents a colliding/stray alumni record from surfacing a stranger's data.
+    const enrichedByUser = await resolveEnrichedProfiles(db, orgId, mentorUserIds);
     const mentorsForDirectory = mentorProfiles.map((profile) => {
-      const alumni = alumniMap.get(profile.user_id);
+      const enriched = enrichedByUser.get(profile.user_id);
       return {
         id: profile.id,
         user_id: profile.user_id,
         name: profile.users?.name ?? "Unknown",
         email: profile.users?.email ?? null,
-        photo_url: alumni?.photo_url ?? null,
-        industry: alumni?.industry ?? null,
-        graduation_year: alumni?.graduation_year ?? null,
-        current_company: alumni?.current_company ?? null,
-        current_city: alumni?.current_city ?? null,
+        photo_url: enriched?.photo_url ?? null,
+        industry: enriched?.industry ?? null,
+        graduation_year: enriched?.graduation_year ?? null,
+        current_company: enriched?.current_company ?? null,
+        current_city: enriched?.current_city ?? null,
         expertise_areas: profile.expertise_areas ?? null,
         topics: profile.topics ?? null,
         sports: profile.sports ?? null,

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { resolveEnrichedProfiles } from "@/lib/profile/enriched-fields";
 
 /**
  * Coerce a jsonb column into a typed array. supabase-js returns jsonb already
@@ -14,15 +15,6 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
     : [];
-}
-
-/**
- * Alumni-wins merge: prefer the alumni value, fall back to the members value
- * only when the alumni side is empty. Mirrors the people-graph projection rule
- * where alumni career data is authoritative over members.
- */
-function pickEnriched<T>(alumniValue: T[], membersValue: T[]): T[] {
-  return alumniValue.length > 0 ? alumniValue : membersValue;
 }
 
 export interface PairableOrgMember {
@@ -144,21 +136,14 @@ export async function loadMentorInputs(
 
   if (mentorUserIds.length === 0) return [];
 
-  const alumniRes = await sb
-    .from("alumni")
-    .select(
-      "user_id, industry, job_title, position_title, current_company, current_city, graduation_year, work_history, education_history, skills"
-    )
-    .eq("organization_id", orgId)
-    .in("user_id", mentorUserIds);
-
-  const alumniByUser = new Map<string, Record<string, unknown>>();
-  for (const row of (alumniRes.data ?? []) as Array<{ user_id: string } & Record<string, unknown>>) {
-    alumniByUser.set(row.user_id, row);
-  }
+  // Resolve each mentor's career signals from the row that backs their own
+  // profile (members → alumni → parents), keyed by their own user_id, so a
+  // stray/colliding alumni row can never inject another person's data into the
+  // matcher. See resolveEnrichedProfiles for the single-row selection rule.
+  const enrichedByUser = await resolveEnrichedProfiles(supabase, orgId, mentorUserIds);
 
   return mentorProfiles.map((p) => {
-    const alumni = alumniByUser.get(p.user_id as string) ?? {};
+    const enriched = enrichedByUser.get(p.user_id as string);
     return {
       userId: p.user_id as string,
       orgId,
@@ -168,19 +153,19 @@ export async function loadMentorInputs(
       nativePositions: (p.positions as string[] | null) ?? [],
       nativeIndustries: (p.industries as string[] | null) ?? [],
       nativeRoleFamilies: (p.role_families as string[] | null) ?? [],
-      industry: (alumni.industry as string | null) ?? null,
-      jobTitle: (alumni.job_title as string | null) ?? null,
-      positionTitle: (alumni.position_title as string | null) ?? null,
-      currentCompany: (alumni.current_company as string | null) ?? null,
-      currentCity: (alumni.current_city as string | null) ?? null,
-      graduationYear: (alumni.graduation_year as number | null) ?? null,
+      industry: enriched?.industry ?? null,
+      jobTitle: enriched?.job_title ?? null,
+      positionTitle: enriched?.position_title ?? null,
+      currentCompany: enriched?.current_company ?? null,
+      currentCity: enriched?.current_city ?? null,
+      graduationYear: enriched?.graduation_year ?? null,
       workHistory: asJsonArray<import("@/lib/mentorship/matching-signals").EnrichedWorkEntry>(
-        alumni.work_history
+        enriched?.work_history
       ),
       educationHistory: asJsonArray<
         import("@/lib/mentorship/matching-signals").EnrichedEducationEntry
-      >(alumni.education_history),
-      skills: asStringArray(alumni.skills),
+      >(enriched?.education_history),
+      skills: asStringArray(enriched?.skills),
       maxMentees: (p.max_mentees as number | null) ?? 3,
       currentMenteeCount: (p.current_mentee_count as number | null) ?? 0,
       acceptingNew: (p.accepting_new as boolean | null) ?? true,
@@ -218,7 +203,11 @@ export async function loadMenteePreferences(
     };
   };
 
-  const [prefsRes, alumniRes, memberRes] = await Promise.all([
+  // Native preferences come from `mentee_preferences`. The mentee's own profile
+  // facts (city/company/grad year + work/education history) are resolved from
+  // the row that backs their profile (members → alumni → parents) via the shared
+  // resolver, so a colliding alumni row can never leak another person's facts.
+  const [prefsRes, enrichedByUser] = await Promise.all([
     sb
       .from("mentee_preferences")
       .select(
@@ -227,24 +216,11 @@ export async function loadMenteePreferences(
       .eq("organization_id", orgId)
       .eq("user_id", menteeUserId)
       .maybeSingle(),
-    sb
-      .from("alumni")
-      .select("current_city, current_company, graduation_year, work_history, education_history")
-      .eq("organization_id", orgId)
-      .eq("user_id", menteeUserId)
-      .maybeSingle(),
-    // Mentees are active members — their enriched data lives on `members`.
-    sb
-      .from("members")
-      .select("work_history, education_history")
-      .eq("organization_id", orgId)
-      .eq("user_id", menteeUserId)
-      .maybeSingle(),
+    resolveEnrichedProfiles(supabase, orgId, [menteeUserId]),
   ]);
 
   const prefs = (prefsRes.data as Record<string, unknown> | null) ?? null;
-  const alumni = (alumniRes.data as Record<string, unknown> | null) ?? null;
-  const member = (memberRes.data as Record<string, unknown> | null) ?? null;
+  const enriched = enrichedByUser.get(menteeUserId) ?? null;
 
   type WorkEntry = import("@/lib/mentorship/matching-signals").EnrichedWorkEntry;
   type EduEntry = import("@/lib/mentorship/matching-signals").EnrichedEducationEntry;
@@ -258,16 +234,10 @@ export async function loadMenteePreferences(
     preferredSports: asStringArray(prefs?.preferred_sports),
     preferredPositions: asStringArray(prefs?.preferred_positions),
     requiredMentorAttributes: asStringArray(prefs?.required_attributes),
-    currentCity: (alumni?.current_city as string | null) ?? null,
-    graduationYear: (alumni?.graduation_year as number | null) ?? null,
-    currentCompany: (alumni?.current_company as string | null) ?? null,
-    workHistory: pickEnriched(
-      asJsonArray<WorkEntry>(alumni?.work_history),
-      asJsonArray<WorkEntry>(member?.work_history)
-    ),
-    educationHistory: pickEnriched(
-      asJsonArray<EduEntry>(alumni?.education_history),
-      asJsonArray<EduEntry>(member?.education_history)
-    ),
+    currentCity: enriched?.current_city ?? null,
+    graduationYear: enriched?.graduation_year ?? null,
+    currentCompany: enriched?.current_company ?? null,
+    workHistory: asJsonArray<WorkEntry>(enriched?.work_history),
+    educationHistory: asJsonArray<EduEntry>(enriched?.education_history),
   };
 }
