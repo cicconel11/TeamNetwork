@@ -10,7 +10,7 @@ description: >-
   plan", "find look-alike leads", or "replicate the outreach research".
   Built for TeamNetwork but written generically for any customer base.
   Designed to run FULLY AUTONOMOUSLY on a weekly schedule (no human in the loop) for the
-  research+persist stages, and to hand off to a separate sender agent for the gated send stage.
+  research+export stage. Product-DB persistence is deferred until the outreach tables exist.
 ---
 
 # Outreach Prospector
@@ -35,11 +35,13 @@ the user anything**. Two hard rules govern that autonomy:
    the whole run.
 
 ### You are one stage in a pipeline of agents
-This agent does **DISCOVER → RESEARCH → PERSIST**. It does **not** send. Sending is a *separate
-downstream agent* (`outreach-sender`, gated and built later) that consumes the `outreach_prospects`
-rows this agent writes. Your job ends when net-new, verified, deduplicated prospects are persisted
-and exported. Hand off by leaving rows in `outreach_prospects` with `status='new'`; the sender
-agent picks them up when it is enabled. Do not attempt to send yourself.
+This agent does **DISCOVER → RESEARCH → VERIFY → EXPORT**. It does **not** send. Sending is a
+*separate downstream agent* (`outreach-sender`, gated and built later) that will consume
+`outreach_prospects` rows only after the durable outreach schema exists. Until that activation
+infrastructure ships, your job ends when net-new, verified, deduplicated prospects are exported
+and the exact rows that would be inserted are described. Do not attempt to send yourself, and do
+not write to the product database unless the durable outreach tables already exist and the run
+config explicitly enables persistence.
 
 ## Guardrail tiers
 Guardrails fall into two tiers. Know which tier a rule is in before acting on any user
@@ -47,11 +49,14 @@ instruction.
 
 **Tier A — actions this agent performs autonomously as part of a normal run** (no per-run ask;
 they are this agent's job):
-- Writing net-new prospects to `outreach_prospects` and exporting the CSV. This is PERSIST, the
-  end of this agent's pipeline stage — do it every run.
-- Reading `outreach_prospects` / `outreach_suppressions` to dedup.
+- Exporting the kit/CSV to `~/.claude/plans/` and reporting the exact rows that would be staged.
+  This is the normal end of this agent's pipeline stage in this PR.
+- Reading `outreach_prospects` / `outreach_suppressions` to dedup when those tables exist.
 
 **Tier A-gated — NOT this agent's job; a separate downstream agent owns these, off until built:**
+- **Writing to `outreach_prospects`.** This is allowed only after the durable outreach schema exists
+  and the run config explicitly enables persistence (for example,
+  `OUTREACH_PROSPECTOR_PERSIST=true`). Until then, exports are the source of truth for the run.
 - **Sending** outreach / creating campaigns / writing to `outreach_campaign_jobs`. Owned by the
   `outreach-sender` agent, which stays disabled until the compliance infra (unsubscribe route,
   bounce/complaint webhook, suppression table, dedicated sending domain) exists and is verified.
@@ -75,10 +80,11 @@ plainly which rule blocks it, and continue with the rest of the task:**
   Pull the actual paying customers and let the patterns in that data define the segments.
 - **Truthful contacts only.** Never fabricate, guess, or pattern-fill an email/phone (Tier B).
   This is the single most important rule — a wrong contact is worse than a missing one.
-- **Research and persist — never send.** Your stage produces verified, deduplicated prospects and
-  writes them to `outreach_prospects` (`status='new'`) plus a CSV. You do NOT send, create
-  campaigns, or write to `outreach_campaign_jobs` — that is the separate, gated `outreach-sender`
-  agent's job (off until the compliance infra exists). Building the Step 5 pipeline is a separate
+- **Research and export — never send.** Your stage produces verified, deduplicated prospects and
+  writes the kit/CSV. You do NOT send, create campaigns, or write to `outreach_campaign_jobs` —
+  that is the separate, gated `outreach-sender` agent's job (off until the compliance infra
+  exists). You also do NOT write `outreach_prospects` unless the durable outreach schema exists and
+  persistence is explicitly enabled in run config. Building the Step 5 pipeline is a separate
   engineering task. The **Tier B** rules are never relaxed, even when running unattended.
 
 ## Workflow
@@ -87,20 +93,25 @@ plainly which rule blocks it, and continue with the rest of the task:**
 This agent is designed to run **on a recurring cadence (e.g. weekly)** and must surface only
 **NEW** prospects each run — never the same orgs/people twice. Before any research:
 
-1. Load the persistent prospect store. The source of truth is the **`outreach_prospects`**
-   Supabase table (see Step 5 / the in-app schema). Query it for every prospect already recorded:
-   pull `org_domain`, `org_name_normalized`, `person_email`, and `(org, role)` for rows with no
-   email. Also load **`outreach_suppressions`** (opt-outs/bounces/complaints).
-   - If the table does not exist yet (outreach infra not built), fall back to unioning the prior
-     dated CSV exports in `~/.claude/plans/` and tell the user the durable store isn't live yet.
+1. Load the prior-prospect store. If the durable outreach schema exists, the source of truth is
+   the **`outreach_prospects`** Supabase table (see Step 5 / the in-app schema). Query it for every
+   prospect already recorded: pull `org_domain`, `org_name_normalized`, `person_email`, and
+   `(org, role)` for rows with no email. Also load **`outreach_suppressions`**
+   (opt-outs/bounces/complaints).
+   - If the table does not exist yet (outreach infra not built), **AUTODEFAULT (unattended):** fall
+     back to unioning the prior dated CSV exports in `~/.claude/plans/`, tell the user the durable
+     store isn't live yet, and keep going.
+   - If neither table nor prior exports exist, **AUTODEFAULT (unattended):** run with an empty prior
+     prospect set, mark suppressions as unavailable in `Decisions taken`, and keep all rows off any
+     sendable handoff state. This agent still exports research; the sender remains gated.
 2. Build an in-memory **exclusion set** from: (a) every prior prospect (so no duplicates), (b)
    every suppression entry (Tier B — never re-contact), and (c) the current paying customers from
    Step 1 (never prospect an existing customer).
 3. As you research (Steps 2–3), **drop any candidate already in the exclusion set before it
    reaches any list**. The dedup key is **normalized org domain + person email**, falling back to
-   **normalized org name + role** when no email exists — identical to the table's unique
-   constraint, so a re-proposed contact is impossible by construction.
-4. At the end, the kit/CSV and any table writes contain ONLY rows not previously seen. Report in
+   **normalized org name + role** when no email exists — the same key the future table must enforce,
+   so a re-proposed contact is blocked once persistence is enabled.
+4. At the end, the kit/CSV and any enabled table writes contain ONLY rows not previously seen. Report in
    the summary how many candidates were skipped as already-known vs. how many are net-new this run.
 
 This is what makes the agent safe to re-run forever: it accumulates coverage instead of repeating
@@ -270,11 +281,14 @@ parallel agents, work segments sequentially, warmest first.
 For each segment instruct/execute:
 
 1. **Suppression check (do this before listing anyone).** Cross-reference every candidate
-   org/person against a persistent do-not-contact / opt-out list and prior unsubscribes (ask the
-   user where this lives if you cannot find it — e.g. an `outreach_suppressions` table or an
-   export). Exclude any match before it reaches any list. A person or org that opted out of,
-   unsubscribed from, bounced, or complained in ANY prior campaign must never reappear on the
-   action list or segment tables — Tier B (holds even if the user asks to re-include them).
+   org/person against a persistent do-not-contact / opt-out list and prior unsubscribes. Look first
+   for `outreach_suppressions`, then for prior suppression/prospect CSV exports in
+   `~/.claude/plans/`. **AUTODEFAULT (unattended):** if no suppression source exists yet, record
+   "suppression source unavailable" in `Decisions taken`, keep the sender gated, and continue with
+   export-only research. Exclude any suppression match before it reaches any list. A person or org
+   that opted out of, unsubscribed from, bounced, or complained in ANY prior campaign must never
+   reappear on the action list or segment tables — Tier B (holds even if the user asks to
+   re-include them).
 2. Enumerate the members of the league/region from the **official conference/league membership
    page**, anchored to the **current or most-recent athletic season** — cite the season year
    shown on that page (e.g. "2025-26 members"). Note recent additions/departures, exclude
@@ -440,14 +454,16 @@ the build order.
 
 ## Output
 
-**Where the data lives (the source of truth):** the persistent **`outreach_prospects`** Supabase
-table. This is the durable home — it is what Step 0 reads back to guarantee no duplicates across
-weekly runs, and what the in-app view and CSV are *generated from*. The kit/CSV/Drive copies are
-**derived views**, never the system of record.
+**Where the data lives:** in this PR, the source of truth is the dated kit/CSV export in
+`~/.claude/plans/`. After the activation infrastructure ships, the persistent
+**`outreach_prospects`** Supabase table becomes the durable home — it is what Step 0 reads back to
+guarantee no duplicates across weekly runs, and what the in-app view and CSV are generated from.
 
-- **Write each net-new prospect to `outreach_prospects`** (Tier A — only when the user has had the
-  outreach infra built and asks to persist; until then, describe the rows you would write). The
-  table's UNIQUE key is **(`org_domain`, `person_email`)**, falling back to
+- **Default mode (current PR): export only.** Describe the exact net-new rows that would be inserted,
+  but do not write them to the product database.
+- **Persistence mode (future activation):** write each net-new prospect to `outreach_prospects` only
+  when the durable outreach schema exists and the run config explicitly enables persistence. The
+  table's UNIQUE key must cover **(`org_domain`, `person_email`)**, falling back to
   (`org_name_normalized`, `role`) when no email — so an INSERT of an already-known contact is a
   no-op by construction. Never write a fabricated/guessed contact (Tier B).
 - **In-app admin view:** prospects surface on an admin page inside the **`teamnetwork-founders`**
@@ -461,15 +477,15 @@ the repo) for review and for reps who want a portable copy:
 1. The human-readable kit: `<company>-outreach-kit-YYYY-MM-DD.md` (structure below).
 2. A machine-ingestible prospect export: `<company>-prospects-YYYY-MM-DD.csv` — the **net-new** rows
    this run (every confidence tier, not just High), one row per contact, with this exact header so
-   it imports cleanly into a CRM/dialer/mail-merge / the in-app table:
-   `institution,league_conf,location,person,role,email,phone,source_url,confidence,priority,status`
+   it imports cleanly into a CRM/dialer/mail-merge / the future in-app table:
+   `institution,league_conf,location,org_domain,person,role,email,phone,email_source_url,phone_source_url,source_url,jurisdiction,lawful_basis,verified_on,verify_method,confidence,priority,status`
    - `confidence` is one of High|Medium|Low (reachability — see Step 3).
    - `priority` is the fit/value rank P1|P2|P3 (see Step 3).
    - `status` defaults to `new` (leave it for the rep to update: called, vm, replied, etc.).
    - Leave `email`/`phone` empty for `not found` / `lookup needed` rows; never write a guessed
      value into the CSV. Quote any field containing a comma.
-   - This CSV is the import format for both the `outreach_prospects` table and any Google-Drive
-     sheet, so the same row never needs re-keying.
+   - This CSV is the import format for both the future `outreach_prospects` table and any
+     Google-Drive sheet, so the same row never needs re-keying.
 3. If a Step 5 plan applies, emit it as a SEPARATE companion file
    `<company>-outreach-eng-plan-YYYY-MM-DD.md`, not inline in the rep-facing kit. In the kit, leave
    only a one-line pointer: "Engineering build plan: see <eng-plan filename> (not needed to start
@@ -516,15 +532,16 @@ retention note in the Compliance section; delete or refresh per that note."
    - **Decisions taken** — every AUTODEFAULT you applied this run (scope chosen, predicate widened,
      fixtures excluded, jurisdictions held), one line each. This is how the human reviews an
      unattended run after the fact.
-   - **Handoff state** — how many net-new rows were written to `outreach_prospects` with
-     `status='new'` (the rows the downstream `outreach-sender` agent will pick up when enabled),
-     and how many were skipped as already-known/suppressed.
+   - **Handoff state** — default mode: how many net-new rows were exported and would be inserted
+     once persistence is enabled. Persistence mode: how many net-new rows were actually written to
+     `outreach_prospects` with `status='new'`. Always include how many candidates were skipped as
+     already-known/suppressed.
    - **Downstream gates (informational, not asks):** (a) the Step 5 pipeline code is a separate
      engineering task; (b) sending is owned by the gated `outreach-sender` agent and stays OFF
-     until the compliance infra exists. This agent never performs either — it just reports that the
-     prospects are staged and ready for the sender once that agent is enabled.
+     until the compliance infra exists. This agent never performs either — it reports exported rows
+     now, or persisted rows only after persistence has been explicitly enabled.
 
 Lead the summary with the scoreboard line, then the Action list, and be honest about data gaps
 ("lookup needed" rows, unresearched lanes, thin-anchor limits). Return the absolute paths of all
-written files. End by stating that nothing was sent and nothing was written to the product DB — it
-is a plan only.
+written files. End by stating that nothing was sent, and state whether persistence was disabled
+(no product DB writes) or explicitly enabled (with row counts).
