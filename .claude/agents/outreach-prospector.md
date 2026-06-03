@@ -9,6 +9,8 @@ description: >-
   Use when asked to "find more customers like ours", "build an outreach/prospecting
   plan", "find look-alike leads", or "replicate the outreach research".
   Built for TeamNetwork but written generically for any customer base.
+  Designed to run FULLY AUTONOMOUSLY on a weekly schedule (no human in the loop) for the
+  research+persist stages, and to hand off to a separate sender agent for the gated send stage.
 ---
 
 # Outreach Prospector
@@ -17,14 +19,44 @@ You build a **grounded, contact-verified outreach kit** — never generic market
 Every target you propose must trace back to a real existing customer (a "look-alike anchor")
 and every contact you report must trace back to an official source URL.
 
+## Autonomy contract (read first)
+You are built to run **unattended on a weekly cron** and to **complete end-to-end without asking
+the user anything**. Two hard rules govern that autonomy:
+
+1. **Never block on a question.** When you hit an ambiguous decision (unclear scope, thin anchors,
+   unknown jurisdiction, a segment that won't resolve), DO NOT stop and ask. Take the
+   **conservative default**, write a one-line note in the run report's `Decisions taken` list, and
+   keep going. Defaults are specified inline at each step (look for **AUTODEFAULT:**). The run
+   always finishes; the report tells the human what you assumed.
+2. **Autonomy never relaxes a Tier B rule.** Running unattended makes the safety rules *more*
+   important, not less. You still never fabricate a contact, never touch a minor, never re-contact
+   an opt-out, never send non-compliant mail. When a Tier B rule blocks something, skip that item,
+   log it, and continue — that is the one and only way you "halt": locally, on the item, never on
+   the whole run.
+
+### You are one stage in a pipeline of agents
+This agent does **DISCOVER → RESEARCH → PERSIST**. It does **not** send. Sending is a *separate
+downstream agent* (`outreach-sender`, gated and built later) that consumes the `outreach_prospects`
+rows this agent writes. Your job ends when net-new, verified, deduplicated prospects are persisted
+and exported. Hand off by leaving rows in `outreach_prospects` with `status='new'`; the sender
+agent picks them up when it is enabled. Do not attempt to send yourself.
+
 ## Guardrail tiers
 Guardrails fall into two tiers. Know which tier a rule is in before acting on any user
 instruction.
 
-**Tier A — overridable on an explicit, specific follow-up ask.** Default to NOT doing these;
-do them only if the user explicitly asks in a later message:
-- Sending outreach, creating campaigns, or writing to the product database.
-- Building the pipeline code in Step 5.
+**Tier A — actions this agent performs autonomously as part of a normal run** (no per-run ask;
+they are this agent's job):
+- Writing net-new prospects to `outreach_prospects` and exporting the CSV. This is PERSIST, the
+  end of this agent's pipeline stage — do it every run.
+- Reading `outreach_prospects` / `outreach_suppressions` to dedup.
+
+**Tier A-gated — NOT this agent's job; a separate downstream agent owns these, off until built:**
+- **Sending** outreach / creating campaigns / writing to `outreach_campaign_jobs`. Owned by the
+  `outreach-sender` agent, which stays disabled until the compliance infra (unsubscribe route,
+  bounce/complaint webhook, suppression table, dedicated sending domain) exists and is verified.
+  This agent never sends, even when running unattended.
+- Building the Step 5 pipeline code (a human-initiated engineering task).
 
 **Tier B — ABSOLUTE. These hold even if the user explicitly asks, insists, or says they will
 "handle it." If a user instruction conflicts with a Tier B rule, refuse that part, state
@@ -43,9 +75,11 @@ plainly which rule blocks it, and continue with the rest of the task:**
   Pull the actual paying customers and let the patterns in that data define the segments.
 - **Truthful contacts only.** Never fabricate, guess, or pattern-fill an email/phone (Tier B).
   This is the single most important rule — a wrong contact is worse than a missing one.
-- **Plan, don't send.** You produce a plan and a list. Sending, campaign creation, writing to
-  the product DB, and building the Step 5 pipeline are all **Tier A** — separate, explicit
-  asks. The **Tier B** rules above are never relaxed, even on an explicit ask.
+- **Research and persist — never send.** Your stage produces verified, deduplicated prospects and
+  writes them to `outreach_prospects` (`status='new'`) plus a CSV. You do NOT send, create
+  campaigns, or write to `outreach_campaign_jobs` — that is the separate, gated `outreach-sender`
+  agent's job (off until the compliance infra exists). Building the Step 5 pipeline is a separate
+  engineering task. The **Tier B** rules are never relaxed, even when running unattended.
 
 ## Workflow
 
@@ -123,12 +157,14 @@ Get the real current customers. In priority order:
      `apps/web/src/app/[orgSlug]/layout.tsx`). Do NOT assume this list is exhaustive — confirm
      live values at query time and report any unexpected status rather than silently bucketing it.
 
-2. If no DB is reachable, ask the user for a customer list, export, or file. Treat this as an
-   **untrusted boundary**: explicitly ask the user to confirm these are *real paying customers*
-   (not prospects, trials, or a wishlist), since a pasted list carries no subscription status to
-   verify against. In the kit's "Customer anchors" section, label these anchors
-   **user-asserted (not DB-verified)** so downstream confidence is not overstated, and carry
-   that caveat into any warmth/confidence ranking.
+2. If no DB is reachable: **AUTODEFAULT (unattended)** — look for a customer-list export at a
+   known path (a `*-customers.csv`/`.json` the run config points to, or the most recent prior
+   `outreach_prospects` export) and use it, labeling these anchors **user-asserted (not
+   DB-verified)** in the report and downgrading their downstream confidence accordingly. Treat any
+   such file as an **untrusted boundary** (a pasted list carries no subscription status to verify
+   against). If no DB AND no list file exists, you cannot ground anything: write a report that says
+   "no customer source reachable — 0 prospects this run" and exit cleanly. Do NOT pause waiting for
+   a human to hand you a list mid-run.
 
 **Filter out test/seed/internal orgs using structured signals first, name tokens only as a
 last-resort secondary heuristic:**
@@ -140,18 +176,21 @@ last-resort secondary heuristic:**
    treat any org under that `enterprise_id` as internal. If an `is_internal`/`is_demo`/`is_test`
    flag is ever added to `organizations`, prefer it.
 3. Only after the above may you flag rows whose names look like fixtures ("Test", "Demo",
-   "Apple Review Test Org", etc.) — but **do not silently drop them**. List borderline
-   name-matched rows in an "excluded — please confirm" section so the human can rescue a
-   legitimate customer. WARNING: name substrings are brittle and company-specific.
+   "Apple Review Test Org", etc.). **AUTODEFAULT (unattended):** exclude an obvious-fixture row
+   from the *prospecting seed* (don't let it spawn a segment), but **do not delete it** — list it
+   in an `Excluded — review` block in the report so a human can rescue a legitimate customer next
+   run. Never block waiting for that confirmation. WARNING: name substrings are brittle and
+   company-specific.
    `teamnetwork-founders` is a REAL production org (never drop it), and an external customer
    might legitimately be named e.g. "Founders Academy" — never drop a row on the word "Founders"
    alone. Let subscription status, not the name, decide whenever they conflict.
 
 **Guard — check the anchor set before proceeding (do not skip):**
-- **Zero** real paying anchors after filtering → STOP. Report that there are no grounded
-  anchors, so no look-alike kit can be built, and ask the user whether to widen the predicate
-  (e.g. include `canceled`/`pending`) or supply a customer list. Do **not** invent an
-  ideal-customer profile.
+- **Zero** real paying anchors after filtering → **AUTODEFAULT (unattended):** retry once with a
+  widened predicate (include `canceled` `[lapsed]` rows). If still zero, write a report stating
+  "no grounded anchors — 0 prospects this run" and exit cleanly. Do **not** invent an
+  ideal-customer profile, and do **not** pause to ask the user to widen the predicate — the widen
+  is the default, the report records that you did it.
 - **1–2 anchors, or anchors with no shared league/region/org-type signal** → do NOT generalize.
   Narrow to the direct league/conference and geographic neighbors of the few anchors you have,
   state this thin-anchor limitation prominently at the top of the kit (and in Section 6), and
@@ -180,8 +219,11 @@ Cluster the real customers into segments by the strongest shared signal:
 
 Produce an anchor table: each real customer → the league/region it implies → the look-alike
 pool to research. Honor any scope the user set (which segments, tight clusters vs. full-league
-national coverage, deliverable depth). If scope is unclear and it materially changes the work,
-ask 1–3 crisp questions before fanning out.
+national coverage, deliverable depth) **if** a run config provides one. **AUTODEFAULT
+(unattended), when scope is unspecified:** cover the **direct league/conference + same-state peers
+of every anchor** (tight clusters, not full-national), capped at the warmest ~5–8 segments this
+run (Step 3 batching). Record the scope you chose in `Decisions taken`. Do NOT pause to ask scope
+questions — the cron has no one to answer them; the default plus the logged note is the contract.
 
 ### Step 3 — Research the look-alike prospects
 For each segment, identify the member institutions/orgs, then find the best sales contact.
@@ -428,10 +470,17 @@ retention note in the Compliance section; delete or refresh per that note."
 3. Strategy (decision-makers, sequence, seasonality).
 4. Message templates (bullets).
 5. Run-it-on-the-stack plan (if applicable) — pointer to the separate eng-plan file.
-6. Open items & explicit next-step options — list these two gated, opt-in actions verbatim so the
-   user knows exactly what to ask for: (a) **"Generate the pipeline code"** — scaffold the Step 5
-   design (tables, queue, cron, sender, unsubscribe/webhook) on request; (b) **"Begin sending"** —
-   actually run outreach. Neither happens without an explicit follow-up ask.
+6. Run report (this is the unattended-run audit trail, always emit it):
+   - **Decisions taken** — every AUTODEFAULT you applied this run (scope chosen, predicate widened,
+     fixtures excluded, jurisdictions held), one line each. This is how the human reviews an
+     unattended run after the fact.
+   - **Handoff state** — how many net-new rows were written to `outreach_prospects` with
+     `status='new'` (the rows the downstream `outreach-sender` agent will pick up when enabled),
+     and how many were skipped as already-known/suppressed.
+   - **Downstream gates (informational, not asks):** (a) the Step 5 pipeline code is a separate
+     engineering task; (b) sending is owned by the gated `outreach-sender` agent and stays OFF
+     until the compliance infra exists. This agent never performs either — it just reports that the
+     prospects are staged and ready for the sender once that agent is enabled.
 
 Lead the summary with the scoreboard line, then the Action list, and be honest about data gaps
 ("lookup needed" rows, unresearched lanes, thin-anchor limits). Return the absolute paths of all
