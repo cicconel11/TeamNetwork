@@ -10,6 +10,11 @@ import type { Member } from "@/types/database";
 import { LinkedInProfileLink, formatPersonHeadline, EnrichmentSections } from "@/components/shared";
 import { ConnectedAccountsSection } from "@/components/members/ConnectedAccountsSection";
 import { sanitizeRichTextToPlainText } from "@/lib/security/rich-text";
+import {
+  resolveMemberExperience,
+  resolveMemberEducation,
+  resolveMemberBio,
+} from "@/lib/profile/member-enrichment";
 
 interface MemberDetailPageProps {
   params: Promise<{ orgSlug: string; memberId: string }>;
@@ -87,35 +92,20 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
     }
   }
 
-  // Extract enrichment data from LinkedIn connection (stored by Apify sync)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m = member as Member & Record<string, any>;
+
+  // Extract enrichment data from the LinkedIn self-connection (stored by Apify sync).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const linkedinData = (enrichmentResult as any)?.data?.linkedin_data;
   const enrichment = linkedinData?.enrichment;
-  const linkedinBio: string | null = enrichment?.about || enrichment?.summary || null;
 
-  // Experience and education from enrichment JSON
-  interface EnrichmentExperience {
-    title?: string | null;
-    company?: string | null;
-    company_id?: string | null;
-    location?: string | null;
-    start_date?: string | null;
-    end_date?: string | null;
-    description_html?: string | null;
-    company_logo_url?: string | null;
-  }
-  interface EnrichmentEducation {
-    title?: string | null; // school name
-    degree?: string | null;
-    field_of_study?: string | null;
-    start_year?: string | null;
-    end_year?: string | null;
-    description?: string | null;
-    institute_logo_url?: string | null;
-  }
-
-  const enrichmentExperience: EnrichmentExperience[] = Array.isArray(enrichment?.experience) ? enrichment.experience : [];
-  const enrichmentEducation: EnrichmentEducation[] = Array.isArray(enrichment?.education) ? enrichment.education : [];
+  // Experience/education/bio prefer the self-connection blob and fall back to the
+  // admin-enriched `members` columns (identical shape) — so members enriched only
+  // by the Apify admin pipeline (no self-connection) still render full history.
+  const linkedinBio: string | null = resolveMemberBio(enrichment, m);
+  const enrichmentExperience = resolveMemberExperience(enrichment, m);
+  const enrichmentEducation = resolveMemberEducation(enrichment, m);
 
   const currentUserId = user?.id ?? null;
   const isAdmin = ctx.isAdmin;
@@ -123,9 +113,6 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   const canModifyExisting = canEdit && !ctx.isReadOnly;
   const canDelete = ctx.isAdmin && !ctx.isReadOnly;
   const isOwnProfile = currentUserId !== null && currentUserId === memberUserId;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const m = member as Member & Record<string, any>;
 
   // member.role is the job title field (confusingly named "role" in the members table)
   const jobTitle = m.role || null;
