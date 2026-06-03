@@ -22,11 +22,13 @@ jobs:
     timeout-minutes: 10
     env:
       NODE_OPTIONS: --max-old-space-size=8192
-      # Supabase secrets are optional — when unset, DB-touching tests skip via
-      # skipWithoutSupabase(). Pure unit tests still run.
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Do NOT inject the Supabase secrets here. The suite is designed to run
+      # with them UNSET: each DB-touching test seeds dummy values via `??`/`||`
+      # fallbacks and `src/lib/ai/spend.ts` `isTestSkip()` bypasses spend when
+      # NEXT_PUBLIC_SUPABASE_URL is absent. Passing the secrets is only safe if
+      # ALL are real — a referenced-but-unset secret resolves to "" (defeats the
+      # `??` fallbacks) and a real URL both defeats `isTestSkip()` and breaks
+      # tests that assert the dummy URL. Leave them unset so the suite runs green.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,11 +55,9 @@ jobs:
     timeout-minutes: 10
     env:
       NODE_OPTIONS: --max-old-space-size=8192
-      # Supabase secrets are optional — when unset, DB-touching tests skip via
-      # skipWithoutSupabase(). Pure unit tests still run.
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Do NOT inject the Supabase secrets here — see the note on the test-unit
+      # job above. The AI suite in particular relies on `isTestSkip()` bypassing
+      # the spend service-client call when NEXT_PUBLIC_SUPABASE_URL is unset.
     steps:
       - uses: actions/checkout@v4
         with:
