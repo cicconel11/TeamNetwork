@@ -228,6 +228,39 @@ questions — the cron has no one to answer them; the default plus the logged no
 ### Step 3 — Research the look-alike prospects
 For each segment, identify the member institutions/orgs, then find the best sales contact.
 
+#### Trusted sources & source-priority order (where to look, in order)
+**Goal: capture EMAIL and PHONE — both are top priority.** A row is only as good as its contact
+channels, so always try to get the official email *and* the official main line. Work these
+sources **in this order** (highest contact-yield first); stop once you have a verified email+phone
+from an official source:
+
+1. **Collegiate athletics CMS (Sidearm)** — `athletics.<school>.edu` /
+   `<mascot>.com` hosted on sidearmsports.com. Highest yield for college **coach emails** (staff
+   directory pages list them). Best first stop for any college segment.
+2. **Official conference / league site + NCAA/NAIA** — the conference's own domain
+   (e.g. `gomacsports.com`, `chsaany.org`) and NCAA/NAIA directories. Authoritative for the
+   **current member roster** (Step 3.2) and sometimes contacts.
+3. **Diocese / state HS athletic-association directories** — archdiocese staff directories and
+   state HS-association `.org` sites. Best shot at **HS athletic-director contacts** that school
+   CMS sites hide. Use these when a high-school segment's own site gates emails.
+4. **MaxPreps + the school's own `/athletics` page** — reliable for the **AD's name and the main
+   athletics phone line** even when email is gated. Always grab the phone here as the fallback
+   channel.
+
+**Trust propagation (when a site may be treated as an official, scrapeable source):** beyond the
+categories above, you MAY read and report contacts from an organization's **own primary domain**
+when that org is a **confirmed member of a trusted league/conference** (membership verified on the
+league's official site this session), or from a platform the **league itself officially operates**
+(e.g. the conference's Sidearm host). League/partner membership extends trust to the member's own
+site and the league's own platform — nothing more.
+
+**Boundary (Tier B — does NOT relax the no-fabrication / official-source rule):** trust does NOT
+extend to third-party data brokers, aggregators (ZoomInfo, RocketReach, Wiza), or any site merely
+because it *claims* a partnership or *lists* the org. "Partnered with a trusted site" means the
+contact appears on the org's own domain or the league's own platform — not on a broker that
+scraped it. When in doubt about whether a source is official, treat the contact as `lookup_needed`,
+not reported.
+
 If you can spawn parallel research agents, fan out per segment for speed, but cap concurrency:
 research the warmest ~5–8 segments first (tightest signal — same league as a customer — and
 largest look-alike pools), in batches of at most 5–8 agents at a time, then drain remaining
@@ -268,6 +301,15 @@ For each segment instruct/execute:
    - **Jurisdiction unknown** → treat as non-US and hold off the action list until resolved.
 5. Collect: Institution | League/Conf | Location | Person & Role | Email | Phone | Source URL |
    Verified-on (date) | Verify method | Confidence | Priority.
+   - **Email AND phone are both top priority — get both whenever an official source shows them.**
+     Do not stop at one. If the staff directory shows an email, also grab the official phone/main
+     athletics line; if email is gated, the phone still makes the row actionable. A row with a
+     verified phone but no email is **not** a dead row — it is a phone-first prospect.
+   - **Channel-by-segment (from observed yield):** **collegiate** segments → cold **email** is the
+     primary channel (Sidearm directories expose coach emails). **High-school** segments → **phone
+     is the primary channel** (school CMS sites gate emails; the main athletics line is usually
+     public). Label each segment's recommended channel so the sender/rep knows how to work it, and
+     prioritize capturing the channel that segment actually yields.
    - Verify method = how you confirmed it (e.g. "fetched directory page, value present").
    - Verified-on = the date you fetched it. A row with no Verify method cannot be High confidence.
 
