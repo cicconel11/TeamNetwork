@@ -4,6 +4,10 @@ import { createCommentSchema } from "@/lib/schemas/feed";
 import { validateJson, validationErrorResponse, ValidationError } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import {
+  getBlockedUserIds,
+  blockedIdsInFilter,
+} from "@/lib/moderation/blocked-users";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
@@ -46,15 +50,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
     }
 
-    const { data: comments, error } = await supabase
+    // Hide comments authored by users in a mutual block with the viewer (Apple 1.2).
+    const blockedFilter = blockedIdsInFilter(
+      await getBlockedUserIds(supabase, user.id),
+    );
+
+    let commentsQuery = supabase
       .from("feed_comments")
       .select(`
         *,
         author:users!feed_comments_author_id_fkey(name)
       `)
       .eq("post_id", postId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true });
+      .is("deleted_at", null);
+
+    if (blockedFilter) {
+      commentsQuery = commentsQuery.not("author_id", "in", blockedFilter);
+    }
+
+    const { data: comments, error } = await commentsQuery.order("created_at", {
+      ascending: true,
+    });
 
     if (error) {
       return NextResponse.json({ error: "Failed to load comments" }, { status: 500 });

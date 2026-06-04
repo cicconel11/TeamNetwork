@@ -7,6 +7,10 @@ import { validateJson, validationErrorResponse, ValidationError, baseSchemas } f
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { getAllowedOrgRoles } from "@/lib/auth/org-role-config";
+import {
+  getBlockedUserIds,
+  blockedIdsInFilter,
+} from "@/lib/moderation/blocked-users";
 import { linkMediaToEntity } from "@/lib/media/link";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
 import type { PollMetadata } from "@/components/feed/types";
@@ -62,8 +66,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
     }
 
+    // Hide posts authored by users in a mutual block with the viewer (Apple 1.2).
+    const blockedFilter = blockedIdsInFilter(
+      await getBlockedUserIds(supabase, user.id),
+    );
+
     // Fetch posts with author info and count
-    const { data: posts, error, count } = await supabase
+    let postsQuery = supabase
       .from("feed_posts")
       .select(
         `
@@ -73,7 +82,13 @@ export async function GET(request: NextRequest) {
         { count: "exact", head: false },
       )
       .eq("organization_id", orgId)
-      .is("deleted_at", null)
+      .is("deleted_at", null);
+
+    if (blockedFilter) {
+      postsQuery = postsQuery.not("author_id", "in", blockedFilter);
+    }
+
+    const { data: posts, error, count } = await postsQuery
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 

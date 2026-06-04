@@ -138,6 +138,12 @@ export default function AccountPage() {
         >
           Language
         </Link>
+        <Link
+          href="/settings/blocked-users"
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          Blocked Users
+        </Link>
       </div>
 
       {/* Support */}
