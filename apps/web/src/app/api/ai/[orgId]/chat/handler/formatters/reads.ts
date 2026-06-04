@@ -43,6 +43,18 @@ interface SuggestMentorsDisplaySuggestion {
   reasons?: Array<{ label?: unknown; value?: unknown }>;
 }
 
+interface SuggestMenteesDisplayPayload {
+  state?: unknown;
+  mentor?: { name?: unknown } | null;
+  suggestions?: unknown;
+  disambiguation_options?: unknown;
+}
+
+interface SuggestMenteesDisplaySuggestion {
+  mentee?: { name?: unknown; subtitle?: unknown } | null;
+  reasons?: Array<{ label?: unknown; value?: unknown }>;
+}
+
 interface DonationAnalyticsDisplayPayload {
   window_days?: unknown;
   totals?: {
@@ -157,6 +169,87 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
   if (suggestions.length === 0) return null;
 
   const lines = [`Top mentors for ${menteeName}`];
+  for (const [index, suggestion] of suggestions.entries()) {
+    lines.push(`${index + 1}. ${suggestion.displayLine}`);
+    lines.push(`   Why: ${suggestion.reasons.join(", ")}`);
+  }
+
+  return lines.join("\n");
+}
+
+export function formatSuggestMenteesResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+
+  const payload = data as SuggestMenteesDisplayPayload;
+  const state = getNonEmptyString(payload.state);
+  if (!state) return null;
+
+  if (state === "unauthorized") {
+    return "Mentee suggestions are currently available to admins only.";
+  }
+
+  if (state === "not_found") {
+    return "I couldn't find that mentor in the organization. Please share a full name or email.";
+  }
+
+  if (state === "ambiguous") {
+    const options = Array.isArray(payload.disambiguation_options)
+      ? payload.disambiguation_options
+          .map((option) =>
+            option && typeof option === "object"
+              ? formatDisplayRow(option as { name?: unknown; subtitle?: unknown })
+              : null
+          )
+          .filter((option): option is string => Boolean(option))
+      : [];
+
+    if (options.length === 0) return null;
+
+    return `I found multiple matches. Which one did you mean?\n${options
+      .map((option) => `- ${option}`)
+      .join("\n")}`;
+  }
+
+  const mentorName = getNonEmptyString(payload.mentor?.name);
+  if (!mentorName) return null;
+
+  if (state === "no_suggestions") {
+    return `I found ${mentorName}, but there are no students seeking mentorship who match right now.`;
+  }
+
+  if (state !== "resolved" || !Array.isArray(payload.suggestions)) return null;
+
+  const suggestions = (payload.suggestions as SuggestMenteesDisplaySuggestion[])
+    .map((s) => {
+      if (!s || typeof s !== "object") return null;
+      const name = getNonEmptyString(s.mentee?.name);
+      if (!name) return null;
+
+      const subtitle = getNonEmptyString(s.mentee?.subtitle);
+      const displayLine = subtitle ? `${name} — ${subtitle}` : name;
+
+      const reasons = Array.isArray(s.reasons)
+        ? s.reasons
+            .map((r) => {
+              const label = getNonEmptyString(r?.label);
+              if (!label) return null;
+              const value = r?.value;
+              return value != null && value !== "" ? `${label}: ${value}` : label;
+            })
+            .filter((r): r is string => Boolean(r))
+        : [];
+
+      if (reasons.length === 0) return null;
+      return { displayLine, reasons };
+    })
+    .filter(
+      (s): s is { displayLine: string; reasons: string[] } => Boolean(s)
+    )
+    .slice(0, 5);
+
+  if (suggestions.length === 0) return null;
+
+  const lines = [`Top mentees for ${mentorName}`];
   for (const [index, suggestion] of suggestions.entries()) {
     lines.push(`${index + 1}. ${suggestion.displayLine}`);
     lines.push(`   Why: ${suggestion.reasons.join(", ")}`);

@@ -740,6 +740,7 @@ export async function buildPromptContext(
     "Do NOT use tools for greetings, general questions, or anything answerable from context.",
     "For networking, connection, or introduction questions about a named person, call suggest_connections directly. It can resolve the person from a natural-language person_query and return a chat-ready payload.",
     "For mentor matching, mentee pairing, or 'who should mentor X' questions, call suggest_mentors directly. Do not invent matches — render only signals from tool output.",
+    "For the reverse direction — 'who should I mentor', 'recommend mentees for X', or finding students for a willing mentor — call suggest_mentees directly. Render only signals from tool output.",
     "For navigation or 'where do I go' requests, call find_navigation_targets and prefer returning direct in-app links.",
     PARTIAL_CAPABILITY_POLICY,
     MEMBER_PREFERENCES_POLICY,

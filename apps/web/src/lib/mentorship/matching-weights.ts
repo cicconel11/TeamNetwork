@@ -15,7 +15,11 @@ export type BuiltInReasonCode =
   | "career_trajectory"
   | "shared_school"
   | "aspirational_skill"
-  | "past_employer_overlap";
+  | "past_employer_overlap"
+  // Synthetic signal carried by fallback candidates when a mentee is too
+  // data-thin to produce any real overlap signal. Never weight-driven — the
+  // fallback ranker sets its weight explicitly.
+  | "fallback_general";
 
 export type CustomReasonCode = `custom:${string}`;
 
@@ -38,6 +42,7 @@ export interface BuiltInMentorshipWeights {
   shared_school: number;
   aspirational_skill: number;
   past_employer_overlap: number;
+  fallback_general: number;
 }
 
 export type MentorshipWeights = BuiltInMentorshipWeights & {
@@ -57,6 +62,10 @@ export const DEFAULT_MENTORSHIP_WEIGHTS: BuiltInMentorshipWeights = {
   shared_school: 14,
   aspirational_skill: 20,
   past_employer_overlap: 8,
+  // Not weight-driven: fallback candidates set this signal's weight to 1
+  // directly. Kept at 0 so it never contributes to scored matches or the
+  // theoretical-max used for quality tiers.
+  fallback_general: 0,
 };
 
 export const MENTORSHIP_REASON_ORDER: BuiltInReasonCode[] = [
@@ -72,6 +81,7 @@ export const MENTORSHIP_REASON_ORDER: BuiltInReasonCode[] = [
   "shared_company",
   "past_employer_overlap",
   "shared_city",
+  "fallback_general",
 ];
 
 /* ------------------------------------------------------------------ */

@@ -33,6 +33,8 @@ interface RoutingCase {
   // tool-choice (e.g. suggest_connections, suggest_mentors — single-tool
   // pattern overrides not in the forced-choice allowlist).
   expectSingleNoForce?: string;
+  // Like expectSingleNoForce but for an exact multi-tool list (no forced choice).
+  expectExactNoForce?: string[];
   // If set, list must START with this tool (per-surface bias preserved).
   expectFirst?: string;
 }
@@ -67,6 +69,17 @@ function runCase(c: RoutingCase) {
       names,
       [c.expectSingleNoForce],
       `[${c.name}] expected single tool [${c.expectSingleNoForce}], got [${names.join(", ")}]`,
+    );
+  } else if (c.expectExactNoForce) {
+    assert.deepEqual(
+      names,
+      c.expectExactNoForce,
+      `[${c.name}] expected tools [${c.expectExactNoForce.join(", ")}], got [${names.join(", ")}]`,
+    );
+    assert.equal(
+      getForcedPass1ToolChoice(tools),
+      undefined,
+      `[${c.name}] expected no forced tool choice`,
     );
   } else {
     for (const required of c.expectIncludes) {
@@ -322,12 +335,12 @@ const DOMAIN_PATTERN_CASES: RoutingCase[] = [
 // On other surfaces they should fall through to the merged list.
 const MENTOR_CONNECTION_CASES: RoutingCase[] = [
   {
-    name: "members: 'find a mentor for me' → suggest_mentors",
+    name: "members: 'find a mentor for me' → suggest_mentors + suggest_mentees",
     message: "find a mentor for me",
     surface: "members",
     intentType: "knowledge_query",
     expectIncludes: [],
-    expectSingleNoForce: "suggest_mentors",
+    expectExactNoForce: ["suggest_mentors", "suggest_mentees"],
   },
   {
     name: "members: 'which mentors are accepting new mentees' → list_available_mentors",

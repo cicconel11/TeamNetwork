@@ -27,6 +27,10 @@ const CANONICAL_ROLE_FAMILIES = new Set([
   "Education",
 ]);
 
+/** Public, ordered views of the canonical vocabularies (for prompts / UI). */
+export const CANONICAL_INDUSTRY_LIST: readonly string[] = Array.from(CANONICAL_INDUSTRIES);
+export const CANONICAL_ROLE_FAMILY_LIST: readonly string[] = Array.from(CANONICAL_ROLE_FAMILIES);
+
 const RAW_INDUSTRY_TO_CANONICAL = new Map<string, string>([
   ["banking", "Finance"],
   ["private equity", "Finance"],
@@ -230,25 +234,32 @@ function parseRoleFragment(value: string): string | null {
   return null;
 }
 
-function matchRoleFamilyFromText(value: string | null | undefined): string | null {
+/**
+ * Match ALL role families whose keyword vocabulary appears in the text. This is
+ * the single source of truth for keyword→role-family matching; callers that
+ * only need the first match use {@link matchRoleFamilyFromText}.
+ */
+export function matchRoleFamiliesFromText(value: string | null | undefined): string[] {
   const normalized = normalizeCareerText(value);
   if (!normalized) {
-    return null;
+    return [];
   }
 
   const padded = ` ${normalized} `;
+  const families: string[] = [];
   for (const entry of ROLE_FAMILY_KEYWORDS) {
-    if (
-      entry.keywords.some((keyword) => {
-        const normalizedKeyword = normalizeCareerText(keyword);
-        return normalizedKeyword ? padded.includes(` ${normalizedKeyword} `) : false;
-      })
-    ) {
-      return entry.family;
-    }
+    const hit = entry.keywords.some((keyword) => {
+      const normalizedKeyword = normalizeCareerText(keyword);
+      return normalizedKeyword ? padded.includes(` ${normalizedKeyword} `) : false;
+    });
+    if (hit && !families.includes(entry.family)) families.push(entry.family);
   }
 
-  return null;
+  return families;
+}
+
+function matchRoleFamilyFromText(value: string | null | undefined): string | null {
+  return matchRoleFamiliesFromText(value)[0] ?? null;
 }
 
 export function canonicalizeRoleFamily(

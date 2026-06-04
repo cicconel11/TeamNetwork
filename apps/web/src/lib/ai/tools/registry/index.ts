@@ -22,6 +22,7 @@ import { getEnterpriseOrgCapacityModule } from "./get-enterprise-org-capacity";
 import { findNavigationTargetsModule } from "./find-navigation-targets";
 import { suggestConnectionsModule } from "./suggest-connections";
 import { suggestMentorsModule } from "./suggest-mentors";
+import { suggestMenteesModule } from "./suggest-mentees";
 import { listAvailableMentorsModule } from "./list-available-mentors";
 import { listMemberPreferencesModule } from "./list-member-preferences";
 import { findFreeMembersModule } from "./find-free-members";
@@ -69,6 +70,7 @@ const MODULES: ReadonlyArray<ToolModule<any>> = [
   findNavigationTargetsModule,
   suggestConnectionsModule,
   suggestMentorsModule,
+  suggestMenteesModule,
   listAvailableMentorsModule,
   listMemberPreferencesModule,
   findFreeMembersModule,

@@ -153,6 +153,28 @@ export const Profiles = {
       maxRetries: 1,
     };
   },
+  signalBackfill(): LlmProfile {
+    return {
+      name: "signal_backfill",
+      model: process.env.ZAI_MODEL_SIGNAL_BACKFILL || defaultModel(),
+      temperature: 0,
+      maxTokens: 300,
+      responseFormat: { type: "json_object" },
+      timeoutMs: 8_000,
+      maxRetries: 1,
+    };
+  },
+  whyGen(): LlmProfile {
+    return {
+      name: "why_gen",
+      model: process.env.ZAI_MODEL_WHY_GEN || defaultModel(),
+      temperature: 0.3,
+      maxTokens: 400,
+      responseFormat: { type: "json_object" },
+      timeoutMs: 8_000,
+      maxRetries: 1,
+    };
+  },
 } as const;
 
 // ---------------------------------------------------------------------------

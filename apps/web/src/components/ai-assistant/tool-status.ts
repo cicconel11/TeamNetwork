@@ -46,6 +46,8 @@ export function formatToolStatusLabel(toolName: string): string {
       return "Finding connections...";
     case "suggest_mentors":
       return "Finding mentors...";
+    case "suggest_mentees":
+      return "Finding mentees...";
     case "find_navigation_targets":
       return "Finding the right page...";
     default:

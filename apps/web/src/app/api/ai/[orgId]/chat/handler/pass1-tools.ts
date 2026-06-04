@@ -46,6 +46,7 @@ const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
     "suggest_connections",
     "list_available_mentors",
     "suggest_mentors",
+    "suggest_mentees",
   ],
   members: [
     "list_members",
@@ -57,6 +58,7 @@ const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
     "suggest_connections",
     "list_available_mentors",
     "suggest_mentors",
+    "suggest_mentees",
   ],
   analytics: ["get_org_stats"],
   events: ["list_events", "find_free_members"],
@@ -557,7 +559,7 @@ const PASS1_ROUTING_RULES: ReadonlyArray<RoutingRule> = [
     tools: (ctx) =>
       MENTOR_AVAILABILITY_PROMPT_PATTERN.test(ctx.message)
         ? ["list_available_mentors"]
-        : ["suggest_mentors"],
+        : ["suggest_mentors", "suggest_mentees"],
   },
   {
     id: "connection_intent",

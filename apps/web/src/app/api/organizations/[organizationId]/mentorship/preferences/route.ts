@@ -4,6 +4,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { menteePreferencesSchema } from "@/lib/schemas/mentorship";
+import {
+  backfillMenteeSignals,
+  computeSignalBackfillInputHash,
+} from "@/lib/mentorship/signal-backfill";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,6 +41,7 @@ type PrefsRow = {
   time_availability: string | null;
   communication_prefs: string[] | null;
   geographic_pref: string | null;
+  derived_signals_input_hash?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -202,7 +207,7 @@ export async function PUT(req: Request, { params }: RouteParams) {
     .from("mentee_preferences")
     .upsert(row, { onConflict: "organization_id,user_id" })
     .select(
-      "id, organization_id, user_id, goals, seeking_mentorship, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref, created_at, updated_at"
+      "id, organization_id, user_id, goals, seeking_mentorship, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref, derived_signals_input_hash, created_at, updated_at"
     )
     .single();
 
@@ -213,5 +218,64 @@ export async function PUT(req: Request, { params }: RouteParams) {
     );
   }
 
-  return NextResponse.json({ preferences: data as PrefsRow });
+  const savedRow = data as PrefsRow;
+
+  // Refresh derived matching signals when the inputs that feed them changed.
+  // The deterministic path short-circuits the LLM for the common case, so this
+  // is cheap; failures never fail the save.
+  await refreshDerivedSignals(service, {
+    organizationId,
+    userId: user.id,
+    goals: savedRow.goals,
+    focusAreas: savedRow.preferred_topics ?? [],
+    priorHash: savedRow.derived_signals_input_hash ?? null,
+  });
+
+  return NextResponse.json({ preferences: savedRow });
+}
+
+/**
+ * Compute + persist canonical derived signals for a mentee when their goals /
+ * focus areas change. Best-effort: any failure is swallowed so a transient AI
+ * outage never blocks a preference save.
+ */
+async function refreshDerivedSignals(
+  service: ReturnType<typeof createServiceClient>,
+  args: {
+    organizationId: string;
+    userId: string;
+    goals: string | null;
+    focusAreas: string[];
+    priorHash: string | null;
+  }
+): Promise<void> {
+  try {
+    const input = {
+      goals: args.goals,
+      focusAreas: args.focusAreas,
+      major: null,
+      orgId: args.organizationId,
+    };
+    const hash = computeSignalBackfillInputHash(input);
+    if (hash === args.priorHash) return; // inputs unchanged — nothing to do
+
+    const signals = await backfillMenteeSignals(input);
+    await (service as unknown as {
+      rpc: (fn: string, params: Record<string, unknown>) => Promise<unknown>;
+    }).rpc("upsert_mentee_derived_signals", {
+      p_organization_id: args.organizationId,
+      p_user_id: args.userId,
+      p_signals: {
+        industries: signals.industries,
+        roleFamilies: signals.roleFamilies,
+        topics: signals.topics,
+        skills: signals.skills,
+        model: signals.model,
+        updated_at: new Date().toISOString(),
+      },
+      p_input_hash: signals.inputHash,
+    });
+  } catch {
+    // Best-effort — never block the preference save on signal backfill.
+  }
 }

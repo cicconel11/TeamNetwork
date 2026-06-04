@@ -1327,6 +1327,35 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  suggest_mentees: {
+    type: "function" as const,
+    function: {
+      name: "suggest_mentees" as const,
+      description:
+        "Suggest mentees (students seeking mentorship) for a mentor within the organization. The bi-directional counterpart of suggest_mentors — use for 'who should I mentor', 'recommend mentees for X', or matching a willing mentor to students. Only considers students who opted into mentorship. Returns auditable signals for every match — never invent reasons beyond tool output.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          mentor_id: {
+            type: "string" as const,
+            description: "User UUID of the mentor.",
+          },
+          mentor_query: {
+            type: "string" as const,
+            description:
+              "Name or email of the mentor when the user asked in natural language (e.g. the asking user themselves).",
+          },
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max mentee suggestions to return (default 5)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   search_org_content: {
     type: "function" as const,
     function: {
@@ -1481,6 +1510,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.get_enterprise_org_capacity,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.suggest_mentors,
+  TOOL_BY_NAME.suggest_mentees,
   TOOL_BY_NAME.list_available_mentors,
   TOOL_BY_NAME.list_member_preferences,
   TOOL_BY_NAME.find_free_members,

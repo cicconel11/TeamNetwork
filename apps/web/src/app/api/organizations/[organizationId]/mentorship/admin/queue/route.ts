@@ -6,6 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import {
   rankMentorsForMentee,
+  loadBalanceMatches,
   type MentorInput,
 } from "@/lib/mentorship/matching";
 import { sendNotificationBlast } from "@/lib/notifications";
@@ -310,7 +311,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       ? svc
           .from("mentee_preferences")
           .select(
-            "user_id, seeking_mentorship, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes"
+            "user_id, goals, seeking_mentorship, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes"
           )
           .eq("organization_id", organizationId)
           .in("user_id", candidateMenteeIds)
@@ -357,6 +358,18 @@ export async function POST(req: Request, { params }: RouteParams) {
   const stringArr = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
 
+  // Load-balancing across the round: track how many mentees each mentor has been
+  // assigned WITHIN this round so we (a) demote heavily-loaded mentors and
+  // (b) never assign a mentor past max_mentees before the DB trigger catches up.
+  const inRoundAssigned = new Map<string, number>();
+  const mentorCapacity = new Map<string, { current: number; max: number }>();
+  for (const mi of mentorInputs) {
+    mentorCapacity.set(mi.userId, {
+      current: mi.currentMenteeCount ?? 0,
+      max: Math.max(1, mi.maxMentees ?? 3),
+    });
+  }
+
   for (const menteeUserId of candidateMenteeIds) {
     const prefs = prefsByUser.get(menteeUserId) ?? null;
     if (!prefs?.seeking_mentorship) {
@@ -373,6 +386,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       {
         userId: menteeUserId,
         orgId: organizationId,
+        goals: prefs?.goals ?? null,
         focusAreas: stringArr(prefs?.preferred_topics),
         preferredIndustries: stringArr(prefs?.preferred_industries),
         preferredRoleFamilies: stringArr(prefs?.preferred_role_families),
@@ -387,7 +401,15 @@ export async function POST(req: Request, { params }: RouteParams) {
       { orgSettings: orgRow?.settings ?? null }
     );
 
-    const topMatch = matches[0] ?? null;
+    // Spread assignments across mentors and skip any mentor that would exceed
+    // capacity once this round's not-yet-persisted assignments are counted.
+    const balanced = loadBalanceMatches(matches, mentorInputs, { inRoundAssigned });
+    const topMatch =
+      balanced.find((m) => {
+        const cap = mentorCapacity.get(m.mentorUserId);
+        if (!cap) return true;
+        return cap.current + (inRoundAssigned.get(m.mentorUserId) ?? 0) < cap.max;
+      }) ?? null;
     if (!topMatch) {
       skippedNoMatch += 1;
       continue;
@@ -427,6 +449,12 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     const inserted = { id: rpcRow.pair_id };
     created += 1;
+    // Count this assignment so the next mentee in the round sees the mentor as
+    // more loaded (and capacity-guarded) before the DB trigger updates counts.
+    inRoundAssigned.set(
+      topMatch.mentorUserId,
+      (inRoundAssigned.get(topMatch.mentorUserId) ?? 0) + 1
+    );
 
     try {
       await (service as unknown as {

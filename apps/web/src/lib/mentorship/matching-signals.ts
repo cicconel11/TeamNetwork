@@ -4,6 +4,7 @@ import {
   normalizeCareerText,
   parseMemberCareerString,
 } from "@/lib/falkordb/career-signals";
+import { extractSignalsFromGoals } from "@/lib/mentorship/goals-extraction";
 
 /**
  * Shape of a single `work_history` jsonb entry (LinkedIn/Apify enrichment).
@@ -89,6 +90,9 @@ export interface MentorSignals {
 export interface MenteeInput {
   userId: string;
   orgId: string;
+  /** Free-text aspirations. Deterministically mined into canonical industries /
+   * role families to enrich (never override) the structured fields below. */
+  goals?: string | null;
   focusAreas?: string[] | null;
   preferredIndustries?: string[] | null;
   preferredRoleFamilies?: string[] | null;
@@ -348,18 +352,40 @@ function deriveEducation(
   return { schools: Array.from(schools), fields: Array.from(fields) };
 }
 
+function unionUnique(base: string[], extra: string[]): string[] {
+  if (extra.length === 0) return base;
+  const seen = new Set(base);
+  const out = [...base];
+  for (const v of extra) {
+    if (!seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
+}
+
 export function extractMenteeSignals(input: MenteeInput): MenteeSignals {
   const focusAreas = uniqueNormalizedList(input.focusAreas);
   const currentCompanyNorm = normalizeCareerText(input.currentCompany);
   const { companies } = deriveTrajectory(input.workHistory, currentCompanyNorm);
   const { schools, fields } = deriveEducation(input.educationHistory);
 
+  // Free-text goals enrich (never override) the canonical structured fields.
+  const goalSignals = extractSignalsFromGoals(input.goals);
+
   return {
     userId: input.userId,
     orgId: input.orgId,
     focusAreas,
-    preferredIndustries: canonicalIndustryList(input.preferredIndustries),
-    preferredRoleFamilies: canonicalRoleFamilyList(input.preferredRoleFamilies),
+    preferredIndustries: unionUnique(
+      canonicalIndustryList(input.preferredIndustries),
+      goalSignals.industries
+    ),
+    preferredRoleFamilies: unionUnique(
+      canonicalRoleFamilyList(input.preferredRoleFamilies),
+      goalSignals.roleFamilies
+    ),
     preferredSports: uniqueNormalizedList(input.preferredSports),
     preferredPositions: uniqueNormalizedList(input.preferredPositions),
     requiredMentorAttributes: normalizedAttributeKeyList(input.requiredMentorAttributes),

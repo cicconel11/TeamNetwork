@@ -7,6 +7,11 @@ const FALLBACK_LABELS: Record<string, string> = {
   graduation_gap_fit: "Graduation gap fit",
   shared_city: "Same city",
   shared_company: "Same company",
+  career_trajectory: "Walked your path",
+  shared_school: "Same school",
+  aspirational_skill: "Skills you want",
+  past_employer_overlap: "Worked at the same company",
+  fallback_general: "Suggested match",
 };
 
 function humanize(code: string): string {

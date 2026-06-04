@@ -1,6 +1,7 @@
 import type { ToolResultMessage } from "@/lib/ai/response-composer";
 import {
   formatSuggestMentorsResponse,
+  formatSuggestMenteesResponse,
   formatDonationAnalyticsResponse,
   formatListAvailableMentorsResponse,
   formatAnnouncementsResponse,
@@ -309,6 +310,8 @@ export function formatDeterministicToolResponse(
       return formatSuggestConnectionsResponse(data);
     case "suggest_mentors":
       return formatSuggestMentorsResponse(data);
+    case "suggest_mentees":
+      return formatSuggestMenteesResponse(data);
     case "list_available_mentors":
       return formatListAvailableMentorsResponse(data);
     case "list_events":

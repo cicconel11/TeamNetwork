@@ -799,6 +799,7 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
     "suggest_connections",
     "list_available_mentors",
     "suggest_mentors",
+    "suggest_mentees",
     "search_org_content",
     "find_navigation_targets",
   ]);
@@ -939,6 +940,7 @@ test("ambiguous queries keep fallback surface tool set", async () => {
     "suggest_connections",
     "list_available_mentors",
     "suggest_mentors",
+    "suggest_mentees",
     "search_org_content",
     "find_navigation_targets",
   ]);
@@ -1625,6 +1627,7 @@ test("action requests do not get forced into find_navigation_targets", async () 
     "suggest_connections",
     "list_available_mentors",
     "suggest_mentors",
+    "suggest_mentees",
     "search_org_content",
     "find_navigation_targets",
   ]);

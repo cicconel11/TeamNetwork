@@ -288,6 +288,7 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
         "suggest_connections",
         "list_available_mentors",
         "suggest_mentors",
+        "suggest_mentees",
         "search_org_content",
         "find_navigation_targets",
       ],
@@ -329,12 +330,12 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
       expectedForcedTool: "find_free_members",
     },
     {
-      name: "MENTOR on members surface → suggest_mentors",
+      name: "MENTOR on members surface → suggest_mentors + suggest_mentees",
       message: "find a mentor for me",
       surface: "members",
       toolPolicy: "surface_read_tools",
       intentType: "knowledge_query",
-      expectedToolNames: ["suggest_mentors"],
+      expectedToolNames: ["suggest_mentors", "suggest_mentees"],
     },
     {
       name: "MENTOR + availability on members → list_available_mentors",
@@ -727,6 +728,7 @@ describe("getPass1Tools — surface defaults", () => {
       "suggest_connections",
       "list_available_mentors",
       "suggest_mentors",
+      "suggest_mentees",
       "search_org_content",
       "find_navigation_targets",
     ]);
@@ -749,6 +751,7 @@ describe("getPass1Tools — surface defaults", () => {
       "suggest_connections",
       "list_available_mentors",
       "suggest_mentors",
+      "suggest_mentees",
       "search_org_content",
       "find_navigation_targets",
     ]);
@@ -942,15 +945,15 @@ describe("getForcedPass1ToolChoice", () => {
     });
   });
 
-  it("returns undefined for a single tool not on the forced allowlist", () => {
+  it("returns undefined for mentor-intent tools not on the forced allowlist", () => {
     const tools = getPass1Tools(
       "find a mentor for me",
       "members",
       "surface_read_tools",
       "knowledge_query",
     );
-    // suggest_mentors is not in the forced allowlist
-    assert.deepEqual(namesOf(tools), ["suggest_mentors"]);
+    // Neither suggest_mentors nor suggest_mentees is on the forced allowlist.
+    assert.deepEqual(namesOf(tools), ["suggest_mentors", "suggest_mentees"]);
     assert.equal(getForcedPass1ToolChoice(tools), undefined);
   });
 });

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout";
 import { getTranslations } from "next-intl/server";
+import { ButtonLink } from "@/components/ui";
 import { AdminMatchQueue } from "@/components/mentorship/AdminMatchQueue";
 
 interface AdminMatchesPageProps {
@@ -28,7 +29,15 @@ export default async function AdminMatchesPage({ params }: AdminMatchesPageProps
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title={title} description={description} />
+      <PageHeader
+        title={title}
+        description={description}
+        actions={
+          <ButtonLink href={`/${orgSlug}/mentorship/admin/pairing`} variant="secondary">
+            Assign a mentor
+          </ButtonLink>
+        }
+      />
       <AdminMatchQueue
         orgId={orgCtx.organization.id}
         orgSlug={orgSlug}

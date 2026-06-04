@@ -1,3 +1,5 @@
+import { MENTORSHIP_REASON_ORDER } from "./matching-weights";
+
 export interface MentorshipPairSummary {
   id: string;
   mentor_user_id: string;
@@ -61,6 +63,12 @@ const REASON_LABELS: Record<string, string> = {
   graduation_gap_fit: "Graduation gap fit",
   shared_city: "Shared city",
   shared_company: "Shared company",
+  // Signals derived from rich LinkedIn-enriched profile data.
+  career_trajectory: "Walked your path",
+  shared_school: "Same school",
+  aspirational_skill: "Skills you want",
+  past_employer_overlap: "Worked at the same company",
+  fallback_general: "Suggested match",
 };
 
 /**
@@ -113,9 +121,59 @@ export function formatMatchExplanation(
       return typeof value === "string" ? `Same city: ${value}` : "Same city";
     case "shared_company":
       return typeof value === "string" ? `Same company: ${value}` : "Same company";
+    case "career_trajectory": {
+      const hits = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      return hits.length > 0 ? `Has worked in ${hits.join(", ")}` : "Walked a path you want";
+    }
+    case "shared_school": {
+      const schools = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      if (schools.length === 1) return `Same school: ${schools[0]}`;
+      if (schools.length > 1) return `Same school: ${schools.join(", ")}`;
+      return "Same school";
+    }
+    case "aspirational_skill": {
+      const skills = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      return skills.length > 0
+        ? `Has skills you want to build: ${skills.join(", ")}`
+        : "Has skills you want to build";
+    }
+    case "past_employer_overlap": {
+      const companies = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      if (companies.length === 1) return `Both worked at ${companies[0]}`;
+      if (companies.length > 1) return `Both worked at ${companies.join(", ")}`;
+      return "Worked at the same company";
+    }
+    case "fallback_general":
+      return "Suggested while we learn more about this student";
     default:
       return formatMentorshipReasonLabel(code);
   }
+}
+
+/**
+ * Compose a single human-readable "why" sentence from a match's signals.
+ * Orders signals by `MENTORSHIP_REASON_ORDER`, takes the strongest few, and
+ * joins their explanations. Used both as the default render and as the
+ * deterministic fallback when the LLM "why" generator is unavailable.
+ */
+export function buildDeterministicWhy(
+  signals: ReadonlyArray<{ code: string; value?: string | number; weight?: number }>,
+  maxReasons = 3
+): string {
+  if (!Array.isArray(signals) || signals.length === 0) return "";
+  const orderIndex = (code: string): number => {
+    const idx = MENTORSHIP_REASON_ORDER.indexOf(code as never);
+    return idx >= 0 ? idx : MENTORSHIP_REASON_ORDER.length;
+  };
+  const ordered = [...signals].sort((a, b) => orderIndex(a.code) - orderIndex(b.code));
+  const parts = ordered
+    .slice(0, maxReasons)
+    .map((s) => formatMatchExplanation(s))
+    .filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return `${parts[0]}.`;
+  const last = parts[parts.length - 1];
+  return `${parts.slice(0, -1).join(", ")}, and ${last}.`;
 }
 
 export type MatchQualityTier = "strong" | "good" | "possible";
