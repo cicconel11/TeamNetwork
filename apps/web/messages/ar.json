@@ -205,7 +205,8 @@
     "tabs": {
       "connectedAccounts": "الحسابات المتصلة",
       "notifications": "الإشعارات",
-      "language": "اللغة"
+      "language": "اللغة",
+      "account": "الحساب"
     },
     "language": {
       "title": "اللغة",

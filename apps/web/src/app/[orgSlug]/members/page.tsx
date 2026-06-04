@@ -6,6 +6,7 @@ import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getCurrentUser, getOrgContext } from "@/lib/auth/roles";
 import { getPersonAdminContext } from "@/lib/people/permissions";
+import { getBlockedUserIds } from "@/lib/moderation/blocked-users";
 import { MembersFilter } from "@/components/members/MembersFilter";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { resolveDataClient, getDevAdminEmails } from "@/lib/auth/dev-admin";
@@ -69,10 +70,19 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     getPersonAdminContext({ orgId: org.id, viewerUserId: user?.id ?? null }),
   ]);
 
-  const memberUserIds = memberRoles?.map((r) => r.user_id) || [];
-  const parentUserIds = memberRoles
-    ?.filter((r) => r.role === "parent")
-    .map((r) => r.user_id) || [];
+  // Drop users in a mutual block with the viewer so they never reach the
+  // directory's `.in("user_id", ...)` filters (Apple 1.2). Manual member rows
+  // have no user_id and can't be blocked, so they're unaffected.
+  const blockedUserIds = user
+    ? new Set(await getBlockedUserIds(dataClient, user.id))
+    : new Set<string>();
+
+  const memberUserIds = (memberRoles?.map((r) => r.user_id) || []).filter(
+    (id) => !blockedUserIds.has(id),
+  );
+  const parentUserIds = (
+    memberRoles?.filter((r) => r.role === "parent").map((r) => r.user_id) || []
+  ).filter((id) => !blockedUserIds.has(id));
   const adminUserIds = personCtx.adminUserIds;
 
   // Gate parent results: empty when filtering by a non-active status or any

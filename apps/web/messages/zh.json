@@ -205,7 +205,8 @@
     "tabs": {
       "connectedAccounts": "关联账户",
       "notifications": "通知",
-      "language": "语言"
+      "language": "语言",
+      "account": "账户"
     },
     "language": {
       "title": "语言",

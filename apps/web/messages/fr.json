@@ -205,7 +205,8 @@
     "tabs": {
       "connectedAccounts": "Comptes connectes",
       "notifications": "Notifications",
-      "language": "Langue"
+      "language": "Langue",
+      "account": "Compte"
     },
     "language": {
       "title": "Langue",
