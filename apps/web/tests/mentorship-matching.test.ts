@@ -771,3 +771,203 @@ describe("enriched-data signals", () => {
     assert.ok(boosted[0].score > base[0].score);
   });
 });
+
+describe("goals scoring (deterministic free-text extraction)", () => {
+  it("scores a mentee whose only input is free-text goals", () => {
+    const mentee: MenteeInput = {
+      userId: "thin-mentee",
+      orgId: "org-1",
+      goals: "I want to break into investment banking and consulting",
+      currentCity: null,
+      graduationYear: 2026,
+      currentCompany: null,
+    };
+    const mentors: MentorInput[] = [
+      mentor({
+        userId: "finance-mentor",
+        nativeIndustries: ["Finance"],
+        nativeRoleFamilies: ["Finance"],
+        graduationYear: 2018,
+      }),
+      mentor({
+        userId: "consulting-mentor",
+        nativeIndustries: ["Consulting"],
+        nativeRoleFamilies: ["Consulting"],
+        graduationYear: 2017,
+      }),
+      mentor({ userId: "unrelated-mentor", nativeIndustries: ["Healthcare"] }),
+    ];
+    const ranked = rankMentorsForMentee(mentee, mentors);
+    const ids = ranked.map((m) => m.mentorUserId);
+    assert.ok(ids.includes("finance-mentor"), "finance mentor should match goals");
+    assert.ok(ids.includes("consulting-mentor"), "consulting mentor should match goals");
+    assert.ok(!ids.includes("unrelated-mentor"), "unrelated mentor should not match");
+  });
+
+  it("goals enrich rather than override structured preferences", () => {
+    const mentee: MenteeInput = {
+      userId: "mentee-1",
+      orgId: "org-1",
+      goals: "exploring healthcare too",
+      preferredIndustries: ["Finance"],
+      currentCity: null,
+      graduationYear: 2026,
+      currentCompany: null,
+    };
+    const mentors: MentorInput[] = [
+      mentor({ userId: "fin", nativeIndustries: ["Finance"], graduationYear: 2018 }),
+      mentor({ userId: "health", nativeIndustries: ["Healthcare"], graduationYear: 2018 }),
+    ];
+    const ids = rankMentorsForMentee(mentee, mentors).map((m) => m.mentorUserId);
+    assert.ok(ids.includes("fin"), "structured Finance preference preserved");
+    assert.ok(ids.includes("health"), "goal-derived Healthcare also matches");
+  });
+});
+
+describe("rankMentorsForMenteeWithFallback", () => {
+  it("returns at least minResults for a zero-signal mentee", async () => {
+    const { rankMentorsForMenteeWithFallback } = await import(
+      "@/lib/mentorship/matching"
+    );
+    const emptyMentee: MenteeInput = {
+      userId: "empty-mentee",
+      orgId: "org-1",
+      goals: null,
+      currentCity: null,
+      graduationYear: null,
+      currentCompany: null,
+    };
+    const mentors: MentorInput[] = Array.from({ length: 6 }, (_, i) =>
+      mentor({ userId: `mentor-${i}`, graduationYear: 2018 })
+    );
+    const { matches, usedFallback } = rankMentorsForMenteeWithFallback(
+      emptyMentee,
+      mentors,
+      { minResults: 5 }
+    );
+    assert.strictEqual(usedFallback, true);
+    assert.ok(matches.length >= 5, `expected >=5, got ${matches.length}`);
+    for (const m of matches) {
+      assert.strictEqual(m.signals[0].code, "fallback_general");
+    }
+  });
+
+  it("does not use fallback when real matches already meet the threshold", async () => {
+    const { rankMentorsForMenteeWithFallback } = await import(
+      "@/lib/mentorship/matching"
+    );
+    const mentee: MenteeInput = {
+      userId: "mentee-1",
+      orgId: "org-1",
+      preferredIndustries: ["Finance"],
+      currentCity: null,
+      graduationYear: 2026,
+      currentCompany: null,
+    };
+    const mentors: MentorInput[] = Array.from({ length: 5 }, (_, i) =>
+      mentor({ userId: `fin-${i}`, nativeIndustries: ["Finance"], graduationYear: 2018 })
+    );
+    const { matches, usedFallback } = rankMentorsForMenteeWithFallback(
+      mentee,
+      mentors,
+      { minResults: 5 }
+    );
+    assert.strictEqual(usedFallback, false);
+    assert.ok(matches.every((m) => m.signals[0].code !== "fallback_general"));
+  });
+});
+
+describe("rankMenteesForMentor (bi-directional)", () => {
+  it("scores a mentee identically in both directions for a single pair", async () => {
+    const { rankMenteesForMentor } = await import("@/lib/mentorship/matching");
+    const theMentor = mentor({
+      userId: "mentor-x",
+      nativeIndustries: ["Finance"],
+      nativeRoleFamilies: ["Finance"],
+      graduationYear: 2018,
+    });
+    const theMentee: MenteeInput = {
+      userId: "mentee-y",
+      orgId: "org-1",
+      preferredIndustries: ["Finance"],
+      preferredRoleFamilies: ["Finance"],
+      currentCity: null,
+      graduationYear: 2026,
+      currentCompany: null,
+    };
+    const forward = rankMentorsForMentee(theMentee, [theMentor]);
+    const reverse = rankMenteesForMentor(theMentor, [theMentee]);
+    assert.strictEqual(forward.length, 1);
+    assert.strictEqual(reverse.length, 1);
+    assert.strictEqual(reverse[0].menteeUserId, "mentee-y");
+    assert.strictEqual(reverse[0].score, forward[0].score);
+  });
+
+  it("returns no mentees when the mentor is at capacity", async () => {
+    const { rankMenteesForMentor } = await import("@/lib/mentorship/matching");
+    const fullMentor = mentor({
+      userId: "full",
+      nativeIndustries: ["Finance"],
+      maxMentees: 2,
+      currentMenteeCount: 2,
+    });
+    const theMentee: MenteeInput = {
+      userId: "mentee-y",
+      orgId: "org-1",
+      preferredIndustries: ["Finance"],
+      currentCity: null,
+      graduationYear: 2026,
+      currentCompany: null,
+    };
+    assert.deepStrictEqual(rankMenteesForMentor(fullMentor, [theMentee]), []);
+  });
+});
+
+describe("loadBalanceMatches", () => {
+  it("demotes a heavily-loaded mentor below an equally-scored idle one", async () => {
+    const { loadBalanceMatches } = await import("@/lib/mentorship/matching");
+    const matches = [
+      { mentorUserId: "loaded", score: 30, signals: [] },
+      { mentorUserId: "idle", score: 30, signals: [] },
+    ];
+    const mentorInputs: MentorInput[] = [
+      mentor({ userId: "loaded", maxMentees: 4, currentMenteeCount: 4 }),
+      mentor({ userId: "idle", maxMentees: 4, currentMenteeCount: 0 }),
+    ];
+    const ordered = loadBalanceMatches(matches, mentorInputs);
+    assert.strictEqual(ordered[0].mentorUserId, "idle");
+    assert.strictEqual(ordered[1].mentorUserId, "loaded");
+    // Displayed score is preserved (ordering layer only).
+    assert.strictEqual(ordered.find((m) => m.mentorUserId === "loaded")!.score, 30);
+  });
+
+  it("keeps a clearly-better mentor on top despite some load", async () => {
+    const { loadBalanceMatches } = await import("@/lib/mentorship/matching");
+    const matches = [
+      { mentorUserId: "strong", score: 60, signals: [] },
+      { mentorUserId: "weak", score: 20, signals: [] },
+    ];
+    const mentorInputs: MentorInput[] = [
+      mentor({ userId: "strong", maxMentees: 4, currentMenteeCount: 2 }),
+      mentor({ userId: "weak", maxMentees: 4, currentMenteeCount: 0 }),
+    ];
+    const ordered = loadBalanceMatches(matches, mentorInputs);
+    assert.strictEqual(ordered[0].mentorUserId, "strong");
+  });
+
+  it("compounds in-round assignments so one mentor isn't picked repeatedly", async () => {
+    const { loadBalanceMatches } = await import("@/lib/mentorship/matching");
+    const matches = [
+      { mentorUserId: "a", score: 30, signals: [] },
+      { mentorUserId: "b", score: 30, signals: [] },
+    ];
+    const mentorInputs: MentorInput[] = [
+      mentor({ userId: "a", maxMentees: 5, currentMenteeCount: 0 }),
+      mentor({ userId: "b", maxMentees: 5, currentMenteeCount: 0 }),
+    ];
+    // After 'a' has already been assigned twice this round, 'b' should lead.
+    const inRoundAssigned = new Map([["a", 2]]);
+    const ordered = loadBalanceMatches(matches, mentorInputs, { inRoundAssigned });
+    assert.strictEqual(ordered[0].mentorUserId, "b");
+  });
+});

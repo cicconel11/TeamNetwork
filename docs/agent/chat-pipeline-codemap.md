@@ -443,6 +443,13 @@ type ToolExecutionResult =
 - **Ranking contract:** shared industry `40`, shared company `30`, shared city `15`, graduation proximity `10` (within 3 years)
 - **Grounding contract:** pass-2 connection prose may only render the fixed connection template, may name only returned `source_person` / `suggestions`, must preserve ranked order, and may claim only returned normalized reason codes for each suggestion
 
+### `suggest_mentors` / `suggest_mentees` (bi-directional mentorship matching)
+
+- `suggest_mentors` ranks mentors for a mentee (`mentee_id` or `mentee_query`); `suggest_mentees` is the reverse — ranks mentees seeking mentorship for a mentor (`mentor_id` or `mentor_query`), backing "who should I mentor?".
+- Both are admin-only in v1, share the symmetric scorer in `src/lib/mentorship/matching.ts` (`rankMentorsForMentee` / `rankMenteesForMentor`), and return `{ state, suggestions[], disambiguation_options? }` with auditable `reasons[]` (never invent reasons beyond tool output).
+- Deterministic free-text + persisted LLM-derived signals (`src/lib/mentorship/goals-extraction.ts`, `signal-backfill.ts`) let a data-thin mentee still match. Both render via `formatDeterministicToolResponse` (`formatSuggestMentorsResponse` / `formatSuggestMenteesResponse`) so pass 2 is skipped.
+- The admin pairing surface (`/[orgSlug]/mentorship/admin/pairing`) uses the same engine via `suggestMentorsForPairing` with a never-empty fallback ranker and a generated "why" (`src/lib/mentorship/why-generator.ts`).
+
 ### Write Actions Today
 
 - The shipped write paths are `prepare_announcement`, `prepare_update_announcement`, `prepare_delete_announcement`, `prepare_job_posting`, `prepare_update_job_posting`, `prepare_delete_job_posting`, `prepare_chat_message`, `prepare_group_message`, `prepare_discussion_reply`, `prepare_discussion_thread`, `prepare_event`, `prepare_update_event`, `prepare_delete_event`, and `prepare_member_role_change`, all backed by the same pending-action confirm/cancel routes.

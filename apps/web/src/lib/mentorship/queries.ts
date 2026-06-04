@@ -211,7 +211,7 @@ export async function loadMenteePreferences(
     sb
       .from("mentee_preferences")
       .select(
-        "goals, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref"
+        "goals, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, nice_to_have_attributes, time_availability, communication_prefs, geographic_pref, derived_signals"
       )
       .eq("organization_id", orgId)
       .eq("user_id", menteeUserId)
@@ -222,15 +222,50 @@ export async function loadMenteePreferences(
   const prefs = (prefsRes.data as Record<string, unknown> | null) ?? null;
   const enriched = enrichedByUser.get(menteeUserId) ?? null;
 
+  return menteeRowToInput(orgId, menteeUserId, prefs, enriched);
+}
+
+type EnrichedFields = ReturnType<
+  Awaited<ReturnType<typeof resolveEnrichedProfiles>>["get"]
+>;
+
+/**
+ * Map a `mentee_preferences` row + resolved enrichment into a `MenteeInput`.
+ * Shared by the single-user and bulk loaders so the field mapping (including
+ * the derived-signal union) lives in exactly one place.
+ */
+function menteeRowToInput(
+  orgId: string,
+  userId: string,
+  prefs: Record<string, unknown> | null,
+  enriched: EnrichedFields | null
+): import("@/lib/mentorship/matching-signals").MenteeInput {
   type WorkEntry = import("@/lib/mentorship/matching-signals").EnrichedWorkEntry;
   type EduEntry = import("@/lib/mentorship/matching-signals").EnrichedEducationEntry;
 
+  // Persisted derived signals (deterministic + LLM backfill) enrich the
+  // structured arrays so the ranker fires for data-thin mentees with no
+  // per-request LLM call. Union, never override.
+  const derived = (prefs?.derived_signals as Record<string, unknown> | null) ?? null;
+  const derivedIndustries = asStringArray(derived?.industries);
+  const derivedRoleFamilies = asStringArray(derived?.roleFamilies);
+  const derivedTopics = asStringArray(derived?.topics);
+  const unionArr = (a: string[], b: string[]): string[] =>
+    Array.from(new Set([...a, ...b]));
+
   return {
-    userId: menteeUserId,
+    userId,
     orgId,
-    focusAreas: asStringArray(prefs?.preferred_topics),
-    preferredIndustries: asStringArray(prefs?.preferred_industries),
-    preferredRoleFamilies: asStringArray(prefs?.preferred_role_families),
+    goals: typeof prefs?.goals === "string" ? prefs.goals : null,
+    focusAreas: unionArr(asStringArray(prefs?.preferred_topics), derivedTopics),
+    preferredIndustries: unionArr(
+      asStringArray(prefs?.preferred_industries),
+      derivedIndustries
+    ),
+    preferredRoleFamilies: unionArr(
+      asStringArray(prefs?.preferred_role_families),
+      derivedRoleFamilies
+    ),
     preferredSports: asStringArray(prefs?.preferred_sports),
     preferredPositions: asStringArray(prefs?.preferred_positions),
     requiredMentorAttributes: asStringArray(prefs?.required_attributes),
@@ -240,4 +275,50 @@ export async function loadMenteePreferences(
     workHistory: asJsonArray<WorkEntry>(enriched?.work_history),
     educationHistory: asJsonArray<EduEntry>(enriched?.education_history),
   };
+}
+
+/**
+ * Bulk-load `MenteeInput`s for every mentee in an org that has opted into
+ * matching (`seeking_mentorship = true`). One preferences query + one bulk
+ * enrichment resolve — used by the bi-directional "recommend mentees for a
+ * mentor" path so it scales to org size without N round-trips.
+ */
+export async function loadSeekingMenteeInputs(
+  supabase: SupabaseClient<Database>,
+  orgId: string
+): Promise<import("@/lib/mentorship/matching-signals").MenteeInput[]> {
+  const sb = supabase as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (c: string, v: string) => {
+          eq: (c: string, v: boolean) => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data } = await sb
+    .from("mentee_preferences")
+    .select(
+      "user_id, goals, preferred_topics, preferred_industries, preferred_role_families, preferred_sports, preferred_positions, required_attributes, derived_signals"
+    )
+    .eq("organization_id", orgId)
+    .eq("seeking_mentorship", true);
+
+  const rows = (Array.isArray(data) ? data : []) as Array<Record<string, unknown>>;
+  const userIds = rows
+    .map((r) => (typeof r.user_id === "string" ? r.user_id : null))
+    .filter((v): v is string => !!v);
+  if (userIds.length === 0) return [];
+
+  const enrichedByUser = await resolveEnrichedProfiles(supabase, orgId, userIds);
+
+  return rows.map((row) =>
+    menteeRowToInput(
+      orgId,
+      row.user_id as string,
+      row,
+      enrichedByUser.get(row.user_id as string) ?? null
+    )
+  );
 }

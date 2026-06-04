@@ -17,6 +17,7 @@ import {
   type MentorInput,
   type MentorSignals,
 } from "@/lib/mentorship/matching-signals";
+import { industryFromFieldOfStudy } from "@/lib/mentorship/goals-extraction";
 
 export interface MentorshipSignal {
   code: MentorshipReasonCode;
@@ -489,6 +490,199 @@ export function rankMentorsForMentee(
   matches.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     return a.mentorUserId.localeCompare(b.mentorUserId);
+  });
+
+  return matches;
+}
+
+/**
+ * Re-order ranked matches to spread recommendations across mentors instead of
+ * sending every student to the same top-scoring mentor. A utilization penalty
+ * demotes mentors who are already near capacity; an optional in-round
+ * assignment count (for batch run-rounds) compounds it so one mentor isn't
+ * picked repeatedly within a single round.
+ *
+ * Purely an ordering layer — the displayed `score` is preserved (admins still
+ * see true match quality); only the order changes. Keeps `rankMentorsForMentee`
+ * itself pure so the AI tool and existing tests are unaffected.
+ */
+export function loadBalanceMatches(
+  matches: readonly MentorMatch[],
+  mentorInputs: readonly MentorInput[],
+  options: { penaltyStrength?: number; inRoundAssigned?: ReadonlyMap<string, number> } = {}
+): MentorMatch[] {
+  const penaltyStrength = options.penaltyStrength ?? 0.4;
+  const capacity = new Map<string, { current: number; max: number }>();
+  for (const m of mentorInputs) {
+    capacity.set(m.userId, {
+      current: m.currentMenteeCount ?? 0,
+      max: Math.max(1, m.maxMentees ?? 3),
+    });
+  }
+
+  const utilizationOf = (mentorUserId: string): number => {
+    const cap = capacity.get(mentorUserId);
+    if (!cap) return 0;
+    const assigned = options.inRoundAssigned?.get(mentorUserId) ?? 0;
+    const util = (cap.current + assigned) / cap.max;
+    return util < 0 ? 0 : util > 1 ? 1 : util;
+  };
+
+  return [...matches]
+    .map((match) => {
+      const utilization = utilizationOf(match.mentorUserId);
+      return {
+        match,
+        utilization,
+        adjusted: match.score * (1 - penaltyStrength * utilization),
+      };
+    })
+    .sort((a, b) => {
+      if (b.adjusted !== a.adjusted) return b.adjusted - a.adjusted;
+      // Prefer the less-loaded mentor when adjusted scores tie.
+      if (a.utilization !== b.utilization) return a.utilization - b.utilization;
+      return a.match.mentorUserId.localeCompare(b.match.mentorUserId);
+    })
+    .map((entry) => entry.match);
+}
+
+/**
+ * Like {@link rankMentorsForMentee}, but guarantees the caller sees at least
+ * `minResults` candidates even for a data-thin mentee who produces no real
+ * overlap signals. When the scored ranking falls short, capacity-eligible
+ * mentors are appended with a single synthetic `fallback_general` signal,
+ * ranked deterministically by graduation-gap fit → likely-industry-of-major →
+ * most open capacity → user id. The admin pairing surface uses this so the
+ * board is never empty; auto-proposal keeps using the strict scored ranking.
+ *
+ * Fallback is skipped when the mentee specified required mentor attributes —
+ * honoring those hard requirements matters more than padding the list.
+ */
+export function rankMentorsForMenteeWithFallback(
+  menteeInput: MenteeInput,
+  mentorInputs: readonly MentorInput[],
+  options: ScoreOptions & { minResults?: number } = {}
+): { matches: MentorMatch[]; usedFallback: boolean } {
+  const minResults = options.minResults ?? 5;
+  const base = rankMentorsForMentee(menteeInput, mentorInputs, options);
+  if (base.length >= minResults) return { matches: base, usedFallback: false };
+
+  const mentee = extractMenteeSignals(menteeInput);
+  if (mentee.requiredMentorAttributes.length > 0) {
+    return { matches: base, usedFallback: false };
+  }
+
+  const excluded = new Set(options.excludeMentorUserIds ?? []);
+  const alreadyMatched = new Set(base.map((m) => m.mentorUserId));
+
+  // The student's likely target industries: from any stated preferences plus
+  // those implied by their field(s) of study.
+  const targetIndustries = new Set<string>(mentee.preferredIndustries);
+  for (const field of mentee.fieldsOfStudyNorm) {
+    const ind = industryFromFieldOfStudy(field);
+    if (ind) targetIndustries.add(ind);
+  }
+
+  const ranked = mentorInputs
+    .map(extractMentorSignals)
+    .filter(
+      (m) =>
+        m.orgId === mentee.orgId &&
+        m.userId !== mentee.userId &&
+        m.isActive &&
+        m.acceptingNew &&
+        m.currentMenteeCount < m.maxMentees &&
+        !excluded.has(m.userId) &&
+        !alreadyMatched.has(m.userId)
+    )
+    .map((m) => {
+      const gapMult =
+        mentee.graduationYear != null && m.graduationYear != null
+          ? graduationGapMultiplier(mentee.graduationYear - m.graduationYear)
+          : 0;
+      const industryHit =
+        m.industries.some((i) => targetIndustries.has(i)) ||
+        m.trajectoryIndustries.some((i) => targetIndustries.has(i))
+          ? 1
+          : 0;
+      const openCapacity = m.maxMentees - m.currentMenteeCount;
+      return { userId: m.userId, gapMult, industryHit, openCapacity };
+    })
+    .sort((a, b) => {
+      if (b.gapMult !== a.gapMult) return b.gapMult - a.gapMult;
+      if (b.industryHit !== a.industryHit) return b.industryHit - a.industryHit;
+      if (b.openCapacity !== a.openCapacity) return b.openCapacity - a.openCapacity;
+      return a.userId.localeCompare(b.userId);
+    });
+
+  const needed = minResults - base.length;
+  const appended: MentorMatch[] = ranked.slice(0, needed).map((m) => ({
+    mentorUserId: m.userId,
+    score: 1,
+    signals: [{ code: "fallback_general", weight: 1, value: "limited mentee data" }],
+  }));
+
+  return { matches: [...base, ...appended], usedFallback: appended.length > 0 };
+}
+
+export interface MenteeMatch {
+  menteeUserId: string;
+  score: number;
+  signals: MentorshipSignal[];
+}
+
+/**
+ * Bi-directional counterpart to {@link rankMentorsForMentee}: rank candidate
+ * mentees for ONE mentor. Reuses {@link scoreMentorForMentee} unchanged — the
+ * signal math is symmetric, so a mentor↔mentee pair scores identically in both
+ * directions given the same rarity stats.
+ *
+ * Capacity is a single up-front gate on the mentor (a full mentor matches no
+ * one), not a per-mentee filter. Required attributes remain mentee-side and are
+ * honored per-mentee inside the scorer. Rarity stays mentor-population-based in
+ * both directions; pass `options.rarityStats` for cross-direction comparability.
+ */
+export function rankMenteesForMentor(
+  mentorInput: MentorInput,
+  menteeInputs: readonly MenteeInput[],
+  options: Omit<ScoreOptions, "excludeMentorUserIds"> & {
+    excludeMenteeUserIds?: Iterable<string>;
+  } = {}
+): MenteeMatch[] {
+  const config = resolveMentorshipConfig(options.orgSettings);
+  const weights = options.weights ?? config.weights;
+  const customDefs = config.customAttributeDefs;
+
+  const mentor = extractMentorSignals(mentorInput);
+  if (
+    !mentor.isActive ||
+    !mentor.acceptingNew ||
+    mentor.currentMenteeCount >= mentor.maxMentees
+  ) {
+    return [];
+  }
+
+  const excluded = new Set(options.excludeMenteeUserIds ?? []);
+  const rarity = options.rarityStats ?? buildRarityStats([mentor]);
+
+  const matches: MenteeMatch[] = [];
+  for (const menteeInput of menteeInputs) {
+    if (excluded.has(menteeInput.userId)) continue;
+    const mentee = extractMenteeSignals(menteeInput);
+    if (mentee.orgId !== mentor.orgId) continue;
+    const scored = scoreMentorForMentee(mentee, mentor, weights, rarity, customDefs);
+    if (scored) {
+      matches.push({
+        menteeUserId: mentee.userId,
+        score: scored.score,
+        signals: scored.signals,
+      });
+    }
+  }
+
+  matches.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.menteeUserId.localeCompare(b.menteeUserId);
   });
 
   return matches;
