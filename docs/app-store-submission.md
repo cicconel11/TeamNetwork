@@ -21,9 +21,12 @@ use the credentials below.
 Test account
   Email:    test-reviewer@myteamnetwork.com
   Password: AppleReview2026!
-  Orgs:     Apple Review Test Org (donation_eligible_ios = true, admin) — fully populated, every feature tab
-            CHSFL - Test Organization (admin) — real org, large roster
-            TeamNetwork founders org (active_member)
+  Orgs:     CHSFL - Test Organization (slug upenn-sprint-football, admin) —
+              use THIS org for the Apple Pay donation demo
+              (donation_eligible_ios = true, Stripe Connect onboarded)
+            University of Pennsylvania Sprint Football
+              (slug university-of-pennsylvania-sprint-football, admin) —
+              fully populated demo org, every feature tab
 
 Payment flows covered by Apple's exemptions, not StoreKit:
 
