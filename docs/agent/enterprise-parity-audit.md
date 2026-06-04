@@ -10,20 +10,20 @@ Org-surface CRUD parity for jobs and calendar events is now handled outside this
 
 | UI action | Handler route | Priority | Status | Notes |
 |---|---|---|---|---|
-| Create enterprise invite | `POST /api/enterprise/[slug]/invites` | P0 | in progress | `prepare_enterprise_invite` + confirm handler this round |
-| Revoke enterprise invite | `PATCH /api/enterprise/[slug]/invites/[id]` | P0 | in progress | `revoke_enterprise_invite` + confirm handler this round |
-| Update enterprise settings (name, contact) | `PATCH /api/enterprise/[slug]` | P1 | tracked | Owner-only; needs_confirmation pattern |
-| Update enterprise branding (logo, colors) | `PATCH /api/enterprise/[slug]/branding` | P2 | tracked | Asset upload adds complexity — defer |
-| Invite new enterprise admin | `POST /api/enterprise/[slug]/admins/invites` | P1 | tracked | Distinct from org-scoped invites; role enum owner/billing_admin/org_admin |
-| Remove enterprise admin | `DELETE /api/enterprise/[slug]/admins/[userId]` | P1 | tracked | High-risk — double confirmation + owner gate |
-| Open Stripe billing portal | `POST /api/enterprise/[slug]/billing/portal` | P2 | tracked | Returns URL — AI should hand off link, not act |
-| Adjust alumni bucket quantity | `PATCH /api/enterprise/[slug]/billing/buckets` | P1 | tracked | Stripe subscription mutation; billing_admin+owner |
-| Add org seat add-ons | `PATCH /api/enterprise/[slug]/billing/seats` | P1 | tracked | Subscription mutation; billing_admin+owner |
-| Bulk invite upload (CSV) | `POST /api/enterprise/[slug]/invites/bulk` | P2 | tracked | File ingestion — lower priority for AI |
-| Create managed sub-org | `POST /api/enterprise/[slug]/orgs` | P1 | tracked | Must respect free-sub-org quota + capacity |
-| Save navigation config | `PUT /api/enterprise/[slug]/navigation` | P2 | tracked | Complex structured payload; defer |
-| Sync navigation to managed orgs | `POST /api/enterprise/[slug]/navigation/sync` | P2 | tracked | Broadcast op — strong confirmation required |
-| Export alumni CSV | `GET /api/enterprise/[slug]/alumni/export` | P2 | tracked | Read-export hybrid; AI can describe + link |
+| Create enterprise invite | `POST /api/enterprise/[enterpriseId]/invites` | P0 | shipped | `prepare_enterprise_invite` tool module + confirm handler landed |
+| Revoke enterprise invite | `PATCH /api/enterprise/[enterpriseId]/invites/[inviteId]` | P0 | shipped | `revoke_enterprise_invite` tool module + confirm handler landed |
+| Update enterprise settings (name, contact) | `PATCH /api/enterprise/[enterpriseId]` | P1 | tracked | Owner-only; needs_confirmation pattern |
+| Update enterprise branding (logo, colors) | `PATCH /api/enterprise/[enterpriseId]/branding` | P2 | tracked | Asset upload adds complexity — defer |
+| Invite new enterprise admin | `POST /api/enterprise/[enterpriseId]/admins/invites` | P1 | tracked | Distinct from org-scoped invites; role enum owner/billing_admin/org_admin |
+| Remove enterprise admin | `DELETE /api/enterprise/[enterpriseId]/admins/[userId]` | P1 | tracked | High-risk — double confirmation + owner gate |
+| Open Stripe billing portal | `POST /api/enterprise/[enterpriseId]/billing/portal` | P2 | tracked | Returns URL — AI should hand off link, not act |
+| Adjust alumni bucket quantity | `PATCH /api/enterprise/[enterpriseId]/billing/adjust` | P1 | tracked | Stripe subscription mutation; billing_admin+owner (bucket + seat adjustments share the `billing/adjust` route) |
+| Add org seat add-ons | `PATCH /api/enterprise/[enterpriseId]/billing/adjust` | P1 | tracked | Subscription mutation; billing_admin+owner (shares `billing/adjust` with bucket changes) |
+| Bulk invite upload (CSV) | `POST /api/enterprise/[enterpriseId]/invites/bulk` | P2 | tracked | File ingestion — lower priority for AI |
+| Create managed sub-org | `POST /api/enterprise/[enterpriseId]/orgs` | P1 | tracked | Must respect free-sub-org quota + capacity |
+| Save navigation config | `PUT /api/enterprise/[enterpriseId]/navigation` | P2 | tracked | Complex structured payload; defer |
+| Sync navigation to managed orgs | `POST /api/enterprise/[enterpriseId]/navigation/sync` | P2 | tracked | Broadcast op — strong confirmation required |
+| Export alumni CSV | `GET /api/enterprise/[enterpriseId]/alumni/export` | P2 | tracked | Read-export hybrid; AI can describe + link |
 
 ## Not planned (excluded by product decision)
 
@@ -31,8 +31,8 @@ Adoption-request mutations are explicitly excluded from the AI surface. These st
 
 | UI action | Handler route | Rationale |
 |---|---|---|
-| Accept adoption request | `POST /api/enterprise/[slug]/adoption-requests/[id]/accept` | Human-only decision |
-| Reject adoption request | `POST /api/enterprise/[slug]/adoption-requests/[id]/reject` | Human-only decision |
+| Accept adoption request | `POST /api/enterprise/[enterpriseId]/adoption-requests/[id]/accept` | Human-only decision |
+| Reject adoption request | `POST /api/enterprise/[enterpriseId]/adoption-requests/[id]/reject` | Human-only decision |
 | Cancel adoption request (requester side) | `DELETE /api/org/[slug]/adoption-requests/[id]` | Human-only decision |
 
 ## Notes on scope

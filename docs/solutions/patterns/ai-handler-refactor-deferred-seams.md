@@ -1,7 +1,7 @@
 ---
-title: "AI Handler Refactor — Deferred Seam: model+tools loop"
+title: "AI Handler Refactor — Seam Pattern: model+tools loop (U4c, now landed)"
 category: patterns
-tags: [refactoring, ai, architecture, seams, sse, byte-parity, deferred-work]
+tags: [refactoring, ai, architecture, seams, sse, byte-parity]
 components: [ai-chat-handler]
 problem_type: refactoring-decision
 date: 2026-04-25
@@ -9,9 +9,18 @@ related_prs: []
 repo_area: src/app/api/ai/[orgId]/chat
 ---
 
-# AI Handler Refactor — Deferred Seam: model+tools loop (U4c)
+# AI Handler Refactor — Seam Pattern: model+tools loop (U4c)
 
-Plan A (`~/.claude/plans/synchronous-plotting-flask.md`) decomposes the 2308-LOC `src/app/api/ai/[orgId]/chat/handler.ts` into stage modules under `handler/stages/`. Units U1, U2, U3a, U3b, U4a, U4b are landed (handler now ~1767 LOC, SSE snapshot suite byte-identical 3/3). **U4c — extracting the pass1+tools+pass2+grounding loop — was deliberately deferred.** Full deferral plan with seam design lives at `~/.claude/plans/u4c-deferred-model-tools-loop.md`.
+> **Status: RESOLVED.** U4c has since shipped exactly as designed below. The
+> model+tools loop now lives in `handler/stages/run-model-tools-loop.ts`
+> (`runModelToolsLoop`, callback-style seam), `handler.ts` is down to ~760 LOC,
+> and the two pre-work fixtures (`multi-tool-call.snap`, `tool-error.snap`) were
+> added before the extraction. This doc is kept as a **reusable seam-extraction
+> pattern**, not as open work — the "Seam design", "Pre-work", and "Lessons"
+> sections are the durable value; the LOC/landed-unit counts below are a
+> point-in-time snapshot from when it was still deferred.
+
+Plan A (`~/.claude/plans/synchronous-plotting-flask.md`) decomposed the 2308-LOC `src/app/api/ai/[orgId]/chat/handler.ts` into stage modules under `handler/stages/`. As of this doc's writing, units U1, U2, U3a, U3b, U4a, U4b were landed (handler ~1767 LOC, SSE snapshot suite byte-identical 3/3) and **U4c — extracting the pass1+tools+pass2+grounding loop — was still deferred** (it has since landed; see status note above). Original deferral plan with seam design: `~/.claude/plans/u4c-deferred-model-tools-loop.md`.
 
 ## Why this seam is hard
 

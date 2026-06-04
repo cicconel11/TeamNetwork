@@ -102,9 +102,9 @@ The graph stores only `Person` nodes and `MENTORS` edges today. There are no eve
 ### Revisit notes from the March 25, 2026 latency pass
 
 - The AI chat latency work intentionally made narrow structured org questions feel fast by skipping RAG for tool-only turns. Local verification showed member, parent, and event queries succeeding quickly on that path.
-- `suggest_connections` was not a good latency baseline during that pass. The graph data was still sparse for high-confidence connection recommendations, and local testing also exposed an import regression: `src/lib/falkordb/suggestions.ts` still imports `normalizeConnectionText`, but `src/lib/falkordb/scoring.ts` no longer exports it.
-- When revisiting Falkor work, first restore that import/export compatibility and rerun direct-name connection prompts before drawing conclusions about graph quality.
-- After the import issue is fixed, evaluate connection quality with richer org data. If recommendations are still weak, prefer improving graph population and signal coverage before tuning ranking weights.
+- `suggest_connections` was not a good latency baseline during that pass. The graph data was still sparse for high-confidence connection recommendations. (A March-2026 import regression where `scoring.ts` stopped exporting `normalizeConnectionText` has since been resolved — it is re-exported at `scoring.ts:248` as an alias of `normalizeCareerText`.)
+- When revisiting Falkor work, rerun direct-name connection prompts before drawing conclusions about graph quality.
+- Evaluate connection quality with richer org data. If recommendations are still weak, prefer improving graph population and signal coverage before tuning ranking weights.
 
 ## Graph Model
 

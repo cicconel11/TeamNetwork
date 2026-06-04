@@ -20,7 +20,7 @@ Admin User → Chat Panel (client)
       → Cache HIT: return cached response (no external API call)
       → Cache MISS:
         → RAG Retrieval (embeddings from ai_document_chunks)
-        → LLM API Call (z.ai / glm-5 model)
+        → LLM API Call (z.ai / glm-5.1 model)
         → Response streamed via SSE
     → Message persisted to ai_messages
     → Audit log entry written to ai_audit_log
@@ -109,7 +109,7 @@ When a user account is deleted:
 | Property | Value |
 |---|---|
 | Provider | z.ai |
-| Model | glm-5 |
+| Model | glm-5.1 |
 | API format | OpenAI-compatible |
 | Data retention by provider | Per z.ai terms of service |
 | Encryption in transit | TLS 1.2+ |
