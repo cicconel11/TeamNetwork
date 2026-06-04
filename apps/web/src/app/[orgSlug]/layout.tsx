@@ -21,10 +21,87 @@ import { MediaUploadManagerProvider } from "@/components/media/MediaUploadManage
 import { pickCurrentOrgProfile } from "@/lib/auth/current-org-profile";
 import { AIEdgeTab, AIPanel, OrgGlobalSearch } from "@/components/layout/OrgClientShell";
 import { computeOrgThemeVariables, safeCssValue, safeHexColor } from "@/lib/theming/org-colors";
+import type { OrgRole } from "@/lib/auth/role-utils";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
   params: Promise<{ orgSlug: string }>;
+}
+
+type ProfileRecord = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  photo_url: string | null;
+};
+
+type ProfileSource = "members" | "alumni" | "parents";
+
+const PROFILE_SOURCE_BY_ROLE: Partial<Record<OrgRole, ProfileSource>> = {
+  admin: "members",
+  active_member: "members",
+  alumni: "alumni",
+  parent: "parents",
+};
+
+async function loadProfileRecord(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  source: ProfileSource,
+  organizationId: string,
+  userId: string,
+): Promise<ProfileRecord | null> {
+  const { data } = await supabase
+    .from(source)
+    .select("id, first_name, last_name, photo_url")
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  return data as ProfileRecord | null;
+}
+
+async function loadCurrentProfile(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgSlug: string,
+  role: OrgRole | null,
+  organizationId: string,
+  userId: string,
+) {
+  const preferredSource = role ? PROFILE_SOURCE_BY_ROLE[role] : undefined;
+
+  if (preferredSource) {
+    const profile = await loadProfileRecord(supabase, preferredSource, organizationId, userId);
+    if (profile) {
+      return pickCurrentOrgProfile({
+        orgSlug,
+        role,
+        memberProfile: preferredSource === "members" ? profile : null,
+        alumniProfile: preferredSource === "alumni" ? profile : null,
+        parentProfile: preferredSource === "parents" ? profile : null,
+      });
+    }
+  }
+
+  const [memberProfile, alumniProfile, parentProfile] = await Promise.all([
+    preferredSource === "members"
+      ? Promise.resolve(null)
+      : loadProfileRecord(supabase, "members", organizationId, userId),
+    preferredSource === "alumni"
+      ? Promise.resolve(null)
+      : loadProfileRecord(supabase, "alumni", organizationId, userId),
+    preferredSource === "parents"
+      ? Promise.resolve(null)
+      : loadProfileRecord(supabase, "parents", organizationId, userId),
+  ]);
+
+  return pickCurrentOrgProfile({
+    orgSlug,
+    role,
+    memberProfile,
+    alumniProfile,
+    parentProfile,
+  });
 }
 
 export default async function OrgLayout({ children, params }: OrgLayoutProps) {
@@ -186,52 +263,30 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   let pendingApprovalsCount = 0;
   if (orgContext.userId) {
     const supabase = await createClient();
-    const [{ data: memberRow }, { data: alumniRow }, { data: parentRow }] = await Promise.all([
-      supabase
-        .from("members")
-        .select("id, first_name, last_name, photo_url")
-        .eq("organization_id", organization.id)
-        .eq("user_id", orgContext.userId)
-        .is("deleted_at", null)
-        .maybeSingle(),
-      supabase
-        .from("alumni")
-        .select("id, first_name, last_name, photo_url")
-        .eq("organization_id", organization.id)
-        .eq("user_id", orgContext.userId)
-        .is("deleted_at", null)
-        .maybeSingle(),
-      supabase
-        .from("parents")
-        .select("id, first_name, last_name, photo_url")
-        .eq("organization_id", organization.id)
-        .eq("user_id", orgContext.userId)
-        .is("deleted_at", null)
-        .maybeSingle(),
+    const [currentProfile, pendingApprovalsResult] = await Promise.all([
+      loadCurrentProfile(
+        supabase,
+        orgSlug,
+        orgContext.role,
+        organization.id,
+        orgContext.userId,
+      ),
+      isAdmin
+        ? supabase
+            .from("user_organization_roles")
+            .select("*", { count: "exact", head: true })
+            .eq("organization_id", organization.id)
+            .eq("status", "pending")
+        : Promise.resolve({ count: 0 }),
     ]);
-    const currentProfile = pickCurrentOrgProfile({
-      orgSlug,
-      role: orgContext.role,
-      memberProfile: memberRow ?? undefined,
-      alumniProfile: alumniRow ?? undefined,
-      parentProfile: parentRow ?? undefined,
-    });
+
     if (!currentProfile) {
       console.warn("[layout] no profile row found for userId:", orgContext.userId, "orgId:", organization.id, "role:", orgContext.role);
     }
     currentProfileHref = currentProfile?.href;
     currentProfileName = currentProfile?.name;
     currentProfileAvatar = currentProfile?.avatarUrl ?? undefined;
-
-    // Pending approvals count for admin sidebar badge (HEAD query, ~2ms)
-    if (isAdmin) {
-      const { count } = await supabase
-        .from("user_organization_roles")
-        .select("*", { count: "exact", head: true })
-        .eq("organization_id", organization.id)
-        .eq("status", "pending");
-      pendingApprovalsCount = count ?? 0;
-    }
+    pendingApprovalsCount = pendingApprovalsResult.count ?? 0;
   }
 
   let serviceSupabase = null;
@@ -243,22 +298,22 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     }
   }
 
-  const memberStats = serviceSupabase
-    ? await serviceSupabase
-        .from("members")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organization.id)
-        .is("deleted_at", null)
-    : null;
+  const [memberStats, subscriptionDetailsResult] = serviceSupabase
+    ? await Promise.all([
+        serviceSupabase
+          .from("members")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", organization.id)
+          .is("deleted_at", null),
+        serviceSupabase
+          .from("organization_subscriptions")
+          .select("stripe_customer_id, stripe_subscription_id")
+          .eq("organization_id", organization.id)
+          .maybeSingle(),
+      ])
+    : [null, { data: null }];
   const memberCount = memberStats?.count ?? undefined;
-
-  const { data: devSubscriptionDetails } = serviceSupabase
-    ? await serviceSupabase
-        .from("organization_subscriptions")
-        .select("stripe_customer_id, stripe_subscription_id")
-        .eq("organization_id", organization.id)
-        .maybeSingle()
-    : { data: null };
+  const devSubscriptionDetails = subscriptionDetailsResult.data;
   const rawBase = (organization as Record<string, unknown>).base_color as string | null;
   const baseColor = rawBase === "primary" ? "primary" : safeHexColor(rawBase, "primary");
   const sidebarColor = safeHexColor(organization.primary_color, "#1e3a5f");

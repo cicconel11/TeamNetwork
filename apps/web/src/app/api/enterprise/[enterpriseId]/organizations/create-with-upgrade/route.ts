@@ -54,8 +54,7 @@ const createOrgWithUpgradeSchema = z
     billingType: z.literal("enterprise_managed").default("enterprise_managed"),
     // Hard block: client must explicitly confirm the upgrade before we bump
     // the seat quantity and charge. Absence returns 402 with a cost preview
-    // so the frontend can surface a confirmation modal. See requirements doc:
-    // docs/brainstorms/2026-04-20-enterprise-bulk-org-wizard-requirements.md
+    // so the frontend can surface a confirmation modal.
     confirmUpgrade: z.boolean().optional(),
   })
   .strict();
@@ -155,11 +154,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
     const requestedQuantity = currentQuantity + 1;
 
-    // Hard block: this route bumps the paid seat quantity by +1. Per the
-    // bulk-org-wizard requirements, admins must explicitly confirm before we
-    // charge. Mirrors the 402 needsUpgrade convention from batch-create so the
-    // frontend can render a confirm modal with cost preview, then retry with
-    // confirmUpgrade: true.
+    // Hard block: this route bumps the paid seat quantity by +1, so admins
+    // must explicitly confirm before we charge. Mirrors the 402 needsUpgrade
+    // convention from batch-create so the frontend can render a confirm modal
+    // with cost preview, then retry with confirmUpgrade: true.
     if (confirmUpgrade !== true) {
       const currentPricing = getSubOrgPricing(
         currentQuantity,
