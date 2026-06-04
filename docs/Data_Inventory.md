@@ -3,7 +3,7 @@
 This document catalogs the main classes of PII and education-adjacent data currently stored by TeamNetwork.
 
 **Last Updated:** April 16, 2026
-**Primary Sources:** `src/types/database.ts`, `src/lib/analytics/policy.ts`, and current Supabase migrations (266 as of this revision).
+**Primary Sources:** `src/types/database.ts`, `src/lib/analytics/policy.ts`, and current Supabase migrations (351 as of this revision; this inventory was last fully reviewed at the 266-migration mark — re-review for PII added since).
 
 ---
 

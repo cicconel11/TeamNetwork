@@ -8,8 +8,8 @@ The AI semantic cache is a conservative v1 exact-match cache for a narrow subset
 
 The cache lives in two files split by trust boundary, not by accident:
 
-- **`semantic-cache-utils.ts`** — pure / sync. Crypto, normalization, eligibility, TTL constants. No Supabase. **Six importers** today: `handler.ts`, `cache-rag.ts`, `pass1-tools.ts`, `turn-execution-policy.ts`, `context-builder.ts`, `audit.ts`.
-- **`semantic-cache.ts`** — async I/O against the `ai_semantic_cache` Postgres table. **One importer**: `cache-rag.ts`.
+- **`semantic-cache-utils.ts`** — pure / sync. Crypto, normalization, eligibility, TTL constants. No Supabase. **~13 importers** today across `handler/` (`cache-rag.ts`, `pass1-tools.ts`, the `stages/*` modules) plus `lib/ai/` (`semantic-cache.ts`, `turn-execution-policy.ts`, `context-builder.ts`, `audit.ts`). Run `grep -rln semantic-cache-utils apps/web/src` for the live set.
+- **`semantic-cache.ts`** — async I/O against the `ai_semantic_cache` Postgres table. **One importer**: `handler/cache-rag.ts`.
 
 The pure file feeds many call sites that never need I/O (eligibility checks during policy build, key derivation during audit). The split keeps eligibility logic test-friendly and lets policy code reason about cacheability without paying for a DB round-trip. Do not collapse the files unless one of those properties stops mattering.
 

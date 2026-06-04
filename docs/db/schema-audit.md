@@ -1,10 +1,10 @@
 # Supabase Schema Audit
 
 **Last Updated:** April 16, 2026
-**Scope:** All migrations in `supabase/migrations/` through `20261017000000_graduation_rpc_admin_guard.sql`
-**Current Migration Count:** 266
+**Scope:** Body reflects migrations through `20261017000000_graduation_rpc_admin_guard.sql` (the last full audit).
+**Migration Count:** 266 at last audit — **now 351** (latest `20261215000000_fk_covering_indexes.sql`). The body has NOT been re-audited for the ~85 migrations since; treat `src/types/database.ts` as source of truth for anything added after Oct 2026 until this snapshot is refreshed.
 
-> **Freshness rule.** Header is hand-maintained. To recheck: `ls supabase/migrations/*.sql | wc -l` and `ls supabase/migrations/ | sort | tail -1`. If either drifts more than ~20 migrations, refresh this doc.
+> **Freshness rule.** Header is hand-maintained. To recheck: `ls supabase/migrations/*.sql | wc -l` and `ls supabase/migrations/ | sort | tail -1`. If either drifts more than ~20 migrations, refresh this doc (re-audit the body, not just the header — drift is currently ~85, past due).
 
 This document is a current-state schema snapshot. The generated types in `src/types/database.ts` are the best day-to-day source of truth when this doc drifts. For per-policy RLS detail, grep the corresponding migration rather than duplicating SQL here.
 
