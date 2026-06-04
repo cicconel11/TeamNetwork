@@ -207,7 +207,8 @@
     "tabs": {
       "connectedAccounts": "Connected Accounts",
       "notifications": "Notifications",
-      "language": "Language"
+      "language": "Language",
+      "account": "Account"
     },
     "language": {
       "title": "Language",

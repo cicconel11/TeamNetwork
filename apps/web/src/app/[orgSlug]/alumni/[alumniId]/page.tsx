@@ -10,6 +10,7 @@ import { getPersonAdminContext } from "@/lib/people/permissions";
 import type { Organization, Alumni } from "@/types/database";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DeleteAlumniButton } from "@/components/alumni/DeleteAlumniButton";
+import { ReportBlockMenu } from "@/components/moderation/ReportBlockMenu";
 import { LinkedInProfileLink, formatPersonHeadline, EnrichmentSections } from "@/components/shared";
 
 interface AlumniDetailPageProps {
@@ -118,33 +119,43 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
         title={`${alum.first_name} ${alum.last_name}`}
         backHref={`/${orgSlug}/alumni`}
         actions={
-          canEdit && (
-            <div className="flex items-center gap-2">
-              {canModifyExisting ? (
-                <Link href={`/${orgSlug}/alumni/${alumniId}/edit`} data-testid="alumni-edit-link">
-                  <Button variant="secondary">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                    </svg>
-                    Edit
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <>
+                {canModifyExisting ? (
+                  <Link href={`/${orgSlug}/alumni/${alumniId}/edit`} data-testid="alumni-edit-link">
+                    <Button variant="secondary">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                      </svg>
+                      Edit
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button variant="secondary" disabled>
+                    Edit Disabled
                   </Button>
-                </Link>
-              ) : (
-                <Button variant="secondary" disabled>
-                  Edit Disabled
-                </Button>
-              )}
-              {canDelete ? (
-                <DeleteAlumniButton
-                  organizationId={orgId}
-                  alumniId={alumniId}
-                  redirectTo={`/${orgSlug}/alumni`}
-                />
-              ) : (
-                canEditPage && <Button variant="danger" disabled>Delete Disabled</Button>
-              )}
-            </div>
-          )
+                )}
+                {canDelete ? (
+                  <DeleteAlumniButton
+                    organizationId={orgId}
+                    alumniId={alumniId}
+                    redirectTo={`/${orgSlug}/alumni`}
+                  />
+                ) : (
+                  canEditPage && <Button variant="danger" disabled>Delete Disabled</Button>
+                )}
+              </>
+            )}
+            {alumUserId && alumUserId !== user?.id && (
+              <ReportBlockMenu
+                orgId={orgId}
+                targetType="user_profile"
+                targetId={alumUserId}
+                reportedUserId={alumUserId}
+              />
+            )}
+          </div>
         }
       />
 
