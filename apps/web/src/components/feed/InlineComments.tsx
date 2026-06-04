@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
+import { ReportBlockMenu } from "@/components/moderation/ReportBlockMenu";
 import { relativeTime } from "@/lib/utils/relative-time";
 import { createCommentSchema } from "@/lib/schemas/feed";
 import type { CommentWithAuthor } from "./types";
@@ -279,7 +280,7 @@ export function InlineComments({ postId, commentCount, currentUserId, orgSlug, o
                         </div>
                         <p className="text-sm text-foreground/90 whitespace-pre-wrap mt-0.5 leading-snug">{comment.body}</p>
                       </div>
-                      {isOwn && (
+                      {isOwn ? (
                         <div className="flex gap-3 mt-0.5 ml-2 opacity-0 group-hover/comment:opacity-100 transition-opacity">
                           <button
                             onClick={() => startEditing(comment)}
@@ -295,6 +296,22 @@ export function InlineComments({ postId, commentCount, currentUserId, orgSlug, o
                           >
                             Delete
                           </button>
+                        </div>
+                      ) : (
+                        <div className="mt-0.5 ml-1 opacity-0 group-hover/comment:opacity-100 focus-within:opacity-100 transition-opacity">
+                          <ReportBlockMenu
+                            orgId={comment.organization_id}
+                            targetType="feed_comment"
+                            targetId={comment.id}
+                            reportedUserId={comment.author_id}
+                            onBlocked={() =>
+                              setComments((prev) =>
+                                prev.filter(
+                                  (c) => c.author_id !== comment.author_id,
+                                ),
+                              )
+                            }
+                          />
                         </div>
                       )}
                     </>

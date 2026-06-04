@@ -12,6 +12,8 @@ import { PollComposer } from "@/components/chat/PollComposer";
 import { FormComposer } from "@/components/chat/FormComposer";
 import { MessageTopBar } from "@/components/messages/MessageTopBar";
 import { useChatRealtime } from "@/hooks/useChatRealtime";
+import { getBlockedUserIds } from "@/lib/moderation";
+import { ReportBlockMenu } from "@/components/moderation/ReportBlockMenu";
 import type { ChatGroup, ChatGroupMember, ChatMessage, ChatPollVote, ChatFormResponse, User, ChatMessageStatus } from "@/types/database";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
@@ -47,6 +49,10 @@ export function ChatMessagePane({
 }: ChatMessagePaneProps) {
   const router = useRouter();
   const [messages, setMessages] = useState<MessageWithAuthor[]>([]);
+  // Authors in a mutual block with the viewer — their messages are hidden
+  // (Apple 1.2). Filtered at the render chokepoint (visibleMessages) so it
+  // covers initial load, realtime inserts, edits, and refresh uniformly.
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
@@ -68,6 +74,21 @@ export function ChatMessagePane({
       open_source: "sidebar",
     }, organizationId);
   }, [group.id, organizationId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getBlockedUserIds()
+      .then((ids) => {
+        if (!cancelled) setBlockedUserIds(new Set(ids));
+      })
+      .catch((err) => {
+        // Non-fatal: failing open shows everything rather than breaking chat.
+        console.error("[chat] failed to load blocked users", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const userMap = useMemo(() => {
     const map = new Map<string, User>();
@@ -484,6 +505,10 @@ export function ChatMessagePane({
   }, [group.id, organizationId]);
 
   const visibleMessages = messages.filter((m) => {
+    // Hide messages from blocked users (never the viewer's own).
+    if (m.author_id !== currentUserId && blockedUserIds.has(m.author_id)) {
+      return false;
+    }
     if (showPendingQueue) return m.status === "pending";
     return m.status === "approved" || m.author_id === currentUserId || canModerate;
   });
@@ -566,7 +591,7 @@ export function ChatMessagePane({
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="group/msg flex-1 min-w-0">
                       {!isGrouped && (
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-sm font-semibold text-foreground">
@@ -582,6 +607,20 @@ export function ChatMessagePane({
                           </span>
                           {isPending && <Badge variant="warning">Pending</Badge>}
                           {isRejected && <Badge variant="error">Rejected</Badge>}
+                          {!isOwn && (
+                            <ReportBlockMenu
+                              orgId={organizationId}
+                              targetType="chat_message"
+                              targetId={message.id}
+                              reportedUserId={message.author_id}
+                              onBlocked={() =>
+                                setBlockedUserIds((prev) =>
+                                  new Set(prev).add(message.author_id),
+                                )
+                              }
+                              className="opacity-0 transition-opacity group-hover/msg:opacity-100 focus-visible:opacity-100"
+                            />
+                          )}
                         </div>
                       )}
                       <div
