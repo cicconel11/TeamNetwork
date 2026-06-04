@@ -3,6 +3,13 @@
 Reference for the release team. Most fields are pasted directly into App Store
 Connect; nothing here is consumed by code.
 
+> **Companion doc:** [`app-review-reference.md`](./app-review-reference.md) — generic
+> Apple App Review process, guideline numbers, timelines, and post-rejection
+> levers (appeal / expedite / Bug Fix Submissions). **This** file is the
+> TeamNetwork-specific playbook (real reviewer creds, our guideline citations,
+> EAS/Vercel env gates). Use the reference for "how does Apple review work";
+> use this file for "what do we paste and verify".
+
 ## App Review Information → Notes
 
 ```
@@ -27,6 +34,14 @@ Payment flows covered by Apple's exemptions, not StoreKit:
      individual end users for digital content. The iOS app does not
      advertise prices, "upgrade" CTAs, or links to a paywall. Admins
      who want to change plans do so on the web.
+   - Creating a new organization is a paid subscription, so on iOS it is
+     NOT sold in-app. Tapping "Create Organization" on iOS shows a single
+     "Open on web" button that hands off to the browser
+     (myteamnetwork.com/app/create-org); no price, plan selection, or
+     checkout appears in the iOS binary. This is intentional 3.1.1
+     compliance, not an incomplete feature. Apple Pay is NOT used for
+     organization creation or any subscription — only for donations
+     (item 2).
 
 2) Charitable donations
    - Apple Guideline 3.2.1(vi). All donating organizations are verified
@@ -39,6 +54,18 @@ Payment flows covered by Apple's exemptions, not StoreKit:
    - Donors pay in-app via Apple Pay through Stripe's Payment Sheet.
      Donations are voluntary and do not unlock any digital content or
      functionality in the app.
+   - Where to find Apple Pay (this is the PassKit integration App Review
+     asked about under 2.1): sign in with the test account, open the
+     "Apple Review Test Org" org (it is donation_eligible_ios = true AND
+     has a dedicated onboarded Stripe Connect account, so the Payment
+     Sheet renders), tap the org logo in the top-left to open the drawer,
+     choose Money → Donations → "Make a Donation", enter an amount, tap
+     "Donate", and complete the captcha. Stripe's Payment Sheet then
+     opens with Apple Pay as a payment option (the test device must have
+     a card in Apple Wallet). Apple Pay only appears on iOS, only for
+     orgs flagged donation_eligible_ios; other orgs fall back to a
+     web-only message, which is why a reviewer testing a non-flagged org
+     would not see it.
 
 3) Apple Wallet
    - Member cards, event tickets, and donation receipts are issued as
@@ -48,7 +75,7 @@ No other monetization exists in the iOS app. We do not offer paid
 content, premium features, in-app currency, or any other digital
 purchase to end users on iOS.
 
-Contact for reviewer questions: [fill in email]
+Contact for reviewer questions: mleonard@myteamnetwork.com
 ```
 
 ## Privacy → App Privacy
@@ -66,8 +93,28 @@ tracking:
 | Purchases             | Other Financial Info (donation amount) | App Functionality |
 | Sensitive Info        | None                  |                 |
 
-No data collected for tracking purposes. No third-party SDKs that track users
-across apps/websites.
+**Tracking: NONE.** Set every data type's "Used to Track You?" to **No**. The
+app ships two first-party SDKs — both are non-tracking under Apple's definition
+(no advertising-data linkage, no data-broker sharing):
+
+- **PostHog** (`posthog-react-native`) — product analytics → maps to *Usage Data
+  → Product Interaction* above. Sends app/device/OS metadata + a random
+  per-install UUID to **our own** PostHog instance. No IDFA is read
+  (`expo-tracking-transparency` is not a dependency, so the binary cannot
+  access it), no session replay, no cross-app identifier. Hardened/pinned in
+  `apps/mobile/src/lib/analytics/posthog.ts`.
+- **Sentry** (`@sentry/react-native`) — crash/error reporting → maps to
+  *Diagnostics → Crash Data, Performance Data* above. `sendDefaultPii: false`;
+  email / username / IP are stripped in `beforeSend`; a PII key-list is scrubbed
+  from extras, tags, and breadcrumbs (`apps/mobile/src/lib/analytics/sentry.ts`).
+
+Because neither SDK reads the IDFA or shares data with ad networks/brokers, **no
+App Tracking Transparency prompt and no `NSUserTrackingUsageDescription` are
+required or present.** Analytics are enabled by default in production
+(opt-out in app settings; off entirely in dev). If a future change adds IDFA
+collection, session replay, an ad SDK, or any data-broker egress, this
+declaration must change to "Used to Track You? Yes" and an ATT prompt becomes
+mandatory before init.
 
 ## App Information
 
@@ -99,6 +146,21 @@ Code-side gates — verify these before each submission:
       (`apps/mobile/app/(app)/(drawer)/delete-account.tsx`)
 - [ ] Donation success path stays in-app (Payment Sheet, no Safari
       redirect) for `donation_eligible_ios = true` orgs on iOS
+- [ ] The org named in the Review Notes donation walkthrough is BOTH
+      `donation_eligible_ios = true` AND has an onboarded Stripe Connect
+      account. The flag alone is not enough: `create-donation` returns
+      400 ("Stripe is not connected" / "onboarding not completed") and
+      Apple Pay never renders unless the account is ready
+      (`details_submitted && charges_enabled && payouts_enabled` — see
+      `apps/web/src/lib/stripe.ts` `getConnectAccountStatus`). The Notes
+      walkthrough points reviewers at `apple-review-test-org`, a
+      dedicated review org with its own throwaway live Connect account
+      (so a reviewer test donation is isolated to that org and is
+      refunded after review, never touching the real CHSFL org). Before
+      each submission, verify in the Stripe dashboard that this org's
+      Connect account shows "Payments active" + Payouts/Transfers, and
+      that `apple-review-test-org.stripe_connect_account_id` is set in the
+      database.
 
 Ops-side gates:
 

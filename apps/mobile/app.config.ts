@@ -169,13 +169,22 @@ const config: ExpoConfig = {
         faceIDPermission: "Use Face ID to quickly and securely sign in to TeamNetwork.",
       },
     ],
+    // Registered BEFORE expo-calendar so it runs AFTER it: Expo unwinds
+    // withInfoPlist mods in reverse registration order. Deletes the NSReminders*
+    // keys expo-calendar always injects (we use calendar EVENTS only — see
+    // src/lib/native-calendar.ts — never the Reminders entity). See plugin.
+    "./plugins/withStripUnusedPermissions",
     [
       "expo-calendar",
       {
         calendarPermission:
           "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
-        remindersPermission:
-          "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
+        // No `remindersPermission`: the app only reads/writes calendar EVENTS
+        // (Calendar.EntityTypes.EVENT in src/lib/native-calendar.ts) and never
+        // touches the Reminders entity. The expo-calendar plugin ALWAYS injects
+        // NSReminders* keys (defaulting to a vague placeholder string);
+        // withStripUnusedPermissions (registered above) deletes them to avoid an
+        // Apple 5.1.1 over-declaration rejection.
       },
     ],
     [
