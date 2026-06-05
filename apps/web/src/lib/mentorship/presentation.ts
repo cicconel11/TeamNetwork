@@ -193,3 +193,52 @@ export function getMatchQualityTier(
   if (pct >= 0.25) return "possible";
   return null; // below threshold — hide from results
 }
+
+export type ConfidenceLabel = "High" | "Good" | "Moderate" | "Low";
+
+/**
+ * Convert a raw match score (an unbounded sum of weighted signals) into a
+ * tier-calibrated **confidence out of 100** for display.
+ *
+ * Rather than a flat `score/theoreticalMax * 100` (which buries realistic
+ * matches at 30–60%), the raw fraction is mapped piecewise-linearly onto
+ * confidence bands aligned with the qualitative tiers, so a strong match reads
+ * "High" and a data-thin fallback never reads 0:
+ *
+ *   pct ≥ 0.75 (strong)   → 85–100
+ *   0.50–0.75 (good)      → 65–84
+ *   0.25–0.50 (possible)  → 45–64
+ *   < 0.25   (thin)       → 30–44  (floored at 30)
+ *
+ * Result is clamped to 0–100 and rounded.
+ */
+export function scoreToConfidence(score: number, theoreticalMax: number): number {
+  if (!Number.isFinite(score) || theoreticalMax <= 0) return 0;
+  const pct = Math.max(0, score) / theoreticalMax;
+  // Piecewise-linear interpolation within each band.
+  const interp = (
+    lo: number,
+    hi: number,
+    outLo: number,
+    outHi: number
+  ): number => {
+    const t = Math.min(1, Math.max(0, (pct - lo) / (hi - lo)));
+    return outLo + t * (outHi - outLo);
+  };
+  let confidence: number;
+  if (pct >= 0.75) confidence = interp(0.75, 1.0, 85, 100);
+  else if (pct >= 0.5) confidence = interp(0.5, 0.75, 65, 84);
+  else if (pct >= 0.25) confidence = interp(0.25, 0.5, 45, 64);
+  else confidence = interp(0, 0.25, 30, 44);
+  return Math.min(100, Math.max(0, Math.round(confidence)));
+}
+
+/**
+ * Bucket a 0–100 confidence into a short label for badges/chips.
+ */
+export function confidenceLabel(confidence: number): ConfidenceLabel {
+  if (confidence >= 85) return "High";
+  if (confidence >= 65) return "Good";
+  if (confidence >= 45) return "Moderate";
+  return "Low";
+}

@@ -4,12 +4,9 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
-import {
-  suggestMentorsForPairing,
-  type AdminPairingCandidate,
-} from "@/lib/mentorship/ai-suggestions";
+import { suggestMentorsForPairing } from "@/lib/mentorship/ai-suggestions";
+import { executeAdminPairing } from "@/lib/mentorship/admin-pairing";
 import { generateMatchWhyBatch } from "@/lib/mentorship/why-generator";
-import { ensureDirectChatGroup } from "@/lib/chat/direct-chat";
 import type { MentorshipSignal } from "@/lib/mentorship/matching";
 
 export const dynamic = "force-dynamic";
@@ -139,95 +136,23 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const service = createServiceClient();
 
-  // Recompute server-side so match_score/match_signals are authoritative.
-  const ranking = await suggestMentorsForPairing(service, organizationId, {
+  const outcome = await executeAdminPairing(service, supabase, {
+    organizationId,
     menteeUserId,
-    limit: 50,
+    mentorUserId,
+    actorUserId: user.id,
   });
-  const candidate: AdminPairingCandidate | undefined = ranking.candidates.find(
-    (c) => c.mentor.user_id === mentorUserId
-  );
-  if (!candidate) {
-    return NextResponse.json(
-      { error: "Mentor is no longer an eligible candidate (capacity or already paired)" },
-      { status: 409 }
-    );
+
+  if (!outcome.ok) {
+    return NextResponse.json({ error: outcome.error }, { status: outcome.httpStatus });
   }
 
-  const matchSignals: MentorshipSignal[] = candidate.reasons.map((r) => ({
-    code: r.code,
-    weight: r.weight,
-    value: r.value,
-  }));
-
-  const svc = service as unknown as {
-    rpc: (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string; message?: string } | null }>;
-    from: (t: string) => { insert: (v: unknown) => Promise<{ error: { message: string } | null }> };
+  // Partial success (accept failed; pair left "proposed") still returns 200 so
+  // the admin can retry the accept — unchanged from the prior inline behavior.
+  const body: { pair_id: string; status: string; warning?: string } = {
+    pair_id: outcome.pairId,
+    status: outcome.status,
   };
-
-  // 1) Propose (idempotent) via the shared RPC.
-  const { data: rpcData, error: rpcError } = await svc.rpc("admin_propose_pair", {
-    p_organization_id: organizationId,
-    p_mentor_user_id: mentorUserId,
-    p_mentee_user_id: menteeUserId,
-    p_match_score: candidate.score,
-    p_match_signals: matchSignals,
-    p_actor_user_id: user.id,
-  });
-
-  if (rpcError && rpcError.code !== "23505") {
-    return NextResponse.json({ error: rpcError.message ?? "Failed to propose pair" }, { status: 500 });
-  }
-  const rpcRow = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as
-    | { pair_id?: string; reused?: boolean }
-    | null;
-  const pairId = rpcRow?.pair_id;
-  if (!pairId) {
-    return NextResponse.json({ error: "Pairing already exists" }, { status: 409 });
-  }
-
-  // 2) Admin-authoritative accept (user-scoped client supplies auth.uid). The
-  // RPC returns the resulting row; surface its true status rather than a guess.
-  const { data: acceptData, error: acceptError } = await supabase.rpc(
-    "accept_mentorship_proposal",
-    { pair_id: pairId, admin_override: true }
-  );
-  if (acceptError) {
-    // Pair exists as proposed; report partial success so the admin can retry accept.
-    return NextResponse.json(
-      { pair_id: pairId, status: "proposed", warning: acceptError.message },
-      { status: 200 }
-    );
-  }
-
-  // Chat bootstrap (idempotent, non-blocking) — parity with the accept path.
-  const chat = await ensureDirectChatGroup(service, {
-    userAId: mentorUserId,
-    userBId: menteeUserId,
-    orgId: organizationId,
-  });
-
-  try {
-    await svc.from("mentorship_audit_log").insert({
-      organization_id: organizationId,
-      actor_user_id: user.id,
-      kind: "admin_matched",
-      pair_id: pairId,
-      metadata: {
-        match_score: candidate.score,
-        source: "admin_pairing_surface",
-        chat_ok: chat.ok,
-      },
-    });
-  } catch {
-    // audit failures are non-fatal
-  }
-
-  const acceptedRow = (Array.isArray(acceptData) ? acceptData[0] : acceptData) as
-    | { status?: string }
-    | null;
-  return NextResponse.json(
-    { pair_id: pairId, status: acceptedRow?.status ?? "accepted" },
-    { status: 200 }
-  );
+  if (outcome.warning) body.warning = outcome.warning;
+  return NextResponse.json(body, { status: 200 });
 }

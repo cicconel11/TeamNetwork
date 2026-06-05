@@ -23,8 +23,10 @@ import {
   type DeleteEventPendingPayload,
   type CreateEnterpriseInvitePendingPayload,
   type RevokeEnterpriseInvitePendingPayload,
+  type CreateMentorshipPairingPendingPayload,
   type PendingActionSupabase,
 } from "@/lib/ai/pending-actions";
+import { executeAdminPairing } from "@/lib/mentorship/admin-pairing";
 import {
   clearDraftSession,
   supportsDraftSessionsStore,
@@ -1378,6 +1380,90 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             ok: true,
             actionId: action.id,
             memberUserId: payload.target_user_id,
+          });
+        }
+        case "create_mentorship_pairing": {
+          const payload = action.payload as CreateMentorshipPairingPendingPayload;
+          // `ctx.serviceSupabase` runs the propose/audit; `supabase` is the
+          // user-scoped admin client the accept RPC needs for auth.uid.
+          type AdminPairingClient = Parameters<typeof executeAdminPairing>[0];
+          const outcome = await executeAdminPairing(
+            ctx.serviceSupabase as unknown as AdminPairingClient,
+            supabase as unknown as AdminPairingClient,
+            {
+              organizationId: ctx.orgId,
+              menteeUserId: payload.mentee_user_id,
+              mentorUserId: payload.mentor_user_id,
+              actorUserId: ctx.userId,
+            },
+          );
+
+          if (!outcome.ok) {
+            // "propose_failed" is transient (retry) → keep pending; the rest are
+            // terminal for this attempt (mentor ineligible / already paired).
+            const terminal = outcome.code !== "propose_failed";
+            await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+              status: terminal ? "failed" : "pending",
+              expectedStatus: "confirmed",
+              errorMessage: terminal ? outcome.error : null,
+            });
+            return NextResponse.json(
+              {
+                error: outcome.error,
+                terminal,
+                actionStatus: terminal ? "failed" : "pending",
+              },
+              { status: outcome.httpStatus },
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase as unknown as PendingActionSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "mentorship_pair",
+            resultEntityId: outcome.pairId,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase as unknown as DraftSessionSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const content =
+            outcome.status === "proposed"
+              ? `Proposed ${payload.mentor_name} as a mentor for ${payload.mentee_name} (confidence ${payload.confidence}/100). Awaiting their acceptance.`
+              : `Paired ${payload.mentee_name} with ${payload.mentor_name} (confidence ${payload.confidence}/100).`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            org_id: ctx.orgId,
+            user_id: ctx.userId,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({
+            ok: true,
+            actionId: action.id,
+            pairId: outcome.pairId,
+            status: outcome.status,
           });
         }
         case "create_enterprise_invite": {

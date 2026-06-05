@@ -198,6 +198,37 @@ export function resolveMentorshipWeights(
 }
 
 /**
+ * Sum of every positive signal weight in a resolved config — the reference
+ * "all signals fire at nominal weight" ceiling used to turn a raw match score
+ * into a 0–100 confidence (see `scoreToConfidence` in `presentation.ts`) and
+ * the qualitative tiers (`getMatchQualityTier`). `fallback_general` is 0 by
+ * design so it never inflates the ceiling. Default config → 202.
+ *
+ * Note: a real match's multipliers (rarity, overlap) can push individual
+ * signals above their nominal weight, so a strong match can score at or above
+ * this max — `scoreToConfidence` clamps that to 100.
+ */
+export function computeTheoreticalMax(config: ResolvedMentorshipConfig): number {
+  let total = 0;
+  for (const value of Object.values(config.weights)) {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      total += value;
+    }
+  }
+  return total;
+}
+
+/**
+ * Theoretical max for the default (un-customized) weight config. Used as the
+ * display normalization reference on surfaces that render a stored raw
+ * `match_score` without loading the org's resolved config.
+ */
+export const DEFAULT_THEORETICAL_MAX: number = computeTheoreticalMax({
+  weights: DEFAULT_MENTORSHIP_WEIGHTS as MentorshipWeights,
+  customAttributeDefs: [],
+});
+
+/**
  * Rarity multiplier (copied shape from falkordb/scoring.ts).
  * Uncommon signals outweigh common ones at same overlap.
  */

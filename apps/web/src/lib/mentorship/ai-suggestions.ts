@@ -16,8 +16,15 @@ import {
 import {
   formatMatchExplanation,
   formatMentorshipReasonLabel,
+  scoreToConfidence,
+  confidenceLabel,
+  type ConfidenceLabel,
 } from "@/lib/mentorship/presentation";
-import type { MentorshipReasonCode } from "@/lib/mentorship/matching-weights";
+import {
+  resolveMentorshipConfig,
+  computeTheoreticalMax,
+  type MentorshipReasonCode,
+} from "@/lib/mentorship/matching-weights";
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                      */
@@ -46,6 +53,9 @@ export interface DisplayReadyMentorReason {
 export interface DisplayReadyMentorSuggestion {
   mentor: DisplayReadyMentorPerson;
   score: number;
+  /** Raw score expressed as a tier-calibrated confidence out of 100. */
+  confidence: number;
+  confidenceLabel: ConfidenceLabel;
   reasons: DisplayReadyMentorReason[];
 }
 
@@ -188,7 +198,8 @@ function buildDisplaySuggestions(
   matches: MentorMatch[],
   mentorLookup: Map<string, { name: string | null; email: string | null }>,
   mentorInputLookup: Map<string, MentorInput>,
-  limit: number
+  limit: number,
+  theoreticalMax: number
 ): DisplayReadyMentorSuggestion[] {
   return matches.slice(0, limit).map((m) => {
     const info = mentorLookup.get(m.mentorUserId);
@@ -196,6 +207,7 @@ function buildDisplaySuggestions(
     const subtitle = [input?.jobTitle, input?.currentCompany]
       .filter(Boolean)
       .join(" at ") || null;
+    const confidence = scoreToConfidence(m.score, theoreticalMax);
 
     return {
       mentor: {
@@ -204,6 +216,8 @@ function buildDisplaySuggestions(
         subtitle,
       },
       score: m.score,
+      confidence,
+      confidenceLabel: confidenceLabel(confidence),
       reasons: m.signals.map((s) => ({
         code: s.code,
         label: formatMentorshipReasonLabel(s.code),
@@ -293,6 +307,9 @@ export async function suggestMentors(
     .maybeSingle();
 
   // 5. Score via Phase 1 library
+  const theoreticalMax = computeTheoreticalMax(
+    resolveMentorshipConfig(orgRow?.settings ?? null)
+  );
   const scored = rankMentorsForMentee(mergedMentee, mentorInputs, {
     orgSettings: orgRow?.settings ?? null,
     excludeMentorUserIds: excludeIds,
@@ -331,7 +348,13 @@ export async function suggestMentors(
   return {
     state: "resolved",
     mentee: menteeDisplay,
-    suggestions: buildDisplaySuggestions(matches, mentorLookup, mentorInputLookup, limit),
+    suggestions: buildDisplaySuggestions(
+      matches,
+      mentorLookup,
+      mentorInputLookup,
+      limit,
+      theoreticalMax
+    ),
   };
 }
 
@@ -351,6 +374,9 @@ export interface AdminPairingReason {
 export interface AdminPairingCandidate {
   mentor: DisplayReadyMentorPerson;
   score: number;
+  /** Raw score expressed as a tier-calibrated confidence out of 100. */
+  confidence: number;
+  confidenceLabel: ConfidenceLabel;
   /** Remaining mentee slots for this mentor (maxMentees - currentMenteeCount). */
   capacityRemaining: number;
   reasons: AdminPairingReason[];
@@ -432,6 +458,10 @@ export async function suggestMentorsForPairing(
     .eq("id", orgId)
     .maybeSingle();
 
+  const theoreticalMax = computeTheoreticalMax(
+    resolveMentorshipConfig(orgRow?.settings ?? null)
+  );
+
   const { matches, usedFallback } = rankMentorsForMenteeWithFallback(
     menteeInput,
     mentorInputs,
@@ -473,6 +503,7 @@ export async function suggestMentorsForPairing(
       0,
       (input?.maxMentees ?? 3) - (input?.currentMenteeCount ?? 0)
     );
+    const confidence = scoreToConfidence(m.score, theoreticalMax);
     return {
       mentor: {
         user_id: m.mentorUserId,
@@ -480,6 +511,8 @@ export async function suggestMentorsForPairing(
         subtitle,
       },
       score: m.score,
+      confidence,
+      confidenceLabel: confidenceLabel(confidence),
       capacityRemaining,
       isFallback: m.signals.some((s) => s.code === "fallback_general"),
       reasons: m.signals.map((s) => ({
@@ -508,6 +541,9 @@ export interface SuggestMenteesOptions {
 export interface DisplayReadyMenteeSuggestion {
   mentee: DisplayReadyMentorPerson;
   score: number;
+  /** Raw score expressed as a tier-calibrated confidence out of 100. */
+  confidence: number;
+  confidenceLabel: ConfidenceLabel;
   reasons: DisplayReadyMentorReason[];
 }
 
@@ -666,6 +702,10 @@ export async function suggestMentees(
     .eq("id", orgId)
     .maybeSingle();
 
+  const theoreticalMax = computeTheoreticalMax(
+    resolveMentorshipConfig(orgRow?.settings ?? null)
+  );
+
   const matches = rankMenteesForMentor(mentorInput, menteeInputs, {
     orgSettings: orgRow?.settings ?? null,
     excludeMenteeUserIds: excludeIds,
@@ -697,6 +737,7 @@ export async function suggestMentees(
     mentor: mentorDisplay,
     suggestions: top.map((m) => {
       const info = lookup.get(m.menteeUserId);
+      const confidence = scoreToConfidence(m.score, theoreticalMax);
       return {
         mentee: {
           user_id: m.menteeUserId,
@@ -704,6 +745,8 @@ export async function suggestMentees(
           subtitle: null,
         },
         score: m.score,
+        confidence,
+        confidenceLabel: confidenceLabel(confidence),
         reasons: m.signals.map((s) => ({
           code: s.code,
           label: formatMentorshipReasonLabel(s.code),

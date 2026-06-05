@@ -10,6 +10,13 @@ const routeSource = await readFile(
   "utf8"
 );
 
+// The propose+accept+audit logic now lives in a shared helper so both the route
+// and the AI confirm handler call identical code.
+const pairingSource = await readFile(
+  new URL("../src/lib/mentorship/admin-pairing.ts", import.meta.url),
+  "utf8"
+);
+
 test("route exports GET and POST, dynamic + nodejs", () => {
   assert.match(routeSource, /export async function GET/);
   assert.match(routeSource, /export async function POST/);
@@ -37,19 +44,25 @@ test("GET attaches a why but never blocks the response on AI failure", () => {
   assert.match(routeSource, /catch\s*{[\s\S]*?leave whyById empty/);
 });
 
-test("POST reuses admin_propose_pair and handles idempotent races", () => {
-  assert.match(routeSource, /admin_propose_pair/);
-  assert.match(routeSource, /23505/); // unique_violation handled, not 500
+test("POST delegates to the shared executeAdminPairing helper", () => {
+  assert.match(routeSource, /executeAdminPairing\(/);
+  // Partial-success path (accept failed) still returns 200 with a warning.
+  assert.match(routeSource, /outcome\.warning/);
 });
 
-test("POST recomputes score/signals server-side (does not trust client)", () => {
-  assert.match(routeSource, /suggestMentorsForPairing[\s\S]*?ranking\.candidates\.find/);
-  assert.match(routeSource, /p_match_score: candidate\.score/);
-  assert.match(routeSource, /p_match_signals: matchSignals/);
+test("executeAdminPairing reuses admin_propose_pair and handles idempotent races", () => {
+  assert.match(pairingSource, /admin_propose_pair/);
+  assert.match(pairingSource, /23505/); // unique_violation handled, not 500
 });
 
-test("POST makes the pairing admin-authoritative and audits the source", () => {
-  assert.match(routeSource, /accept_mentorship_proposal/);
-  assert.match(routeSource, /admin_override: true/);
-  assert.match(routeSource, /source: "admin_pairing_surface"/);
+test("executeAdminPairing recomputes score/signals server-side (does not trust client)", () => {
+  assert.match(pairingSource, /suggestMentorsForPairing[\s\S]*?ranking\.candidates\.find/);
+  assert.match(pairingSource, /p_match_score: candidate\.score/);
+  assert.match(pairingSource, /p_match_signals: matchSignals/);
+});
+
+test("executeAdminPairing makes the pairing admin-authoritative and audits the source", () => {
+  assert.match(pairingSource, /accept_mentorship_proposal/);
+  assert.match(pairingSource, /admin_override: true/);
+  assert.match(pairingSource, /source: "admin_pairing_surface"/);
 });

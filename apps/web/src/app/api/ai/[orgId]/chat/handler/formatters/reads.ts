@@ -40,6 +40,8 @@ interface SuggestMentorsDisplayPayload {
 
 interface SuggestMentorsDisplaySuggestion {
   mentor?: { name?: unknown; subtitle?: unknown } | null;
+  confidence?: unknown;
+  confidenceLabel?: unknown;
   reasons?: Array<{ label?: unknown; value?: unknown }>;
 }
 
@@ -52,6 +54,8 @@ interface SuggestMenteesDisplayPayload {
 
 interface SuggestMenteesDisplaySuggestion {
   mentee?: { name?: unknown; subtitle?: unknown } | null;
+  confidence?: unknown;
+  confidenceLabel?: unknown;
   reasons?: Array<{ label?: unknown; value?: unknown }>;
 }
 
@@ -159,10 +163,22 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
         : [];
 
       if (reasons.length === 0) return null;
-      return { displayLine, reasons };
+      const confidence =
+        typeof s.confidence === "number" && Number.isFinite(s.confidence)
+          ? Math.round(s.confidence)
+          : null;
+      const confidenceLabel = getNonEmptyString(s.confidenceLabel);
+      return { displayLine, reasons, confidence, confidenceLabel };
     })
     .filter(
-      (s): s is { displayLine: string; reasons: string[] } => Boolean(s)
+      (
+        s
+      ): s is {
+        displayLine: string;
+        reasons: string[];
+        confidence: number | null;
+        confidenceLabel: string | null;
+      } => Boolean(s)
     )
     .slice(0, 5);
 
@@ -170,11 +186,21 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
 
   const lines = [`Top mentors for ${menteeName}`];
   for (const [index, suggestion] of suggestions.entries()) {
-    lines.push(`${index + 1}. ${suggestion.displayLine}`);
+    lines.push(`${index + 1}. ${suggestion.displayLine}${formatConfidenceSuffix(suggestion)}`);
     lines.push(`   Why: ${suggestion.reasons.join(", ")}`);
   }
 
   return lines.join("\n");
+}
+
+/** Render a "(Confidence 92/100 · High)" suffix, or "" when unavailable. */
+function formatConfidenceSuffix(s: {
+  confidence: number | null;
+  confidenceLabel: string | null;
+}): string {
+  if (s.confidence == null) return "";
+  const label = s.confidenceLabel ? ` · ${s.confidenceLabel}` : "";
+  return ` (Confidence ${s.confidence}/100${label})`;
 }
 
 export function formatSuggestMenteesResponse(data: unknown): string | null {
@@ -240,10 +266,22 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
         : [];
 
       if (reasons.length === 0) return null;
-      return { displayLine, reasons };
+      const confidence =
+        typeof s.confidence === "number" && Number.isFinite(s.confidence)
+          ? Math.round(s.confidence)
+          : null;
+      const confidenceLabel = getNonEmptyString(s.confidenceLabel);
+      return { displayLine, reasons, confidence, confidenceLabel };
     })
     .filter(
-      (s): s is { displayLine: string; reasons: string[] } => Boolean(s)
+      (
+        s
+      ): s is {
+        displayLine: string;
+        reasons: string[];
+        confidence: number | null;
+        confidenceLabel: string | null;
+      } => Boolean(s)
     )
     .slice(0, 5);
 
@@ -251,7 +289,7 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
 
   const lines = [`Top mentees for ${mentorName}`];
   for (const [index, suggestion] of suggestions.entries()) {
-    lines.push(`${index + 1}. ${suggestion.displayLine}`);
+    lines.push(`${index + 1}. ${suggestion.displayLine}${formatConfidenceSuffix(suggestion)}`);
     lines.push(`   Why: ${suggestion.reasons.join(", ")}`);
   }
 

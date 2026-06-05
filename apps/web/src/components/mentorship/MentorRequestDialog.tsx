@@ -5,6 +5,11 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui";
 import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
+import { scoreToConfidence } from "@/lib/mentorship/presentation";
+// The signal "+weights" below explain the match; the headline is a
+// tier-calibrated confidence out of 100 (normalized vs the default
+// theoretical-max — these orgs use default weights).
+import { DEFAULT_THEORETICAL_MAX } from "@/lib/mentorship/matching-weights";
 import type { MentorDetailData } from "./MentorDetailModal";
 
 interface MatchSignal {
@@ -145,8 +150,8 @@ export function MentorRequestDialog({
               })}
               {score !== null && (
                 <li className="flex justify-between font-medium pt-1 border-t border-[var(--border)]">
-                  <span>{t("totalScore")}</span>
-                  <span>{score}</span>
+                  <span>{t("confidenceLabel")}</span>
+                  <span>{scoreToConfidence(score, DEFAULT_THEORETICAL_MAX)}/100</span>
                 </li>
               )}
             </ul>

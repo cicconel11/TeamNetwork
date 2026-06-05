@@ -24,6 +24,7 @@ export type PendingActionType =
   | "update_event"
   | "delete_event"
   | "member_role_change"
+  | "create_mentorship_pairing"
   | "create_enterprise_invite"
   | "revoke_enterprise_invite";
 export type PendingActionStatus =
@@ -136,6 +137,29 @@ export interface MemberRoleChangePendingPayload {
   reason?: string | null;
 }
 
+export interface MentorshipPairingSignalPayload {
+  code: string;
+  weight: number;
+  value?: string | number;
+}
+
+export interface CreateMentorshipPairingPendingPayload {
+  orgSlug?: string | null;
+  mentee_user_id: string;
+  mentee_name: string;
+  mentor_user_id: string;
+  mentor_name: string;
+  /** Authoritative raw match score (sum of weighted signals). */
+  match_score: number;
+  /** Raw score expressed as a tier-calibrated confidence out of 100. */
+  confidence: number;
+  match_signals: MentorshipPairingSignalPayload[];
+  /** Human-readable "why this match" sentence, if available. */
+  why?: string | null;
+  /** True when the candidate came from the data-thin fallback ranker. */
+  is_fallback?: boolean;
+}
+
 export interface CreateEnterpriseInvitePendingPayload {
   enterpriseId: string;
   enterpriseSlug: string;
@@ -170,6 +194,7 @@ export interface PendingActionPayloadByType {
   update_event: UpdateEventPendingPayload;
   delete_event: DeleteEventPendingPayload;
   member_role_change: MemberRoleChangePendingPayload;
+  create_mentorship_pairing: CreateMentorshipPairingPendingPayload;
   create_enterprise_invite: CreateEnterpriseInvitePendingPayload;
   revoke_enterprise_invite: RevokeEnterpriseInvitePendingPayload;
 }
@@ -623,6 +648,13 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
         title: "Review member change",
         description: "Confirm the member role or status change before it is applied.",
       };
+    case "create_mentorship_pairing": {
+      const payload = record.payload as CreateMentorshipPairingPendingPayload;
+      return {
+        title: "Confirm mentorship pairing",
+        description: `Pair ${payload.mentee_name} with ${payload.mentor_name} — confidence ${payload.confidence}/100.`,
+      };
+    }
     case "create_enterprise_invite":
       return {
         title: "Review enterprise invite",

@@ -36,6 +36,7 @@ import {
   formatPrepareDiscussionReplyResponse,
   formatPrepareChatMessageResponse,
   formatPrepareMemberRoleChangeResponse,
+  formatPrepareMentorshipPairingResponse,
   formatPrepareGroupMessageResponse,
   formatPrepareEventResponse,
   formatPrepareUpdateEventResponse,
@@ -340,6 +341,8 @@ export function formatDeterministicToolResponse(
       return formatPrepareChatMessageResponse(data);
     case "prepare_member_role_change":
       return formatPrepareMemberRoleChangeResponse(data);
+    case "prepare_mentorship_pairing":
+      return formatPrepareMentorshipPairingResponse(data);
     case "prepare_group_message":
       return formatPrepareGroupMessageResponse(data);
     case "prepare_discussion_reply":

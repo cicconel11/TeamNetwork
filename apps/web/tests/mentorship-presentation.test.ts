@@ -3,14 +3,22 @@ import assert from "node:assert/strict";
 import {
   buildDeterministicWhy,
   canLogMentorshipActivity,
+  confidenceLabel,
   formatMatchExplanation,
   formatMentorshipReasonLabel,
   getMentorshipSectionOrder,
   getMentorshipStatusTranslationKey,
   getVisibleMentorshipPairs,
   isUserInMentorshipPair,
+  scoreToConfidence,
 } from "../src/lib/mentorship/presentation.ts";
-import { MENTORSHIP_REASON_ORDER } from "../src/lib/mentorship/matching-weights.ts";
+import {
+  computeTheoreticalMax,
+  DEFAULT_MENTORSHIP_WEIGHTS,
+  DEFAULT_THEORETICAL_MAX,
+  MENTORSHIP_REASON_ORDER,
+  resolveMentorshipConfig,
+} from "../src/lib/mentorship/matching-weights.ts";
 
 test("getMentorshipSectionOrder shows pairs first only for non-admins with pairs", () => {
   assert.equal(
@@ -135,4 +143,55 @@ test("buildDeterministicWhy orders by reason priority and joins top reasons", ()
     why,
     "Has worked in Finance, 6 years ahead in career, and Same city: NYC."
   );
+});
+
+test("computeTheoreticalMax sums positive built-in weights to 202 by default", () => {
+  assert.equal(computeTheoreticalMax(resolveMentorshipConfig(null)), 202);
+  assert.equal(DEFAULT_THEORETICAL_MAX, 202);
+  // fallback_general (0) never contributes to the ceiling.
+  assert.equal(DEFAULT_MENTORSHIP_WEIGHTS.fallback_general, 0);
+});
+
+test("computeTheoreticalMax includes custom attribute weights", () => {
+  const config = resolveMentorshipConfig({
+    mentorship_custom_attribute_defs: [
+      { key: "region", label: "Region", type: "select", weight: 10 },
+    ],
+  });
+  assert.equal(computeTheoreticalMax(config), 212);
+});
+
+test("scoreToConfidence is tier-calibrated and clamped to 0-100", () => {
+  const max = 202;
+  // Strong matches read "High" (85-100); >max clamps to 100.
+  assert.equal(scoreToConfidence(202, max), 100);
+  assert.equal(scoreToConfidence(300, max), 100);
+  assert.ok(scoreToConfidence(160, max) >= 85);
+  // Good band.
+  const good = scoreToConfidence(130, max);
+  assert.ok(good >= 65 && good < 85, `expected good band, got ${good}`);
+  // Possible band.
+  const possible = scoreToConfidence(70, max);
+  assert.ok(possible >= 45 && possible < 65, `expected possible band, got ${possible}`);
+  // Data-thin fallback (raw score 1) floors at 30 — never 0.
+  assert.equal(scoreToConfidence(1, max), 30);
+  // Guard: a non-positive theoretical max yields 0.
+  assert.equal(scoreToConfidence(50, 0), 0);
+});
+
+test("scoreToConfidence preserves ordering (monotonic in raw score)", () => {
+  const max = 202;
+  assert.ok(scoreToConfidence(180, max) > scoreToConfidence(120, max));
+  assert.ok(scoreToConfidence(120, max) > scoreToConfidence(60, max));
+  assert.ok(scoreToConfidence(60, max) > scoreToConfidence(1, max));
+});
+
+test("confidenceLabel buckets confidence into High/Good/Moderate/Low", () => {
+  assert.equal(confidenceLabel(92), "High");
+  assert.equal(confidenceLabel(85), "High");
+  assert.equal(confidenceLabel(78), "Good");
+  assert.equal(confidenceLabel(65), "Good");
+  assert.equal(confidenceLabel(55), "Moderate");
+  assert.equal(confidenceLabel(45), "Moderate");
+  assert.equal(confidenceLabel(31), "Low");
 });
