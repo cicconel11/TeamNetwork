@@ -79,6 +79,12 @@ export const MENTOR_PROMPT_PATTERN =
   /(?<!\w)(?:mentor|mentors|mentee|mentees|pair\s+with|match\s+(?:me|us|them)\s+with)(?!\w)/i;
 export const MENTOR_AVAILABILITY_PROMPT_PATTERN =
   /\b(?:available|availability|accepting(?:\s+new)?|open(?:\s+spots?)?|capacity|room\s+for\s+more)\b/i;
+// Explicit "create this pairing" imperatives — distinct from "who could mentor X"
+// (which stays a suggestion). Matches "pair Jane with John", "make John her
+// mentor", "assign Maria as her mentor", "create the pairing", "go with the
+// second one".
+export const CREATE_MENTORSHIP_PAIRING_PROMPT_PATTERN =
+  /(?:(?<!\w)pair(?!\w)[\s\S]{0,60}\bwith\b|(?<!\w)(?:make|set|assign|give)(?!\w)[\s\S]{0,60}\b(?:as\s+)?(?:a\s+|the\s+|their\s+|her\s+|his\s+)?mentor\b|(?<!\w)(?:create|generate|confirm|set\s+up)(?!\w)[\s\S]{0,40}\b(?:the\s+|this\s+|a\s+)?pairing\b|(?<!\w)(?:go\s+with|choose|pick)(?!\w)[\s\S]{0,40}\b(?:mentor|number\s+\d|#\s*\d|the\s+(?:first|second|third|fourth|fifth))\b)/i;
 // Sport/interest/personal-availability questions about regular members (not mentor capacity).
 // Matches "who plays tennis", "members interested in fundraising", "anyone free Tuesday evening",
 // "find members who like X". Intentionally broad on the noun side so it picks up casual phrasings.
@@ -553,6 +559,13 @@ const PASS1_ROUTING_RULES: ReadonlyArray<RoutingRule> = [
   },
 
   // ── Members-surface specials ───────────────────────────────────────────
+  // Explicit pairing imperative wins over the suggestion intent below.
+  {
+    id: "create_mentorship_pairing",
+    when: (ctx) =>
+      CREATE_MENTORSHIP_PAIRING_PROMPT_PATTERN.test(ctx.message) && isImperative(ctx),
+    tools: () => ["prepare_mentorship_pairing"],
+  },
   {
     id: "mentor_intent",
     when: (ctx) => ctx.surface === "members" && MENTOR_PROMPT_PATTERN.test(ctx.message),
@@ -773,6 +786,7 @@ export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<
   "prepare_update_event",
   "prepare_delete_event",
   "prepare_member_role_change",
+  "prepare_mentorship_pairing",
   "list_members",
   "list_member_preferences",
   "find_free_members",

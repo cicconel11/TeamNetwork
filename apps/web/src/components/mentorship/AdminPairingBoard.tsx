@@ -19,6 +19,8 @@ interface CandidateReason {
 interface Candidate {
   mentor: { user_id: string; name: string; subtitle: string | null };
   score: number;
+  confidence: number;
+  confidenceLabel: "High" | "Good" | "Moderate" | "Low";
   capacityRemaining: number;
   isFallback: boolean;
   reasons: CandidateReason[];
@@ -155,11 +157,10 @@ export function AdminPairingBoard({ orgId, mentees }: AdminPairingBoardProps) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-foreground truncate">{c.mentor.name}</h3>
-                    {c.isFallback ? (
-                      <Badge variant="muted">Suggested</Badge>
-                    ) : (
-                      <Badge variant="primary">Score {c.score}</Badge>
-                    )}
+                    {c.isFallback && <Badge variant="muted">Suggested</Badge>}
+                    <Badge variant="primary">
+                      Confidence {c.confidence}/100 · {c.confidenceLabel}
+                    </Badge>
                     <Badge variant={c.capacityRemaining > 0 ? "success" : "warning"}>
                       {c.capacityRemaining} {c.capacityRemaining === 1 ? "slot" : "slots"} open
                     </Badge>

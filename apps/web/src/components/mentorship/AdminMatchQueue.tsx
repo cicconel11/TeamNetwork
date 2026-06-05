@@ -6,6 +6,10 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Badge, Button, EmptyState, Select, Textarea } from "@/components/ui";
 import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
+import { scoreToConfidence } from "@/lib/mentorship/presentation";
+// Queue rows render a stored raw `match_score`. These orgs use default weights,
+// so we normalize for display against the default theoretical-max.
+import { DEFAULT_THEORETICAL_MAX } from "@/lib/mentorship/matching-weights";
 
 interface QueueRow {
   id: string;
@@ -323,7 +327,8 @@ export function AdminMatchQueue({ orgId, orgSlug }: AdminMatchQueueProps) {
                     {row.match_score !== null && (
                       <>
                         {" · "}
-                        {safeT("matchScoreLabel", "Score")}: {row.match_score}
+                        {safeT("confidenceLabel", "Confidence")}:{" "}
+                        {scoreToConfidence(row.match_score, DEFAULT_THEORETICAL_MAX)}/100
                       </>
                     )}
                   </p>

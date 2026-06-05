@@ -7,6 +7,11 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Badge, Button, EmptyState, Textarea } from "@/components/ui";
 import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
+import { scoreToConfidence } from "@/lib/mentorship/presentation";
+// Proposals render a stored raw `match_score`. These orgs use default weights,
+// so we normalize for display against the default theoretical-max. The raw
+// score stays authoritative in the DB.
+import { DEFAULT_THEORETICAL_MAX } from "@/lib/mentorship/matching-weights";
 
 const KNOWN_PROPOSAL_STATUSES = new Set([
   "proposed",
@@ -185,7 +190,9 @@ export function MentorshipProposalsTab({
                     </p>
                     {p.match_score !== null && (
                       <p className="text-xs text-[var(--muted-foreground)]">
-                        {t("matchScore", { score: p.match_score })}
+                        {t("matchScore", {
+                          score: scoreToConfidence(p.match_score, DEFAULT_THEORETICAL_MAX),
+                        })}
                       </p>
                     )}
                   </div>
@@ -272,7 +279,9 @@ export function MentorshipProposalsTab({
                   </p>
                   {p.match_score !== null && (
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      {t("matchScore", { score: p.match_score })}
+                      {t("matchScore", {
+                        score: scoreToConfidence(p.match_score, DEFAULT_THEORETICAL_MAX),
+                      })}
                     </p>
                   )}
                   {renderSignalChips(p.match_signals, `outgoing-signals-${p.id}`)}

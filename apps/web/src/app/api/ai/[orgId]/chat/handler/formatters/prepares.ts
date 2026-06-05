@@ -431,6 +431,80 @@ export function formatPrepareMemberRoleChangeResponse(data: unknown): string | n
   return null;
 }
 
+export function formatPrepareMentorshipPairingResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload & {
+    disambiguation_options?: unknown;
+    mentee?: { name?: unknown } | null;
+  };
+  const state = getNonEmptyString(payload.state);
+  if (!state) return null;
+
+  if (state === "unauthorized") {
+    return getNonEmptyString(payload.message) ?? "Creating mentorship pairings is admin-only.";
+  }
+
+  if (state === "mentee_not_found") {
+    return "I couldn't find that student in the organization. Share a full name or email.";
+  }
+
+  if (state === "no_candidates") {
+    return "There are no eligible mentors available to pair with that student right now.";
+  }
+
+  if (state === "mentee_ambiguous" || state === "mentor_ambiguous") {
+    const options = Array.isArray(payload.disambiguation_options)
+      ? payload.disambiguation_options
+          .map((opt) => {
+            if (!opt || typeof opt !== "object") return null;
+            const o = opt as { name?: unknown; subtitle?: unknown };
+            const name = getNonEmptyString(o.name);
+            if (!name) return null;
+            const subtitle = getNonEmptyString(o.subtitle);
+            return subtitle ? `${name} (${subtitle})` : name;
+          })
+          .filter((v): v is string => Boolean(v))
+      : [];
+    const who = state === "mentee_ambiguous" ? "student" : "mentor";
+    if (options.length === 0) {
+      return `I found multiple matches for that ${who}. Which one did you mean?`;
+    }
+    return `I found multiple matches for that ${who}. Which one did you mean?\n${options
+      .map((o) => `- ${o}`)
+      .join("\n")}`;
+  }
+
+  if (state === "mentor_ineligible") {
+    return (
+      getNonEmptyString(payload.message) ??
+      "That mentor isn't an eligible match for this student right now."
+    );
+  }
+
+  if (state === "needs_confirmation") {
+    const draft = (payload.draft ?? {}) as {
+      mentee?: { name?: unknown } | null;
+      mentor?: { name?: unknown } | null;
+      confidence?: unknown;
+      why?: unknown;
+    };
+    const menteeName = getNonEmptyString(draft.mentee?.name) ?? "this student";
+    const mentorName = getNonEmptyString(draft.mentor?.name) ?? "this mentor";
+    const confidence =
+      typeof draft.confidence === "number" && Number.isFinite(draft.confidence)
+        ? ` (confidence ${Math.round(draft.confidence)}/100)`
+        : "";
+    const why = getNonEmptyString(draft.why);
+    const whyLine = why ? ` ${why}` : "";
+    return `I prepared a pairing of ${menteeName} with ${mentorName}${confidence}.${whyLine} Confirm below to create it.`;
+  }
+
+  return null;
+}
+
 export function formatPrepareGroupMessageResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;

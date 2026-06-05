@@ -1356,6 +1356,38 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_mentorship_pairing: {
+    type: "function" as const,
+    function: {
+      name: "prepare_mentorship_pairing" as const,
+      description:
+        "Admin-only. Create a mentorship pairing between a student (mentee) and a chosen mentor — typically one of the mentors returned by suggest_mentors. Use after the admin picks a mentor for a student (e.g. 'pair Jane with John Smith', 'go with the second one', 'make Maria her mentor'). Recomputes the match server-side and prepares a confirmation card; the pairing is only created once the admin confirms. Reuses the same propose+accept logic as the admin pairing board.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          mentee_id: {
+            type: "string" as const,
+            description: "User UUID of the mentee (student).",
+          },
+          mentee_query: {
+            type: "string" as const,
+            description:
+              "Name or email of the mentee when the admin asked in natural language.",
+          },
+          mentor_id: {
+            type: "string" as const,
+            description: "User UUID of the chosen mentor.",
+          },
+          mentor_query: {
+            type: "string" as const,
+            description:
+              "Name or email of the chosen mentor. When the admin refers to a previously suggested mentor by position ('the second one'), resolve it to that mentor's name from the prior suggest_mentors result.",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   search_org_content: {
     type: "function" as const,
     function: {
@@ -1511,6 +1543,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.suggest_mentors,
   TOOL_BY_NAME.suggest_mentees,
+  TOOL_BY_NAME.prepare_mentorship_pairing,
   TOOL_BY_NAME.list_available_mentors,
   TOOL_BY_NAME.list_member_preferences,
   TOOL_BY_NAME.find_free_members,

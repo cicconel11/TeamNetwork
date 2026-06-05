@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 45 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 45);
+test("AI_TOOLS exports 46 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 46);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -59,6 +59,7 @@ test("TOOL_NAMES contains all tool names", () => {
     "find_free_members",
     "suggest_mentors",
     "suggest_mentees",
+    "prepare_mentorship_pairing",
     "find_navigation_targets",
     "search_org_content",
     "prepare_update_announcement",
@@ -69,6 +70,21 @@ test("TOOL_NAMES contains all tool names", () => {
     "prepare_delete_event",
   ];
   assert.deepEqual([...TOOL_NAMES].sort(), [...expected].sort());
+});
+
+test("prepare_mentorship_pairing accepts mentee and mentor id/query params", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "prepare_mentorship_pairing")!;
+  assert.ok(tool, "prepare_mentorship_pairing should be registered");
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+  assert.ok(props.mentee_id);
+  assert.ok(props.mentee_query);
+  assert.ok(props.mentor_id);
+  assert.ok(props.mentor_query);
+  assert.equal(params.additionalProperties, false);
+  // No hard-required params — resolution is by id OR query (enforced in Zod).
+  assert.equal(params.required, undefined);
+  assert.match(tool.function.description, /admin-only/i);
 });
 
 test("ToolName type is derived from AI_TOOLS", () => {
