@@ -1,8 +1,12 @@
 import { useCallback, useState } from "react";
 import * as Crypto from "expo-crypto";
-import { useStripe } from "@stripe/stripe-react-native";
+import { initStripe, useStripe } from "@stripe/stripe-react-native";
 import { supabase } from "@/lib/supabase";
 import { fetchWithAuth } from "@/lib/web-api";
+
+const PLATFORM_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+const MERCHANT_IDENTIFIER = "merchant.com.myteamnetwork.teammeet";
+const URL_SCHEME = "teammeet";
 
 type StartDonationInput = {
   organizationId: string;
@@ -41,6 +45,12 @@ export function useDonationPaymentSheet() {
 
   const start = useCallback(
     async (input: StartDonationInput): Promise<StartDonationResult> => {
+      if (!PLATFORM_PUBLISHABLE_KEY) {
+        return {
+          status: "error",
+          message: "Payments are not configured in this build.",
+        };
+      }
       setIsProcessing(true);
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -85,33 +95,54 @@ export function useDonationPaymentSheet() {
         }
 
         const sheet = data as PaymentSheetResponse;
-        const initResult = await initPaymentSheet({
-          merchantDisplayName: "TeamNetwork",
-          customerId: sheet.customerId,
-          customerEphemeralKeySecret: sheet.ephemeralKeySecret,
-          paymentIntentClientSecret: sheet.paymentIntentClientSecret,
-          applePay: { merchantCountryCode: "US" },
-          // Direct charges on a Connect account require routing the
-          // confirmation call to that account.
-          // @ts-expect-error - stripeAccountId is supported in 0.65+ but
-          // missing from the older type bundled by Expo's resolution.
-          stripeAccountId: sheet.stripeAccountId,
-          allowsDelayedPaymentMethods: false,
-          returnURL: "teammeet://stripe-redirect",
-        });
-        if (initResult.error) {
-          return { status: "error", message: initResult.error.message };
-        }
 
-        const presentResult = await presentPaymentSheet();
-        if (presentResult.error) {
-          if (presentResult.error.code === "Canceled") {
-            return { status: "canceled" };
+        // Direct charges settle on the org's connected account, so the
+        // PaymentSheet must confirm against that account. `stripeAccountId`
+        // belongs to the SDK's init params (StripeProvider / initStripe), NOT
+        // to initPaymentSheet — passing it to initPaymentSheet is silently
+        // ignored, leaving the sheet bound to the platform account and
+        // producing "The client_secret provided does not match any associated
+        // PaymentIntent on this account". Re-init the SDK with the connected
+        // account for the duration of this payment, then restore the platform
+        // context so subsequent donations to other orgs are not routed wrong.
+        try {
+          await initStripe({
+            publishableKey: PLATFORM_PUBLISHABLE_KEY,
+            stripeAccountId: sheet.stripeAccountId,
+            merchantIdentifier: MERCHANT_IDENTIFIER,
+            urlScheme: URL_SCHEME,
+          });
+
+          const initResult = await initPaymentSheet({
+            merchantDisplayName: "TeamNetwork",
+            customerId: sheet.customerId,
+            customerEphemeralKeySecret: sheet.ephemeralKeySecret,
+            paymentIntentClientSecret: sheet.paymentIntentClientSecret,
+            applePay: { merchantCountryCode: "US" },
+            allowsDelayedPaymentMethods: false,
+            returnURL: "teammeet://stripe-redirect",
+          });
+          if (initResult.error) {
+            return { status: "error", message: initResult.error.message };
           }
-          return { status: "error", message: presentResult.error.message };
-        }
 
-        return { status: "completed", paymentAttemptId: sheet.paymentAttemptId };
+          const presentResult = await presentPaymentSheet();
+          if (presentResult.error) {
+            if (presentResult.error.code === "Canceled") {
+              return { status: "canceled" };
+            }
+            return { status: "error", message: presentResult.error.message };
+          }
+
+          return { status: "completed", paymentAttemptId: sheet.paymentAttemptId };
+        } finally {
+          // Restore the platform-scoped SDK context regardless of outcome.
+          await initStripe({
+            publishableKey: PLATFORM_PUBLISHABLE_KEY,
+            merchantIdentifier: MERCHANT_IDENTIFIER,
+            urlScheme: URL_SCHEME,
+          });
+        }
       } catch (e) {
         return {
           status: "error",
