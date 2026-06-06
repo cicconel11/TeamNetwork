@@ -21,11 +21,11 @@ use the credentials below.
 Test account
   Email:    test-reviewer@myteamnetwork.com
   Password: AppleReview2026!
-  Orgs:     CHSFL - Test Organization (slug upenn-sprint-football, admin) —
+  Orgs:     Villanova Women's Lacrosse (slug villanova-football) —
               use THIS org for the Apple Pay donation demo
               (donation_eligible_ios = true, Stripe Connect onboarded)
             University of Pennsylvania Sprint Football
-              (slug university-of-pennsylvania-sprint-football, admin) —
+              (slug university-of-pennsylvania-sprint-football) —
               fully populated demo org, every feature tab
 
 Payment flows covered by Apple's exemptions, not StoreKit:
@@ -59,9 +59,10 @@ Payment flows covered by Apple's exemptions, not StoreKit:
      functionality in the app.
    - Where to find Apple Pay (this is the PassKit integration App Review
      asked about under 2.1): sign in with the test account, open the
-     "Apple Review Test Org" org (it is donation_eligible_ios = true AND
-     has a dedicated onboarded Stripe Connect account, so the Payment
-     Sheet renders), tap the org logo in the top-left to open the drawer,
+     "Villanova Women's Lacrosse" org (slug villanova-football — it is
+     donation_eligible_ios = true AND has an onboarded Stripe Connect
+     account, so the Payment Sheet renders), tap the org logo in the
+     top-left to open the drawer,
      choose Money → Donations → "Make a Donation", enter an amount, tap
      "Donate", and complete the captcha. Stripe's Payment Sheet then
      opens with Apple Pay as a payment option (the test device must have
@@ -131,6 +132,16 @@ mandatory before init.
 | Copyright              | © Teamra LLC |
 | Age Rating             | 12+ (Infrequent/Mild Profanity or Crude Humor — user-generated chat) |
 
+> **In-App Controls → Age Assurance: set to `None`.** The signup age gate
+> (`under_13` / `13_17` / `18_plus`, blocks under-13) is a custom dropdown,
+> not Apple's **Declared Age Range API**. Apple's "Age Assurance" in-app
+> control value refers specifically to that system API (or government-ID /
+> age-estimation), so a custom dropdown does not qualify. Declaring it caused
+> a 2.3.6 rejection (reviewer "unable to find Parental Controls or Age
+> Assurance mechanisms"). Fix is metadata-only: App Store Connect → app →
+> **App Information** → Age Rating → set **Age Assurance** to **None**. Do not
+> declare Parental Controls either — the app has none.
+
 ## Export Compliance
 
 `ITSAppUsesNonExemptEncryption: false` is set in `apps/mobile/app.config.ts`.
@@ -156,14 +167,20 @@ Code-side gates — verify these before each submission:
       Apple Pay never renders unless the account is ready
       (`details_submitted && charges_enabled && payouts_enabled` — see
       `apps/web/src/lib/stripe.ts` `getConnectAccountStatus`). The Notes
-      walkthrough points reviewers at `apple-review-test-org`, a
-      dedicated review org with its own throwaway live Connect account
-      (so a reviewer test donation is isolated to that org and is
-      refunded after review, never touching the real CHSFL org). Before
-      each submission, verify in the Stripe dashboard that this org's
-      Connect account shows "Payments active" + Payouts/Transfers, and
-      that `apple-review-test-org.stripe_connect_account_id` is set in the
-      database.
+      walkthrough points reviewers at `villanova-football` (Villanova
+      Women's Lacrosse), currently the ONLY org with both
+      `donation_eligible_ios = true` and an onboarded Connect account.
+      ⚠️ This is a LIVE customer org (~133 real members): a reviewer test
+      donation routes through the customer's real Stripe account and MUST
+      be refunded after review, and the reviewer account has access to
+      real member data. The previous isolated throwaway org
+      (`apple-review-test-org`) was deleted 2026-06-04 and never had a
+      Connect account. Strongly consider re-provisioning a dedicated
+      review org with its own throwaway Connect account before the next
+      submission to avoid exposing customer data/funds. Before each
+      submission, verify in the Stripe dashboard that
+      `villanova-football`'s Connect account shows "Payments active" +
+      Payouts/Transfers.
 
 Ops-side gates:
 
@@ -197,3 +214,5 @@ Ops-side gates:
 | 3.1.1 IAP required | Reviewer assumes subscription is consumer-facing | Reply citing 3.1.3(d): the alumni tier is paid by orgs/admins from an org budget on behalf of members; not a consumer subscription. Offer to demo on a call. |
 | 3.2.1(vi) donations | Org not recognized as a nonprofit | Provide the determination letter; if not 501(c)(3), pull the org from iOS via `donation_eligible_ios = false` instead of arguing. |
 | 5.1.1(v) account deletion | Delete account flow broken or hidden | Verify the delete-account screen is reachable from Profile and actually signs the user out + marks for deletion. |
+| 2.1(a) "client_secret does not match PaymentIntent" on donate | PaymentSheet confirmed against the platform account, but the PaymentIntent lives on the org's **connected** account (direct charge). `stripeAccountId` was passed to `initPaymentSheet`, which silently ignores it — it belongs to the SDK init params. | Fixed in `useDonationPaymentSheet.ts`: call `initStripe({ publishableKey, stripeAccountId })` with the connected account before opening the sheet, restore the platform context in `finally`. Verify the donation walkthrough org's Connect account is fully onboarded. |
+| 2.3.6 Age Assurance not found | "Age Assurance" / In-App Controls declared in age rating, but the app's age gate is a custom dropdown, not the Declared Age Range API | Metadata-only: ASC → App Information → Age Rating → set **Age Assurance** (and Parental Controls) to **None**. |
