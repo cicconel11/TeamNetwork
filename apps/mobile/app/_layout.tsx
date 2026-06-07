@@ -31,7 +31,8 @@ import { LiveActivityProvider } from "@/contexts/LiveActivityContext";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { setGlobalShowToast } from "@/components/ui/Toast";
 import AuthLoadingScreen from "@/components/AuthLoadingScreen";
-import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled } from "@/lib/analytics";
+import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled, setTrackingLevel } from "@/lib/analytics";
+import { getAgeBracketFromUserMetadata, resolveTrackingLevel } from "@/lib/analytics/policy";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
@@ -197,13 +198,22 @@ function RootLayoutInner() {
     const userId = session?.user?.id;
 
     if (userId && userId !== prevUserIdRef.current) {
+      // Apple 5.1.4: gate third-party analytics for minors BEFORE identifying.
+      // Age bracket is written to user_metadata at signup. Unknown bracket is
+      // treated conservatively (page_view_only) by resolveTrackingLevel.
+      const ageBracket = getAgeBracketFromUserMetadata(
+        session.user.user_metadata as Record<string, unknown> | null | undefined,
+      );
+      setTrackingLevel(resolveTrackingLevel(ageBracket));
       identify(userId, {
         authProvider: session.user.app_metadata?.provider || "email",
       });
       prevUserIdRef.current = userId;
     } else if (!userId && prevUserIdRef.current) {
-      // User logged out
+      // User logged out — clear identity and drop any minor restriction so the
+      // next session resolves its own tracking level at identify.
       resetAnalytics();
+      setTrackingLevel("full");
       prevUserIdRef.current = undefined;
     }
   }, [session?.user?.id, session?.user?.app_metadata?.provider]);

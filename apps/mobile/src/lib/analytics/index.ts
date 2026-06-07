@@ -16,8 +16,22 @@ import type {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as posthog from "./posthog";
 import * as sentry from "./sentry";
+import {
+  canTrackBehavioralEvent,
+  type TrackingLevel,
+} from "./policy";
 
-let enabled = !__DEV__;
+// User opt-in preference (defaults to on outside dev).
+let enabledPref = !__DEV__;
+// Minor-aware tracking level (Apple 5.1.4). "none" disables all third-party
+// analytics; "page_view_only" allows screen views but no behavioral events.
+let trackingLevel: TrackingLevel = "full";
+// Effective gate: analytics run only when the user opts in AND the resolved
+// tracking level permits any analytics at all. Recomputed by
+// applyEffectiveEnabled() whenever the preference or level changes; the initial
+// value equals the preference because the default level ("full") never forces
+// analytics off.
+let enabled = enabledPref;
 let configStored: AnalyticsConfig | null = null;
 let sdksInitialized = false;
 const eventQueue: QueuedEvent[] = [];
@@ -113,7 +127,7 @@ export function identify(userId: string, traits?: UserTraits): void {
  * Set or update user properties. Queued if called before SDKs init.
  */
 export function setUserProperties(properties: UserProperties): void {
-  if (!enabled) return;
+  if (!enabled || !canTrackBehavioralEvent(trackingLevel)) return;
 
   if (!sdksInitialized) {
     if (eventQueue.length < MAX_QUEUE_SIZE) {
@@ -149,7 +163,7 @@ export function screen(name: string, properties?: ScreenProperties): void {
  * Track a custom event. Queued if called before SDKs init.
  */
 export function track(event: string, properties?: EventProperties): void {
-  if (!enabled) return;
+  if (!enabled || !canTrackBehavioralEvent(trackingLevel)) return;
 
   if (!sdksInitialized) {
     if (eventQueue.length < MAX_QUEUE_SIZE) {
@@ -176,23 +190,45 @@ export function reset(): void {
 }
 
 /**
- * Enable or disable analytics. When enabling, initializes SDKs if config is available.
+ * Recompute the effective `enabled` gate from the opt-in preference and the
+ * minor-aware tracking level, applying the SDK transition (init when turning
+ * on, reset when turning off). Single source of truth so `setEnabled` and
+ * `setTrackingLevel` cannot drift.
  */
-export function setEnabled(value: boolean): void {
+function applyEffectiveEnabled(): void {
   const wasEnabled = enabled;
-  enabled = value;
-  sentry.setEnabled(value);
+  enabled = enabledPref && trackingLevel !== "none";
+  sentry.setEnabled(enabled);
 
-  if (!value && wasEnabled) {
+  if (!enabled && wasEnabled) {
     reset();
   }
-
-  // If enabling and we have stored config, try to initialize SDKs
-  if (value && !wasEnabled) {
+  if (enabled && !wasEnabled) {
     initSdksIfNeeded();
   }
+}
 
+/**
+ * Enable or disable analytics (user opt-in). The effective state also depends
+ * on the minor-aware tracking level — a minor at level "none" stays off even
+ * when the preference is on.
+ */
+export function setEnabled(value: boolean): void {
+  enabledPref = value;
+  applyEffectiveEnabled();
   void persistEnabled(value);
+}
+
+/**
+ * Set the minor-aware tracking level (Apple 5.1.4). "none" turns analytics off
+ * entirely (under_13); "page_view_only" keeps screen views but drops behavioral
+ * events (13_17); "full" is unrestricted (18_plus). Call before/at identify
+ * once the user's age bracket is known.
+ */
+export function setTrackingLevel(level: TrackingLevel): void {
+  if (level === trackingLevel) return;
+  trackingLevel = level;
+  applyEffectiveEnabled();
 }
 
 /**
