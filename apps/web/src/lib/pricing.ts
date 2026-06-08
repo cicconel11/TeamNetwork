@@ -51,7 +51,7 @@ export const FAQ_ITEMS = [
   },
   {
     question: "Do you take a cut of our donations?",
-    answer: "No. We charge a flat platform fee. You connect your own Stripe account, so 100% of donations (minus standard Stripe processing fees) go directly to your program.",
+    answer: "We apply a small platform fee on donations to keep TeamNetwork running, in addition to standard Stripe processing fees. You connect your own Stripe account, so each donation settles there, minus those fees.",
   },
   {
     question: "How does alumni pricing work?",
