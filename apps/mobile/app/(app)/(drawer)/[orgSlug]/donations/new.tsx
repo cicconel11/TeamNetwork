@@ -12,9 +12,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
+import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
-import { getWebAppUrl } from "@/lib/web-api";
+import { getWebAppUrl, getWebPath } from "@/lib/web-api";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
@@ -150,6 +151,28 @@ export default function NewDonationScreen() {
     },
     buttonDisabled: {
       opacity: 0.6,
+    },
+    webNotice: {
+      backgroundColor: n.background,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: 4,
+    },
+    webNoticeTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    webNoticeBody: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+    },
+    webNoticeLink: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+      marginTop: SPACING.xs,
+      textDecorationLine: "underline" as const,
     },
   }));
 
@@ -382,13 +405,29 @@ export default function NewDonationScreen() {
             </Text>
           </View>
 
-          {error && (
+          {/* iOS collects donations on the web (Apple Guideline 3.1.1/3.2.1):
+              the native payment form is never presented on iOS. */}
+          {isIOS && (
+            <View style={styles.webNotice}>
+              <Text style={styles.webNoticeTitle}>Donations are managed on the web</Text>
+              <Text style={styles.webNoticeBody}>
+                Contributions for this organization are handled through its website.
+              </Text>
+              <Pressable
+                onPress={() => Linking.openURL(getWebPath(orgSlug || "", "donations"))}
+              >
+                <Text style={styles.webNoticeLink}>Open on web</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {error && !isIOS && (
             <View style={styles.errorCard}>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
 
-          {succeededAttemptId && (
+          {succeededAttemptId && !isIOS && (
             <>
               {receiptState.kind === "polling" && (
                 <View
@@ -435,7 +474,7 @@ export default function NewDonationScreen() {
             </>
           )}
 
-          {!succeededAttemptId && (
+          {!succeededAttemptId && !isIOS && (
           <>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Amount (USD)</Text>
