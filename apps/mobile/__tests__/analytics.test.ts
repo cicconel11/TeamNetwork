@@ -168,4 +168,56 @@ describe("Analytics Module", () => {
     await analytics.hydrateEnabled();
     expect(analytics.isEnabled()).toBe(true);
   });
+
+  describe("minor tracking levels (Apple 5.1.4)", () => {
+    it('level "none" (under_13) disables all analytics even when opted in', () => {
+      analytics.setEnabled(true);
+      analytics.setTrackingLevel("none");
+      analytics.init(VALID_CONFIG);
+
+      expect(analytics.isEnabled()).toBe(false);
+      expect(posthog.init).not.toHaveBeenCalled();
+      analytics.screen("HomeScreen");
+      analytics.track("button_clicked");
+      expect(posthog.screen).not.toHaveBeenCalled();
+      expect(posthog.track).not.toHaveBeenCalled();
+    });
+
+    it('level "page_view_only" (13_17) allows screen views but drops behavioral events', () => {
+      analytics.setEnabled(true);
+      analytics.setTrackingLevel("page_view_only");
+      analytics.init(VALID_CONFIG);
+
+      analytics.screen("HomeScreen", { orgSlug: "test-org" });
+      analytics.track("button_clicked", { buttonName: "submit" });
+      analytics.setUserProperties({ role: "member" });
+
+      expect(posthog.screen).toHaveBeenCalledWith("HomeScreen", {
+        orgSlug: "test-org",
+      });
+      expect(posthog.track).not.toHaveBeenCalled();
+      expect(posthog.setUserProperties).not.toHaveBeenCalled();
+    });
+
+    it('level "full" (18_plus) allows everything', () => {
+      analytics.setEnabled(true);
+      analytics.setTrackingLevel("full");
+      analytics.init(VALID_CONFIG);
+
+      analytics.screen("HomeScreen");
+      analytics.track("button_clicked");
+
+      expect(posthog.screen).toHaveBeenCalled();
+      expect(posthog.track).toHaveBeenCalled();
+    });
+
+    it("downgrading to none after init resets SDKs", () => {
+      analytics.setEnabled(true);
+      analytics.init(VALID_CONFIG);
+      analytics.setTrackingLevel("none");
+
+      expect(posthog.reset).toHaveBeenCalled();
+      expect(sentry.setEnabled).toHaveBeenLastCalledWith(false);
+    });
+  });
 });

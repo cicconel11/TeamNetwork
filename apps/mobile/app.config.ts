@@ -6,6 +6,7 @@ const REQUIRED_PROD_ENV = [
   "EXPO_PUBLIC_WEB_URL",
   "EXPO_PUBLIC_TURNSTILE_SITE_KEY",
   "EXPO_PUBLIC_CAPTCHA_BASE_URL",
+  "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
 ] as const;
 
 if (process.env.EAS_BUILD_PROFILE === "production") {
@@ -169,22 +170,25 @@ const config: ExpoConfig = {
         faceIDPermission: "Use Face ID to quickly and securely sign in to TeamNetwork.",
       },
     ],
-    // Registered BEFORE expo-calendar so it runs AFTER it: Expo unwinds
-    // withInfoPlist mods in reverse registration order. Deletes the NSReminders*
-    // keys expo-calendar always injects (we use calendar EVENTS only — see
-    // src/lib/native-calendar.ts — never the Reminders entity). See plugin.
-    "./plugins/withStripUnusedPermissions",
+    // NOTE: We previously stripped the NSReminders* keys via a custom plugin to
+    // avoid an Apple 5.1.1 over-declaration (the app uses calendar EVENTS only —
+    // Calendar.EntityTypes.EVENT in src/lib/native-calendar.ts — never the
+    // Reminders entity). That CRASHED the app at launch: expo-calendar v55
+    // registers a Reminders permission requester at module init
+    // (initializePermittedEntities -> RemindersPermissionRequester) which calls
+    // RCTFatal(MissingCalendarPListValueException) when the key is absent. So we
+    // must keep an NSReminders* usage string. We supply an explicit, honest
+    // string below rather than expo-calendar's vague placeholder.
     [
       "expo-calendar",
       {
         calendarPermission:
           "Add TeamNetwork events to your device calendar so you see them alongside your other commitments.",
-        // No `remindersPermission`: the app only reads/writes calendar EVENTS
-        // (Calendar.EntityTypes.EVENT in src/lib/native-calendar.ts) and never
-        // touches the Reminders entity. The expo-calendar plugin ALWAYS injects
-        // NSReminders* keys (defaulting to a vague placeholder string);
-        // withStripUnusedPermissions (registered above) deletes them to avoid an
-        // Apple 5.1.1 over-declaration rejection.
+        // Required so expo-calendar's init-time Reminders requester does not
+        // fatally crash (see note above). The app does not use the Reminders
+        // entity, but the native module checks the permission at startup.
+        remindersPermission:
+          "TeamNetwork uses calendar access to add team events to your calendar.",
       },
     ],
     [
