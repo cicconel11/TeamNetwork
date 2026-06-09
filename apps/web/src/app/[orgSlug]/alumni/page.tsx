@@ -168,13 +168,16 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const hasActiveFilters =
     filters.year || filters.birthYear || filters.industry || filters.company || filters.city || filters.position;
 
-  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const [tNav, locale, tAlumni, tMembers2, tActions] = await Promise.all([
+    getTranslations("nav.items"),
+    getLocale(),
+    getTranslations("alumni"),
+    getTranslations("members"),
+    getTranslations("pages.actions"),
+  ]);
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/alumni", navConfig, t, locale);
   const actionLabel = resolveActionLabel("/alumni", navConfig, "Add", t, locale);
-  const tAlumni = await getTranslations("alumni");
-  const tMembers2 = await getTranslations("members");
-  const tActions = await getTranslations("pages.actions");
 
   // Preserve active filters across pagination links
   const filterParams = new URLSearchParams();

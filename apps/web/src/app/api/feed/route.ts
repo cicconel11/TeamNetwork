@@ -132,7 +132,8 @@ export async function GET(request: NextRequest) {
         supabase
           .from("feed_poll_votes")
           .select("post_id, option_index")
-          .in("post_id", pollPostIds),
+          .in("post_id", pollPostIds)
+          .limit(5000),
       ]);
 
       for (const v of userVotes || []) {

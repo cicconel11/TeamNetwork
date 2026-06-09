@@ -177,11 +177,14 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   ];
 
   const navConfig = org.nav_config as NavConfig | null;
-  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const [tNav, locale, tPagesMembers] = await Promise.all([
+    getTranslations("nav.items"),
+    getLocale(),
+    getTranslations("pages.members"),
+  ]);
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/members", navConfig, t, locale);
   const actionLabel = resolveActionLabel("/members", navConfig, "Add", t, locale);
-  const tPagesMembers = await getTranslations("pages.members");
 
   return (
     <div className="animate-fade-in">

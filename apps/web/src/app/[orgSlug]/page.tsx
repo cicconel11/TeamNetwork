@@ -56,6 +56,8 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
     userName,
     feedSidebarData,
     jumpBackInData,
+    donationStat,
+    tDash,
   ] = await Promise.all([
     queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).is("graduated_at", null).eq("status", "active"),
     queryClient.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
@@ -83,9 +85,6 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
       userId: orgCtx.userId,
       dataClient: queryClient,
     }),
-  ]);
-
-  const [donationStat, tDash] = await Promise.all([
     getCachedDonationStats(org.id),
     getTranslations("pages.dashboard"),
   ]);
