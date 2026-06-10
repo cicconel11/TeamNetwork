@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, Button, Input, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { useUnsavedChangesWarning } from "@/hooks";
 import { editAlumniSchema, type EditAlumniForm } from "@/lib/schemas/member";
 import type { Alumni } from "@/types/database";
 
@@ -24,11 +25,12 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSaved, setHasSaved] = useState(false);
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<EditAlumniForm>({
     resolver: zodResolver(editAlumniSchema),
     defaultValues: {
@@ -49,6 +51,8 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
       position_title: alumni.position_title || "",
     },
   });
+
+  useUnsavedChangesWarning(isDirty && !hasSaved);
 
   const onSubmit = async (data: EditAlumniForm) => {
     setIsLoading(true);
@@ -80,6 +84,7 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
       setIsLoading(false);
     }
 
+    setHasSaved(true);
     router.push(`/${orgSlug}/alumni/${alumniId}`);
     router.refresh();
   };

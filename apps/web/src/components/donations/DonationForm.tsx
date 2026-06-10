@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card, Button, Input, Textarea, Select, Captcha, type CaptchaProvider } from "@/components/ui";
-import { useIdempotencyKey, useCaptcha } from "@/hooks";
+import { useIdempotencyKey, useCaptcha, useUnsavedChangesWarning } from "@/hooks";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface PhilanthropyEventOption {
@@ -65,6 +65,16 @@ export function DonationForm({
   });
 
   const hasEvents = (philanthropyEventsForForm ?? []).length > 0;
+
+  // Dirty when any user-entered field differs from its initial value.
+  const isDirty =
+    amount !== "" ||
+    donorName !== "" ||
+    donorEmail !== "" ||
+    note !== "" ||
+    designation !== "general" ||
+    anonymous;
+  const { suppress: suppressUnsavedWarning } = useUnsavedChangesWarning(isDirty);
 
   useEffect(() => {
     if (!didTrackOpenRef.current) {
@@ -149,6 +159,9 @@ export function DonationForm({
       }
 
       if (data.url) {
+        // Hard redirect to Stripe Checkout — disable the unsaved-changes
+        // warning synchronously so beforeunload doesn't block it.
+        suppressUnsavedWarning();
         window.location.href = data.url as string;
         return;
       }

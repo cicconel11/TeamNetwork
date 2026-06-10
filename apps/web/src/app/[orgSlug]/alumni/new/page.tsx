@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { useUnsavedChangesWarning } from "@/hooks";
 import { newAlumniSchema, type NewAlumniForm } from "@/lib/schemas/member";
 
 interface SubscriptionInfo {
@@ -30,11 +31,12 @@ export default function NewAlumniPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [quota, setQuota] = useState<SubscriptionInfo | null>(null);
   const [isLoadingQuota, setIsLoadingQuota] = useState(true);
+  const [hasSaved, setHasSaved] = useState(false);
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<NewAlumniForm>({
     resolver: zodResolver(newAlumniSchema),
     defaultValues: {
@@ -55,6 +57,8 @@ export default function NewAlumniPage() {
       position_title: "",
     },
   });
+
+  useUnsavedChangesWarning(isDirty && !hasSaved);
 
   const fetchQuota = useCallback(async (organizationId: string) => {
     setIsLoadingQuota(true);
@@ -134,6 +138,7 @@ export default function NewAlumniPage() {
       return;
     }
 
+    setHasSaved(true);
     router.push(`/${orgSlug}/alumni`);
     router.refresh();
   };

@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { useUnsavedChangesWarning } from "@/hooks";
 import { useLocale, useTranslations } from "next-intl";
 import { newEventSchema, type NewEventForm } from "@/lib/schemas/content";
 import { expandRecurrence, type RecurrenceRule } from "@/lib/events/recurrence";
@@ -46,13 +47,14 @@ export default function NewCalendarEventPage() {
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [dayOfMonth, setDayOfMonth] = useState<string>("");
   const [repeatEndDate, setRepeatEndDate] = useState<string>("");
+  const [hasSaved, setHasSaved] = useState(false);
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<NewEventForm>({
     resolver: zodResolver(newEventSchema),
     defaultValues: {
@@ -78,6 +80,12 @@ export default function NewCalendarEventPage() {
   const startTime = watch("start_time");
   const endDate = watch("end_date");
   const endTime = watch("end_time");
+
+  // Recurrence and recipient selection live outside react-hook-form, so
+  // include them in the dirty check explicitly.
+  useUnsavedChangesWarning(
+    (isDirty || repeatType !== "none" || targetUserIds.length > 0) && !hasSaved,
+  );
 
   useEffect(() => {
     try {
@@ -335,6 +343,7 @@ export default function NewCalendarEventPage() {
       await Promise.allSettled(syncPromises);
     }
 
+    setHasSaved(true);
     router.push(calendarEventsPath(orgSlug));
     router.refresh();
   };
@@ -540,7 +549,7 @@ export default function NewCalendarEventPage() {
                 type="checkbox"
                 id="send_notification"
                 checked={watch("send_notification")}
-                onChange={(e) => setValue("send_notification", e.target.checked)}
+                onChange={(e) => setValue("send_notification", e.target.checked, { shouldDirty: true })}
                 className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
               />
               <label htmlFor="send_notification" className="text-sm text-foreground">
@@ -567,7 +576,7 @@ export default function NewCalendarEventPage() {
               type="checkbox"
               id="is_philanthropy"
               checked={watch("is_philanthropy")}
-              onChange={(e) => setValue("is_philanthropy", e.target.checked)}
+              onChange={(e) => setValue("is_philanthropy", e.target.checked, { shouldDirty: true })}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
             />
             <label htmlFor="is_philanthropy" className="text-sm text-foreground">

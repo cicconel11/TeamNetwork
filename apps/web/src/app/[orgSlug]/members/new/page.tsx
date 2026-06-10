@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { useUnsavedChangesWarning } from "@/hooks";
 import { newMemberSchema, type NewMemberForm } from "@/lib/schemas/member";
 
 export default function NewMemberPage() {
@@ -16,11 +17,12 @@ export default function NewMemberPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSaved, setHasSaved] = useState(false);
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<NewMemberForm>({
     resolver: zodResolver(newMemberSchema),
     defaultValues: {
@@ -34,6 +36,8 @@ export default function NewMemberPage() {
       linkedin_url: "",
     },
   });
+
+  useUnsavedChangesWarning(isDirty && !hasSaved);
 
   const onSubmit = async (data: NewMemberForm) => {
     setIsLoading(true);
@@ -72,6 +76,7 @@ export default function NewMemberPage() {
       return;
     }
 
+    setHasSaved(true);
     router.push(`/${orgSlug}/members`);
     router.refresh();
   };

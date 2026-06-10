@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { useUnsavedChangesWarning } from "@/hooks";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { useLocale, useTranslations } from "next-intl";
 import { newAnnouncementSchema, type NewAnnouncementForm } from "@/lib/schemas/content";
@@ -31,6 +32,7 @@ export default function NewAnnouncementPage() {
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
   const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
+  const [hasSaved, setHasSaved] = useState(false);
 
   // Get the custom label for this page
   const tNav = useTranslations("nav.items");
@@ -42,7 +44,7 @@ export default function NewAnnouncementPage() {
     register,
     handleSubmit,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<NewAnnouncementForm>({
     resolver: zodResolver(newAnnouncementSchema),
     defaultValues: {
@@ -55,6 +57,8 @@ export default function NewAnnouncementPage() {
   });
 
   const audience = watch("audience");
+
+  useUnsavedChangesWarning((isDirty || targetUserIds.length > 0) && !hasSaved);
 
   useEffect(() => {
     const supabase = createClient();
@@ -158,6 +162,7 @@ export default function NewAnnouncementPage() {
       }
     }
 
+    setHasSaved(true);
     router.push(`/${orgSlug}/announcements`);
     router.refresh();
   };

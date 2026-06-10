@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { useUnsavedChangesWarning } from "@/hooks";
 import { editAnnouncementSchema, type EditAnnouncementForm } from "@/lib/schemas/content";
 import type { Announcement, AnnouncementAudience } from "@/types/database";
 
@@ -26,6 +27,8 @@ export default function EditAnnouncementPage() {
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
+  const [recipientsTouched, setRecipientsTouched] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
 
   const {
     register,
@@ -33,7 +36,7 @@ export default function EditAnnouncementPage() {
     reset,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<EditAnnouncementForm>({
     resolver: zodResolver(editAnnouncementSchema),
     defaultValues: {
@@ -46,6 +49,9 @@ export default function EditAnnouncementPage() {
 
   const audience = watch("audience");
   const isPinned = watch("is_pinned");
+
+  // `reset()` after the initial fetch rebases isDirty onto the loaded values.
+  useUnsavedChangesWarning((isDirty || recipientsTouched) && !hasSaved);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,6 +117,7 @@ export default function EditAnnouncementPage() {
   }, [orgSlug, announcementId, reset]);
 
   const toggleTarget = (id: string) => {
+    setRecipientsTouched(true);
     setTargetUserIds((prev) =>
       prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
     );
@@ -155,6 +162,7 @@ export default function EditAnnouncementPage() {
       return;
     }
 
+    setHasSaved(true);
     router.push(`/${orgSlug}/announcements`);
     router.refresh();
   };
@@ -212,7 +220,9 @@ export default function EditAnnouncementPage() {
           <Select
             label="Audience"
             value={audience}
-            onChange={(e) => setValue("audience", e.target.value as AnnouncementAudience)}
+            onChange={(e) =>
+              setValue("audience", e.target.value as AnnouncementAudience, { shouldDirty: true })
+            }
             error={errors.audience?.message}
             options={[
               { label: "All Members", value: "all" },
@@ -250,7 +260,7 @@ export default function EditAnnouncementPage() {
               type="checkbox"
               id="is_pinned"
               checked={isPinned}
-              onChange={(e) => setValue("is_pinned", e.target.checked)}
+              onChange={(e) => setValue("is_pinned", e.target.checked, { shouldDirty: true })}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
             />
             <label htmlFor="is_pinned" className="text-sm text-foreground">

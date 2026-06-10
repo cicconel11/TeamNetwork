@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
+import { useUnsavedChangesWarning } from "@/hooks";
 import { createJobSchema, type CreateJobForm } from "@/lib/schemas/jobs";
 
 interface JobFormProps {
@@ -31,6 +32,14 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
     industry: initialData?.industry || "",
     experience_level: initialData?.experience_level || undefined,
   });
+
+  const [hasSaved, setHasSaved] = useState(false);
+  // Snapshot of the initial values, captured on first render only.
+  const initialStateRef = useRef({ formData, expiresAt });
+  const isDirty =
+    expiresAt !== initialStateRef.current.expiresAt ||
+    JSON.stringify(formData) !== JSON.stringify(initialStateRef.current.formData);
+  useUnsavedChangesWarning(isDirty && !hasSaved);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +90,7 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
       }
 
       await response.json();
+      setHasSaved(true);
       router.replace(`/${orgSlug}/jobs`);
       router.refresh();
     } catch (error) {

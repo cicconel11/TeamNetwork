@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { useUnsavedChangesWarning } from "@/hooks";
 import { useLocale, useTranslations } from "next-intl";
 import { editEventSchema, type EditEventForm } from "@/lib/schemas/content";
 import { updateFutureEvents } from "@/lib/events/recurring-operations";
@@ -33,6 +34,7 @@ export default function EditCalendarEventPage() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [showScopeDialog, setShowScopeDialog] = useState(false);
   const [pendingData, setPendingData] = useState<EditEventForm | null>(null);
+  const [hasSaved, setHasSaved] = useState(false);
   const tNav = useTranslations("nav.items");
   const tEvents = useTranslations("events");
   const locale = useLocale();
@@ -45,7 +47,7 @@ export default function EditCalendarEventPage() {
     reset,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<EditEventForm>({
     resolver: zodResolver(editEventSchema),
     defaultValues: {
@@ -64,6 +66,9 @@ export default function EditCalendarEventPage() {
 
   const eventType = watch("event_type");
   const isPhilanthropy = watch("is_philanthropy");
+
+  // `reset()` after the initial fetch rebases isDirty onto the loaded values.
+  useUnsavedChangesWarning(isDirty && !hasSaved);
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -212,6 +217,7 @@ export default function EditCalendarEventPage() {
         console.error("Failed to trigger calendar sync:", syncError);
       }
 
+      setHasSaved(true);
       router.push(calendarEventDetailPath(orgSlug, eventId));
       router.refresh();
       return;
@@ -253,6 +259,7 @@ export default function EditCalendarEventPage() {
       console.error("Failed to trigger calendar sync:", syncError);
     }
 
+    setHasSaved(true);
     router.push(calendarEventDetailPath(orgSlug, eventId));
     router.refresh();
   };
@@ -356,7 +363,7 @@ export default function EditCalendarEventPage() {
           <Select
             label="Event Type"
             value={eventType}
-            onChange={(e) => setValue("event_type", e.target.value as EventType)}
+            onChange={(e) => setValue("event_type", e.target.value as EventType, { shouldDirty: true })}
             error={errors.event_type?.message}
             options={EVENT_TYPE_OPTIONS.map((o) => ({ value: o.value, label: tEvents(o.value) }))}
           />
@@ -376,7 +383,7 @@ export default function EditCalendarEventPage() {
               type="checkbox"
               id="is_philanthropy"
               checked={isPhilanthropy}
-              onChange={(e) => setValue("is_philanthropy", e.target.checked)}
+              onChange={(e) => setValue("is_philanthropy", e.target.checked, { shouldDirty: true })}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
             />
             <label htmlFor="is_philanthropy" className="text-sm text-foreground">

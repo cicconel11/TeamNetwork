@@ -26,3 +26,5 @@ export type { UseLinkedInReturn } from "./useLinkedIn";
 export { useGalleryUpload } from "./useGalleryUpload";
 export type { UploadFileEntry, FileUploadStatus } from "./useGalleryUpload";
 export { useHasMounted } from "./useHasMounted";
+export { useUnsavedChangesWarning } from "./useUnsavedChangesWarning";
+export type { UseUnsavedChangesWarningReturn } from "./useUnsavedChangesWarning";
