@@ -270,12 +270,12 @@ export default async function LandingPage() {
           </p>
 
           <p className="scroll-reveal text-sm text-landing-cream/40 mb-8">
-            Start with a free trial. Credit card required.
+            Contact us for contract pricing tailored to your organization.
           </p>
 
           <div className="scroll-reveal flex flex-col sm:flex-row gap-4 justify-center">
-            <ButtonLink href="/auth/signup" variant="landingPrimary" size="xl" className="cta-glow">
-              Create Your Organization
+            <ButtonLink href="/contact" variant="landingPrimary" size="xl" className="cta-glow">
+              Request Pricing
             </ButtonLink>
           </div>
         </Container>
@@ -303,7 +303,7 @@ export default async function LandingPage() {
                   <Link href="#features" className="text-landing-cream/65 hover:text-landing-cream transition-colors">Features</Link>
                   <Link href="#pricing" className="text-landing-cream/65 hover:text-landing-cream transition-colors">Pricing</Link>
                   <Link href="/demos" className="text-landing-cream/65 hover:text-landing-cream transition-colors">Demos</Link>
-                  <Link href="/pricing/calculator" className="text-landing-cream/65 hover:text-landing-cream transition-colors">Pricing calculator</Link>
+                  <Link href="/contact" className="text-landing-cream/65 hover:text-landing-cream transition-colors">Contact sales</Link>
                 </nav>
               </div>
               <div>

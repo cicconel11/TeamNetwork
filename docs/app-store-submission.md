@@ -31,7 +31,7 @@ Test account
 Payment flows covered by Apple's exemptions, not StoreKit:
 
 1) Organization subscriptions (alumni tier plans)
-   - Apple Guideline 3.1.3(d) — Enterprise Services. The subscription is
+   - Apple Guideline 3.1.3(c) — Enterprise Services. The subscription is
      purchased by an organization administrator on behalf of the
      organization's members; payment is from an org budget, not by
      individual end users for digital content. The iOS app does not
@@ -47,13 +47,17 @@ Payment flows covered by Apple's exemptions, not StoreKit:
      (item 2).
 
 2) Charitable donations
-   - Apple Guideline 3.2.1(vi). All donating organizations are verified
-     nonprofits; the `donation_eligible_ios` flag is set only after ops
-     reviews each org's 501(c)(3) determination letter (or international
-     equivalent). Determination letters are available on request. The
-     funds route through Stripe Connect directly to the recipient
-     organization's own Stripe account; TeamNetwork is not the merchant
-     of record for the donation itself.
+   - Apple Guideline 3.2.1(vi). In-app donations (native Apple Pay) are
+     gated by the `donation_eligible_ios` flag, which ops sets ONLY for an
+     organization after verifying its nonprofit status (501(c)(3)
+     determination letter or international equivalent). Orgs whose
+     nonprofit status is not confirmed are NOT flagged and cannot take
+     donations inside the iOS app. Determination letters for flagged orgs
+     are available on request.
+   - TeamNetwork takes NO platform fee on donations. Funds route through
+     Stripe Connect (direct charge) to the recipient organization's own
+     Stripe account, minus only Stripe's standard processing fee;
+     TeamNetwork is not the merchant of record for the donation.
    - Donors pay in-app via Apple Pay through Stripe's Payment Sheet.
      Donations are voluntary and do not unlock any digital content or
      functionality in the app.
@@ -130,17 +134,39 @@ mandatory before init.
 | Marketing URL          | https://www.myteamnetwork.com |
 | Privacy Policy URL     | https://www.myteamnetwork.com/privacy |
 | Copyright              | © Teamra LLC |
-| Age Rating             | 12+ (Infrequent/Mild Profanity or Crude Humor — user-generated chat) |
+| Age Rating             | 13+ (see questionnaire answers below) |
 
-> **In-App Controls → Age Assurance: set to `None`.** The signup age gate
-> (`under_13` / `13_17` / `18_plus`, blocks under-13) is a custom dropdown,
-> not Apple's **Declared Age Range API**. Apple's "Age Assurance" in-app
-> control value refers specifically to that system API (or government-ID /
-> age-estimation), so a custom dropdown does not qualify. Declaring it caused
-> a 2.3.6 rejection (reviewer "unable to find Parental Controls or Age
-> Assurance mechanisms"). Fix is metadata-only: App Store Connect → app →
-> **App Information** → Age Rating → set **Age Assurance** to **None**. Do not
-> declare Parental Controls either — the app has none.
+> **Age-rating system (current, 2025–2026).** Apple replaced the old
+> 4+/9+/12+/17+ brackets with **4+ / 9+ / 13+ / 16+ / 18+** and a new
+> questionnaire (In-App Controls, Capabilities, sensitive-content frequency).
+> Re-answering was required by **Jan 31, 2026** — answer the new questionnaire
+> before the next submission or App Store Connect will block it. **12+ no
+> longer exists; do not select it.**
+>
+> **Target rating: 13+.** TeamNetwork is a moderated social app with
+> user-generated chat/feed/discussions. Under the new questionnaire, UGC and
+> messaging alone map to 4+, but possible infrequent profanity in member chat
+> pushes the conservative, defensible answer to **13+**. Do NOT answer
+> "unrestricted web access = Yes" — the app has no in-app browser (external
+> links open in Safari / OAuth web sessions only), so that would wrongly force
+> 16+.
+>
+> **Pinned questionnaire answers (set these exactly):**
+> - **In-App Controls → Age Assurance: `None`.** The signup age gate
+>   (`under_13` / `13_17` / `18_plus`, blocks under-13) is a custom dropdown,
+>   not Apple's **Declared Age Range API**. Apple's "Age Assurance" value
+>   refers specifically to that system API (or government-ID / age-estimation),
+>   so a custom dropdown does not qualify. Declaring it caused a 2.3.6
+>   rejection ("unable to find Parental Controls or Age Assurance mechanisms").
+> - **In-App Controls → Parental Controls: `None`.** The app has none.
+> - **Capabilities → Unrestricted Web Access: `No`.** No in-app browser.
+> - **Medical/Wellness, Gambling, Contests: `No`.**
+> - **User-Generated Content / Messaging: `Yes`** (chat, feed, discussions) —
+>   this is expected and does not by itself exceed 13+.
+> - **Profanity or Crude Humor: `Infrequent/Mild`** (member-authored chat).
+>
+> All of the above are metadata-only in App Store Connect → app →
+> **App Information** → Age Rating. No binary change required.
 
 ## Export Compliance
 
@@ -211,7 +237,7 @@ Ops-side gates:
 | Rejection citation | Likely cause | Response |
 |--------------------|--------------|----------|
 | 3.1.1 anti-steering | A price or "Upgrade" string slipped into iOS | grep the build, gate it on `Platform.OS !== 'ios'`, resubmit. Do not appeal — fix and resubmit is faster. |
-| 3.1.1 IAP required | Reviewer assumes subscription is consumer-facing | Reply citing 3.1.3(d): the alumni tier is paid by orgs/admins from an org budget on behalf of members; not a consumer subscription. Offer to demo on a call. |
+| 3.1.1 IAP required | Reviewer assumes subscription is consumer-facing | Reply citing 3.1.3(c) Enterprise Services: the alumni tier is paid by orgs/admins from an org budget on behalf of members; not a consumer subscription. Offer to demo on a call. |
 | 3.2.1(vi) donations | Org not recognized as a nonprofit | Provide the determination letter; if not 501(c)(3), pull the org from iOS via `donation_eligible_ios = false` instead of arguing. |
 | 5.1.1(v) account deletion | Delete account flow broken or hidden | Verify the delete-account screen is reachable from Profile and actually signs the user out + marks for deletion. |
 | 2.1(a) "client_secret does not match PaymentIntent" on donate | PaymentSheet confirmed against the platform account, but the PaymentIntent lives on the org's **connected** account (direct charge). `stripeAccountId` was passed to `initPaymentSheet`, which silently ignores it — it belongs to the SDK init params. | Fixed in `useDonationPaymentSheet.ts`: call `initStripe({ publishableKey, stripeAccountId })` with the connected account before opening the sheet, restore the platform context in `finally`. Verify the donation walkthrough org's Connect account is fully onboarded. |

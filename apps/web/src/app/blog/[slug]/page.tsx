@@ -101,11 +101,11 @@ export default async function BlogPostPage({
               Sign In
             </ButtonLink>
             <ButtonLink
-              href="/auth/signup"
+              href="/contact"
               variant="custom"
               className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-5"
             >
-              Get Started
+              Contact Sales
             </ButtonLink>
           </div>
         </div>
@@ -174,11 +174,11 @@ export default async function BlogPostPage({
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <ButtonLink
-                href="/auth/signup"
+                href="/contact"
                 variant="custom"
                 className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-8 py-3"
               >
-                Get Started Free
+                Contact Sales
               </ButtonLink>
               <ButtonLink
                 href="/demos"

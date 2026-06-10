@@ -1,23 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Input, Card, Textarea, InlineBanner } from "@/components/ui";
-import { FeedbackButton } from "@/components/feedback";
-import { useIdempotencyKey } from "@/hooks";
 import { createOrgV2Schema, type CreateOrgV2Form } from "@/lib/schemas/organization-v2";
-import { quote, isSelfServeSalesLed } from "@/lib/pricing-v2";
 
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+function buildPricingMailto(data: CreateOrgV2Form) {
+  const subject = encodeURIComponent(`TeamNetwork pricing request: ${data.name}`);
+  const body = encodeURIComponent(
+    [
+      "Hi TeamNetwork,",
+      "",
+      "I'd like contract pricing for a new organization.",
+      "",
+      `Organization: ${data.name}`,
+      `Slug: ${data.slug}`,
+      `Active members: ${data.actives ?? 0}`,
+      `Alumni: ${data.alumni ?? 0}`,
+      data.description ? `Description: ${data.description}` : null,
+      "",
+      "Please send pricing and next steps.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  return `mailto:sales@myteamnetwork.com?subject=${subject}&body=${body}`;
 }
 
 export default function CreateOrgPage() {
-  const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,40 +57,7 @@ export default function CreateOrgPage() {
     },
   });
 
-  const formValues = watch();
-  const { name, slug, primaryColor, billingInterval, actives, alumni } = formValues;
-
-  const q = useMemo(
-    () => quote({ tier: "single", actives: actives || 0, alumni: alumni || 0 }),
-    [actives, alumni],
-  );
-  const salesLed = isSelfServeSalesLed({
-    tier: "single",
-    actives: actives || 0,
-    alumni: alumni || 0,
-  });
-  const monthlyCents = q.monthlyCents;
-  const yearlyCents = q.yearlyCents;
-  const displayCents = billingInterval === "year" ? yearlyCents : monthlyCents;
-  const intervalLabel = billingInterval === "year" ? "/yr" : "/mo";
-
-  const fingerprint = useMemo(
-    () =>
-      JSON.stringify({
-        name: name?.trim() || "",
-        slug: slug?.trim() || "",
-        description: formValues.description?.trim() || "",
-        primaryColor: primaryColor || "",
-        billingInterval,
-        actives: actives || 0,
-        alumni: alumni || 0,
-      }),
-    [actives, alumni, billingInterval, formValues.description, name, primaryColor, slug],
-  );
-  const { idempotencyKey } = useIdempotencyKey({
-    storageKey: "create-org-v2-checkout",
-    fingerprint,
-  });
+  const { slug, primaryColor } = watch();
 
   const handleNameChange = (value: string) => {
     setValue("name", value);
@@ -94,54 +75,20 @@ export default function CreateOrgPage() {
     if (valid) setStep(2);
   };
 
-  const onSubmit = async (data: CreateOrgV2Form) => {
+  const onSubmit = (data: CreateOrgV2Form) => {
     setIsLoading(true);
     setError(null);
     setInfoMessage(null);
-    if (!idempotencyKey) {
-      setError("Preparing checkout... please try again.");
-      setIsLoading(false);
-      return;
-    }
 
     try {
-      const response = await fetch("/api/stripe/create-org-v2-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: data.name,
-          slug: data.slug,
-          description: data.description ?? "",
-          primaryColor: data.primaryColor,
-          billingInterval: data.billingInterval,
-          actives: data.actives,
-          alumni: data.alumni,
-          idempotencyKey,
-        }),
-      });
-
-      const responseData = await response.json();
-      if (!response.ok) throw new Error(responseData.error || "Unable to start checkout");
-
-      if (responseData.mode === "sales") {
-        setInfoMessage("Thank you! We will contact you to finalize a custom plan.");
-        router.push(`/app?org=${data.slug}&billing=pending-sales`);
-        return;
-      }
-
-      const checkoutUrl = responseData.checkoutUrl ?? responseData.url;
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl as string;
-        return;
-      }
-      throw new Error("Missing checkout URL");
+      window.location.href = buildPricingMailto(data);
+      setInfoMessage("Opening your email app so you can request contract pricing.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : "Unable to open email.");
+    } finally {
       setIsLoading(false);
     }
   };
-
-  const submitDisabled = !salesLed && displayCents <= 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -176,23 +123,16 @@ export default function CreateOrgPage() {
           <div className="mb-8">
             <p className="text-sm font-medium text-muted-foreground mb-1">Step {step} of 2</p>
             <h2 className="text-2xl font-bold text-foreground mb-2">
-              {step === 1 ? "Your Organization" : "Plan & Billing"}
+              {step === 1 ? "Your Organization" : "Pricing Request"}
             </h2>
             <p className="text-muted-foreground">
               {step === 1
-                ? "Set up your team, club, or group. You’ll be the admin and can invite members later."
-                : "Tell us about your size — pricing scales with your active members and alumni."}
+                ? "Tell us what you are building. We will use this to prepare your workspace and pricing conversation."
+                : "Share your organization size so we can send contract pricing and next steps."}
             </p>
           </div>
 
-          {error && (
-            <InlineBanner variant="error" className="mb-6">
-              {error}
-              <div className="mt-2 flex justify-end">
-                <FeedbackButton context="create-org" trigger="checkout_error" />
-              </div>
-            </InlineBanner>
-          )}
+          {error && <InlineBanner variant="error" className="mb-6">{error}</InlineBanner>}
           {infoMessage && (
             <InlineBanner variant="success" className="mb-6">{infoMessage}</InlineBanner>
           )}
@@ -243,9 +183,6 @@ export default function CreateOrgPage() {
                       {...register("primaryColor")}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    This color will be used for your organization&apos;s branding
-                  </p>
                 </div>
                 <div className="flex gap-4 pt-4">
                   <Link href="/app" className="flex-1">
@@ -258,31 +195,12 @@ export default function CreateOrgPage() {
 
             {step === 2 && (
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-foreground">Billing Interval</p>
-                  <div className="flex gap-2">
-                    {(["month", "year"] as const).map((interval) => (
-                      <button
-                        key={interval}
-                        type="button"
-                        onClick={() => setValue("billingInterval", interval)}
-                        className={`flex-1 px-4 py-3 rounded-xl border ${
-                          billingInterval === interval
-                            ? "border-org-primary bg-org-primary text-org-primary-foreground"
-                            : "border-border bg-muted text-foreground"
-                        }`}
-                      >
-                        {interval === "month" ? "Monthly" : "Yearly (save 17%)"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label="Active Members"
                     type="number"
                     min={0}
+                    helperText="Current roster, staff, volunteers, or active community members."
                     error={errors.actives?.message}
                     {...register("actives", { valueAsNumber: true })}
                   />
@@ -290,50 +208,25 @@ export default function CreateOrgPage() {
                     label="Alumni"
                     type="number"
                     min={0}
+                    helperText="Past members, graduates, supporters, or long-term contacts."
                     error={errors.alumni?.message}
                     {...register("alumni", { valueAsNumber: true })}
                   />
                 </div>
 
-                <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm space-y-2">
-                  <p className="font-semibold text-foreground">Pricing Summary</p>
-                  {salesLed ? (
-                    <p className="text-muted-foreground">
-                      Custom quote &mdash; we&apos;ll contact you to finalize pricing for your network size.
-                    </p>
-                  ) : displayCents > 0 ? (
-                    <>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Active members ({actives || 0})</span>
-                        <span>{formatCents(q.breakdown.activeMonthlyCents)}/mo</span>
-                      </div>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Alumni ({alumni || 0})</span>
-                        <span>{formatCents(q.breakdown.alumniMonthlyCents)}/mo</span>
-                      </div>
-                      <div className="border-t border-border my-1" />
-                      <div className="flex justify-between font-medium text-foreground">
-                        <span>Total</span>
-                        <span>{formatCents(displayCents)}{intervalLabel}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-muted-foreground">
-                      Add active members or alumni to see pricing.
-                    </p>
-                  )}
+                <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm">
+                  <p className="font-semibold text-foreground">Contract pricing</p>
+                  <p className="mt-2 text-muted-foreground">
+                    We no longer show self-serve rates here. Send us your org
+                    details and we&apos;ll follow up with pricing based on your
+                    size, modules, support needs, and rollout timing.
+                  </p>
                 </div>
-
-                {salesLed && (
-                  <InlineBanner variant="warning">
-                    With {alumni?.toLocaleString()} alumni, we will contact you with custom pricing. No payment is collected now and the org remains pending_sales.
-                  </InlineBanner>
-                )}
 
                 <div className="flex gap-4 pt-4">
                   <Button type="button" variant="secondary" className="flex-1" onClick={() => setStep(1)}>Back</Button>
-                  <Button type="submit" className="flex-1" isLoading={isLoading} disabled={submitDisabled}>
-                    {salesLed ? "Contact Sales" : "Create Organization"}
+                  <Button type="submit" className="flex-1" isLoading={isLoading}>
+                    Contact us for pricing
                   </Button>
                 </div>
               </div>

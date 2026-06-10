@@ -97,11 +97,11 @@ export default function BlogPage() {
               Sign In
             </ButtonLink>
             <ButtonLink
-              href="/auth/signup"
+              href="/contact"
               variant="custom"
               className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-5"
             >
-              Get Started
+              Contact Sales
             </ButtonLink>
           </div>
         </div>

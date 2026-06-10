@@ -21,7 +21,6 @@ import {
   updatePaymentAttempt,
   waitForExistingStripeResource,
 } from "@/lib/payments/idempotency";
-import { calculatePlatformFee } from "@/lib/payments/platform-fee";
 import { verifyCaptcha } from "@/lib/security/captcha";
 
 export const dynamic = "force-dynamic";
@@ -52,9 +51,6 @@ const donationSchema = z
     paymentAttemptId: baseSchemas.uuid.optional(),
     anonymous: z.boolean().optional(),
     captchaToken: z.string().min(1, "Captcha verification required"),
-    // SECURITY: platformFeeAmountCents is accepted but IGNORED - fee is calculated server-side
-    // This field is deprecated and will be removed in a future version
-    platformFeeAmountCents: z.coerce.number().int().min(0).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -109,9 +105,10 @@ export async function POST(req: Request) {
         : "checkout";
   const platformHeader = req.headers.get("x-platform")?.toLowerCase() ?? null;
   const isIosClient = platformHeader === "ios";
-  // SECURITY: Platform fee is ALWAYS calculated server-side to prevent fee bypass attacks
-  // Client-provided platformFeeAmountCents is intentionally ignored
-  const platformFeeCents = calculatePlatformFee(amountCents);
+  // TeamNetwork takes NO platform fee on donations. Donations are direct charges
+  // on the org's connected Stripe account; the org receives the full amount minus
+  // only Stripe's own processing fee. (No application_fee_amount — see Apple
+  // Guideline 3.2.1(vi) and the customer-facing "no fees" promise.)
   const idempotencyKey = body.idempotencyKey ?? null;
   const paymentAttemptId = body.paymentAttemptId ?? null;
 
@@ -207,7 +204,6 @@ export async function POST(req: Request) {
     donorName,
     eventId: body.eventId || null,
     purpose: purpose || null,
-    platformFeeCents,
   });
   // Stripe metadata (no PII - stored in payment_attempts instead)
   const metadata: Record<string, string> = {
@@ -218,7 +214,6 @@ export async function POST(req: Request) {
 
   if (body.eventId) metadata.event_id = body.eventId;
   if (purpose) metadata.purpose = purpose;
-  if (platformFeeCents) metadata.platform_fee_cents = String(platformFeeCents);
 
   // Store donor PII in payment_attempts metadata (not sent to Stripe)
   const paymentAttemptMetadata: Record<string, string> = { ...metadata };
@@ -342,7 +337,6 @@ export async function POST(req: Request) {
           receipt_email: donorEmail || undefined,
           description: purpose ? `Donation: ${purpose}` : `Donation to ${resolvedOrg.name}`,
           metadata,
-          application_fee_amount: platformFeeCents || undefined,
           ...(customerId ? { customer: customerId } : {}),
         },
         { idempotencyKey: claimedAttempt.idempotency_key, ...stripeOptions },
@@ -407,7 +401,6 @@ export async function POST(req: Request) {
         payment_intent_data: {
           metadata,
           receipt_email: donorEmail || undefined,
-          application_fee_amount: platformFeeCents || undefined,
         },
         success_url: `${origin}/${resolvedOrg.slug}/donations?donation=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/${resolvedOrg.slug}/donations?donation=cancelled`,

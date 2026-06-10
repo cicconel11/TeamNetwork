@@ -50,8 +50,8 @@ export default function DemosPage() {
             <ButtonLink href="/auth/login" variant="custom" className="text-landing-cream/80 hover:text-landing-cream hover:bg-landing-cream/10">
               Sign In
             </ButtonLink>
-            <ButtonLink href="/auth/signup" variant="custom" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-5">
-              Get Started
+            <ButtonLink href="/contact" variant="custom" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-5">
+              Contact Sales
             </ButtonLink>
           </div>
         </div>
@@ -116,8 +116,8 @@ export default function DemosPage() {
                 </svg>
                 Request a Demo
               </a>
-              <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-8 py-4 text-base">
-                Get Started Free
+              <ButtonLink href="/contact" variant="custom" size="lg" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-8 py-4 text-base">
+                Contact Sales
               </ButtonLink>
             </div>
           </div>

@@ -1,26 +1,44 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Input, Card, Textarea, InlineBanner } from "@/components/ui";
-import { useIdempotencyKey } from "@/hooks";
 import {
   createEnterpriseV2Schema,
   type CreateEnterpriseV2Form,
 } from "@/lib/schemas/organization-v2";
-import { quote, isSelfServeSalesLed } from "@/lib/pricing-v2";
 
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+function buildEnterprisePricingMailto(data: CreateEnterpriseV2Form) {
+  const subject = encodeURIComponent(`TeamNetwork enterprise pricing request: ${data.name}`);
+  const body = encodeURIComponent(
+    [
+      "Hi TeamNetwork,",
+      "",
+      "I'd like contract pricing for an enterprise account.",
+      "",
+      `Enterprise: ${data.name}`,
+      `Slug: ${data.slug}`,
+      `Billing contact: ${data.billingContactEmail}`,
+      `Active members: ${data.actives ?? 0}`,
+      `Alumni: ${data.alumni ?? 0}`,
+      `Sub-organizations: ${data.subOrgs ?? 0}`,
+      data.description ? `Description: ${data.description}` : null,
+      "",
+      "Please send pricing and next steps.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  return `mailto:sales@myteamnetwork.com?subject=${subject}&body=${body}`;
 }
 
 export default function CreateEnterprisePage() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const {
     register,
@@ -43,56 +61,7 @@ export default function CreateEnterprisePage() {
     },
   });
 
-  const {
-    name,
-    slug,
-    description,
-    primaryColor,
-    billingContactEmail,
-    actives,
-    alumni,
-    subOrgs,
-    billingInterval,
-  } = watch();
-
-  const q = useMemo(
-    () =>
-      quote({
-        tier: "enterprise",
-        actives: actives || 0,
-        alumni: alumni || 0,
-        subOrgs: subOrgs || 0,
-      }),
-    [actives, alumni, subOrgs],
-  );
-  const salesLed = isSelfServeSalesLed({
-    tier: "enterprise",
-    actives: actives || 0,
-    alumni: alumni || 0,
-    subOrgs: subOrgs || 0,
-  });
-  const displayCents = billingInterval === "year" ? q.yearlyCents : q.monthlyCents;
-  const intervalLabel = billingInterval === "year" ? "/yr" : "/mo";
-
-  const fingerprint = useMemo(
-    () =>
-      JSON.stringify({
-        name: name?.trim() || "",
-        slug: slug?.trim() || "",
-        description: description?.trim() || "",
-        primaryColor: primaryColor || "",
-        billingContactEmail: billingContactEmail?.trim() || "",
-        actives: actives || 0,
-        alumni: alumni || 0,
-        subOrgs: subOrgs || 0,
-        billingInterval,
-      }),
-    [actives, alumni, billingContactEmail, billingInterval, description, name, primaryColor, slug, subOrgs],
-  );
-  const { idempotencyKey } = useIdempotencyKey({
-    storageKey: "create-enterprise-v2-checkout",
-    fingerprint,
-  });
+  const { slug, primaryColor } = watch();
 
   const handleNameChange = (value: string) => {
     setValue("name", value);
@@ -105,54 +74,20 @@ export default function CreateEnterprisePage() {
     setValue("slug", generatedSlug);
   };
 
-  const onSubmit = async (data: CreateEnterpriseV2Form) => {
+  const onSubmit = (data: CreateEnterpriseV2Form) => {
     setIsLoading(true);
     setError(null);
-    if (!idempotencyKey) {
-      setError("Preparing checkout... please try again.");
-      setIsLoading(false);
-      return;
-    }
+    setInfoMessage(null);
 
     try {
-      const response = await fetch("/api/stripe/create-enterprise-v2-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: data.name,
-          slug: data.slug,
-          description: data.description ?? "",
-          primaryColor: data.primaryColor,
-          billingInterval: data.billingInterval,
-          actives: data.actives,
-          alumni: data.alumni,
-          subOrgs: data.subOrgs,
-          billingContactEmail: data.billingContactEmail,
-          idempotencyKey,
-        }),
-      });
-
-      const responseData = await response.json();
-      if (!response.ok) throw new Error(responseData.error || "Unable to start checkout");
-
-      if (responseData.mode === "sales") {
-        router.push(`/app?enterprise=${data.slug}&billing=pending-sales`);
-        return;
-      }
-
-      const checkoutUrl = responseData.checkoutUrl ?? responseData.url;
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl as string;
-        return;
-      }
-      throw new Error("Missing checkout URL");
+      window.location.href = buildEnterprisePricingMailto(data);
+      setInfoMessage("Opening your email app so you can request enterprise pricing.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : "Unable to open email.");
+    } finally {
       setIsLoading(false);
     }
   };
-
-  const submitDisabled = !salesLed && displayCents <= 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -186,12 +121,14 @@ export default function CreateEnterprisePage() {
               <div className="mb-8">
                 <h2 className="text-2xl font-bold text-foreground mb-2">Create Enterprise Account</h2>
                 <p className="text-muted-foreground">
-                  Manage multiple organizations under one roof with shared billing.
+                  Tell us about your enterprise network and we&apos;ll follow up
+                  with contract pricing and implementation next steps.
                 </p>
               </div>
 
-              {error && (
-                <InlineBanner variant="error" className="mb-6">{error}</InlineBanner>
+              {error && <InlineBanner variant="error" className="mb-6">{error}</InlineBanner>}
+              {infoMessage && (
+                <InlineBanner variant="success" className="mb-6">{infoMessage}</InlineBanner>
               )}
 
               <form onSubmit={handleSubmit(onSubmit)}>
@@ -249,31 +186,6 @@ export default function CreateEnterprisePage() {
                     </div>
                   </div>
 
-                  <div className="space-y-3 p-5 rounded-xl border border-border bg-card">
-                    <h3 className="text-base font-semibold text-foreground">Billing Frequency</h3>
-                    <div className="flex gap-3">
-                      {(["month", "year"] as const).map((interval) => (
-                        <button
-                          key={interval}
-                          type="button"
-                          onClick={() => setValue("billingInterval", interval)}
-                          className={`flex-1 p-3 rounded-lg border ${
-                            billingInterval === interval
-                              ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                              : "border-border hover:border-muted-foreground"
-                          }`}
-                        >
-                          <p className="font-semibold text-foreground">
-                            {interval === "month" ? "Monthly" : "Yearly"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {interval === "month" ? "Billed monthly" : "Save 17%"}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Input
                       label="Active Members"
@@ -298,18 +210,21 @@ export default function CreateEnterprisePage() {
                     />
                   </div>
 
-                  {salesLed && (
-                    <InlineBanner variant="warning">
-                      Your size qualifies for custom enterprise pricing. We&apos;ll reach out to finalize the plan; no payment is collected now.
-                    </InlineBanner>
-                  )}
+                  <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm">
+                    <p className="font-semibold text-foreground">Contract pricing</p>
+                    <p className="mt-2 text-muted-foreground">
+                      Enterprise pricing depends on network structure, migration
+                      support, data needs, rollout timing, and contract terms. No
+                      payment is collected here.
+                    </p>
+                  </div>
 
                   <div className="flex gap-4 pt-4">
                     <Link href="/app" className="flex-1">
                       <Button type="button" variant="secondary" className="w-full">Cancel</Button>
                     </Link>
-                    <Button type="submit" className="flex-1" isLoading={isLoading} disabled={submitDisabled}>
-                      {salesLed ? "Contact Sales" : "Continue to Checkout"}
+                    <Button type="submit" className="flex-1" isLoading={isLoading}>
+                      Contact us for pricing
                     </Button>
                   </div>
                 </div>
@@ -319,40 +234,12 @@ export default function CreateEnterprisePage() {
 
           <div className="lg:col-span-1">
             <Card className="p-6 sticky top-8">
-              <h3 className="font-semibold text-foreground mb-4">Order Summary</h3>
-              <div className="space-y-2 text-sm">
-                {salesLed ? (
-                  <p className="text-muted-foreground">
-                    Custom quote — sales will tailor a plan for your size.
-                  </p>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Platform base</span>
-                      <span>{formatCents(q.breakdown.platformBaseCents)}/mo</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Active members ({actives || 0})</span>
-                      <span>{formatCents(q.breakdown.activeMonthlyCents)}/mo</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Alumni ({alumni || 0})</span>
-                      <span>{formatCents(q.breakdown.alumniMonthlyCents)}/mo</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Sub-orgs ({q.breakdown.subOrgsBilled})</span>
-                      <span>{formatCents(q.breakdown.subOrgMonthlyCents)}/mo</span>
-                    </div>
-                    <div className="border-t border-border my-2" />
-                    <div className="flex justify-between text-lg">
-                      <span className="font-semibold text-foreground">Total</span>
-                      <span className="font-bold text-foreground">
-                        {formatCents(displayCents)}{intervalLabel}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
+              <h3 className="font-semibold text-foreground mb-3">What happens next</h3>
+              <p className="text-sm text-muted-foreground">
+                We&apos;ll review your requested enterprise size, confirm the
+                rollout model, and send a contract-based quote. Your account is
+                not charged from this page.
+              </p>
             </Card>
           </div>
         </div>
