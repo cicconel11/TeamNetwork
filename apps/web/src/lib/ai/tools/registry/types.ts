@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { AiActorRole } from "@/lib/ai/access-policy";
 import type { AiLogContext } from "@/lib/ai/logger";
 import type { ToolExecutionAuthorization, ToolExecutionContext } from "@/lib/ai/tools/executor";
 import type { ToolExecutionResult } from "@/lib/ai/tools/result";
@@ -18,6 +19,12 @@ export interface ToolModuleRunContext {
   ctx: ToolExecutionContext;
   sb: SB;
   logContext: AiLogContext;
+  /**
+   * Resolved policy role of the calling actor. Modules that return PII must
+   * redact for non-admin actors (defense in depth on top of the executor's
+   * RLS-client selection).
+   */
+  actorRole: AiActorRole;
 }
 
 export type { ToolExecutionAuthorization };

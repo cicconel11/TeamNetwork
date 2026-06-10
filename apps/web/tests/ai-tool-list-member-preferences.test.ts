@@ -57,12 +57,14 @@ const logContext = { requestId: "req-1", route: "test" } as never;
 async function execute(
   args: { limit?: number; sport?: string; topic?: string },
   fixtures: TableFixtures,
+  actorRole: "admin" | "active_member" | "alumni" | "parent" = "admin",
 ) {
   const parsed = listMemberPreferencesModule.argsSchema.parse(args);
   return listMemberPreferencesModule.execute(parsed as never, {
     ctx: ctx as never,
     sb: makeStubSb(fixtures) as never,
     logContext,
+    actorRole,
   });
 }
 
@@ -253,5 +255,65 @@ describe("list_member_preferences", () => {
     const data = result.data as { state: string; total: number };
     assert.equal(data.state, "no_results");
     assert.equal(data.total, 0);
+  });
+});
+
+/* ── U9: email redaction for non-admin actors ──────────────────────────────── */
+
+describe("list_member_preferences email redaction (U9)", () => {
+  const fixtures: TableFixtures = {
+    mentor_profiles: [
+      {
+        user_id: "u1",
+        organization_id: ORG_ID,
+        sports: ["basketball"],
+        topics: ["finance"],
+        positions: [],
+        industries: [],
+        time_commitment: null,
+        accepting_new: true,
+        is_active: true,
+      },
+    ],
+    mentee_preferences: [],
+    users: [
+      { id: "u1", name: null, email: "u1@example.com" },
+    ],
+  };
+
+  it("non-admin actors get email: null and never an email-as-name fallback", async () => {
+    const result = await execute({}, fixtures, "active_member");
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    const data = result.data as { members: Array<{ name: string; email: string | null }> };
+    assert.equal(data.members.length, 1);
+    assert.equal(data.members[0].email, null);
+    assert.equal(data.members[0].name, "Member");
+  });
+
+  it("admin actors still see emails and the email-as-name fallback", async () => {
+    const result = await execute({}, fixtures, "admin");
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    const data = result.data as { members: Array<{ name: string; email: string | null }> };
+    assert.equal(data.members[0].email, "u1@example.com");
+    assert.equal(data.members[0].name, "u1@example.com");
+  });
+
+  it("executor routes non-admin calls through the RLS client (source assert)", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const src = await readFile(
+      new URL("../src/lib/ai/tools/executor.ts", import.meta.url),
+      "utf8"
+    );
+    // Tool is in the non-admin RLS set...
+    assert.match(
+      src,
+      /NON_ADMIN_RLS_READ_TOOL_NAMES[\s\S]*?"list_member_preferences"[\s\S]*?\]\);/
+    );
+    // ...and the dispatcher threads the resolved actor role to modules.
+    assert.match(src, /dispatchToolModule\([\s\S]*?actorRole:\s*policyActor\.role/);
+    // Null RLS client fails closed (auth_error) rather than falling back to service role.
+    assert.match(src, /auth-bound client unavailable for non-admin tool/);
   });
 });

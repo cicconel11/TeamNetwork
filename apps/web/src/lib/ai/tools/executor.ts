@@ -73,6 +73,9 @@ const NON_ADMIN_RLS_READ_TOOL_NAMES: ReadonlySet<ToolName> = new Set<ToolName>([
   "list_philanthropy_events",
   "find_navigation_targets",
   "search_org_content",
+  // Reads preference rows + user names/emails; non-admins must go through RLS
+  // (mentee rows collapse to self) with module-level email redaction on top.
+  "list_member_preferences",
 ]);
 
 const ENTERPRISE_TOOL_NAMES = new Set<ToolName>([
@@ -293,7 +296,7 @@ export async function executeToolCall(
 
   try {
     return await withStageTimeout(`tool_${toolName}`, timeoutMs, async () =>
-      dispatchToolModule(toolName, args, { ctx, sb, logContext })
+      dispatchToolModule(toolName, args, { ctx, sb, logContext, actorRole: policyActor.role })
     );
   } catch (err) {
     if (isStageTimeoutError(err)) {
