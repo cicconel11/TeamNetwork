@@ -1,9 +1,8 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
 import { Card, Button, Select, Input, Badge } from "@/components/ui";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 
 interface FilterOption {
   value: string;
@@ -32,57 +31,15 @@ const EXPERIENCE_OPTIONS: FilterOption[] = [
   { value: "executive", label: "Executive" },
 ];
 
+const FILTER_KEYS = ["q", "type", "level", "location", "company", "industry"] as const;
+
 export function JobsFilters({
   locations,
   companies,
   industries,
 }: JobsFiltersProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const [filters, setFilters] = useState({
-    q: searchParams.get("q") || "",
-    type: searchParams.get("type") || "",
-    level: searchParams.get("level") || "",
-    location: searchParams.get("location") || "",
-    company: searchParams.get("company") || "",
-    industry: searchParams.get("industry") || "",
-  });
-
-  const activeFilterCount = Object.values(filters).filter((v) => v !== "").length;
-  const hasActiveFilters = activeFilterCount > 0;
-
-  const updateURL = useCallback(() => {
-    const params = new URLSearchParams();
-    if (filters.q) params.set("q", filters.q);
-    if (filters.type) params.set("type", filters.type);
-    if (filters.level) params.set("level", filters.level);
-    if (filters.location) params.set("location", filters.location);
-    if (filters.company) params.set("company", filters.company);
-    if (filters.industry) params.set("industry", filters.industry);
-
-    const queryString = params.toString();
-    router.push(queryString ? `${pathname}?${queryString}` : pathname);
-  }, [filters, pathname, router]);
-
-  useEffect(() => {
-    const debounce = setTimeout(() => {
-      updateURL();
-    }, 300);
-    return () => clearTimeout(debounce);
-  }, [filters, updateURL]);
-
-  const clearFilters = () => {
-    setFilters({
-      q: "",
-      type: "",
-      level: "",
-      location: "",
-      company: "",
-      industry: "",
-    });
-  };
+  const { filters, setFilter, clearFilters, hasActiveFilters, activeFilterCount } =
+    useUrlFilters({ keys: FILTER_KEYS });
 
   const sortStrings = (values: (string | null)[]) =>
     uniqueStringsCaseInsensitive(values).sort((a, b) =>
@@ -125,7 +82,7 @@ export function JobsFilters({
             </svg>
             <Input
               value={filters.q}
-              onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+              onChange={(e) => setFilter("q", e.target.value)}
               placeholder="Search jobs..."
               style={{ paddingLeft: "2.25rem" }}
             />
@@ -134,7 +91,7 @@ export function JobsFilters({
           <div className="flex flex-wrap gap-1">
             <button
               type="button"
-              onClick={() => setFilters({ ...filters, type: "" })}
+              onClick={() => setFilter("type", "")}
               className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
                 filters.type === ""
                   ? "bg-gray-900 text-white"
@@ -147,9 +104,7 @@ export function JobsFilters({
               <button
                 key={t}
                 type="button"
-                onClick={() =>
-                  setFilters({ ...filters, type: filters.type === t ? "" : t })
-                }
+                onClick={() => setFilter("type", filters.type === t ? "" : t)}
                 className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
                   filters.type === t
                     ? "bg-gray-900 text-white"
@@ -197,7 +152,7 @@ export function JobsFilters({
             <Select
               label="Experience"
               value={filters.level}
-              onChange={(e) => setFilters({ ...filters, level: e.target.value })}
+              onChange={(e) => setFilter("level", e.target.value)}
               options={EXPERIENCE_OPTIONS}
             />
           </div>
@@ -205,7 +160,7 @@ export function JobsFilters({
             <Select
               label="Location"
               value={filters.location}
-              onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+              onChange={(e) => setFilter("location", e.target.value)}
               options={locationOptions}
             />
           </div>
@@ -213,7 +168,7 @@ export function JobsFilters({
             <Select
               label="Company"
               value={filters.company}
-              onChange={(e) => setFilters({ ...filters, company: e.target.value })}
+              onChange={(e) => setFilter("company", e.target.value)}
               options={companyOptions}
             />
           </div>
@@ -221,7 +176,7 @@ export function JobsFilters({
             <Select
               label="Industry"
               value={filters.industry}
-              onChange={(e) => setFilters({ ...filters, industry: e.target.value })}
+              onChange={(e) => setFilter("industry", e.target.value)}
               options={industryOptions}
             />
           </div>

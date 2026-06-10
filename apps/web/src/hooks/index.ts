@@ -28,3 +28,5 @@ export type { UploadFileEntry, FileUploadStatus } from "./useGalleryUpload";
 export { useHasMounted } from "./useHasMounted";
 export { useUnsavedChangesWarning } from "./useUnsavedChangesWarning";
 export type { UseUnsavedChangesWarningReturn } from "./useUnsavedChangesWarning";
+export { useUrlFilters } from "./useUrlFilters";
+export type { UseUrlFiltersOptions, UseUrlFiltersResult } from "./useUrlFilters";

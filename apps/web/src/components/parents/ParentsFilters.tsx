@@ -1,10 +1,9 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useEffect, useCallback, useRef } from "react";
 import { Button, Select, Input } from "@/components/ui";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 
 interface FilterOption {
   value: string;
@@ -16,36 +15,13 @@ interface ParentsFiltersProps {
   relationships: (string | null)[];
 }
 
+const FILTER_KEYS = ["relationship", "student_name"] as const;
+
 export function ParentsFilters({ orgId, relationships }: ParentsFiltersProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const didMountRef = useRef(false);
-
-  const [filters, setFilters] = useState({
-    relationship: searchParams.get("relationship") || "",
-    student_name: searchParams.get("student_name") || "",
-  });
-
-  const hasActiveFilters = Object.values(filters).some((v) => v !== "");
-
-  const updateURL = useCallback(() => {
-    const params = new URLSearchParams();
-    if (filters.relationship) params.set("relationship", filters.relationship);
-    if (filters.student_name) params.set("student_name", filters.student_name);
-
-    const queryString = params.toString();
-    router.push(queryString ? `${pathname}?${queryString}` : pathname);
-  }, [filters, pathname, router]);
-
-  useEffect(() => {
-    const debounce = setTimeout(() => {
-      updateURL();
-      if (!didMountRef.current) {
-        didMountRef.current = true;
-        return;
-      }
-      const filterKeys = Object.entries(filters)
+  const { filters, setFilter, clearFilters, hasActiveFilters } = useUrlFilters({
+    keys: FILTER_KEYS,
+    onSync: (current) => {
+      const filterKeys = Object.entries(current)
         .filter(([, value]) => value)
         .map(([key]) => key);
       trackBehavioralEvent("directory_filter_apply", {
@@ -53,13 +29,8 @@ export function ParentsFilters({ orgId, relationships }: ParentsFiltersProps) {
         filter_keys: filterKeys,
         filters_count: filterKeys.length,
       }, orgId);
-    }, 300);
-    return () => clearTimeout(debounce);
-  }, [filters, orgId, updateURL]);
-
-  const clearFilters = () => {
-    setFilters({ relationship: "", student_name: "" });
-  };
+    },
+  });
 
   const sortStrings = (values: (string | null)[]) =>
     uniqueStringsCaseInsensitive(values).sort((a, b) =>
@@ -78,7 +49,7 @@ export function ParentsFilters({ orgId, relationships }: ParentsFiltersProps) {
           <Select
             label="Relationship"
             value={filters.relationship}
-            onChange={(e) => setFilters({ ...filters, relationship: e.target.value })}
+            onChange={(e) => setFilter("relationship", e.target.value)}
             options={relationshipOptions}
           />
         </div>
@@ -87,7 +58,7 @@ export function ParentsFilters({ orgId, relationships }: ParentsFiltersProps) {
             label="Student Name"
             placeholder="Search by student name..."
             value={filters.student_name}
-            onChange={(e) => setFilters({ ...filters, student_name: e.target.value })}
+            onChange={(e) => setFilter("student_name", e.target.value)}
           />
         </div>
         {hasActiveFilters && (

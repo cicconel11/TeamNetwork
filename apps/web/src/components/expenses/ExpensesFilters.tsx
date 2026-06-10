@@ -1,8 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
 import { Button, Select } from "@/components/ui";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 
 interface FilterOption {
   value: string;
@@ -20,40 +19,12 @@ interface ExpensesFiltersProps {
   submitters: Submitter[];
 }
 
+const FILTER_KEYS = ["type", "user"] as const;
+
 export function ExpensesFilters({ expenseTypes, submitters }: ExpensesFiltersProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const [filters, setFilters] = useState({
-    type: searchParams.get("type") || "",
-    user: searchParams.get("user") || "",
+  const { filters, setFilter, clearFilters, hasActiveFilters } = useUrlFilters({
+    keys: FILTER_KEYS,
   });
-
-  const hasActiveFilters = Object.values(filters).some((v) => v !== "");
-
-  const updateURL = useCallback(() => {
-    const params = new URLSearchParams();
-    if (filters.type) params.set("type", filters.type);
-    if (filters.user) params.set("user", filters.user);
-
-    const queryString = params.toString();
-    router.push(queryString ? `${pathname}?${queryString}` : pathname);
-  }, [filters, pathname, router]);
-
-  useEffect(() => {
-    const debounce = setTimeout(() => {
-      updateURL();
-    }, 300);
-    return () => clearTimeout(debounce);
-  }, [filters, updateURL]);
-
-  const clearFilters = () => {
-    setFilters({
-      type: "",
-      user: "",
-    });
-  };
 
   const typeOptions: FilterOption[] = [
     { value: "", label: "All Types" },
@@ -73,7 +44,7 @@ export function ExpensesFilters({ expenseTypes, submitters }: ExpensesFiltersPro
             <Select
               label="Expense Type"
               value={filters.type}
-              onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+              onChange={(e) => setFilter("type", e.target.value)}
               options={typeOptions}
             />
           </div>
@@ -83,7 +54,7 @@ export function ExpensesFilters({ expenseTypes, submitters }: ExpensesFiltersPro
             <Select
               label="Submitted By"
               value={filters.user}
-              onChange={(e) => setFilters({ ...filters, user: e.target.value })}
+              onChange={(e) => setFilter("user", e.target.value)}
               options={userOptions}
             />
           </div>

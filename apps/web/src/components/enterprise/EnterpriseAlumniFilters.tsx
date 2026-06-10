@@ -1,8 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
 import { Button, Select } from "@/components/ui";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 
 interface FilterOption {
   value: string;
@@ -19,6 +18,18 @@ interface EnterpriseAlumniFiltersProps {
   positions: string[];
 }
 
+const FILTER_KEYS = [
+  "org",
+  "year",
+  "birthYear",
+  "industry",
+  "company",
+  "city",
+  "position",
+  "hasEmail",
+  "hasPhone",
+] as const;
+
 export function EnterpriseAlumniFilters({
   organizations,
   years,
@@ -28,60 +39,9 @@ export function EnterpriseAlumniFilters({
   cities,
   positions,
 }: EnterpriseAlumniFiltersProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const [filters, setFilters] = useState({
-    org: searchParams.get("org") || "",
-    year: searchParams.get("year") || "",
-    birthYear: searchParams.get("birthYear") || "",
-    industry: searchParams.get("industry") || "",
-    company: searchParams.get("company") || "",
-    city: searchParams.get("city") || "",
-    position: searchParams.get("position") || "",
-    hasEmail: searchParams.get("hasEmail") || "",
-    hasPhone: searchParams.get("hasPhone") || "",
+  const { filters, setFilter, clearFilters, hasActiveFilters } = useUrlFilters({
+    keys: FILTER_KEYS,
   });
-
-  const hasActiveFilters = Object.values(filters).some((v) => v !== "");
-
-  const updateURL = useCallback(() => {
-    const params = new URLSearchParams();
-    if (filters.org) params.set("org", filters.org);
-    if (filters.year) params.set("year", filters.year);
-    if (filters.birthYear) params.set("birthYear", filters.birthYear);
-    if (filters.industry) params.set("industry", filters.industry);
-    if (filters.company) params.set("company", filters.company);
-    if (filters.city) params.set("city", filters.city);
-    if (filters.position) params.set("position", filters.position);
-    if (filters.hasEmail) params.set("hasEmail", filters.hasEmail);
-    if (filters.hasPhone) params.set("hasPhone", filters.hasPhone);
-
-    const queryString = params.toString();
-    router.push(queryString ? `${pathname}?${queryString}` : pathname);
-  }, [filters, pathname, router]);
-
-  useEffect(() => {
-    const debounce = setTimeout(() => {
-      updateURL();
-    }, 300);
-    return () => clearTimeout(debounce);
-  }, [filters, updateURL]);
-
-  const clearFilters = () => {
-    setFilters({
-      org: "",
-      year: "",
-      birthYear: "",
-      industry: "",
-      company: "",
-      city: "",
-      position: "",
-      hasEmail: "",
-      hasPhone: "",
-    });
-  };
 
   const orgOptions: FilterOption[] = [
     { value: "", label: "All Organizations" },
@@ -123,7 +83,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="Organization"
             value={filters.org}
-            onChange={(e) => setFilters({ ...filters, org: e.target.value })}
+            onChange={(e) => setFilter("org", e.target.value)}
             options={orgOptions}
           />
         </div>
@@ -131,7 +91,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="Graduation Year"
             value={filters.year}
-            onChange={(e) => setFilters({ ...filters, year: e.target.value })}
+            onChange={(e) => setFilter("year", e.target.value)}
             options={yearOptions}
           />
         </div>
@@ -139,7 +99,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="Year of Birth"
             value={filters.birthYear}
-            onChange={(e) => setFilters({ ...filters, birthYear: e.target.value })}
+            onChange={(e) => setFilter("birthYear", e.target.value)}
             options={birthYearOptions}
           />
         </div>
@@ -147,7 +107,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="Industry"
             value={filters.industry}
-            onChange={(e) => setFilters({ ...filters, industry: e.target.value })}
+            onChange={(e) => setFilter("industry", e.target.value)}
             options={makeOptions(industries, "All Industries")}
           />
         </div>
@@ -155,7 +115,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="Company"
             value={filters.company}
-            onChange={(e) => setFilters({ ...filters, company: e.target.value })}
+            onChange={(e) => setFilter("company", e.target.value)}
             options={makeOptions(companies, "All Companies")}
           />
         </div>
@@ -167,7 +127,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="City"
             value={filters.city}
-            onChange={(e) => setFilters({ ...filters, city: e.target.value })}
+            onChange={(e) => setFilter("city", e.target.value)}
             options={makeOptions(cities, "All Cities")}
           />
         </div>
@@ -175,7 +135,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="Position"
             value={filters.position}
-            onChange={(e) => setFilters({ ...filters, position: e.target.value })}
+            onChange={(e) => setFilter("position", e.target.value)}
             options={makeOptions(positions, "All Positions")}
           />
         </div>
@@ -183,7 +143,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="Has Email"
             value={filters.hasEmail}
-            onChange={(e) => setFilters({ ...filters, hasEmail: e.target.value })}
+            onChange={(e) => setFilter("hasEmail", e.target.value)}
             options={boolOptions}
           />
         </div>
@@ -191,7 +151,7 @@ export function EnterpriseAlumniFilters({
           <Select
             label="Has Phone"
             value={filters.hasPhone}
-            onChange={(e) => setFilters({ ...filters, hasPhone: e.target.value })}
+            onChange={(e) => setFilter("hasPhone", e.target.value)}
             options={boolOptions}
           />
         </div>

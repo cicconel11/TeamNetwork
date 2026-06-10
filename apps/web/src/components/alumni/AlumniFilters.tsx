@@ -1,10 +1,9 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useEffect, useCallback, useRef } from "react";
 import { Button, Select } from "@/components/ui";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 
 interface FilterOption {
   value: string;
@@ -21,6 +20,8 @@ interface AlumniFiltersProps {
   positions: (string | null)[];
 }
 
+const FILTER_KEYS = ["year", "birthYear", "industry", "company", "city", "position"] as const;
+
 export function AlumniFilters({
   orgId,
   years,
@@ -30,43 +31,10 @@ export function AlumniFilters({
   cities,
   positions,
 }: AlumniFiltersProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const didMountRef = useRef(false);
-
-  const [filters, setFilters] = useState({
-    year: searchParams.get("year") || "",
-    birthYear: searchParams.get("birthYear") || "",
-    industry: searchParams.get("industry") || "",
-    company: searchParams.get("company") || "",
-    city: searchParams.get("city") || "",
-    position: searchParams.get("position") || "",
-  });
-
-  const hasActiveFilters = Object.values(filters).some((v) => v !== "");
-
-  const updateURL = useCallback(() => {
-    const params = new URLSearchParams();
-    if (filters.year) params.set("year", filters.year);
-    if (filters.birthYear) params.set("birthYear", filters.birthYear);
-    if (filters.industry) params.set("industry", filters.industry);
-    if (filters.company) params.set("company", filters.company);
-    if (filters.city) params.set("city", filters.city);
-    if (filters.position) params.set("position", filters.position);
-
-    const queryString = params.toString();
-    router.push(queryString ? `${pathname}?${queryString}` : pathname);
-  }, [filters, pathname, router]);
-
-  useEffect(() => {
-    const debounce = setTimeout(() => {
-      updateURL();
-      if (!didMountRef.current) {
-        didMountRef.current = true;
-        return;
-      }
-      const filterKeys = Object.entries(filters)
+  const { filters, setFilter, clearFilters, hasActiveFilters } = useUrlFilters({
+    keys: FILTER_KEYS,
+    onSync: (current) => {
+      const filterKeys = Object.entries(current)
         .filter(([, value]) => value)
         .map(([key]) => key);
       trackBehavioralEvent("directory_filter_apply", {
@@ -74,20 +42,8 @@ export function AlumniFilters({
         filter_keys: filterKeys,
         filters_count: filterKeys.length,
       }, orgId);
-    }, 300);
-    return () => clearTimeout(debounce);
-  }, [filters, orgId, updateURL]);
-
-  const clearFilters = () => {
-    setFilters({
-      year: "",
-      birthYear: "",
-      industry: "",
-      company: "",
-      city: "",
-      position: "",
-    });
-  };
+    },
+  });
 
   const sortStrings = (values: (string | null)[]) =>
     uniqueStringsCaseInsensitive(values).sort((a, b) =>
@@ -137,7 +93,7 @@ export function AlumniFilters({
           <Select
             label="Graduation Year"
             value={filters.year}
-            onChange={(e) => setFilters({ ...filters, year: e.target.value })}
+            onChange={(e) => setFilter("year", e.target.value)}
             options={yearOptions}
           />
         </div>
@@ -145,7 +101,7 @@ export function AlumniFilters({
           <Select
             label="Year of Birth"
             value={filters.birthYear}
-            onChange={(e) => setFilters({ ...filters, birthYear: e.target.value })}
+            onChange={(e) => setFilter("birthYear", e.target.value)}
             options={birthYearOptions}
           />
         </div>
@@ -153,7 +109,7 @@ export function AlumniFilters({
           <Select
             label="Industry"
             value={filters.industry}
-            onChange={(e) => setFilters({ ...filters, industry: e.target.value })}
+            onChange={(e) => setFilter("industry", e.target.value)}
             options={industryOptions}
           />
         </div>
@@ -161,7 +117,7 @@ export function AlumniFilters({
           <Select
             label="Company"
             value={filters.company}
-            onChange={(e) => setFilters({ ...filters, company: e.target.value })}
+            onChange={(e) => setFilter("company", e.target.value)}
             options={companyOptions}
           />
         </div>
@@ -169,7 +125,7 @@ export function AlumniFilters({
           <Select
             label="City"
             value={filters.city}
-            onChange={(e) => setFilters({ ...filters, city: e.target.value })}
+            onChange={(e) => setFilter("city", e.target.value)}
             options={cityOptions}
           />
         </div>
@@ -177,7 +133,7 @@ export function AlumniFilters({
           <Select
             label="Position"
             value={filters.position}
-            onChange={(e) => setFilters({ ...filters, position: e.target.value })}
+            onChange={(e) => setFilter("position", e.target.value)}
             options={positionOptions}
           />
         </div>
