@@ -2,12 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import type { Database, NotificationAudience, NotificationChannel, UserRole } from "@/types/database";
 import { buildNewReportEmail, type NewReportEmailContext } from "./notifications/templates/moderation/new-report";
+import { GLOBAL_FROM_EMAIL, resolveOrgSender } from "./notifications/sender";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
+const FROM_EMAIL = GLOBAL_FROM_EMAIL;
 
 export type DeliveryChannel = "email" | "sms";
 
@@ -64,6 +65,8 @@ export interface EmailParams {
   to: string;
   subject: string;
   body: string;
+  /** Custom sender (verified org domain). Falls back to the global FROM_EMAIL. */
+  from?: string;
 }
 
 export interface SMSParams {
@@ -116,9 +119,12 @@ async function runWithConcurrency<T extends { success: boolean; error?: string }
 }
 
 export async function sendEmail(params: EmailParams): Promise<NotificationResult> {
+  const from = params.from ?? FROM_EMAIL;
+
   if (!resend) {
     // Fallback to stub behavior when Resend is not configured (e.g., local development)
     console.info("[STUB] Sending email (RESEND_API_KEY not configured):", {
+      from,
       to: params.to,
       subject: params.subject,
       body: params.body.substring(0, 100) + "...",
@@ -129,13 +135,22 @@ export async function sendEmail(params: EmailParams): Promise<NotificationResult
 
   try {
     const response = await resend.emails.send({
-      from: FROM_EMAIL,
+      from,
       to: params.to,
       subject: params.subject,
       text: params.body,
     });
 
     if (response.error) {
+      // A custom org sender can go stale between verification polls (domain
+      // revoked, removed from Resend, etc.). The first send failed outright,
+      // so retrying once from the global sender can't double-deliver.
+      if (params.from && params.from !== FROM_EMAIL) {
+        console.warn(
+          `Resend rejected custom sender "${params.from}" (${response.error.message}); retrying from global sender`
+        );
+        return sendEmail({ ...params, from: undefined });
+      }
       console.error("Resend email error:", response.error);
       return { success: false, error: response.error.message };
     }
@@ -143,6 +158,10 @@ export async function sendEmail(params: EmailParams): Promise<NotificationResult
     return { success: true, messageId: response.data?.id };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+    if (params.from && params.from !== FROM_EMAIL) {
+      console.warn(`Resend exception with custom sender "${params.from}" (${errorMsg}); retrying from global sender`);
+      return sendEmail({ ...params, from: undefined });
+    }
     console.error("Resend email exception:", errorMsg);
     return { success: false, error: errorMsg };
   }
@@ -355,6 +374,9 @@ export async function sendNotificationBlast(input: NotificationBlastInput): Prom
 
   const emailFn = sendEmailFn || sendEmail;
 
+  // Resolve the org's sender once per blast, never per recipient.
+  const sender = await resolveOrgSender(supabase, organizationId);
+
   // Build tasks for concurrent execution
   type SendResult = { type: "email" | "sms"; success: boolean; error?: string };
   const tasks: (() => Promise<SendResult>)[] = [];
@@ -363,7 +385,7 @@ export async function sendNotificationBlast(input: NotificationBlastInput): Prom
     if (target.channels.includes("email") && target.email) {
       const email = target.email;
       tasks.push(async () => {
-        const result = await emailFn({ to: email, subject: title, body });
+        const result = await emailFn({ to: email, subject: title, body, from: sender.from });
         return { type: "email" as const, success: result.success, error: result.error ? `Email to ${email}: ${result.error}` : undefined };
       });
     }
@@ -444,6 +466,7 @@ export async function sendNewReportEmail(input: SendNewReportEmailInput): Promis
     if (recipients.length === 0) return;
 
     const reviewUrl = process.env.MODERATION_REVIEW_URL || null;
+    const sender = await resolveOrgSender(supabase, organizationId);
 
     const { subject, body } = buildNewReportEmail({
       orgName,
@@ -456,7 +479,7 @@ export async function sendNewReportEmail(input: SendNewReportEmailInput): Promis
     });
 
     await Promise.allSettled(
-      recipients.map((to) => sendEmail({ to, subject, body })),
+      recipients.map((to) => sendEmail({ to, subject, body, from: sender.from })),
     );
   } catch (err) {
     console.error("[sendNewReportEmail] best-effort failure", err);

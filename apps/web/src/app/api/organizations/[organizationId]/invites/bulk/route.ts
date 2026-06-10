@@ -8,6 +8,7 @@ import { validateJson, ValidationError, baseSchemas } from "@/lib/security/valid
 import { requireActiveOrgAdmin } from "@/lib/auth/require-active-admin";
 import { orgBulkInviteSchema } from "@/lib/schemas/invite";
 import { sendEmail } from "@/lib/notifications";
+import { resolveOrgSender } from "@/lib/notifications/sender";
 import { buildInviteLink } from "@/lib/invites/buildInviteLink";
 
 export const dynamic = "force-dynamic";
@@ -128,6 +129,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const orgName = orgRow?.name || "your organization";
 
+  // Resolve the org's sender (verified custom domain or global) once for the
+  // whole fan-out, never per recipient.
+  const sender = await resolveOrgSender(serviceSupabase, organizationId);
+
   // Fan out emails in batches of CONCURRENCY
   const emailTasks = uniqueEmails.map((email) => async (): Promise<EmailResult> => {
     try {
@@ -135,6 +140,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         to: email,
         subject: `You're invited to join ${orgName}`,
         body: `You've been invited to join ${orgName}.\n\nJoin using this link: ${inviteLink}\n\nOr use invite code: ${invite.code}`,
+        from: sender.from,
       });
       return result.success
         ? { email, status: "sent" }

@@ -49,7 +49,8 @@ type TableName =
   | "enterprise_subscriptions"
   | "enterprise_adoption_requests"
   | "user_enterprise_roles"
-  | "ai_messages";
+  | "ai_messages"
+  | "organization_email_domains";
 
 type Row = Record<string, unknown>;
 
@@ -114,6 +115,7 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   enterprise_adoption_requests: [],
   user_enterprise_roles: [["user_id", "enterprise_id"]],
   ai_messages: [],
+  organization_email_domains: ["organization_id", "domain"],
 };
 
 function nowIso() {
@@ -171,6 +173,7 @@ export function createSupabaseStub() {
     enterprise_adoption_requests: [],
     user_enterprise_roles: [],
     ai_messages: [],
+    organization_email_domains: [],
   };
 
   // RPC handler registry
