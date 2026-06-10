@@ -399,3 +399,51 @@ test("PUT first-time typed bio (no stored row) is manual", () => {
   assert.equal(p.bio_generated_at, null);
   assert.equal(p.bio_input_hash, null);
 });
+
+// ── U14: GET always returns a structured `suggested` object ─────────────────
+
+/** GET handler source, isolated so PUT internals can't satisfy GET asserts. */
+const getSource = routeSource.slice(
+  routeSource.indexOf("export async function GET"),
+  routeSource.indexOf("export async function PUT")
+);
+
+test("GET alumni suggestion read filters soft-deleted rows", () => {
+  assert.match(
+    getSource,
+    /from\("alumni"\)[\s\S]*?\.is\("deleted_at", null\)[\s\S]*?\.maybeSingle\(\)/,
+    "alumni read must include .is(\"deleted_at\", null) before maybeSingle"
+  );
+});
+
+test("GET no-alumni outcome is an empty structured suggested object, not null", () => {
+  // The fallback literal must exist (else-branch when no alumni row is found).
+  assert.match(
+    getSource,
+    /suggested = \{ bio: null, industries: \[\], role_families: \[\], positions: \[\] \}/,
+    "expected the empty-suggestion fallback literal"
+  );
+  // Both branches of the no-profile path assign `suggested`: alumni-sourced
+  // population AND the empty fallback. With if/else covering the !profile
+  // block, the response's suggested is never null when profile is null.
+  assert.match(
+    getSource,
+    /if \(alumniRow\) \{[\s\S]*?suggested = \{[\s\S]*?\} else \{[\s\S]*?suggested = \{ bio: null/,
+    "alumniRow if/else must assign suggested on both branches"
+  );
+  // Response construction returns the computed object — no literal
+  // `suggested: null` short-circuit in the JSON response.
+  assert.match(getSource, /NextResponse\.json\(\{ profile, suggested \}\)/);
+  assert.doesNotMatch(
+    getSource,
+    /NextResponse\.json\(\{[^}]*suggested:\s*null/,
+    "response must not hardcode suggested: null"
+  );
+});
+
+test("GET keeps alumni-sourced suggestion population when a row exists", () => {
+  assert.match(getSource, /alumniRow\.summary\?\.trim\(\) \|\| alumniRow\.headline\?\.trim\(\) \|\| null/);
+  assert.match(getSource, /industries: alumniRow\.industry \? \[alumniRow\.industry\] : \[\]/);
+  assert.match(getSource, /role_families: alumniRow\.job_title \? \[alumniRow\.job_title\] : \[\]/);
+  assert.match(getSource, /positions: alumniRow\.position_title \? \[alumniRow\.position_title\] : \[\]/);
+});

@@ -10,6 +10,8 @@ import { getPersonAdminContext } from "@/lib/people/permissions";
 import type { Organization, Alumni } from "@/types/database";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DeleteAlumniButton } from "@/components/alumni/DeleteAlumniButton";
+import { EnrichmentStatusBadge } from "@/components/alumni/EnrichmentStatusBadge";
+import { ClaimAlumniBanner } from "@/components/alumni/ClaimAlumniBanner";
 import { ReportBlockMenu } from "@/components/moderation/ReportBlockMenu";
 import { LinkedInProfileLink, formatPersonHeadline, EnrichmentSections } from "@/components/shared";
 
@@ -88,6 +90,29 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const canDelete = canEditPage && !ctx.isReadOnly;
   const isReadOnly = ctx.isReadOnly;
 
+  // U12: enrichment status surfacing. Validate the raw column value so an
+  // unexpected DB value degrades to "render nothing" instead of a bad pill.
+  const isAdmin = role === "admin";
+  const isSelf = Boolean(user?.id && alumUserId === user.id);
+  const enrichmentStatus =
+    alum.enrichment_status === "pending" ||
+    alum.enrichment_status === "enriched" ||
+    alum.enrichment_status === "failed"
+      ? alum.enrichment_status
+      : null;
+
+  // U15: claim banner visibility, computed server-side with the AUTHED
+  // user's email. Mirrors claim-flow's verification gate (email_confirmed_at
+  // must be set) — the claim_alumni_profiles RPC re-validates regardless.
+  const viewerVerifiedEmail =
+    user?.email && user.email_confirmed_at ? user.email.toLowerCase() : null;
+  const showClaimBanner = Boolean(
+    !alumUserId &&
+      viewerVerifiedEmail &&
+      typeof alum.email === "string" &&
+      alum.email.toLowerCase() === viewerVerifiedEmail
+  );
+
   // Extract enrichment data (may not exist if migration hasn't run)
   const rawWorkHistory = Array.isArray(alum.work_history) ? (alum.work_history as unknown[]) : [];
   const rawEducationHistory = Array.isArray(alum.education_history)
@@ -158,6 +183,20 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
           </div>
         }
       />
+
+      <ClaimAlumniBanner visible={showClaimBanner} />
+
+      {enrichmentStatus && (
+        <div className="mb-4">
+          <EnrichmentStatusBadge
+            orgId={orgId}
+            alumniId={alumniId}
+            status={enrichmentStatus}
+            hasLinkedinUrl={Boolean(alum.linkedin_url)}
+            canRetry={isAdmin || isSelf}
+          />
+        </div>
+      )}
 
       {isReadOnly && (
         <div className="mb-6 rounded-xl bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">

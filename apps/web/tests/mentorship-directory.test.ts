@@ -211,3 +211,18 @@ test("MentorProfileCard gates the AI-generated badge on bioSource and offers reg
   // 429 rate-limit handled specially
   assert.match(mentorProfileCardSource, /res\.status === 429/);
 });
+
+test("MentorProfileCard onboarding copy adapts to empty suggestions (U14)", () => {
+  // No profile row + empty suggested → LinkedIn-aware guidance copy.
+  assert.match(
+    mentorProfileCardSource,
+    /Tell mentees about yourself — or connect LinkedIn to pre-fill\./
+  );
+  // Users with suggestions keep the original onboarding copy.
+  assert.match(
+    mentorProfileCardSource,
+    /Share your background so mentees can find you\./
+  );
+  // Suggestion presence is derived from the payload, not assumed truthy.
+  assert.match(mentorProfileCardSource, /setHasSuggestions\(/);
+});

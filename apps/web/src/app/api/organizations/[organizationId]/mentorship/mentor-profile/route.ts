@@ -148,6 +148,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       .select("summary, headline, industry, job_title, position_title")
       .eq("organization_id", organizationId)
       .eq("user_id", targetUserId)
+      .is("deleted_at", null)
       .maybeSingle();
 
     if (alumniRow) {
@@ -158,6 +159,10 @@ export async function GET(req: Request, { params }: RouteParams) {
         role_families: alumniRow.job_title ? [alumniRow.job_title] : [],
         positions: alumniRow.position_title ? [alumniRow.position_title] : [],
       };
+    } else {
+      // No LinkedIn-enriched alumni row — return an empty-but-structured
+      // suggestion object so the client renders guided onboarding, not a blank.
+      suggested = { bio: null, industries: [], role_families: [], positions: [] };
     }
   }
 

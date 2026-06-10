@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, Button, Input, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { editAlumniSchema, type EditAlumniForm } from "@/lib/schemas/member";
+import { ENRICHMENT_PROVENANCE_FIELDS } from "@/lib/alumni/mutations";
 import type { Alumni } from "@/types/database";
 
 const READ_ONLY_ERROR =
@@ -16,9 +17,44 @@ interface EditAlumniFormProps {
   alumni: Alumni;
   orgSlug: string;
   isReadOnly: boolean;
+  /**
+   * D11: alumni column names filled by LinkedIn enrichment
+   * (alumni.enrichment_filled_fields). null/undefined = unknown — no chips.
+   */
+  enrichmentFilledFields?: string[] | null;
 }
 
-export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormProps) {
+/**
+ * Form field names match alumni column names 1:1 (the PATCH payload in
+ * buildAlumniWritePayload writes each form key to the same-named column),
+ * so the chip gate is a direct membership check against the provenance list,
+ * limited to columns enrichment actually fills.
+ */
+const ENRICHMENT_CHIP_FIELDS: ReadonlySet<string> = new Set(ENRICHMENT_PROVENANCE_FIELDS);
+
+function EnrichmentChip({
+  field,
+  filledFields,
+}: {
+  field: string;
+  filledFields: string[] | null | undefined;
+}) {
+  if (!filledFields || !ENRICHMENT_CHIP_FIELDS.has(field) || !filledFields.includes(field)) {
+    return null;
+  }
+  return (
+    <span className="inline-block w-fit rounded-full bg-[var(--muted)]/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+      Filled from LinkedIn — editing makes it yours
+    </span>
+  );
+}
+
+export function EditAlumniForm({
+  alumni,
+  orgSlug,
+  isReadOnly,
+  enrichmentFilledFields,
+}: EditAlumniFormProps) {
   const router = useRouter();
   const alumniId = alumni.id;
 
@@ -154,49 +190,67 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
               />
             </div>
 
-            <Input
-              label="Major"
-              placeholder="e.g., Finance, Computer Science"
-              error={errors.major?.message}
-              {...register("major")}
-            />
-
-            <Input
-              label="Current Position (Legacy)"
-              placeholder="e.g., Software Engineer at Google"
-              helperText="Optional - use Position Title and Company below for better filtering"
-              error={errors.job_title?.message}
-              {...register("job_title")}
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <EnrichmentChip field="major" filledFields={enrichmentFilledFields} />
               <Input
-                label="Position Title"
-                placeholder="e.g., Software Engineer"
-                error={errors.position_title?.message}
-                {...register("position_title")}
+                label="Major"
+                placeholder="e.g., Finance, Computer Science"
+                error={errors.major?.message}
+                {...register("major")}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <EnrichmentChip field="job_title" filledFields={enrichmentFilledFields} />
               <Input
-                label="Current Company"
-                placeholder="e.g., Google"
-                error={errors.current_company?.message}
-                {...register("current_company")}
+                label="Current Position (Legacy)"
+                placeholder="e.g., Software Engineer at Google"
+                helperText="Optional - use Position Title and Company below for better filtering"
+                error={errors.job_title?.message}
+                {...register("job_title")}
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label="Industry"
-                placeholder="e.g., Technology, Finance, Healthcare"
-                error={errors.industry?.message}
-                {...register("industry")}
-              />
-              <Input
-                label="Current City"
-                placeholder="e.g., San Francisco, CA"
-                error={errors.current_city?.message}
-                {...register("current_city")}
-              />
+              <div className="space-y-1.5">
+                <EnrichmentChip field="position_title" filledFields={enrichmentFilledFields} />
+                <Input
+                  label="Position Title"
+                  placeholder="e.g., Software Engineer"
+                  error={errors.position_title?.message}
+                  {...register("position_title")}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <EnrichmentChip field="current_company" filledFields={enrichmentFilledFields} />
+                <Input
+                  label="Current Company"
+                  placeholder="e.g., Google"
+                  error={errors.current_company?.message}
+                  {...register("current_company")}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <EnrichmentChip field="industry" filledFields={enrichmentFilledFields} />
+                <Input
+                  label="Industry"
+                  placeholder="e.g., Technology, Finance, Healthcare"
+                  error={errors.industry?.message}
+                  {...register("industry")}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <EnrichmentChip field="current_city" filledFields={enrichmentFilledFields} />
+                <Input
+                  label="Current City"
+                  placeholder="e.g., San Francisco, CA"
+                  error={errors.current_city?.message}
+                  {...register("current_city")}
+                />
+              </div>
             </div>
 
             <Input
@@ -207,14 +261,17 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
               {...register("phone_number")}
             />
 
-            <Input
-              label="Photo URL"
-              type="url"
-              placeholder="https://example.com/photo.jpg"
-              helperText="Direct link to alumni photo"
-              error={errors.photo_url?.message}
-              {...register("photo_url")}
-            />
+            <div className="space-y-1.5">
+              <EnrichmentChip field="photo_url" filledFields={enrichmentFilledFields} />
+              <Input
+                label="Photo URL"
+                type="url"
+                placeholder="https://example.com/photo.jpg"
+                helperText="Direct link to alumni photo"
+                error={errors.photo_url?.message}
+                {...register("photo_url")}
+              />
+            </div>
 
             <Input
               label="LinkedIn profile URL (optional)"
