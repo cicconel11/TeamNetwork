@@ -154,6 +154,7 @@ export function NavItemLink({
       <Link
         data-testid={`nav-item-${navItemSlug}`}
         data-active={isActive ? "true" : "false"}
+        aria-current={isActive ? "page" : undefined}
         href={href}
         title={isCollapsed ? item.label : undefined}
         aria-label={isCollapsed ? item.label : undefined}

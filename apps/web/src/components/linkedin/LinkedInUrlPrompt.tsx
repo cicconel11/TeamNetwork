@@ -148,7 +148,7 @@ export function LinkedInUrlPrompt() {
       <Card className="w-full max-w-md p-6 space-y-4" role="dialog" aria-modal="true">
         <div className="flex items-center gap-3">
           <svg
-            className="h-8 w-8 text-[#0A66C2] shrink-0"
+            className="h-8 w-8 text-linkedin shrink-0"
             viewBox="0 0 24 24"
             fill="currentColor"
             aria-hidden="true"

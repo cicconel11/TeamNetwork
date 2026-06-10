@@ -22,10 +22,26 @@ import { pickCurrentOrgProfile } from "@/lib/auth/current-org-profile";
 import { AIEdgeTab, AIPanel, OrgGlobalSearch } from "@/components/layout/OrgClientShell";
 import { computeOrgThemeVariables, safeCssValue, safeHexColor } from "@/lib/theming/org-colors";
 import type { OrgRole } from "@/lib/auth/role-utils";
+import type { Metadata } from "next";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
   params: Promise<{ orgSlug: string }>;
+}
+
+export async function generateMetadata({ params }: Pick<OrgLayoutProps, "params">): Promise<Metadata> {
+  const { orgSlug } = await params;
+  // getOrgContext is request-cached, so the layout's own call reuses this lookup
+  const { organization } = await getOrgContext(orgSlug);
+  if (!organization) return {};
+
+  return {
+    title: {
+      template: `%s | ${organization.name}`,
+      default: organization.name,
+    },
+    robots: { index: false, follow: false },
+  };
 }
 
 type ProfileRecord = {

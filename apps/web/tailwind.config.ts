@@ -36,6 +36,10 @@ const config: Config = {
           green: "rgb(var(--landing-green-rgb) / <alpha-value>)",
           "green-dark": "rgb(var(--landing-green-dark-rgb) / <alpha-value>)",
         },
+        linkedin: {
+          DEFAULT: "#0A66C2",
+          dark: "#004182",
+        },
         success: "var(--success)",
         warning: "var(--warning)",
         error: "var(--error)",

@@ -66,6 +66,8 @@ export function Avatar({ src, alt, name, size = "md", className = "", ...props }
 
   return (
     <div
+      role="img"
+      aria-label={alt || name || "Avatar"}
       className={`${sizes[size]} rounded-full bg-org-primary text-org-primary-foreground flex items-center justify-center font-medium flex-shrink-0 ${className}`}
       {...props}
     >
