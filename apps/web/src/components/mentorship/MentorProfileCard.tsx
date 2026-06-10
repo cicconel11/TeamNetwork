@@ -68,6 +68,8 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
   const [hasRow, setHasRow] = useState(false);
   const [form, setForm] = useState<Profile>(EMPTY);
   const [meetingMinutes, setMeetingMinutes] = useState<number>(DEFAULT_MEETING_MINUTES);
+  const [bioSource, setBioSource] = useState<"manual" | "ai_generated" | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   const hydrate = useCallback((p: Profile) => {
     setForm(p);
@@ -87,7 +89,11 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as {
           profile:
-            | (Partial<Profile> & { id?: string; years_of_experience?: number | null })
+            | (Partial<Profile> & {
+                id?: string;
+                years_of_experience?: number | null;
+                bio_source?: "manual" | "ai_generated" | null;
+              })
             | null;
           suggested?: {
             bio?: string | null;
@@ -99,6 +105,7 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
         if (cancelled) return;
         if (json.profile) {
           setHasRow(true);
+          setBioSource(json.profile.bio_source ?? null);
           hydrate({
             bio: json.profile.bio ?? "",
             expertise_areas: json.profile.expertise_areas ?? [],
@@ -114,6 +121,7 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
             years_of_experience: json.profile.years_of_experience ?? null,
           });
         } else if (json.suggested) {
+          setBioSource(null);
           hydrate({
             ...EMPTY,
             bio: json.suggested.bio ?? "",
@@ -162,8 +170,12 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
         throw new Error(json.error ?? `HTTP ${res.status}`);
       }
       const json = (await res.json()) as {
-        profile: Partial<Profile> & { years_of_experience?: number | null };
+        profile: Partial<Profile> & {
+          years_of_experience?: number | null;
+          bio_source?: "manual" | "ai_generated" | null;
+        };
       };
+      setBioSource(json.profile.bio_source ?? null);
       hydrate({
         bio: json.profile.bio ?? "",
         expertise_areas: json.profile.expertise_areas ?? [],
@@ -185,6 +197,36 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
       toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const regenerateBio = async () => {
+    setRegenerating(true);
+    try {
+      const res = await fetch(
+        `/api/organizations/${orgId}/mentorship/mentor-profile/generate-bio`,
+        { method: "POST" }
+      );
+      if (res.status === 429) {
+        toast.error("Too many regenerations, try later");
+        return;
+      }
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+      const json = (await res.json()) as {
+        bio: string;
+        model: string;
+        bio_source: "ai_generated";
+      };
+      setForm((p) => ({ ...p, bio: json.bio }));
+      setBioSource(json.bio_source);
+      toast.success("Bio regenerated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not regenerate bio");
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -223,13 +265,36 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
       {expanded && (
         <div className="space-y-5 pt-3 border-t border-[var(--border)]">
           <Field label="Bio" hint="A few sentences about who you are and how you can help.">
-            <Textarea
-              value={form.bio}
-              onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))}
-              placeholder="Short intro — your background, what you can help with."
-              rows={3}
-              maxLength={2000}
-            />
+            <div className="space-y-2">
+              {bioSource === "ai_generated" && form.bio.trim().length > 0 && (
+                <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-[var(--muted)]/40 text-[var(--muted-foreground)]">
+                  AI-generated
+                </span>
+              )}
+              <Textarea
+                value={form.bio}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setForm((p) => ({ ...p, bio: value }));
+                  // Typed text becomes 'manual' server-side; clear the badge for
+                  // immediate feedback. Server's bio_source is trusted after save.
+                  if (bioSource !== null) setBioSource(null);
+                }}
+                placeholder="Short intro — your background, what you can help with."
+                rows={3}
+                maxLength={2000}
+              />
+              <div className="flex justify-end">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={regenerateBio}
+                  disabled={regenerating || saving}
+                >
+                  {regenerating ? "Regenerating…" : "Regenerate with AI"}
+                </Button>
+              </div>
+            </div>
           </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

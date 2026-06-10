@@ -18,6 +18,7 @@ type MentorProfileRow = Database["public"]["Tables"]["mentor_profiles"]["Row"] &
   years_of_experience?: number | null;
   sports?: string[] | null;
   positions?: string[] | null;
+  bio_source?: "manual" | "ai_generated" | null;
 };
 
 type MentorshipPairRow = Database["public"]["Tables"]["mentorship_pairs"]["Row"] & {
@@ -123,6 +124,7 @@ export type MentorshipTabData =
           sports: string[] | null;
           positions: string[] | null;
           bio: string | null;
+          bio_source: "manual" | "ai_generated" | null;
           contact_email: string | null;
           contact_linkedin: string | null;
           contact_phone: string | null;
@@ -498,6 +500,7 @@ export async function loadMentorshipTabView({
         sports: profile.sports ?? null,
         positions: profile.positions ?? null,
         bio: profile.bio ?? null,
+        bio_source: profile.bio_source ?? null,
         contact_email: profile.contact_email ?? null,
         contact_linkedin: profile.contact_linkedin ?? null,
         contact_phone: profile.contact_phone ?? null,

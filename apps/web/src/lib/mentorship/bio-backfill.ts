@@ -4,9 +4,11 @@ import {
   computeBioInputHash,
   generateMentorBio,
   type BioGenerationInput,
+  type BioGenerationResult,
 } from "@/lib/mentorship/bio-generator";
 import { resolveMentorshipConfig, type CustomAttributeDef } from "@/lib/mentorship/matching-weights";
 import { canonicalizeIndustry, canonicalizeRoleFamily } from "@/lib/falkordb/career-signals";
+import { resolveEnrichedProfiles } from "@/lib/profile/enriched-fields";
 
 export interface MentorBioBackfillCandidate {
   mentorProfileId: string | null;
@@ -44,16 +46,17 @@ interface MentorProfileRow {
   bio_generated_at: string | null;
   bio_input_hash: string | null;
   custom_attributes: Record<string, unknown> | null;
+  expertise_areas: string[] | null;
+  topics: string[] | null;
+  sports: string[] | null;
+  positions: string[] | null;
 }
 
-interface AlumniRow {
+/** LinkedIn free-text only. Enriched structured fields come from
+ * {@link resolveEnrichedProfiles} so members-first precedence is honored. */
+interface AlumniTextRow {
   headline: string | null;
   summary: string | null;
-  job_title: string | null;
-  position_title: string | null;
-  current_company: string | null;
-  industry: string | null;
-  graduation_year: number | null;
 }
 
 const MAX_ERROR_LENGTH = 500;
@@ -65,7 +68,10 @@ type QueryClient = SupabaseClient<Database> & {
       maybeSingle?: () => Promise<{ data: Record<string, unknown> | null; error?: { message: string } | null }>;
     };
     update?: (values: Record<string, unknown>) => {
-      eq: (column: string, value: string) => {
+      eq: (
+        column: string,
+        value: string
+      ) => Promise<{ data?: unknown; error: { message: string } | null }> & {
         or: (filters: string) => Promise<{ data?: unknown; error: { message: string } | null }>;
       };
     };
@@ -134,41 +140,53 @@ export async function loadMentorBioContext(
   const queryMaybeSingle = (
     table: string,
     columns: string,
-    filters: Array<[string, string]>
+    filters: Array<[string, string]>,
+    isNullColumns: string[] = []
   ) => {
     let query = client.from(table).select(columns) as unknown as {
       eq: (column: string, value: string) => typeof query;
+      is: (column: string, value: null) => typeof query;
       maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error?: { message: string } | null }>;
     };
 
     for (const [column, value] of filters) {
       query = query.eq(column, value);
     }
+    for (const column of isNullColumns) {
+      query = query.is(column, null);
+    }
 
     return query.maybeSingle();
   };
 
-  const [alumniResult, orgResult, userResult, mentorProfileResult] = await Promise.all([
-    queryMaybeSingle(
-      "alumni",
-      "headline, summary, job_title, position_title, current_company, industry, graduation_year",
-      [["user_id", userId], ["organization_id", organizationId]]
-    ),
-    queryMaybeSingle("organizations", "settings, name", [["id", organizationId]]),
-    queryMaybeSingle(
-      "user_organization_roles",
-      "user_id, users(name)",
-      [["user_id", userId], ["organization_id", organizationId]]
-    ),
-    queryMaybeSingle(
-      "mentor_profiles",
-      "id, organization_id, user_id, bio, bio_source, bio_generated_at, bio_input_hash, custom_attributes",
-      [["user_id", userId], ["organization_id", organizationId]]
-    ),
-  ]);
+  // Enriched structured fields (company/industry/job_title/grad year) follow
+  // members-first precedence and soft-delete filtering via resolveEnrichedProfiles.
+  // alumni is read ONLY for LinkedIn free text, filtered to non-deleted rows.
+  const [alumniTextResult, orgResult, userResult, mentorProfileResult, enrichedByUser] =
+    await Promise.all([
+      queryMaybeSingle(
+        "alumni",
+        "headline, summary",
+        [["user_id", userId], ["organization_id", organizationId]],
+        ["deleted_at"]
+      ),
+      queryMaybeSingle("organizations", "settings, name", [["id", organizationId]]),
+      queryMaybeSingle(
+        "user_organization_roles",
+        "user_id, users(name)",
+        [["user_id", userId], ["organization_id", organizationId]]
+      ),
+      queryMaybeSingle(
+        "mentor_profiles",
+        "id, organization_id, user_id, bio, bio_source, bio_generated_at, bio_input_hash, custom_attributes, expertise_areas, topics, sports, positions",
+        [["user_id", userId], ["organization_id", organizationId]]
+      ),
+      resolveEnrichedProfiles(supabase, organizationId, [userId]),
+    ]);
   const mentorProfile = mentorProfileResult.data as MentorProfileRow | null;
 
-  const alumni = alumniResult.data as AlumniRow | null;
+  const alumniText = alumniTextResult.data as AlumniTextRow | null;
+  const enriched = enrichedByUser.get(userId) ?? null;
   const orgRow = orgResult.data as { settings?: unknown; name?: string | null } | null;
   const userName = (
     userResult.data as { users?: { name?: string | null } | Array<{ name?: string | null }> | null } | null
@@ -184,10 +202,13 @@ export async function loadMentorBioContext(
     mentorProfile?.custom_attributes
   );
 
-  const rawJobTitle = alumni?.job_title ?? alumni?.position_title ?? null;
-  const rawCompany = alumni?.current_company ?? null;
-  const industry = canonicalizeIndustry(alumni?.industry ?? null);
+  const rawJobTitle = enriched?.job_title ?? enriched?.position_title ?? null;
+  const rawCompany = enriched?.current_company ?? null;
+  const industry = canonicalizeIndustry(enriched?.industry ?? null);
   const roleFamily = canonicalizeRoleFamily(rawJobTitle, rawCompany, industry);
+
+  const nonEmptyArray = (value: string[] | null | undefined): string[] | null =>
+    value && value.length > 0 ? value : null;
 
   const input: BioGenerationInput = {
     name: resolvedUserName,
@@ -195,10 +216,14 @@ export async function loadMentorBioContext(
     currentCompany: rawCompany,
     industry,
     roleFamily,
-    graduationYear: alumni?.graduation_year ?? null,
-    linkedinSummary: alumni?.summary ?? null,
-    linkedinHeadline: alumni?.headline ?? null,
+    graduationYear: enriched?.graduation_year ?? null,
+    linkedinSummary: alumniText?.summary ?? null,
+    linkedinHeadline: alumniText?.headline ?? null,
     customAttributes,
+    chosenExpertiseAreas: nonEmptyArray(mentorProfile?.expertise_areas),
+    chosenTopics: nonEmptyArray(mentorProfile?.topics),
+    chosenSports: nonEmptyArray(mentorProfile?.sports),
+    chosenPositions: nonEmptyArray(mentorProfile?.positions),
     orgName: orgRow?.name ?? "",
     orgId: organizationId,
   };
@@ -236,28 +261,98 @@ async function persistGeneratedMentorBio(
   supabase: SupabaseClient<Database>,
   context: LoadedMentorBioContext,
   bio: string,
-  inputHash: string
+  inputHash: string,
+  allowManualOverwrite = false
 ) {
   if (!context.mentorProfileId) {
     throw new Error("Cannot persist a generated bio without a mentor profile id");
   }
 
   const client = supabase as unknown as QueryClient;
-  const { error } =
-    await client
-      .from("mentor_profiles")
-      .update?.({
-        bio,
-        bio_source: "ai_generated",
-        bio_generated_at: new Date().toISOString(),
-        bio_input_hash: inputHash,
-      })
-      .eq("id", context.mentorProfileId)
-      .or("bio_source.is.null,bio_source.neq.manual");
+  const updateChain = client
+    .from("mentor_profiles")
+    .update?.({
+      bio,
+      bio_source: "ai_generated",
+      bio_generated_at: new Date().toISOString(),
+      bio_input_hash: inputHash,
+    })
+    .eq("id", context.mentorProfileId);
+
+  if (!updateChain) {
+    throw new Error("Failed to persist generated mentor bio: update unavailable");
+  }
+
+  // Background backfill never clobbers a manual bio; explicit regeneration may.
+  // When overwrite is allowed we await the `.eq("id", …)` filter directly,
+  // dropping the manual-source guard.
+  const { error } = allowManualOverwrite
+    ? await updateChain
+    : await updateChain.or("bio_source.is.null,bio_source.neq.manual");
 
   if (error) {
     throw new Error(`Failed to persist generated mentor bio: ${error.message}`);
   }
+}
+
+export interface RegenerateMentorBioResult {
+  bio: string;
+  model: string;
+  bioSource: "ai_generated";
+  topics: string[];
+  expertiseAreas: string[];
+  inputHash: string;
+  inputTokens: number;
+  outputTokens: number;
+  latencyMs: number;
+}
+
+/**
+ * Explicit, user-triggered bio regeneration for a single mentor.
+ *
+ * Loads the latest profile context, generates a fresh bio, and persists it.
+ * Returns `null` when the user has no mentor_profiles row (the caller should
+ * surface 404/409) — we never create a profile here. When
+ * `allowManualOverwrite` is true the persist drops the manual-source guard, so
+ * a manually written bio is replaced. If grounding rejects the generated bio,
+ * the template is persisted with model `"template_grounding_rejected"` and that
+ * model is returned to the caller.
+ */
+export async function regenerateMentorBio(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  userId: string,
+  opts: { allowManualOverwrite: boolean; spendBypass?: boolean }
+): Promise<RegenerateMentorBioResult | null> {
+  const context = await loadMentorBioContext(supabase, organizationId, userId);
+  if (!context || !context.mentorProfileId) {
+    return null;
+  }
+
+  const result: BioGenerationResult = await generateMentorBio({
+    ...context.input,
+    spendBypass: opts.spendBypass,
+  });
+
+  await persistGeneratedMentorBio(
+    supabase,
+    context,
+    result.bio,
+    result.inputHash,
+    opts.allowManualOverwrite
+  );
+
+  return {
+    bio: result.bio,
+    model: result.model,
+    bioSource: "ai_generated",
+    topics: result.topics,
+    expertiseAreas: result.expertiseAreas,
+    inputHash: result.inputHash,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    latencyMs: result.latencyMs,
+  };
 }
 
 export async function processMentorBioBackfillQueue(
