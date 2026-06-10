@@ -65,6 +65,53 @@ export function canMutateAlumni(params: {
   };
 }
 
+/**
+ * Alumni columns that are BOTH written by the LinkedIn enrichment RPCs
+ * (see migration 20261219000000_alumni_enrichment_provenance.sql) AND
+ * editable through the alumni edit form's PATCH payload. Only these can
+ * gain a "Filled from LinkedIn" chip or be stripped from provenance by a
+ * human edit.
+ */
+export const ENRICHMENT_PROVENANCE_FIELDS = [
+  "job_title",
+  "position_title",
+  "current_company",
+  "current_city",
+  "major",
+  "industry",
+  "photo_url",
+] as const;
+
+function normalizeForProvenanceCompare(value: unknown): unknown {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+  }
+  return value ?? null;
+}
+
+/**
+ * D11 consumer-side strip: given the pre-update alumni row, the PATCH write
+ * payload, and the row's enrichment_filled_fields, return the provenance keys
+ * the edit actually CHANGED (trim-compared for strings). Identical round-trip
+ * values strip nothing; a null/empty provenance list is a no-op.
+ */
+export function computeProvenanceStrip(
+  existingRow: Record<string, unknown>,
+  patchPayload: Record<string, unknown>,
+  filledFields: string[] | null | undefined,
+): string[] {
+  if (!filledFields || filledFields.length === 0) return [];
+  return ENRICHMENT_PROVENANCE_FIELDS.filter((field) => {
+    if (!filledFields.includes(field)) return false;
+    if (!(field in patchPayload)) return false;
+    return (
+      normalizeForProvenanceCompare(patchPayload[field]) !==
+      normalizeForProvenanceCompare(existingRow[field])
+    );
+  });
+}
+
 export function buildAlumniWritePayload(data: AlumniWriteInput) {
   return {
     first_name: data.first_name,

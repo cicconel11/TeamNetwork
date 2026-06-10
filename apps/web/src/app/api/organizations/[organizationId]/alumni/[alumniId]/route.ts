@@ -5,7 +5,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas, validateJson, ValidationError } from "@/lib/security/validation";
 import { editAlumniSchema, type EditAlumniForm } from "@/lib/schemas/member";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
-import { buildAlumniWritePayload, canMutateAlumni } from "@/lib/alumni/mutations";
+import {
+  buildAlumniWritePayload,
+  canMutateAlumni,
+  computeProvenanceStrip,
+} from "@/lib/alumni/mutations";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +17,24 @@ export const runtime = "nodejs";
 
 interface RouteParams {
   params: Promise<{ organizationId: string; alumniId: string }>;
+}
+
+/**
+ * Pre-update alumni snapshot used for access checks and the D11 provenance
+ * strip. `enrichment_filled_fields` is not in the generated DB types yet
+ * (migration lands in this branch), hence the structural type + cast below.
+ */
+interface AlumniAccessRow {
+  id: string;
+  user_id: string | null;
+  job_title: string | null;
+  position_title: string | null;
+  current_company: string | null;
+  current_city: string | null;
+  major: string | null;
+  industry: string | null;
+  photo_url: string | null;
+  enrichment_filled_fields?: string[] | null;
 }
 
 async function resolveAlumniAccess(params: { organizationId: string; alumniId: string; userId: string }) {
@@ -27,7 +49,9 @@ async function resolveAlumniAccess(params: { organizationId: string; alumniId: s
       .maybeSingle(),
     serviceSupabase
       .from("alumni")
-      .select("id, user_id")
+      .select(
+        "id, user_id, job_title, position_title, current_company, current_city, major, industry, photo_url, enrichment_filled_fields",
+      )
       .eq("id", params.alumniId)
       .eq("organization_id", params.organizationId)
       .is("deleted_at", null)
@@ -42,10 +66,13 @@ async function resolveAlumniAccess(params: { organizationId: string; alumniId: s
     throw new Error("Unable to load alumni record");
   }
 
+  const alumniRow = (alumni ?? null) as AlumniAccessRow | null;
+
   return {
     isAdmin: roleData?.role === "admin",
-    isSelf: Boolean(alumni?.user_id && alumni.user_id === params.userId),
-    alumniExists: Boolean(alumni?.id),
+    isSelf: Boolean(alumniRow?.user_id && alumniRow.user_id === params.userId),
+    alumniExists: Boolean(alumniRow?.id),
+    alumni: alumniRow,
   };
 }
 
@@ -106,10 +133,12 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  const writePayload = buildAlumniWritePayload(body);
+
   const { error: updateError } = await supabase
     .from("alumni")
     .update({
-      ...buildAlumniWritePayload(body),
+      ...writePayload,
       updated_at: new Date().toISOString(),
     })
     .eq("id", alumniId)
@@ -121,6 +150,37 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 
   const svc = createServiceClient();
+
+  // D11: a human edit takes ownership — strip the edited keys from the row's
+  // enrichment provenance. Best-effort: a strip failure must never fail the
+  // field update itself.
+  const preUpdateRow = access.alumni;
+  const filledFields = preUpdateRow?.enrichment_filled_fields ?? null;
+  if (preUpdateRow && filledFields && filledFields.length > 0) {
+    const strippedKeys = computeProvenanceStrip(
+      preUpdateRow as unknown as Record<string, unknown>,
+      writePayload,
+      filledFields,
+    );
+    if (strippedKeys.length > 0) {
+      const nextFilledFields = filledFields.filter((field) => !strippedKeys.includes(field));
+      const { error: stripError } = await svc
+        .from("alumni")
+        .update({ enrichment_filled_fields: nextFilledFields } as Record<string, unknown> as never)
+        .eq("id", alumniId)
+        .eq("organization_id", organizationId)
+        .is("deleted_at", null);
+      if (stripError) {
+        console.error("[alumni PATCH] Provenance strip failed (field update succeeded):", {
+          alumniId,
+          organizationId,
+          strippedKeys,
+          error: stripError,
+        });
+      }
+    }
+  }
+
   const { data: orgEnterprise } = await svc
     .from("organizations")
     .select("enterprise_id")

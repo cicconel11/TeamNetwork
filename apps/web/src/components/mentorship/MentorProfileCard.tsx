@@ -70,6 +70,7 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
   const [meetingMinutes, setMeetingMinutes] = useState<number>(DEFAULT_MEETING_MINUTES);
   const [bioSource, setBioSource] = useState<"manual" | "ai_generated" | null>(null);
   const [regenerating, setRegenerating] = useState(false);
+  const [hasSuggestions, setHasSuggestions] = useState(false);
 
   const hydrate = useCallback((p: Profile) => {
     setForm(p);
@@ -121,13 +122,20 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
             years_of_experience: json.profile.years_of_experience ?? null,
           });
         } else if (json.suggested) {
+          const s = json.suggested;
           setBioSource(null);
+          setHasSuggestions(
+            Boolean(s.bio?.trim()) ||
+              (s.industries?.length ?? 0) > 0 ||
+              (s.role_families?.length ?? 0) > 0 ||
+              (s.positions?.length ?? 0) > 0
+          );
           hydrate({
             ...EMPTY,
-            bio: json.suggested.bio ?? "",
-            industries: json.suggested.industries ?? [],
-            role_families: json.suggested.role_families ?? [],
-            positions: json.suggested.positions ?? [],
+            bio: s.bio ?? "",
+            industries: s.industries ?? [],
+            role_families: s.role_families ?? [],
+            positions: s.positions ?? [],
           });
         }
       } catch {
@@ -254,7 +262,9 @@ export function MentorProfileCard({ orgId }: MentorProfileCardProps) {
           <p className="text-sm text-[var(--muted-foreground)] mt-1">
             {hasRow
               ? "Keep your profile up to date to attract the right mentees."
-              : "Share your background so mentees can find you."}
+              : hasSuggestions
+                ? "Share your background so mentees can find you."
+                : "Tell mentees about yourself — or connect LinkedIn to pre-fill."}
           </p>
         </div>
         <Button size="sm" onClick={() => setExpanded((v) => !v)}>

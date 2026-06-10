@@ -9,3 +9,5 @@ export { ImportPasteArea } from "./ImportPasteArea";
 export { ImportPreviewSummary } from "./ImportPreviewSummary";
 export { ImportResultBanner } from "./ImportResultBanner";
 export { EditAlumniForm } from "./EditAlumniForm";
+export { EnrichmentStatusBadge } from "./EnrichmentStatusBadge";
+export { ClaimAlumniBanner } from "./ClaimAlumniBanner";

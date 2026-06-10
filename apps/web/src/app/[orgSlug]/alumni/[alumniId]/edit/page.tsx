@@ -5,6 +5,7 @@ import { getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { checkOrgReadOnly } from "@/lib/subscription/read-only-guard";
 import { EditAlumniForm } from "@/components/alumni/EditAlumniForm";
+import { EnrichmentStatusBadge } from "@/components/alumni/EnrichmentStatusBadge";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Organization, Alumni } from "@/types/database";
 
@@ -49,7 +50,9 @@ export default async function EditAlumniPage({ params }: EditAlumniPageProps) {
     return notFound();
   }
 
-  const alum = alumData as Alumni;
+  // select("*") already returns enrichment_filled_fields at runtime; the
+  // generated types don't include the new column yet, hence the cast.
+  const alum = alumData as Alumni & { enrichment_filled_fields?: string[] | null };
   const navConfig = org.nav_config as NavConfig | null;
   const canEditPage = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
   const alumUserId = alum.user_id || null;
@@ -60,11 +63,28 @@ export default async function EditAlumniPage({ params }: EditAlumniPageProps) {
     return notFound();
   }
 
+  const enrichmentStatus =
+    alum.enrichment_status === "pending" ||
+    alum.enrichment_status === "enriched" ||
+    alum.enrichment_status === "failed"
+      ? alum.enrichment_status
+      : null;
+
   return (
-    <EditAlumniForm
-      alumni={alum}
-      orgSlug={orgSlug}
-      isReadOnly={isReadOnly}
-    />
+    <div className="space-y-3">
+      <EnrichmentStatusBadge
+        orgId={orgId}
+        alumniId={alumniId}
+        status={enrichmentStatus}
+        hasLinkedinUrl={Boolean(alum.linkedin_url)}
+        canRetry={canEdit}
+      />
+      <EditAlumniForm
+        alumni={alum}
+        orgSlug={orgSlug}
+        isReadOnly={isReadOnly}
+        enrichmentFilledFields={alum.enrichment_filled_fields ?? null}
+      />
+    </div>
   );
 }
