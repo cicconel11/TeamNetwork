@@ -3,6 +3,45 @@ import assert from "node:assert/strict";
 import fc from "fast-check";
 import { parseCurrencyClaim } from "../src/lib/ai/grounding/primitives.ts";
 import { verifyToolBackedResponse } from "../src/lib/ai/grounding/tool/verifier.ts";
+import { extractMentorReasonCodes } from "../src/lib/ai/grounding/tool/claim-extraction.ts";
+import {
+  formatMatchExplanation,
+  REASON_CODE_LABEL_PATTERNS,
+} from "../src/lib/mentorship/presentation.ts";
+
+function makeSuggestMentorsToolResult(suggestions: Array<{
+  name: string;
+  reasons: Array<{ code: string }>;
+}>) {
+  return {
+    name: "suggest_mentors" as const,
+    data: {
+      state: "resolved",
+      mentee: { name: "Sam Student" },
+      suggestions: suggestions.map((s) => ({
+        mentor: { name: s.name },
+        reasons: s.reasons.map((r) => ({ code: r.code, label: r.code, weight: 1 })),
+      })),
+    },
+  };
+}
+
+function makeSuggestMenteesToolResult(suggestions: Array<{
+  name: string;
+  reasons: Array<{ code: string }>;
+}>) {
+  return {
+    name: "suggest_mentees" as const,
+    data: {
+      state: "resolved",
+      mentor: { name: "Mary Mentor" },
+      suggestions: suggestions.map((s) => ({
+        mentee: { name: s.name },
+        reasons: s.reasons.map((r) => ({ code: r.code, label: r.code, weight: 1 })),
+      })),
+    },
+  };
+}
 
 const FRESH_FRESHNESS = { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" } as const;
 
@@ -942,4 +981,114 @@ test("verifyToolBackedResponse flags donor leak when hide_donor_names is enabled
 
   assert.equal(result.grounded, false);
   assert.ok(result.failures.some((f) => /jane doe.*leaked/i.test(f)));
+});
+
+/* ── U7: mentorship reason-code label⇄code drift + verifier coverage ───────── */
+
+test("every reason code's rendered explanation round-trips to exactly that code", () => {
+  // Table-driven drift guard: for every engine code, extracting reason codes
+  // from its own rendered explanation must yield exactly [code]. This is what
+  // keeps formatMatchExplanation/REASON_LABELS and the verifier's extractor in
+  // lockstep so a correct deterministic answer is never flagged.
+  for (const { code } of REASON_CODE_LABEL_PATTERNS) {
+    const renderedDefault = formatMatchExplanation({ code });
+    assert.deepEqual(
+      extractMentorReasonCodes(renderedDefault),
+      [code],
+      `default label for ${code} ("${renderedDefault}") must extract to [${code}]`
+    );
+
+    const renderedWithValue = formatMatchExplanation({ code, value: "Acme" });
+    assert.ok(
+      extractMentorReasonCodes(renderedWithValue).includes(code),
+      `valued label for ${code} ("${renderedWithValue}") must include ${code}`
+    );
+  }
+});
+
+test("'Worked at the same company' maps to past_employer_overlap, not shared_company", () => {
+  const codes = extractMentorReasonCodes("Why: Worked at the same company");
+  assert.deepEqual(codes, ["past_employer_overlap"]);
+  assert.ok(!codes.includes("shared_company"));
+});
+
+test("'Both worked at Acme' maps to past_employer_overlap only", () => {
+  const codes = extractMentorReasonCodes("Both worked at Acme");
+  assert.deepEqual(codes, ["past_employer_overlap"]);
+});
+
+test("'Same company: Acme' still maps to shared_company (true positive kept)", () => {
+  assert.deepEqual(extractMentorReasonCodes("Same company: Acme"), ["shared_company"]);
+});
+
+test("suggest_mentors deterministic past-employer reason is no longer flagged", () => {
+  const result = verifyToolBackedResponse({
+    content:
+      "Top mentors for Sam Student:\n- Mary Mentor\n  Why: Worked at the same company",
+    toolResults: [
+      makeSuggestMentorsToolResult([
+        { name: "Mary Mentor", reasons: [{ code: "past_employer_overlap" }] },
+      ]),
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("suggest_mentors flags a 'same company' claim the tool never returned", () => {
+  const result = verifyToolBackedResponse({
+    content: "- Mary Mentor\n  Why: Same company: Acme",
+    toolResults: [
+      makeSuggestMentorsToolResult([
+        { name: "Mary Mentor", reasons: [{ code: "past_employer_overlap" }] },
+      ]),
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /shared_company/.test(f)));
+});
+
+test("verifier dispatches suggest_mentees and accepts grounded output", () => {
+  const result = verifyToolBackedResponse({
+    content:
+      "Top mentees for Mary Mentor:\n- Sam Student\n  Why: Shared topics",
+    toolResults: [
+      makeSuggestMenteesToolResult([
+        { name: "Sam Student", reasons: [{ code: "shared_topics" }] },
+      ]),
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("suggest_mentees flags an invented mentee name not in tool rows", () => {
+  const result = verifyToolBackedResponse({
+    content: "- Sam Student\n- Invented Person",
+    toolResults: [
+      makeSuggestMenteesToolResult([
+        { name: "Sam Student", reasons: [{ code: "shared_topics" }] },
+      ]),
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /invented person.*not present/i.test(f)));
+});
+
+test("suggest_mentees flags an unsupported reason code", () => {
+  const result = verifyToolBackedResponse({
+    content: "- Sam Student\n  Why: Same company: Acme",
+    toolResults: [
+      makeSuggestMenteesToolResult([
+        { name: "Sam Student", reasons: [{ code: "shared_topics" }] },
+      ]),
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /suggest_mentees.*unsupported reason shared_company/.test(f)));
 });

@@ -150,6 +150,71 @@ export function formatMatchExplanation(
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Reason code ⇄ label patterns (single source of truth)             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Maps each mentorship reason code to the regex patterns that identify its
+ * rendered label/explanation in free text. This is the single source of truth
+ * the grounding verifier (`extractMentorReasonCodes`) consumes to map a
+ * model-written "why" line back to the engine codes it claims — colocated with
+ * the labels in {@link REASON_LABELS} / {@link formatMatchExplanation} so the
+ * two never drift (enforced by a table-driven test).
+ *
+ * ORDER MATTERS. `past_employer_overlap` ("Worked at the same company", "Both
+ * worked at X") is listed before `shared_company` ("Same company: X") and its
+ * patterns are matched first; a line that matches a more-specific earlier code
+ * masks the span so the generic `shared_company` pattern cannot also fire on
+ * the word "company". Every {@link BuiltInReasonCode} must appear exactly once.
+ */
+export const REASON_CODE_LABEL_PATTERNS: ReadonlyArray<{
+  code: string;
+  patterns: RegExp[];
+}> = [
+  { code: "shared_topics", patterns: [/shared topics?/] },
+  { code: "career_trajectory", patterns: [/has worked in|walked a path you want|walked your path/] },
+  { code: "aspirational_skill", patterns: [/skills you want(?: to build)?|has skills you want/] },
+  { code: "shared_school", patterns: [/same school|shared school/] },
+  { code: "shared_sport", patterns: [/shared sport|same sport/] },
+  { code: "shared_position", patterns: [/shared position|same position/] },
+  { code: "graduation_gap_fit", patterns: [/years? ahead(?: in career)?|good career gap|graduation gap fit|graduation fit/] },
+  // past_employer_overlap MUST precede shared_company so "worked at the same
+  // company" / "both worked at X" never collapse into the generic company code.
+  { code: "past_employer_overlap", patterns: [/worked at the same company|both worked at|past employer/] },
+  { code: "shared_company", patterns: [/same company|shared company/] },
+  { code: "shared_industry", patterns: [/same industry|shared industry/] },
+  { code: "shared_role_family", patterns: [/same career path|shared role family|same role family|similar role/] },
+  { code: "shared_city", patterns: [/same city|shared city|both (?:live|based|located) in/] },
+  { code: "fallback_general", patterns: [/suggested (?:match|while we learn)/] },
+];
+
+/**
+ * Extract the mentorship reason codes a single line of model text claims,
+ * driven by {@link REASON_CODE_LABEL_PATTERNS}. Earlier (more specific) codes
+ * win: once a code's pattern matches, its matched spans are blanked out before
+ * later codes are tested, so `past_employer_overlap` cannot also surface as
+ * `shared_company`.
+ */
+export function extractReasonCodesFromLine(line: string): string[] {
+  let remaining = line.toLowerCase();
+  const matched: string[] = [];
+
+  for (const { code, patterns } of REASON_CODE_LABEL_PATTERNS) {
+    let hit = false;
+    for (const pattern of patterns) {
+      const re = new RegExp(pattern.source, "g");
+      if (re.test(remaining)) {
+        hit = true;
+        remaining = remaining.replace(new RegExp(pattern.source, "g"), " ");
+      }
+    }
+    if (hit) matched.push(code);
+  }
+
+  return matched;
+}
+
 /**
  * Compose a single human-readable "why" sentence from a match's signals.
  * Orders signals by `MENTORSHIP_REASON_ORDER`, takes the strongest few, and
