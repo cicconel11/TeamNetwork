@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
+import { InlineBanner } from "@/components/ui";
 import { ConnectSetup } from "@/components/donations";
 import { DonationResultTracker } from "@/components/analytics/DonationResultTracker";
 import { PhilanthropyDashboardClient } from "@/components/philanthropy/PhilanthropyDashboardClient";
@@ -27,7 +28,12 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const canEdit = canEditNavItem(org.nav_config as NavConfig, "/donations", orgCtx.role, ["admin"]);
   const supabase = await createClient();
 
-  const [{ data: donationStats }, { data: donations }, { data: philanthropyEvents }, connectStatus] = await Promise.all([
+  const [
+    { data: donationStats, error: statsError },
+    { data: donations, error: donationsError },
+    { data: philanthropyEvents, error: eventsError },
+    connectStatus,
+  ] = await Promise.all([
     supabase
       .from("organization_donation_stats")
       .select("*")
@@ -50,6 +56,13 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
       ? getConnectAccountStatus(org.stripe_connect_account_id)
       : Promise.resolve(null),
   ]);
+
+  if (statsError)
+    console.error("[donations] Failed to fetch donation stats:", statsError.message);
+  if (donationsError)
+    console.error("[donations] Failed to fetch donations:", donationsError.message);
+  if (eventsError)
+    console.error("[donations] Failed to fetch philanthropy events:", eventsError.message);
 
   const stats = (donationStats || null) as OrganizationDonationStat | null;
   const allDonationRows = (donations || []) as OrganizationDonation[];
@@ -87,6 +100,11 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const exportStamp = new Date().toISOString().slice(0, 10);
   const purposeTotals = buildDonationPurposeTotals(donationRows, tDonations("generalSupport"));
 
+  const fetchFailures: string[] = [];
+  if (donationsError) fetchFailures.push(pageLabel.toLowerCase());
+  if (statsError) fetchFailures.push("donation totals");
+  if (eventsError) fetchFailures.push("philanthropy events");
+
   return (
     <div className="animate-fade-in">
       <DonationResultTracker organizationId={org.id} />
@@ -102,6 +120,13 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
           ) : undefined
         }
       />
+
+      {fetchFailures.length > 0 && (
+        <InlineBanner variant="error" className="mb-6">
+          Couldn&apos;t load {fetchFailures.join(", ")}. Some data on this page
+          may be missing. Refresh to try again.
+        </InlineBanner>
+      )}
 
       {canEdit && !isConnected && (
         <div className="mb-6">

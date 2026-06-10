@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Avatar, Button, EmptyState, InlineBanner } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getCurrentUser, getOrgContext } from "@/lib/auth/roles";
 import { getPersonAdminContext } from "@/lib/people/permissions";
@@ -60,7 +60,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   // Step 1: Get user_ids with active_member, admin, or parent role.
   // The role lookup also feeds the unified PersonAdminContext (admin set +
   // org-role label badges) for parity across the directory + detail pages.
-  const [{ data: memberRoles }, personCtx] = await Promise.all([
+  const [{ data: memberRoles, error: memberRolesError }, personCtx] = await Promise.all([
     dataClient
       .from("user_organization_roles")
       .select("user_id, role")
@@ -69,6 +69,9 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       .eq("status", "active"),
     getPersonAdminContext({ orgId: org.id, viewerUserId: user?.id ?? null }),
   ]);
+
+  if (memberRolesError)
+    console.error("[members] Failed to fetch member roles:", memberRolesError.message);
 
   // Drop users in a mutual block with the viewer so they never reach the
   // directory's `.in("user_id", ...)` filters (Apple 1.2). Manual member rows
@@ -145,7 +148,12 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
 
   // Run queries in parallel. Postgres handles `IN ()` (empty list) natively
   // and returns zero rows, so no invalid-UUID sentinel is needed.
-  const [{ data: linkedMembers }, { data: manualMembers }, { data: parentProfiles }, { data: allMembers }] = await Promise.all([
+  const [
+    { data: linkedMembers, error: linkedMembersError },
+    { data: manualMembers, error: manualMembersError },
+    { data: parentProfiles, error: parentProfilesError },
+    { data: allMembers, error: allMembersError },
+  ] = await Promise.all([
     linkedMembersQuery,
     manualMembersQuery,
     parentProfilesQuery,
@@ -156,6 +164,15 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       .is("deleted_at", null)
       .limit(1000),
   ]);
+
+  if (linkedMembersError)
+    console.error("[members] Failed to fetch members:", linkedMembersError.message);
+  if (manualMembersError)
+    console.error("[members] Failed to fetch manual members:", manualMembersError.message);
+  if (parentProfilesError)
+    console.error("[members] Failed to fetch parent profiles:", parentProfilesError.message);
+  if (allMembersError)
+    console.error("[members] Failed to fetch filter options:", allMembersError.message);
 
   const members: MemberDirectoryEntry[] = buildMemberDirectoryEntries({
     orgSlug,
@@ -183,6 +200,12 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const actionLabel = resolveActionLabel("/members", navConfig, "Add", t, locale);
   const tPagesMembers = await getTranslations("pages.members");
 
+  const fetchFailures: string[] = [];
+  if (memberRolesError || linkedMembersError || manualMembersError)
+    fetchFailures.push(pageLabel.toLowerCase());
+  if (parentProfilesError) fetchFailures.push("parents");
+  if (allMembersError) fetchFailures.push("filter options");
+
   return (
     <div className="animate-fade-in">
       <DirectoryViewTracker organizationId={org.id} directoryType="active_members" />
@@ -202,6 +225,13 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
           )
         }
       />
+
+      {fetchFailures.length > 0 && (
+        <InlineBanner variant="error" className="mb-6">
+          Couldn&apos;t load {fetchFailures.join(", ")}. Some data on this page
+          may be missing. Refresh to try again.
+        </InlineBanner>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-6">

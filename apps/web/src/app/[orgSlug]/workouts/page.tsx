@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
-import { Card, Badge, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Button, EmptyState, InlineBanner } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { WorkoutLogEditor } from "@/components/workouts/WorkoutLogEditor";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
@@ -23,7 +23,7 @@ export default async function WorkoutsPage({ params }: WorkoutsPageProps) {
   const orgId = orgCtx.organization.id;
 
   // Parallelize workout + user logs queries (independent of each other)
-  const [{ data: workouts }, { data: userLogs }] = await Promise.all([
+  const [{ data: workouts, error: workoutsError }, { data: userLogs, error: logsError }] = await Promise.all([
     supabase
       .from("workouts")
       .select("*")
@@ -36,8 +36,13 @@ export default async function WorkoutsPage({ params }: WorkoutsPageProps) {
           .select("*")
           .eq("organization_id", orgId)
           .eq("user_id", orgCtx.userId)
-      : Promise.resolve({ data: [] as never[] }),
+      : Promise.resolve({ data: [] as never[], error: null }),
   ]);
+
+  if (workoutsError)
+    console.error("[workouts] Failed to fetch workouts:", workoutsError.message);
+  if (logsError)
+    console.error("[workouts] Failed to fetch workout logs:", logsError.message);
 
   const userLogsList: WorkoutLog[] = (userLogs as WorkoutLog[]) || [];
   const logByWorkout = new Map<string, WorkoutLog>();
@@ -48,6 +53,10 @@ export default async function WorkoutsPage({ params }: WorkoutsPageProps) {
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/workouts", navConfig, t, locale);
   const actionLabel = resolveActionLabel("/workouts", navConfig, "Post", t, locale);
+
+  const fetchFailures: string[] = [];
+  if (workoutsError) fetchFailures.push(pageLabel.toLowerCase());
+  if (logsError) fetchFailures.push("your progress");
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -67,6 +76,13 @@ export default async function WorkoutsPage({ params }: WorkoutsPageProps) {
           )
         }
       />
+
+      {fetchFailures.length > 0 && (
+        <InlineBanner variant="error">
+          Couldn&apos;t load {fetchFailures.join(", ")}. Some data on this page
+          may be missing. Refresh to try again.
+        </InlineBanner>
+      )}
 
       {workouts && workouts.length > 0 ? (
         <div className="space-y-4">

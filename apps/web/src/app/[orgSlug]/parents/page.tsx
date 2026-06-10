@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Avatar, Button, EmptyState, InlineBanner } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { ParentsFilters } from "@/components/parents";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
@@ -61,7 +61,18 @@ export default async function ParentsPage({ params, searchParams }: ParentsPageP
 
   const org = orgs?.[0];
 
-  if (!org || orgError) return null;
+  if (orgError) {
+    console.error("[parents] Failed to fetch organization:", orgError.message);
+    return (
+      <div className="animate-fade-in">
+        <InlineBanner variant="error">
+          Couldn&apos;t load this page. Refresh to try again.
+        </InlineBanner>
+      </div>
+    );
+  }
+
+  if (!org) return null;
 
   const navConfig = org.nav_config as NavConfig | null;
   const { role } = await getOrgRole({ orgId: org.id, userId: user?.id });
@@ -90,10 +101,18 @@ export default async function ParentsPage({ params, searchParams }: ParentsPageP
   query = query.order("last_name", { ascending: true }).range(offset, offset + PAGE_SIZE - 1);
 
   // Fetch page of parents and distinct relationship options in parallel
-  const [{ data: rawParents, count: totalCount }, { data: relRows }] = await Promise.all([
+  const [
+    { data: rawParents, count: totalCount, error: parentsError },
+    { data: relRows, error: relError },
+  ] = await Promise.all([
     query,
     dataClient.rpc("get_parents_relationship_options", { p_org_id: org.id }),
   ]);
+
+  if (parentsError)
+    console.error("[parents] Failed to fetch parents:", parentsError.message);
+  if (relError)
+    console.error("[parents] Failed to fetch filter options:", relError.message);
 
   const parents: ParentRecord[] = (rawParents as ParentRecord[] | null) || [];
   const total = totalCount ?? 0;
@@ -112,6 +131,10 @@ export default async function ParentsPage({ params, searchParams }: ParentsPageP
   if (filters.relationship) filterParams.set("relationship", filters.relationship);
   if (filters.student_name) filterParams.set("student_name", filters.student_name);
   const paginationBase = filterParams.toString() ? `?${filterParams.toString()}&` : "?";
+
+  const fetchFailures: string[] = [];
+  if (parentsError) fetchFailures.push(pageLabel.toLowerCase());
+  if (relError) fetchFailures.push("filter options");
 
   return (
     <div className="animate-fade-in">
@@ -132,6 +155,13 @@ export default async function ParentsPage({ params, searchParams }: ParentsPageP
           )
         }
       />
+
+      {fetchFailures.length > 0 && (
+        <InlineBanner variant="error" className="mb-6">
+          Couldn&apos;t load {fetchFailures.join(", ")}. Some data on this page
+          may be missing. Refresh to try again.
+        </InlineBanner>
+      )}
 
       <ParentsFilters orgId={org.id} relationships={relationships} />
 

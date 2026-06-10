@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Button, EmptyState, InlineBanner } from "@/components/ui";
 import { SoftDeleteButton } from "@/components/ui/SoftDeleteButton";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
@@ -36,14 +36,20 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
     query = query.eq("category", filters.category);
   }
 
-  const { data: records } = await query;
+  const { data: records, error: recordsError } = await query;
+
+  if (recordsError)
+    console.error("[records] Failed to fetch records:", recordsError.message);
 
   // Get unique categories for filter — also filter soft-deleted
-  const { data: allRecords } = await supabase
+  const { data: allRecords, error: categoriesError } = await supabase
     .from("records")
     .select("category")
     .eq("organization_id", org.id)
     .is("deleted_at", null);
+
+  if (categoriesError)
+    console.error("[records] Failed to fetch categories:", categoriesError.message);
 
   const categories = [...new Set(allRecords?.map((r) => r.category).filter(Boolean))];
 
@@ -69,6 +75,10 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
   const pageLabel = resolveLabel("/records", navConfig, t, locale);
   const actionLabel = resolveActionLabel("/records", navConfig, "Add", t, locale);
 
+  const fetchFailures: string[] = [];
+  if (recordsError) fetchFailures.push(pageLabel.toLowerCase());
+  if (categoriesError) fetchFailures.push("categories");
+
   return (
     <div className="animate-fade-in">
       <PageHeader
@@ -87,6 +97,13 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
           )
         }
       />
+
+      {fetchFailures.length > 0 && (
+        <InlineBanner variant="error" className="mb-6">
+          Couldn&apos;t load {fetchFailures.join(", ")}. Some data on this page
+          may be missing. Refresh to try again.
+        </InlineBanner>
+      )}
 
       {/* Category Filters */}
       {categories.length > 0 && (

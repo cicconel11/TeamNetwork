@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Avatar, Button, EmptyState, InlineBanner } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniFilters, AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel, AlumniSelectableGrid } from "@/components/alumni";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
@@ -72,7 +72,18 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
   const org = orgs?.[0];
 
-  if (!org || orgError) return null;
+  if (orgError) {
+    console.error("[alumni] Failed to fetch organization:", orgError.message);
+    return (
+      <div className="animate-fade-in">
+        <InlineBanner variant="error">
+          Couldn&apos;t load this page. Refresh to try again.
+        </InlineBanner>
+      </div>
+    );
+  }
+
+  if (!org) return null;
 
   const navConfig = org.nav_config as NavConfig | null;
   const { role } = await getOrgRole({ orgId: org.id, userId: user?.id });
@@ -126,7 +137,10 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
     .order("last_name", { ascending: true })
     .range(offset, offset + PAGE_SIZE - 1);
 
-  const { data: rawAlumni, count: totalCount } = await query;
+  const { data: rawAlumni, count: totalCount, error: alumniError } = await query;
+
+  if (alumniError)
+    console.error("[alumni] Failed to fetch alumni:", alumniError.message);
 
   // Project to is_claimed for admins; strip user_id before the value reaches
   // any rendered child component.
@@ -143,12 +157,15 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
   // Get unique values for filter dropdowns (from all alumni, not just filtered).
   // Cap at FACET_ROW_CAP rows — follow-up: move to RPC get_alumni_facet_options.
-  const { data: allAlumni } = await dataClient
+  const { data: allAlumni, error: facetsError } = await dataClient
     .from("alumni")
     .select("graduation_year, birth_year, industry, current_company, current_city, position_title")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
     .limit(FACET_ROW_CAP);
+
+  if (facetsError)
+    console.error("[alumni] Failed to fetch filter options:", facetsError.message);
 
   const years = [...new Set(allAlumni?.map((a) => a.graduation_year).filter(Boolean))];
   const birthYears = [...new Set(allAlumni?.map((a) => a.birth_year).filter(Boolean))];
@@ -186,6 +203,10 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   if (filters.position) filterParams.set("position", filters.position);
   const paginationBase = filterParams.toString() ? `?${filterParams.toString()}&` : "?";
 
+  const fetchFailures: string[] = [];
+  if (alumniError) fetchFailures.push(pageLabel.toLowerCase());
+  if (facetsError) fetchFailures.push("filter options");
+
   const pageContent = (
     <div className="animate-fade-in">
       <DirectoryViewTracker organizationId={org.id} directoryType="alumni" />
@@ -201,6 +222,13 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
           )
         }
       />
+
+      {fetchFailures.length > 0 && (
+        <InlineBanner variant="error" className="mb-6">
+          Couldn&apos;t load {fetchFailures.join(", ")}. Some data on this page
+          may be missing. Refresh to try again.
+        </InlineBanner>
+      )}
 
       {/* Dynamic Filters */}
       <AlumniFilters

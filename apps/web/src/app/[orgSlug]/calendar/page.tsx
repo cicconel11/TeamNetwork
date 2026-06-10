@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
-import { Button } from "@/components/ui";
+import { Button, InlineBanner } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { CalendarViewToggle } from "@/components/calendar/CalendarViewToggle";
 import { CalendarTab } from "@/components/calendar/CalendarTab";
@@ -58,7 +58,7 @@ export default async function CalendarPage({ params, searchParams }: CalendarPag
           .eq("organization_id", orgId)
           .is("deleted_at", null)
           .order("start_time", { ascending: true })
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
     fetchUnifiedEvents(supabase, orgId, orgCtx.userId, {
       start: rangeStart,
       end: rangeEnd,
@@ -69,9 +69,15 @@ export default async function CalendarPage({ params, searchParams }: CalendarPag
     }),
   ]);
 
+  if (mySchedulesResult.error)
+    console.error("[calendar] Failed to fetch schedules:", mySchedulesResult.error.message);
+  if (allSchedulesResult.error)
+    console.error("[calendar] Failed to fetch all schedules:", allSchedulesResult.error.message);
+
   const mySchedules = mySchedulesResult.data || [];
   const allSchedules = (allSchedulesResult.data || []) as (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
   const initialEvents: UnifiedEvent[] | undefined = initialEventsResult ?? undefined;
+  const schedulesFetchFailed = Boolean(mySchedulesResult.error || allSchedulesResult.error);
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
   const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
@@ -123,6 +129,13 @@ export default async function CalendarPage({ params, searchParams }: CalendarPag
           </div>
         }
       />
+
+      {schedulesFetchFailed && (
+        <InlineBanner variant="error">
+          Couldn&apos;t load schedules. Some data on this page may be missing.
+          Refresh to try again.
+        </InlineBanner>
+      )}
 
       <div className="space-y-6">
         <CalendarViewToggle />

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Button, EmptyState, InlineBanner } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { ConnectSetup } from "@/components/donations";
 import { DonationResultTracker } from "@/components/analytics/DonationResultTracker";
@@ -45,7 +45,13 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
     eventsQuery = eventsQuery.gte("start_date", new Date().toISOString()).order("start_date");
   }
 
-  const [{ data: events }, { data: donationStats }, { data: allPhilanthropyEvents }, { data: donations }, connectStatus] = await Promise.all([
+  const [
+    { data: events, error: eventsError },
+    { data: donationStats, error: statsError },
+    { data: allPhilanthropyEvents, error: allEventsError },
+    { data: donations, error: donationsError },
+    connectStatus,
+  ] = await Promise.all([
     eventsQuery,
     supabase
       .from("organization_donation_stats")
@@ -69,6 +75,15 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
       ? getConnectAccountStatus(org.stripe_connect_account_id)
       : Promise.resolve(null),
   ]);
+
+  if (eventsError)
+    console.error("[philanthropy] Failed to fetch events:", eventsError.message);
+  if (statsError)
+    console.error("[philanthropy] Failed to fetch donation stats:", statsError.message);
+  if (allEventsError)
+    console.error("[philanthropy] Failed to fetch all events:", allEventsError.message);
+  if (donationsError)
+    console.error("[philanthropy] Failed to fetch donations:", donationsError.message);
 
   const donationStat = (donationStats || null) as OrganizationDonationStat | null;
   const allDonationRows = (donations || []) as OrganizationDonation[];
@@ -114,6 +129,11 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const exportStamp = new Date().toISOString().slice(0, 10);
   const purposeTotals = buildDonationPurposeTotals(donationRows, tDonations("generalSupport"));
 
+  const fetchFailures: string[] = [];
+  if (eventsError || allEventsError) fetchFailures.push("events");
+  if (donationsError) fetchFailures.push("donations");
+  if (statsError) fetchFailures.push("donation totals");
+
   return (
     <div className="animate-fade-in">
       <DonationResultTracker organizationId={org.id} />
@@ -143,6 +163,13 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
           ) : undefined
         }
       />
+
+      {fetchFailures.length > 0 && (
+        <InlineBanner variant="error" className="mb-6">
+          Couldn&apos;t load {fetchFailures.join(", ")}. Some data on this page
+          may be missing. Refresh to try again.
+        </InlineBanner>
+      )}
 
       {/* Stripe Connect onboarding banners */}
       {onboardingStatus === "success" && isConnected && (

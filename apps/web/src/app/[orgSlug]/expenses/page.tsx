@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
+import { Card, Button, EmptyState, InlineBanner, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { ExpensesFilters } from "@/components/expenses";
 import { getOrgContext } from "@/lib/auth/roles";
@@ -124,23 +124,34 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
   let expenseTypes: string[] = [];
   let submitters: Array<{ id: string; name: string | null; email: string }> = [];
   let userLookup = new Map<string, { id: string; name: string | null; email: string }>();
+  let filterFetchFailed = false;
 
   if (isAdmin) {
-    const { data: allExpenses } = await supabase
+    const { data: allExpenses, error: allExpensesError } = await supabase
       .from("expenses")
       .select("expense_type, user_id")
       .eq("organization_id", org.id)
       .is("deleted_at", null);
+
+    if (allExpensesError) {
+      console.error("[expenses] Failed to fetch filter options:", allExpensesError.message);
+      filterFetchFailed = true;
+    }
 
     if (allExpenses) {
       expenseTypes = [...new Set(allExpenses.map((e) => e.expense_type).filter((type) => type && type !== "test"))];
 
       const userIds = Array.from(new Set(allExpenses.map((e) => e.user_id).filter(Boolean))) as string[];
       if (userIds.length > 0) {
-        const { data: users } = await supabase
+        const { data: users, error: usersError } = await supabase
           .from("users")
           .select("id, name, email")
           .in("id", userIds);
+
+        if (usersError) {
+          console.error("[expenses] Failed to fetch submitters:", usersError.message);
+          filterFetchFailed = true;
+        }
 
         if (users) {
           userLookup = new Map(users.map((u) => [u.id, u]));
@@ -169,6 +180,13 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
           </Link>
         }
       />
+
+      {filterFetchFailed && (
+        <InlineBanner variant="error" className="mb-6">
+          Couldn&apos;t load filter options. Some data on this page may be
+          missing. Refresh to try again.
+        </InlineBanner>
+      )}
 
       {/* Admin Filters */}
       {isAdmin && (expenseTypes.length > 0 || submitters.length > 0) && (
