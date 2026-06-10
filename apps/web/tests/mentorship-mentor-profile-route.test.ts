@@ -32,10 +32,38 @@ test("route rate-limits read + write", () => {
   assert.match(routeSource, /mentor profile write/);
 });
 
+test("PUT reads the existing row's bio provenance before upsert", () => {
+  // A select of bio_source must precede the upsert so the 3-way diff (D1) runs
+  // server-side. Both the read and the written row must reference bio_source.
+  assert.match(routeSource, /\.select\(\s*"[^"]*bio_source[^"]*"\s*\)/);
+  const selectIdx = routeSource.search(/\.select\(\s*"bio,\s*bio_source/);
+  const upsertIdx = routeSource.indexOf(".upsert(");
+  assert.ok(selectIdx > -1, "expected a bio_source select before upsert");
+  assert.ok(upsertIdx > -1, "expected an upsert call");
+  assert.ok(selectIdx < upsertIdx, "bio_source select must precede the upsert");
+  assert.match(routeSource, /bio_source:/);
+});
+
+test("PROFILE_COLS / GET expose bio_source", () => {
+  assert.match(routeSource, /PROFILE_COLS\s*=\s*\n?\s*"[^"]*bio_source[^"]*bio_generated_at[^"]*bio_input_hash/);
+  // GET selects "*", so bio_source is already returned to the client.
+  assert.match(routeSource, /\.from\("mentor_profiles"\)\s*\.select\("\*"\)/s);
+});
+
 // ── Route logic simulator ───────────────────────────────────────────────────
 
 type Role = "admin" | "active_member" | "alumni" | "parent";
 type Status = "active" | "revoked" | "pending";
+
+type BioSource = "manual" | "ai_generated" | null;
+
+/** Stored mentor_profiles bio provenance, as read before the upsert. */
+interface StoredBio {
+  bio: string | null;
+  bio_source: BioSource;
+  bio_generated_at: string | null;
+  bio_input_hash: string | null;
+}
 
 interface SimReq {
   method: "GET" | "PUT";
@@ -46,6 +74,8 @@ interface SimReq {
   /** Present when simulating a PUT with ?user_id= targeting a peer. */
   target?: { role: Role; status: Status } | null;
   body?: unknown;
+  /** Existing row's bio provenance; absent = no existing row (insert path). */
+  stored?: StoredBio | null;
 }
 
 interface SimRes {
@@ -106,6 +136,9 @@ function simulate(req: SimReq): SimRes {
   if (!parsed.success) {
     return { status: 400, body: { error: "Invalid payload" } };
   }
+
+  const bioFields = resolveBioFields(parsed.data.bio, req.stored ?? null);
+
   return {
     status: 200,
     body: {
@@ -113,8 +146,39 @@ function simulate(req: SimReq): SimRes {
         organization_id: req.organizationId,
         user_id: targetUserId,
         ...parsed.data,
+        ...bioFields,
       },
     },
+  };
+}
+
+/**
+ * Mirror of route.ts PUT bio-diff (decision D1): server-side 3-way diff between
+ * the incoming bio and the stored row, with no client-supplied source flag.
+ */
+function resolveBioFields(
+  incoming: string | undefined,
+  stored: StoredBio | null
+): StoredBio {
+  const incomingBio = incoming?.trim() ? incoming.trim() : "";
+  const storedBio = stored?.bio?.trim() ?? "";
+
+  if (!incomingBio) {
+    return { bio: null, bio_source: null, bio_generated_at: null, bio_input_hash: null };
+  }
+  if (stored && incomingBio === storedBio) {
+    return {
+      bio: stored.bio,
+      bio_source: stored.bio_source,
+      bio_generated_at: stored.bio_generated_at,
+      bio_input_hash: stored.bio_input_hash,
+    };
+  }
+  return {
+    bio: incomingBio,
+    bio_source: "manual",
+    bio_generated_at: null,
+    bio_input_hash: null,
   };
 }
 
@@ -247,4 +311,91 @@ test("revoked caller forbidden", () => {
     body: { sports: [] },
   });
   assert.equal(res.status, 403);
+});
+
+// ── Bio provenance (decision D1) ─────────────────────────────────────────────
+
+test("PUT new bio text over an ai_generated row promotes to manual", () => {
+  const res = simulate({
+    method: "PUT",
+    authUserId: randomUUID(),
+    organizationId: randomUUID(),
+    caller: { role: "alumni", status: "active" },
+    stored: {
+      bio: "AI wrote this",
+      bio_source: "ai_generated",
+      bio_generated_at: "2026-01-01T00:00:00.000Z",
+      bio_input_hash: "abc123",
+    },
+    body: { bio: "Human rewrote this", sports: [] },
+  });
+  assert.equal(res.status, 200);
+  const p = res.body.profile as Record<string, unknown>;
+  assert.equal(p.bio, "Human rewrote this");
+  assert.equal(p.bio_source, "manual");
+  assert.equal(p.bio_generated_at, null);
+  assert.equal(p.bio_input_hash, null);
+});
+
+test("PUT identical bio + unrelated field change preserves ai_generated provenance", () => {
+  const res = simulate({
+    method: "PUT",
+    authUserId: randomUUID(),
+    organizationId: randomUUID(),
+    caller: { role: "alumni", status: "active" },
+    stored: {
+      bio: "AI wrote this",
+      bio_source: "ai_generated",
+      bio_generated_at: "2026-01-01T00:00:00.000Z",
+      bio_input_hash: "abc123",
+    },
+    // MentorProfileCard echoes the bio back verbatim; only max_mentees changed.
+    body: { bio: "AI wrote this", max_mentees: 7, sports: [] },
+  });
+  assert.equal(res.status, 200);
+  const p = res.body.profile as Record<string, unknown>;
+  assert.equal(p.bio, "AI wrote this");
+  assert.equal(p.bio_source, "ai_generated");
+  assert.equal(p.bio_generated_at, "2026-01-01T00:00:00.000Z");
+  assert.equal(p.bio_input_hash, "abc123");
+  assert.equal(p.max_mentees, 7);
+});
+
+test("PUT empty bio on a manual row clears bio + provenance", () => {
+  const res = simulate({
+    method: "PUT",
+    authUserId: randomUUID(),
+    organizationId: randomUUID(),
+    caller: { role: "alumni", status: "active" },
+    stored: {
+      bio: "Manually typed",
+      bio_source: "manual",
+      bio_generated_at: null,
+      bio_input_hash: null,
+    },
+    body: { bio: "   ", sports: [] },
+  });
+  assert.equal(res.status, 200);
+  const p = res.body.profile as Record<string, unknown>;
+  assert.equal(p.bio, null);
+  assert.equal(p.bio_source, null);
+  assert.equal(p.bio_generated_at, null);
+  assert.equal(p.bio_input_hash, null);
+});
+
+test("PUT first-time typed bio (no stored row) is manual", () => {
+  const res = simulate({
+    method: "PUT",
+    authUserId: randomUUID(),
+    organizationId: randomUUID(),
+    caller: { role: "alumni", status: "active" },
+    // No `stored` → insert path; stored bio was null/empty.
+    body: { bio: "My very first bio", sports: [] },
+  });
+  assert.equal(res.status, 200);
+  const p = res.body.profile as Record<string, unknown>;
+  assert.equal(p.bio, "My very first bio");
+  assert.equal(p.bio_source, "manual");
+  assert.equal(p.bio_generated_at, null);
+  assert.equal(p.bio_input_hash, null);
 });

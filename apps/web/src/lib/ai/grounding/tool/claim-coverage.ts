@@ -21,6 +21,7 @@ import {
   type StatRow,
   type SuggestConnectionGroundingData,
   type SuggestConnectionGroundingRow,
+  type SuggestMenteesGroundingData,
   type SuggestMentorsGroundingData,
 } from "./claim-extraction";
 
@@ -916,36 +917,102 @@ export function verifySuggestMentors(content: string, data: unknown): string[] {
   const suggestions = payload.suggestions ?? [];
   if (suggestions.length === 0) return failures;
 
-  // Build a map of mentor names → their reason codes
-  const mentorReasonCodes = new Map<string, Set<string>>();
-  for (const s of suggestions) {
-    const name = typeof s.mentor?.name === "string" ? s.mentor.name.toLowerCase() : null;
-    if (!name) continue;
+  const names = suggestions
+    .map((s) => (typeof s.mentor?.name === "string" ? s.mentor.name : null))
+    .filter((name): name is string => Boolean(name));
+  const reasonCodes = suggestions.map((s) => s.reasons ?? []);
 
-    const codes = new Set<string>();
-    for (const r of s.reasons ?? []) {
-      if (typeof r.code === "string") codes.add(r.code);
-    }
-    mentorReasonCodes.set(name, codes);
+  return verifyMentorshipSuggestionContent({
+    content,
+    toolName: "suggest_mentors",
+    suggestedNames: names,
+    reasonsPerSuggestion: reasonCodes,
+    existing: failures,
+  });
+}
+
+export function verifySuggestMentees(content: string, data: unknown): string[] {
+  if (!data || typeof data !== "object") {
+    return ["suggest_mentees returned non-object data"];
   }
 
-  // Verify that pass-2 response only references reason codes present in tool output
-  const lines = content.split("\n");
-  for (const line of lines) {
-    if (!line.trim()) continue;
+  const payload = data as SuggestMenteesGroundingData;
+  const state = typeof payload.state === "string" ? payload.state : null;
+  const failures: string[] = [];
 
-    const extractedCodes = extractMentorReasonCodes(line);
-    if (extractedCodes.length === 0) continue;
+  if (state === "unauthorized" || state === "not_found" || state === "ambiguous" || state === "no_suggestions") {
+    return failures;
+  }
 
-    // Collect all available codes from all suggestions for this check
-    const allAvailableCodes = new Set<string>();
-    for (const codes of mentorReasonCodes.values()) {
-      for (const c of codes) allAvailableCodes.add(c);
+  if (state !== "resolved") {
+    failures.push(`suggest_mentees returned unexpected state: ${state}`);
+    return failures;
+  }
+
+  const suggestions = payload.suggestions ?? [];
+  if (suggestions.length === 0) return failures;
+
+  const names = suggestions
+    .map((s) => (typeof s.mentee?.name === "string" ? s.mentee.name : null))
+    .filter((name): name is string => Boolean(name));
+  const reasonCodes = suggestions.map((s) => s.reasons ?? []);
+
+  return verifyMentorshipSuggestionContent({
+    content,
+    toolName: "suggest_mentees",
+    suggestedNames: names,
+    reasonsPerSuggestion: reasonCodes,
+    existing: failures,
+  });
+}
+
+/**
+ * Shared grounding pass for the bi-directional mentorship suggestion tools.
+ * Verifies (a) every name the model renders as a suggestion is one the tool
+ * returned, and (b) every reason code the model claims for a suggestion is
+ * backed by that tool's structured output. Reason codes are pooled across
+ * suggestions (per-suggestion attribution is a documented deferral).
+ */
+function verifyMentorshipSuggestionContent(args: {
+  content: string;
+  toolName: "suggest_mentors" | "suggest_mentees";
+  suggestedNames: string[];
+  reasonsPerSuggestion: Array<Array<{ code?: unknown; label?: unknown }>>;
+  existing: string[];
+}): string[] {
+  const { content, toolName, suggestedNames, reasonsPerSuggestion, existing } = args;
+  const failures = existing;
+
+  const knownNames = new Set(suggestedNames.map((name) => normalizeIdentifier(name)));
+
+  // Name grounding: any rendered suggestion head must be a returned person.
+  for (const candidate of extractListEntryHeads(content)) {
+    const normalized = normalizeMemberCandidate(candidate);
+    if (
+      isIgnoredMemberCandidate(candidate) ||
+      normalized.includes("@") ||
+      normalized.length < 3
+    ) {
+      continue;
     }
+    if (!knownNames.has(normalized)) {
+      failures.push(`${toolName} suggestion ${candidate} was not present in tool rows`);
+    }
+  }
 
-    for (const code of extractedCodes) {
+  // Reason grounding: pooled codes across all suggestions.
+  const allAvailableCodes = new Set<string>();
+  for (const reasons of reasonsPerSuggestion) {
+    for (const r of reasons) {
+      if (typeof r.code === "string") allAvailableCodes.add(r.code);
+    }
+  }
+
+  for (const line of content.split("\n")) {
+    if (!line.trim()) continue;
+    for (const code of extractMentorReasonCodes(line)) {
       if (!allAvailableCodes.has(code)) {
-        failures.push(`suggest_mentors response claimed unsupported reason ${code}`);
+        failures.push(`${toolName} response claimed unsupported reason ${code}`);
       }
     }
   }

@@ -1,6 +1,8 @@
 // Per-tool grounding-data type contracts and reason-code extractors used by
 // the per-tool coverage checks.
 
+import { extractReasonCodesFromLine } from "@/lib/mentorship/presentation";
+
 export interface SuggestConnectionGroundingReason {
   code?: unknown;
   label?: unknown;
@@ -23,6 +25,15 @@ export interface SuggestMentorsGroundingData {
   mentee?: { name?: unknown } | null;
   suggestions?: Array<{
     mentor?: { name?: unknown } | null;
+    reasons?: Array<{ code?: unknown; label?: unknown }>;
+  }>;
+}
+
+export interface SuggestMenteesGroundingData {
+  state?: unknown;
+  mentor?: { name?: unknown } | null;
+  suggestions?: Array<{
+    mentee?: { name?: unknown } | null;
     reasons?: Array<{ code?: unknown; label?: unknown }>;
   }>;
 }
@@ -85,16 +96,13 @@ export function extractSuggestConnectionReasonCodes(line: string): string[] {
   return [...matches];
 }
 
+/**
+ * Reason codes a single mentorship "why" line claims. Delegates to the single
+ * label⇄code source of truth in presentation.ts (covers ALL engine codes, with
+ * `past_employer_overlap` winning over `shared_company`) so the verifier never
+ * flags a correct deterministic reason as unsupported. Shared by suggest_mentors
+ * and suggest_mentees grounding.
+ */
 export function extractMentorReasonCodes(line: string): string[] {
-  const matches = new Set<string>();
-  const normalized = line.toLowerCase();
-
-  if (/(shared topics?)/.test(normalized)) matches.add("shared_topics");
-  if (/(shared industry|same industry)/.test(normalized)) matches.add("shared_industry");
-  if (/(shared role family|same role family|similar role)/.test(normalized)) matches.add("shared_role_family");
-  if (/(graduation gap|years? ahead|graduation fit)/.test(normalized)) matches.add("graduation_gap_fit");
-  if (/(shared city|same city|both (?:live|based) in)/.test(normalized)) matches.add("shared_city");
-  if (/(shared company|same company)/.test(normalized)) matches.add("shared_company");
-
-  return [...matches];
+  return extractReasonCodesFromLine(line);
 }

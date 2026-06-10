@@ -22,11 +22,16 @@ interface RouteParams {
  * typed via assertion until gen:types is re-run post-deploy.
  */
 
+type BioSource = "manual" | "ai_generated" | null;
+
 type ProfileRow = {
   id: string;
   organization_id: string;
   user_id: string;
   bio: string | null;
+  bio_source: BioSource;
+  bio_generated_at: string | null;
+  bio_input_hash: string | null;
   expertise_areas: string[] | null;
   topics: string[] | null;
   sports: string[] | null;
@@ -64,7 +69,7 @@ type SupabaseEscape = {
 };
 
 const PROFILE_COLS =
-  "id, organization_id, user_id, bio, expertise_areas, topics, sports, positions, industries, role_families, max_mentees, accepting_new, meeting_preferences, time_commitment, years_of_experience, is_active, created_at, updated_at";
+  "id, organization_id, user_id, bio, bio_source, bio_generated_at, bio_input_hash, expertise_areas, topics, sports, positions, industries, role_families, max_mentees, accepting_new, meeting_preferences, time_commitment, years_of_experience, is_active, created_at, updated_at";
 
 export async function GET(req: Request, { params }: RouteParams) {
   const { organizationId } = await params;
@@ -240,10 +245,72 @@ export async function PUT(req: Request, { params }: RouteParams) {
   }
 
   const p = parsed.data;
+  const sb = service as unknown as SupabaseEscape;
+
+  // Read the existing row's bio provenance so we can decide, server-side,
+  // whether this save promotes the bio to manual, preserves an AI bio, or
+  // clears it — without trusting any client-supplied source flag.
+  const { data: existingData, error: existingError } = await sb
+    .from("mentor_profiles")
+    .select("bio, bio_source, bio_generated_at, bio_input_hash")
+    .eq("organization_id", organizationId)
+    .eq("user_id", targetUserId)
+    .maybeSingle();
+
+  if (existingError) {
+    return NextResponse.json(
+      { error: existingError.message ?? "Failed to load mentor profile" },
+      { status: 500 }
+    );
+  }
+
+  const existing = existingData as Pick<
+    ProfileRow,
+    "bio" | "bio_source" | "bio_generated_at" | "bio_input_hash"
+  > | null;
+
+  const incomingBio = p.bio?.trim() ? p.bio.trim() : "";
+  const storedBio = existing?.bio?.trim() ?? "";
+
+  // 3-way bio diff (decision D1):
+  // 1. Empty incoming → clear bio + provenance (lets the AI refill it).
+  // 2. Unchanged incoming → preserve provenance (a round-trip echo of an AI bio
+  //    plus an unrelated field change must NOT promote ai_generated → manual).
+  // 3. Non-empty + changed (incl. first-time typed) → a human typed it → manual,
+  //    clear the AI hash/timestamp.
+  let bioFields: {
+    bio: string | null;
+    bio_source: BioSource;
+    bio_generated_at: string | null;
+    bio_input_hash: string | null;
+  };
+  if (!incomingBio) {
+    bioFields = {
+      bio: null,
+      bio_source: null,
+      bio_generated_at: null,
+      bio_input_hash: null,
+    };
+  } else if (existing && incomingBio === storedBio) {
+    bioFields = {
+      bio: existing.bio,
+      bio_source: existing.bio_source,
+      bio_generated_at: existing.bio_generated_at,
+      bio_input_hash: existing.bio_input_hash,
+    };
+  } else {
+    bioFields = {
+      bio: incomingBio,
+      bio_source: "manual",
+      bio_generated_at: null,
+      bio_input_hash: null,
+    };
+  }
+
   const row = {
     organization_id: organizationId,
     user_id: targetUserId,
-    bio: p.bio?.trim() ? p.bio.trim() : null,
+    ...bioFields,
     expertise_areas: p.expertise_areas,
     topics: p.topics,
     sports: p.sports,
@@ -258,7 +325,6 @@ export async function PUT(req: Request, { params }: RouteParams) {
     is_active: true,
   };
 
-  const sb = service as unknown as SupabaseEscape;
   const { data, error } = await sb
     .from("mentor_profiles")
     .upsert(row, { onConflict: "user_id,organization_id" })

@@ -184,23 +184,59 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
 
   if (suggestions.length === 0) return null;
 
-  const lines = [`Top mentors for ${menteeName}`];
-  for (const [index, suggestion] of suggestions.entries()) {
-    lines.push(`${index + 1}. ${suggestion.displayLine}${formatConfidenceSuffix(suggestion)}`);
-    lines.push(`   Why: ${suggestion.reasons.join(", ")}`);
-  }
-
-  return lines.join("\n");
+  return renderMentorshipSuggestions(`Top mentors for ${menteeName}`, suggestions);
 }
 
-/** Render a "(Confidence 92/100 · High)" suffix, or "" when unavailable. */
-function formatConfidenceSuffix(s: {
+interface RenderableSuggestion {
+  displayLine: string;
+  reasons: string[];
   confidence: number | null;
   confidenceLabel: string | null;
-}): string {
-  if (s.confidence == null) return "";
-  const label = s.confidenceLabel ? ` · ${s.confidenceLabel}` : "";
-  return ` (Confidence ${s.confidence}/100${label})`;
+}
+
+/** Render a "Confidence 92/100 (High)" line body, or null when unavailable. */
+function formatConfidenceLine(s: {
+  confidence: number | null;
+  confidenceLabel: string | null;
+}): string | null {
+  if (s.confidence == null) return null;
+  const label = s.confidenceLabel ? ` (${s.confidenceLabel})` : "";
+  return `Confidence: ${s.confidence}/100${label}`;
+}
+
+/**
+ * Normalize whitespace inside a reason string so comma-joined values read
+ * cleanly ("consulting,strategy" -> "consulting, strategy"). Whitespace-only:
+ * the label/value wording the grounding verifier inspects is unchanged.
+ */
+function normalizeReasonSpacing(reason: string): string {
+  return reason.replace(/\s*,\s*/g, ", ").trim();
+}
+
+/**
+ * Shared markdown renderer for the mentor/mentee suggestion lists. Bold,
+ * numbered name as a heading; confidence on its own line; each reason as its
+ * own bullet; a divider plus blank line between people so the assistant's
+ * narrow surface stays scannable.
+ */
+function renderMentorshipSuggestions(
+  heading: string,
+  suggestions: RenderableSuggestion[]
+): string {
+  const blocks = suggestions.map((suggestion, index) => {
+    const lines = [`**${index + 1}. ${suggestion.displayLine}**`];
+    const confidence = formatConfidenceLine(suggestion);
+    if (confidence) lines.push(confidence);
+    lines.push("");
+    for (const reason of suggestion.reasons) {
+      lines.push(`- ${normalizeReasonSpacing(reason)}`);
+    }
+    return lines.join("\n");
+  });
+
+  // Divider + surrounding blank lines separate each person on the narrow
+  // assistant surface.
+  return `### ${heading}\n\n${blocks.join("\n\n---\n\n")}`;
 }
 
 export function formatSuggestMenteesResponse(data: unknown): string | null {
@@ -287,13 +323,7 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
 
   if (suggestions.length === 0) return null;
 
-  const lines = [`Top mentees for ${mentorName}`];
-  for (const [index, suggestion] of suggestions.entries()) {
-    lines.push(`${index + 1}. ${suggestion.displayLine}${formatConfidenceSuffix(suggestion)}`);
-    lines.push(`   Why: ${suggestion.reasons.join(", ")}`);
-  }
-
-  return lines.join("\n");
+  return renderMentorshipSuggestions(`Top mentees for ${mentorName}`, suggestions);
 }
 
 export function formatDonationAnalyticsResponse(data: unknown): string | null {
