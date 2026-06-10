@@ -30,6 +30,7 @@ interface MentorData {
   sports: string[] | null;
   positions: string[] | null;
   bio: string | null;
+  bio_source: "manual" | "ai_generated" | null;
   contact_email: string | null;
   contact_linkedin: string | null;
   contact_phone: string | null;
@@ -467,7 +468,17 @@ export function MentorDirectory({
                       </div>
                     )}
                     {mentor.bio && (
-                      <p className="text-sm text-[var(--foreground)]/80 line-clamp-2 mt-1">{mentor.bio}</p>
+                      <div className="mt-1">
+                        {mentor.bio_source === "ai_generated" && (
+                          <p
+                            data-testid={`mentor-card-${mentor.user_id}-ai-summary`}
+                            className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)]"
+                          >
+                            {safeT(tMentorship, "aiSummary", "AI summary")}
+                          </p>
+                        )}
+                        <p className="text-sm text-[var(--foreground)]/80 line-clamp-2">{mentor.bio}</p>
+                      </div>
                     )}
 
                     <div className="flex flex-wrap items-center gap-3 mt-2">

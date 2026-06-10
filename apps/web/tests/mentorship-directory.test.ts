@@ -23,6 +23,14 @@ const queriesSource = await readFile(
   new URL("../src/lib/mentorship/queries.ts", import.meta.url),
   "utf8"
 );
+const mentorProfileCardSource = await readFile(
+  new URL("../src/components/mentorship/MentorProfileCard.tsx", import.meta.url),
+  "utf8"
+);
+const tabDataSource = await readFile(
+  new URL("../src/lib/mentorship/tab-data.ts", import.meta.url),
+  "utf8"
+);
 
 function mentor(overrides: Partial<DirectoryMentorLike> & { user_id: string }): DirectoryMentorLike {
   return {
@@ -170,4 +178,36 @@ test("native mentee preferences do not fall back to alumni position_title", () =
     loadMenteePreferencesBlock,
     /preferredPositions: asStringArray\(prefs\?\.preferred_positions\)/
   );
+});
+
+// ── bio_source provenance (U6) ───────────────────────────────────────────────
+
+test("tab-data directory payload maps bio_source onto each mentor", () => {
+  // payload element type declares the field
+  assert.match(tabDataSource, /bio_source:\s*"manual"\s*\|\s*"ai_generated"\s*\|\s*null;/);
+  // mapping actually populates it from the profile row
+  assert.match(tabDataSource, /bio_source:\s*profile\.bio_source\s*\?\?\s*null,/);
+});
+
+test("MentorDirectory shows the AI-summary label only for ai_generated bios", () => {
+  // MentorData carries the provenance
+  assert.match(mentorDirectorySource, /bio_source:\s*"manual"\s*\|\s*"ai_generated"\s*\|\s*null;/);
+  // label render is gated on the ai_generated source
+  assert.match(mentorDirectorySource, /mentor\.bio_source === "ai_generated"/);
+  assert.match(mentorDirectorySource, /-ai-summary`/);
+});
+
+test("MentorProfileCard gates the AI-generated badge on bioSource and offers regenerate", () => {
+  // badge appears only for ai_generated provenance with a non-empty bio
+  assert.match(
+    mentorProfileCardSource,
+    /bioSource === "ai_generated" && form\.bio\.trim\(\)\.length > 0/
+  );
+  assert.match(mentorProfileCardSource, />\s*AI-generated\s*</);
+  // regenerate button POSTs to the generate-bio endpoint
+  assert.match(mentorProfileCardSource, /mentor-profile\/generate-bio/);
+  assert.match(mentorProfileCardSource, /method:\s*"POST"/);
+  assert.match(mentorProfileCardSource, /onClick=\{regenerateBio\}/);
+  // 429 rate-limit handled specially
+  assert.match(mentorProfileCardSource, /res\.status === 429/);
 });
