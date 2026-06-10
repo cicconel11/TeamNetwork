@@ -388,10 +388,17 @@ export async function runModelToolsLoop(
         )
       : null;
 
+    // Deterministic content is template-rendered directly from the tool's
+    // structured data, so re-running the regex-based grounding self-check on it
+    // is lossy (it can re-extract a label whose code the table doesn't map and
+    // wrongly flag a correct answer). The model never freely composed this text,
+    // so there is nothing to ground — skip the check for deterministic paths.
+    let renderedDeterministically = false;
     if (deterministicToolContent || deterministicGlobalLookupContent || deterministicToolErrorContent) {
       skipStage(input.stageTimings, "pass2");
       pass2BufferedContent =
         deterministicToolContent ?? deterministicGlobalLookupContent ?? deterministicToolErrorContent ?? "";
+      renderedDeterministically = true;
     } else {
       const hasToolErrors =
         toolResults.length > input.successfulToolResults.length;
@@ -449,20 +456,22 @@ export async function runModelToolsLoop(
       }
     }
 
-    pass2BufferedContent = await runGroundingCheck({
-      pass2BufferedContent,
-      successfulToolResults: input.successfulToolResults,
-      executionPolicy: input.executionPolicy,
-      hideDonorNames,
-      runtimeState: input.runtimeState,
-      stageTimings: input.stageTimings,
-      threadId: input.threadId,
-      assistantMessageId: input.assistantMessageId,
-      orgId: input.ctx.orgId,
-      requestLogContext: input.requestLogContext,
-      verifyToolBackedResponseFn: input.verifyToolBackedResponseFn,
-      trackOpsEventServerFn: input.trackOpsEventServerFn,
-    });
+    if (!renderedDeterministically) {
+      pass2BufferedContent = await runGroundingCheck({
+        pass2BufferedContent,
+        successfulToolResults: input.successfulToolResults,
+        executionPolicy: input.executionPolicy,
+        hideDonorNames,
+        runtimeState: input.runtimeState,
+        stageTimings: input.stageTimings,
+        threadId: input.threadId,
+        assistantMessageId: input.assistantMessageId,
+        orgId: input.ctx.orgId,
+        requestLogContext: input.requestLogContext,
+        verifyToolBackedResponseFn: input.verifyToolBackedResponseFn,
+        trackOpsEventServerFn: input.trackOpsEventServerFn,
+      });
+    }
 
     if (pass2BufferedContent) {
       pass2BufferedContent = await input.applyTurnSafetyGate(pass2BufferedContent);

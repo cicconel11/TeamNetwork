@@ -13,6 +13,7 @@ import {
   verifyListMembers,
   verifyOrgStats,
   verifySuggestConnections,
+  verifySuggestMentees,
   verifySuggestMentors,
 } from "./claim-coverage";
 
@@ -77,6 +78,9 @@ export function verifyToolBackedResponse(
         break;
       case "suggest_mentors":
         failures.push(...verifySuggestMentors(input.content, result.data));
+        break;
+      case "suggest_mentees":
+        failures.push(...verifySuggestMentees(input.content, result.data));
         break;
       default:
         // No grounding check for this tool
