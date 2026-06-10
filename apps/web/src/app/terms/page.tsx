@@ -213,8 +213,8 @@ export default function TermsPage() {
             <Link href="/" className="text-sm text-landing-cream/60 hover:text-landing-cream transition-colors">
               ← Back to Home
             </Link>
-            <ButtonLink href="/auth/signup" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold">
-              Get Started
+            <ButtonLink href="/contact" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold">
+              Contact Sales
             </ButtonLink>
           </div>
         </div>

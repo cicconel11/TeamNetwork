@@ -27,11 +27,9 @@ import { getWebAppUrl } from "@/lib/web-api";
 import {
   ALUMNI_BUCKET_LABELS,
   ALUMNI_LIMITS,
-  getTotalPrice,
-  formatPrice,
   normalizeBucket,
 } from "@teammeet/core";
-import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
+import type { AlumniBucket } from "@teammeet/types";
 import {
   CreditCard,
   ExternalLink,
@@ -364,6 +362,10 @@ export default function BillingScreen() {
     Linking.openURL(`${getWebAppUrl()}${path}`);
   }, [orgSlug, isIOS]);
 
+  const handleContactSalesInWeb = useCallback(() => {
+    Linking.openURL(`${getWebAppUrl()}/contact`);
+  }, []);
+
   const formatStatus = useCallback(
     (status: string): { label: string; color: string; bgColor: string } => {
       switch (status) {
@@ -394,11 +396,6 @@ export default function BillingScreen() {
     subscription && alumniLimit !== null && alumniLimit > 0
       ? Math.min((subscription.alumniCount / alumniLimit) * 100, 100)
       : 0;
-
-  const estimatedPrice =
-    !isIOS && subscription && normalizedBucket !== "none"
-      ? getTotalPrice("month" as SubscriptionInterval, normalizedBucket)
-      : null;
 
   if (!roleLoading && !isAdmin) {
     return (
@@ -516,13 +513,6 @@ export default function BillingScreen() {
                   <Text style={styles.tierValue}>{formatBucketLabel(normalizedBucket)}</Text>
                 </View>
 
-                {estimatedPrice !== null && (
-                  <View style={styles.tierRow}>
-                    <Text style={styles.tierLabel}>Monthly Cost</Text>
-                    <Text style={styles.tierValue}>{formatPrice(estimatedPrice, "month")}</Text>
-                  </View>
-                )}
-
                 {subscription.currentPeriodEnd && (
                   <View style={styles.tierRow}>
                     <View style={styles.tierLabelRow}>
@@ -590,7 +580,7 @@ export default function BillingScreen() {
                   <View style={styles.warningBanner}>
                     <TrendingUp size={16} color={semantic.warning} />
                     <Text style={styles.warningText}>
-                      You're approaching your alumni limit. Consider upgrading your plan.
+                      You're approaching your alumni limit. Contact sales to review your contract.
                     </Text>
                   </View>
                 )}
@@ -603,7 +593,7 @@ export default function BillingScreen() {
               >
                 <CreditCard size={20} color={neutral.surface} />
                 <Text style={styles.manageBillingText}>
-                  {isIOS ? "Manage organization on web" : "Manage Billing in Web"}
+                  {isIOS ? "Manage organization on web" : "Manage contract on web"}
                 </Text>
                 <ExternalLink size={18} color={neutral.surface} />
               </Pressable>
@@ -611,7 +601,7 @@ export default function BillingScreen() {
               <Text style={styles.hintText}>
                 {isIOS
                   ? "Organization settings are managed on the web."
-                  : "To change your plan, update payment methods, or view invoices, visit the billing settings on the web."}
+                  : "To review contract terms, update payment methods, or view invoices, visit billing settings on the web."}
               </Text>
             </>
           ) : (
@@ -621,14 +611,14 @@ export default function BillingScreen() {
               <Text style={styles.noSubscriptionText}>
                 {isIOS
                   ? "Subscription is managed by your organization administrator on the web."
-                  : "Set up billing from the web to access all features."}
+                  : "New organization pricing is contract-based. Contact us on the web and we'll follow up with next steps."}
               </Text>
               {!isIOS && (
                 <Pressable
                   style={({ pressed }) => [styles.setupButton, pressed && { opacity: 0.9 }]}
-                  onPress={handleManageBillingInWeb}
+                  onPress={handleContactSalesInWeb}
                 >
-                  <Text style={styles.setupButtonText}>Set Up Billing</Text>
+                  <Text style={styles.setupButtonText}>Request Pricing</Text>
                   <ExternalLink size={16} color={neutral.surface} />
                 </Pressable>
               )}

@@ -4,7 +4,7 @@ import "../landing-styles.css";
 
 export const metadata: Metadata = {
   title: "Contact Sales — TeamNetwork",
-  description: "Get in touch to learn more about TeamNetwork for your enterprise.",
+  description: "Get in touch for TeamNetwork contract pricing.",
 };
 
 export default function ContactPage() {
@@ -32,12 +32,12 @@ export default function ContactPage() {
             Contact Sales
           </h1>
           <p className="text-landing-cream/60 mb-8 text-sm leading-relaxed">
-            Interested in TeamNetwork Enterprise for your organization? Drop us a
-            line and we&apos;ll get back to you within one business day.
+            Tell us about your organization, network size, and rollout goals.
+            We&apos;ll get back to you with contract pricing and next steps.
           </p>
 
           <a
-            href="mailto:sales@myteamnetwork.com?subject=Enterprise%20Inquiry"
+            href="mailto:sales@myteamnetwork.com?subject=TeamNetwork%20Pricing%20Inquiry"
             className="inline-block w-full bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-semibold py-3 px-8 rounded-xl transition-all text-sm mb-4"
           >
             Email Sales &rarr;

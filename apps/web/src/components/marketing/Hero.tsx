@@ -60,12 +60,12 @@ export function Hero({ proofPoints }: HeroProps) {
 
             <div className="hero-animate mx-0 flex w-full max-w-full flex-col items-stretch gap-4 sm:mx-auto sm:flex-row sm:justify-center lg:mx-0 lg:justify-start">
               <ButtonLink
-                href="/auth/signup"
+                href="/contact"
                 variant="landingPrimary"
                 size="xl"
                 className="cta-glow w-full sm:w-auto"
               >
-                Create Your Organization
+                Request Pricing
               </ButtonLink>
               <ButtonLink
                 href="/auth/login?redirect=/app/join"

@@ -164,11 +164,11 @@ export function LandingHeader() {
             Sign In
           </ButtonLink>
           <ButtonLink
-            href="/auth/signup"
+            href="/contact"
             variant="landingPrimary"
             className="whitespace-nowrap px-2 py-2 text-xs min-[380px]:px-2.5 min-[380px]:text-sm sm:px-5 sm:text-base"
           >
-            Get Started
+            Contact Sales
           </ButtonLink>
 
           {/* Hamburger button — mobile only */}
@@ -260,11 +260,11 @@ export function LandingHeader() {
                 Sign In
               </ButtonLink>
               <ButtonLink
-                href="/auth/signup"
+                href="/contact"
                 variant="landingPrimary"
                 className="w-full text-center"
               >
-                Get Started
+                Contact Sales
               </ButtonLink>
             </div>
           </nav>

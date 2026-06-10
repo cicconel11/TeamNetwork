@@ -55,7 +55,7 @@ export const FAQ_ITEMS = [
   },
   {
     question: "How does alumni pricing work?",
-    answer: "The base plan covers your current roster and coaches. You only pay extra if you want to grant access to a large database of alumni for networking and fundraising purposes.",
+    answer: "We include alumni access in your contract quote based on the size of your network, migration needs, and the modules your organization wants to use.",
   },
   {
     question: "Can booster clubs use this?",
@@ -67,11 +67,11 @@ export const FAQ_ITEMS = [
   },
   {
     question: "Can I cancel anytime?",
-    answer: "Yes. You can cancel your subscription at any time from your organization settings. Your access continues through the end of the current billing period — no partial refunds, but no surprise charges either.",
+    answer: "Contract terms are handled with your organization during onboarding. We will make renewal, cancellation, and data-export terms clear before you sign.",
   },
   {
-    question: "Is there a free trial?",
-    answer: "Every organization can start with a free trial. A credit card is required up front, and billing begins when the trial ends unless you cancel.",
+    question: "How do we get pricing?",
+    answer: "Contact us with your organization size, rollout timeline, and the modules you need. We will send a contract-based quote instead of asking you to choose from a public rate card.",
   },
   {
     question: "What happens to my data if I cancel?",
