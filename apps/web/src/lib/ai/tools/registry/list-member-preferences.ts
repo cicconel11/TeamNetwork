@@ -61,8 +61,12 @@ interface AggregatedMember {
 export const listMemberPreferencesModule: ToolModule<Args> = {
   name: "list_member_preferences",
   argsSchema: listMemberPreferencesSchema,
-  async execute(args, { ctx, sb, logContext }) {
-    return runListMemberPreferences(sb, ctx.orgId, args, logContext);
+  async execute(args, { ctx, sb, logContext, actorRole }) {
+    // Non-admins never see member emails — module-level redaction on top of
+    // the executor handing them an RLS-bound client.
+    return runListMemberPreferences(sb, ctx.orgId, args, logContext, {
+      redactEmails: actorRole !== "admin",
+    });
   },
 };
 
@@ -82,6 +86,7 @@ async function runListMemberPreferences(
   orgId: string,
   args: Args,
   logContext: AiLogContext,
+  options: { redactEmails: boolean },
 ): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 20, 50);
 
@@ -186,10 +191,13 @@ async function runListMemberPreferences(
       if (!matchesFilter(topicsForFilter, args.topic)) continue;
 
       const user = userLookup.get(userId);
+      // Redacted actors never see an email anywhere — including the
+      // email-as-display-name fallback.
+      const emailFallbackName = options.redactEmails ? null : user?.email;
       aggregated.push({
         user_id: userId,
-        name: user?.name ?? user?.email ?? "Member",
-        email: user?.email ?? null,
+        name: user?.name ?? emailFallbackName ?? "Member",
+        email: options.redactEmails ? null : (user?.email ?? null),
         as_mentor: mentor
           ? {
               sports: mentor.sports,

@@ -1,13 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import {
+  buildRarityStats,
   rankMentorsForMentee,
   rankMentorsForMenteeWithFallback,
   rankMenteesForMentor,
   loadBalanceMatches,
   type MentorMatch,
 } from "@/lib/mentorship/matching";
-import type { MentorInput } from "@/lib/mentorship/matching-signals";
+import { extractMentorSignals, type MentorInput } from "@/lib/mentorship/matching-signals";
 import {
   loadMentorInputs,
   loadMenteePreferences,
@@ -709,6 +710,9 @@ export async function suggestMentees(
   const matches = rankMenteesForMentor(mentorInput, menteeInputs, {
     orgSettings: orgRow?.settings ?? null,
     excludeMenteeUserIds: excludeIds,
+    // Same rarity population as the mentor direction — without it the scorer
+    // defaults to a population of one and deflates mentee-direction confidence.
+    rarityStats: buildRarityStats(mentorInputs.map(extractMentorSignals)),
   });
 
   if (matches.length === 0) {
