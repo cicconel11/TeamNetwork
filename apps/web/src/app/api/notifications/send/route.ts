@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
 import { z } from "zod";
 import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
-import { sendNotificationBlast, sendEmail as sendEmailStub } from "@/lib/notifications";
-import type { EmailParams, NotificationResult, NotificationCategory } from "@/lib/notifications";
+import { sendNotificationBlast } from "@/lib/notifications";
+import type { NotificationCategory } from "@/lib/notifications";
 import { sendPush, type PushType } from "@/lib/notifications/push";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
@@ -51,12 +50,6 @@ const looseUuid = z
   .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, {
     message: "Must be a 36-char UUID",
   });
-
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
-
-const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 
 const validChannel = (value: string | undefined): NotificationChannel => {
   if (value === "sms" || value === "both") return value;
@@ -147,30 +140,6 @@ const notificationSchema = z
       });
     }
   });
-
-async function sendEmailWithFallback(to: string, subject: string, bodyText: string) {
-  if (resend) {
-    try {
-      const response = await resend.emails.send({
-        from: FROM_EMAIL,
-        to,
-        subject,
-        text: bodyText,
-      });
-
-      if (response.error) {
-        return { success: false, error: response.error.message };
-      }
-
-      return { success: true, messageId: response.data?.id };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      return { success: false, error: errorMsg };
-    }
-  }
-
-  return sendEmailStub({ to, subject, body: bodyText });
-}
 
 export async function POST(request: Request) {
   let respond: ((payload: unknown, status?: number) => ReturnType<typeof NextResponse.json>) | null = null;
@@ -342,7 +311,7 @@ export async function POST(request: Request) {
     // required for the blast path; gating it earlier blocks push-only sends
     // whenever email is unconfigured.
     let runBlast = shouldSendBlast(requestedChannel);
-    if (runBlast && !resend && process.env.NODE_ENV === "production") {
+    if (runBlast && !process.env.RESEND_API_KEY && process.env.NODE_ENV === "production") {
       // For "all", degrade gracefully so push still fires.
       // For email/sms-only, the request can't succeed — return a config error.
       if (!shouldSendPush(requestedChannel)) {
@@ -367,9 +336,6 @@ export async function POST(request: Request) {
           body: bodyText,
           targetUserIds: targetUserIds || undefined,
           category,
-          sendEmailFn: async (params: EmailParams): Promise<NotificationResult> => {
-            return sendEmailWithFallback(params.to, params.subject, params.body);
-          },
         })
       : { total: 0, emailCount: 0, smsCount: 0, skippedMissingContact: 0, errors: [] };
 

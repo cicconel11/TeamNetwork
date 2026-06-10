@@ -87,3 +87,6 @@ export * from "./ai-feedback";
 
 // Moderation schemas (content reports, blocks)
 export * from "./moderation";
+
+// Org custom email sending domain schemas
+export * from "./email-domain";
