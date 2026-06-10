@@ -15,8 +15,8 @@ import { createMockCheckoutSession, createMockPaymentIntent } from "../../utils/
  * 2. Validate amount (min $1, max $100,000)
  * 3. Validate organization has Stripe Connect account
  * 4. Handle idempotency (prevent duplicate donations)
- * 5. Calculate platform fee server-side (ignore client value)
- * 6. Support both checkout session and payment intent modes
+ * 5. Support checkout session, payment intent, and iOS PaymentSheet modes
+ * 6. Return connected-account details for native iOS donations
  * 7. Handle anonymous and authenticated donors
  */
 
@@ -32,15 +32,20 @@ interface DonationRequest {
   anonymous?: boolean;
   eventId?: string;
   idempotencyKey: string;
-  mode?: "checkout" | "payment_intent";
-  clientPlatformFee?: number; // Should be ignored
+  mode?: "checkout" | "payment_intent" | "payment_sheet";
+  platform?: "ios" | "web";
 }
 
 interface DonationResult {
   status: number;
   checkoutUrl?: string;
   clientSecret?: string;
+  ephemeralKeySecret?: string;
+  customerId?: string;
+  stripeAccountId?: string;
+  paymentAttemptId?: string;
   error?: string;
+  reason?: string;
 }
 
 interface DonationContext {
@@ -49,6 +54,7 @@ interface DonationContext {
     id: string;
     stripe_connect_account_id?: string | null;
     name?: string;
+    donation_eligible_ios?: boolean | null;
   };
   connectStatus?: {
     isReady: boolean;
@@ -59,7 +65,6 @@ interface DonationContext {
 // Constants
 const MIN_AMOUNT_CENTS = 100; // $1
 const MAX_AMOUNT_CENTS = 10000000; // $100,000
-const PLATFORM_FEE_PERCENT = 3; // 3% platform fee
 
 // Simulation functions
 
@@ -85,6 +90,18 @@ function simulateCreateDonation(
   // Validate org has Stripe Connect account
   if (!ctx.organization.stripe_connect_account_id) {
     return { status: 400, error: "Organization has not set up donations" };
+  }
+
+  if (request.platform === "ios" && !ctx.organization.donation_eligible_ios) {
+    return {
+      status: 403,
+      error: "Donations to this organization are only available on the web.",
+      reason: "org_not_eligible_ios",
+    };
+  }
+
+  if (request.mode === "payment_sheet" && request.platform !== "ios") {
+    return { status: 400, error: "payment_sheet mode is only available on the iOS client." };
   }
 
   // If Stripe account lookup fails, surface temporary failure
@@ -128,10 +145,6 @@ function simulateCreateDonation(
     return { status: 409, error: "Payment is being processed" };
   }
 
-  // Calculate platform fee SERVER-SIDE (ignore any client-provided value)
-  // Platform fee calculation happens server-side but not used in this simulation
-  void Math.round(request.amountCents * (PLATFORM_FEE_PERCENT / 100));
-
   // Currency validation
   const currency = (request.currency || "usd").toLowerCase();
   if (!["usd", "eur", "gbp", "cad"].includes(currency)) {
@@ -150,6 +163,22 @@ function simulateCreateDonation(
       currency,
     });
     return { status: 200, clientSecret: mockIntent.client_secret };
+  }
+
+  if (request.mode === "payment_sheet") {
+    const mockIntent = createMockPaymentIntent({
+      amount: request.amountCents,
+      currency,
+    });
+
+    return {
+      status: 200,
+      clientSecret: mockIntent.client_secret,
+      ephemeralKeySecret: "ephkey_test_secret",
+      customerId: "cus_test",
+      stripeAccountId: ctx.organization.stripe_connect_account_id,
+      paymentAttemptId: "attempt_test",
+    };
   }
 
   // Default: checkout session mode
@@ -450,6 +479,90 @@ test("create-donation payment_intent mode requires donor email", () => {
   assert.strictEqual(result.error, "Donor email is required for payment intent mode");
 });
 
+test("create-donation payment_sheet mode returns connected-account payment details for iOS", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.unauthenticated,
+      captchaToken: "valid_token",
+      organizationId: "org-1",
+      amountCents: 5000,
+      idempotencyKey: "key-payment-sheet",
+      mode: "payment_sheet",
+      platform: "ios",
+      donorEmail: "donor@example.com",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: true,
+      },
+      connectStatus: { isReady: true },
+    }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.ok(result.clientSecret);
+  assert.strictEqual(result.ephemeralKeySecret, "ephkey_test_secret");
+  assert.strictEqual(result.customerId, "cus_test");
+  assert.strictEqual(result.stripeAccountId, "acct_connected_123");
+  assert.strictEqual(result.paymentAttemptId, "attempt_test");
+});
+
+test("create-donation payment_sheet mode is blocked for non-iOS callers", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.unauthenticated,
+      captchaToken: "valid_token",
+      organizationId: "org-1",
+      amountCents: 5000,
+      idempotencyKey: "key-payment-sheet-web",
+      mode: "payment_sheet",
+      platform: "web",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: true,
+      },
+    }
+  );
+
+  assert.strictEqual(result.status, 400);
+  assert.strictEqual(result.error, "payment_sheet mode is only available on the iOS client.");
+});
+
+test("create-donation blocks iOS donations for orgs not verified for native donations", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.unauthenticated,
+      captchaToken: "valid_token",
+      organizationId: "org-1",
+      amountCents: 5000,
+      idempotencyKey: "key-ios-ineligible",
+      mode: "payment_sheet",
+      platform: "ios",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: false,
+      },
+    }
+  );
+
+  assert.strictEqual(result.status, 403);
+  assert.strictEqual(result.reason, "org_not_eligible_ios");
+});
+
 test("create-donation rejects unsupported currency", () => {
   const supabase = createSupabaseStub();
   const result = simulateCreateDonation(
@@ -510,29 +623,6 @@ test("create-donation works for anonymous users", () => {
 
   assert.strictEqual(result.status, 200);
   assert.ok(result.checkoutUrl);
-});
-
-test("platform fee is calculated server-side (client value ignored)", () => {
-  const supabase = createSupabaseStub();
-
-  // Client tries to pass a custom platform fee (should be ignored)
-  const request: DonationRequest = {
-    auth: AuthPresets.unauthenticated,
-    captchaToken: "valid_token",
-    organizationId: "org-1",
-    amountCents: 10000, // $100
-    idempotencyKey: "key-1",
-    clientPlatformFee: 0, // Client tries to set 0 fee
-  };
-
-  const result = simulateCreateDonation(request, {
-    supabase,
-    organization: { id: "org-1", stripe_connect_account_id: "acct_123" },
-  });
-
-  // The request succeeds, but internally the platform fee would be
-  // calculated as 3% = $3 = 300 cents, regardless of client value
-  assert.strictEqual(result.status, 200);
 });
 
 test("create-donation accepts anonymous flag in request body", () => {

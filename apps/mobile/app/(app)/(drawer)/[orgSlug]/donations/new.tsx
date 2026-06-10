@@ -26,6 +26,15 @@ import { track } from "@/lib/analytics";
 import { useDonationPaymentSheet } from "@/hooks/useDonationPaymentSheet";
 import { AddToWalletButton } from "@/components/wallet/AddToWalletButton";
 
+function donationAmountBucket(amount: number) {
+  if (amount < 10) return "<10";
+  if (amount <= 25) return "10-25";
+  if (amount <= 50) return "26-50";
+  if (amount <= 100) return "51-100";
+  if (amount <= 250) return "101-250";
+  return "250+";
+}
+
 export default function NewDonationScreen() {
   const navigation = useNavigation();
   const router = useRouter();
@@ -256,6 +265,14 @@ export default function NewDonationScreen() {
     }
 
     if (isIOS) {
+      const amountBucket = donationAmountBucket(amountValue);
+      track("donation_checkout_start", {
+        org_slug: orgSlug,
+        amount_bucket: amountBucket,
+        has_purpose: !!purpose.trim(),
+        channel: "payment_sheet",
+      });
+
       const result = await startPaymentSheet({
         organizationId: orgId,
         organizationSlug: orgSlug,
@@ -267,24 +284,44 @@ export default function NewDonationScreen() {
       });
 
       if (result.status === "completed") {
-        track("donation_checkout_started", {
+        track("donation_checkout_result", {
           org_slug: orgSlug,
-          amount: amountValue,
-          has_purpose: !!purpose.trim(),
+          amount_bucket: amountBucket,
           channel: "payment_sheet",
+          result: "success",
         });
         setSucceededAttemptId(result.paymentAttemptId);
         return;
       }
       if (result.status === "canceled") {
+        track("donation_checkout_result", {
+          org_slug: orgSlug,
+          amount_bucket: amountBucket,
+          channel: "payment_sheet",
+          result: "cancel",
+        });
         return;
       }
       if (result.status === "ineligible_ios") {
+        track("donation_checkout_result", {
+          org_slug: orgSlug,
+          amount_bucket: amountBucket,
+          channel: "payment_sheet",
+          result: "fail",
+          error_code: "org_not_eligible_ios",
+        });
         setError(
           "Donations for this organization are only available on the web. Please open the web app to contribute.",
         );
         return;
       }
+      track("donation_checkout_result", {
+        org_slug: orgSlug,
+        amount_bucket: amountBucket,
+        channel: "payment_sheet",
+        result: "fail",
+        error_code: "payment_sheet_error",
+      });
       setError(result.message);
       return;
     }
@@ -322,10 +359,11 @@ export default function NewDonationScreen() {
       }
 
       if (data?.url) {
-        track("donation_checkout_started", {
+        track("donation_checkout_start", {
           org_slug: orgSlug,
-          amount: amountValue,
+          amount_bucket: donationAmountBucket(amountValue),
           has_purpose: !!(purpose.trim()),
+          channel: "checkout",
         });
         if (!(await openHttpsUrl(data.url as string))) {
           throw new Error("Checkout URL was invalid");

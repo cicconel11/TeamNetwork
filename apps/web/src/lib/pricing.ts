@@ -51,7 +51,7 @@ export const FAQ_ITEMS = [
   },
   {
     question: "Do you take a cut of our donations?",
-    answer: "No. We charge a flat platform fee. You connect your own Stripe account, so 100% of donations (minus standard Stripe processing fees) go directly to your program.",
+    answer: "No. You connect your own Stripe account, so 100% of donations (minus standard Stripe processing fees) go directly to your program.",
   },
   {
     question: "How does alumni pricing work?",
