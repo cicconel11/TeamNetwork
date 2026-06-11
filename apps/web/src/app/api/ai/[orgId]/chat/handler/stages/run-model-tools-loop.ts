@@ -34,7 +34,11 @@ import {
   formatDeterministicToolErrorResponse,
   formatGlobalLookupToolResponse,
 } from "../formatters/index";
-import { MEMBER_ROSTER_PROMPT_PATTERN } from "../pass1-tools";
+import {
+  MEMBER_ROSTER_PROMPT_PATTERN,
+  pass1RequiresToolBackedAnswer,
+} from "../pass1-tools";
+import { aiLog } from "@/lib/ai/logger";
 import { classifyFastPath } from "../fast-path-classifier";
 import { runPass1Bypass } from "./run-pass1-bypass";
 import type { PendingEventRevisionAnalysis } from "../pending-event-revision";
@@ -310,10 +314,29 @@ export async function runModelToolsLoop(
   }
 
   if (!input.runtimeState.toolCallMade && pass1BufferedContent) {
-    pass1BufferedContent = await input.applyTurnRagGrounding(pass1BufferedContent);
-    pass1BufferedContent = await input.applyTurnSafetyGate(pass1BufferedContent);
-    fullContent += pass1BufferedContent;
-    input.enqueue({ type: "chunk", content: pass1BufferedContent });
+    // Fail closed for tool-required intents (mentorship suggestions): a
+    // free-text pass-1 answer here is the model imitating earlier suggestion
+    // turns with fabricated member names, and there is no tool result to
+    // ground it against. z.ai does not support tool_choice "required", so the
+    // fabricated text is suppressed after the fact instead.
+    if (pass1RequiresToolBackedAnswer(input.pass1Tools)) {
+      aiLog(
+        "warn",
+        "ai-chat",
+        "suppressed tool-less pass-1 answer for tool-required intent",
+        input.requestLogContext,
+        { droppedChars: pass1BufferedContent.length },
+      );
+      const fallback =
+        "Mentorship suggestions come straight from your organization's matching engine, and I couldn't run it for that request. Please try again — for example: \"Suggest mentors for <member name>\" or \"Recommend mentees for <mentor name>\".";
+      fullContent += fallback;
+      input.enqueue({ type: "chunk", content: fallback });
+    } else {
+      pass1BufferedContent = await input.applyTurnRagGrounding(pass1BufferedContent);
+      pass1BufferedContent = await input.applyTurnSafetyGate(pass1BufferedContent);
+      fullContent += pass1BufferedContent;
+      input.enqueue({ type: "chunk", content: pass1BufferedContent });
+    }
   }
 
   if (input.runtimeState.toolCallMade && toolResults.length > 0) {
