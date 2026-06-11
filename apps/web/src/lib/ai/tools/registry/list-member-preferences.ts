@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { isStageTimeoutError } from "@/lib/ai/timeout";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
-import { getSafeErrorMessage } from "@/lib/ai/tools/shared";
+import { getSafeErrorMessage, matchesFilter } from "@/lib/ai/tools/shared";
 import { toolError, type ToolExecutionResult } from "@/lib/ai/tools/result";
 import type { ToolModule } from "./types";
 
@@ -73,12 +73,6 @@ export const listMemberPreferencesModule: ToolModule<Args> = {
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
-}
-
-function matchesFilter(values: string[], needle: string | undefined): boolean {
-  if (!needle) return true;
-  const lowered = needle.toLowerCase();
-  return values.some((value) => value.toLowerCase().includes(lowered));
 }
 
 async function runListMemberPreferences(

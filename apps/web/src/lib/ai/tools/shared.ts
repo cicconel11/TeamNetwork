@@ -146,3 +146,13 @@ export function isScheduleImageAttachment(attachment?: {
     attachment && SCHEDULE_IMAGE_MIME_TYPES.has(attachment.mimeType as ScheduleImageMimeType)
   );
 }
+
+/**
+ * Case-insensitive substring filter used by listing tools (member preferences,
+ * available mentors). An absent needle matches everything.
+ */
+export function matchesFilter(values: string[], needle: string | undefined): boolean {
+  if (!needle) return true;
+  const lowered = needle.toLowerCase();
+  return values.some((value) => value.toLowerCase().includes(lowered));
+}

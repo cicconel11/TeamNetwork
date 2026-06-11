@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { isStageTimeoutError } from "@/lib/ai/timeout";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
-import { getSafeErrorMessage } from "@/lib/ai/tools/shared";
+import { getSafeErrorMessage, matchesFilter } from "@/lib/ai/tools/shared";
 import { toolError, type ToolExecutionResult } from "@/lib/ai/tools/result";
 import type { ToolModule } from "./types";
 
@@ -14,12 +14,6 @@ const listAvailableMentorsSchema = z
     position: z.string().trim().min(1).max(80).optional(),
   })
   .strict();
-
-function matchesFilter(values: string[], needle: string | undefined): boolean {
-  if (!needle) return true;
-  const lowered = needle.toLowerCase();
-  return values.some((value) => value.toLowerCase().includes(lowered));
-}
 
 type Args = z.infer<typeof listAvailableMentorsSchema>;
 

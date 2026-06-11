@@ -319,7 +319,7 @@ export async function runModelToolsLoop(
     // turns with fabricated member names, and there is no tool result to
     // ground it against. z.ai does not support tool_choice "required", so the
     // fabricated text is suppressed after the fact instead.
-    if (pass1RequiresToolBackedAnswer(input.pass1Tools)) {
+    if (pass1RequiresToolBackedAnswer(input.pass1Tools, input.message)) {
       aiLog(
         "warn",
         "ai-chat",
