@@ -46,6 +46,7 @@ import {
   looksLikeStructuredJobDraft,
   getPass1Tools,
   getForcedPass1ToolChoice,
+  pass1RequiresToolBackedAnswer,
   isToolFirstEligible,
   deriveOrgStatsScope,
   deriveDonationAnalyticsDimension,
@@ -955,6 +956,45 @@ describe("getForcedPass1ToolChoice", () => {
     // Neither suggest_mentors nor suggest_mentees is on the forced allowlist.
     assert.deepEqual(namesOf(tools), ["suggest_mentors", "suggest_mentees"]);
     assert.equal(getForcedPass1ToolChoice(tools), undefined);
+  });
+});
+
+describe("pass1RequiresToolBackedAnswer", () => {
+  it("is true for the mentorship-suggestion pair (no-tool answers are fabrications)", () => {
+    const tools = getPass1Tools(
+      "Recommend mentees for Emily Adams",
+      "members",
+      "surface_read_tools",
+      "knowledge_query",
+    );
+    assert.deepEqual(namesOf(tools), ["suggest_mentors", "suggest_mentees"]);
+    assert.equal(pass1RequiresToolBackedAnswer(tools), true);
+  });
+
+  it("is false for undefined, empty, and non-mentorship toolsets", () => {
+    assert.equal(pass1RequiresToolBackedAnswer(undefined), false);
+    const availability = getPass1Tools(
+      "are any mentors available right now?",
+      "members",
+      "surface_read_tools",
+      "knowledge_query",
+    );
+    assert.deepEqual(namesOf(availability), ["list_available_mentors"]);
+    assert.equal(pass1RequiresToolBackedAnswer(availability), false);
+  });
+
+  it("tools loop suppresses tool-less answers for tool-required intents (source assert)", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const src = await readFile(
+      new URL(
+        "../src/app/api/ai/[orgId]/chat/handler/stages/run-model-tools-loop.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    assert.match(src, /pass1RequiresToolBackedAnswer\(input\.pass1Tools\)/);
+    assert.match(src, /suppressed tool-less pass-1 answer for tool-required intent/);
+    assert.match(src, /matching engine, and I couldn't run it for that request/);
   });
 });
 

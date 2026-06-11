@@ -811,6 +811,36 @@ export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<
   "extract_schedule_pdf",
 ]);
 
+/**
+ * Tool sets where a free-text (no-tool) pass-1 answer is never acceptable:
+ * mentorship suggestions must come from the matching engine. Without a guard
+ * the model can skip the tool and imitate prior suggestion turns in the
+ * thread, fabricating plausible member names — and tool-grounding never runs
+ * because there is no tool result to ground against. z.ai only supports
+ * tool_choice "auto" (named-function forcing aside), so this cannot be
+ * enforced at the API layer; the tools loop fails closed instead when pass-1
+ * answered one of these intents without calling a tool.
+ */
+const TOOL_REQUIRED_PASS1_TOOL_NAMES: ReadonlySet<ToolName> = new Set<ToolName>([
+  "suggest_mentors",
+  "suggest_mentees",
+]);
+
+/**
+ * True when the routed pass-1 toolset means a free-text answer must be
+ * suppressed unless a tool actually ran (see TOOL_REQUIRED_PASS1_TOOL_NAMES).
+ */
+export function pass1RequiresToolBackedAnswer(
+  pass1Tools: ReadonlyArray<OpenAI.Chat.ChatCompletionTool> | undefined
+): boolean {
+  if (!pass1Tools || pass1Tools.length === 0) return false;
+  return pass1Tools.every(
+    (tool) =>
+      "function" in tool &&
+      TOOL_REQUIRED_PASS1_TOOL_NAMES.has(tool.function.name as ToolName),
+  );
+}
+
 export function getForcedPass1ToolChoice(
   pass1Tools: ReturnType<typeof getPass1Tools>
 ): OpenAI.Chat.ChatCompletionToolChoiceOption | undefined {
