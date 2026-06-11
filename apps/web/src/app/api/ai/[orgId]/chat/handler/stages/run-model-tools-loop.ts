@@ -406,7 +406,7 @@ export async function runModelToolsLoop(
         (result) => result.name === "suggest_connections",
       );
       const mentorPass2 = input.successfulToolResults.some(
-        (result) => result.name === "suggest_mentors",
+        (result) => result.name === "suggest_mentors" || result.name === "suggest_mentees",
       );
       const memberRosterPass2 = input.successfulToolResults.some(
         (result) => result.name === "list_members",

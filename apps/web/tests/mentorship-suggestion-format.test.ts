@@ -81,6 +81,55 @@ test("mentor suggestions share the same structure", () => {
   assert.match(out, /\n- Shared industry: Finance/);
 });
 
+test("code-bearing reasons render human copy, not raw label:value", () => {
+  const out = formatSuggestMentorsResponse({
+    state: "resolved",
+    mentee: { name: "Reese Price" },
+    suggestions: [
+      {
+        mentor: { name: "Maria Bell", subtitle: "Healthcare Consultant at Pfizer" },
+        confidence: 63,
+        confidenceLabel: "Moderate",
+        reasons: [
+          { code: "graduation_gap_fit", label: "Graduation gap fit", value: 8 },
+          { code: "career_trajectory", label: "Walked your path", value: "Operations" },
+          { code: "shared_industry", label: "Shared industry", value: "Healthcare" },
+        ],
+      },
+    ],
+  })!;
+  // Raw internal number is humanized.
+  assert.match(out, /\n- 8 years ahead in career/);
+  assert.ok(!out.includes("Graduation gap fit: 8"));
+  assert.match(out, /\n- Has worked in Operations/);
+  assert.match(out, /\n- Same industry: Healthcare/);
+});
+
+test("mentee-direction reasons flip perspective-sensitive copy", () => {
+  const out = formatSuggestMenteesResponse({
+    state: "resolved",
+    mentor: { name: "Emily Adams" },
+    suggestions: [
+      {
+        mentee: { name: "Dominic Romano", subtitle: null },
+        confidence: 89,
+        confidenceLabel: "High",
+        reasons: [
+          { code: "aspirational_skill", label: "Skills you want", value: "operations,healthcare" },
+          { code: "career_trajectory", label: "Walked your path", value: "Operations" },
+          { code: "graduation_gap_fit", label: "Graduation gap fit", value: 14 },
+        ],
+      },
+    ],
+  })!;
+  assert.match(out, /\n- Wants skills you have: operations, healthcare/);
+  assert.match(out, /\n- Wants to follow your path: Operations/);
+  assert.match(out, /\n- You're 14 years ahead in career/);
+  // The mentor-perspective wording must not appear in the mentee direction.
+  assert.ok(!out.includes("Skills you want"));
+  assert.ok(!out.includes("Walked your path"));
+});
+
 test("non-resolved states keep their plain copy (no markdown heading)", () => {
   assert.equal(
     formatSuggestMenteesResponse({ state: "unauthorized" }),

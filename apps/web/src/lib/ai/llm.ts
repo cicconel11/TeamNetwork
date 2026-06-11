@@ -100,7 +100,9 @@ export const Profiles = {
       model: defaultModel(),
       fallbackModel: defaultFallback(),
       temperature: envNumber("AI_PASS2_TEMPERATURE", 0.7),
-      maxTokens: envInt("AI_PASS2_MAX_TOKENS", 2000),
+      // glm reasoning tokens count toward max_tokens; 2000 truncated real
+      // multi-tool answers mid-word (visible text is a fraction of the spend).
+      maxTokens: envInt("AI_PASS2_MAX_TOKENS", 4000),
       timeoutMs: defaultTimeout(30_000),
       maxRetries: defaultMaxRetries(0),
     };

@@ -664,6 +664,43 @@ describe("enriched-data signals", () => {
       // 2 overlaps -> 0.6 + 0.2*2 = 1.0 -> weight 20
       assert.strictEqual(signal!.weight, 20);
     });
+
+    it("does not re-credit a value already credited by shared_topics (U16)", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: ["finance"],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({ userId: "dup", topics: ["finance"], skills: ["Finance"] }),
+      ]);
+      const codes = ranked[0]?.signals.map((s) => s.code) ?? [];
+      assert.ok(codes.includes("shared_topics"), "shared_topics owns the value");
+      assert.ok(
+        !codes.includes("aspirational_skill"),
+        "aspirational_skill must not double-count a topic-credited value",
+      );
+    });
+
+    it("still credits the distinct skill when others overlap topics (U16 mixed)", () => {
+      const mentee: MenteeInput = {
+        ...menteeBase,
+        focusAreas: ["finance", "excel"],
+        preferredIndustries: [],
+        preferredRoleFamilies: [],
+      };
+      const ranked = rankMentorsForMentee(mentee, [
+        mentor({ userId: "mixed", topics: ["finance"], skills: ["Finance", "Excel"] }),
+      ]);
+      const signals = ranked[0]?.signals ?? [];
+      const topics = signals.find((s) => s.code === "shared_topics");
+      const aspirational = signals.find((s) => s.code === "aspirational_skill");
+      assert.strictEqual(topics?.value, "finance");
+      assert.strictEqual(aspirational?.value, "excel");
+      // 1 distinct overlap -> 0.6 + 0.2 = 0.8 -> weight 16
+      assert.strictEqual(aspirational?.weight, 16);
+    });
   });
 
   describe("past_employer_overlap", () => {

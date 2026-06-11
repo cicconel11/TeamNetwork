@@ -1,4 +1,33 @@
+import {
+  formatMatchExplanation,
+  type MatchExplanationDirection,
+} from "@/lib/mentorship/presentation";
 import { getNonEmptyString, formatIsoDate, formatDisplayRow } from "./index";
+
+/**
+ * Render one suggestion reason for display. Prefers the engine code + raw
+ * value (human copy via formatMatchExplanation, direction-aware), falling back
+ * to the legacy "Label: value" join when the payload predates reason codes.
+ */
+function formatSuggestionReason(
+  r: { code?: unknown; label?: unknown; value?: unknown } | null | undefined,
+  direction: MatchExplanationDirection,
+): string | null {
+  const code = getNonEmptyString(r?.code);
+  const value = r?.value;
+  if (code) {
+    return formatMatchExplanation(
+      {
+        code,
+        value: typeof value === "string" || typeof value === "number" ? value : undefined,
+      },
+      direction,
+    );
+  }
+  const label = getNonEmptyString(r?.label);
+  if (!label) return null;
+  return value != null && value !== "" ? `${label}: ${value}` : label;
+}
 
 interface AnnouncementDisplayRow {
   title?: unknown;
@@ -42,7 +71,7 @@ interface SuggestMentorsDisplaySuggestion {
   mentor?: { name?: unknown; subtitle?: unknown } | null;
   confidence?: unknown;
   confidenceLabel?: unknown;
-  reasons?: Array<{ label?: unknown; value?: unknown }>;
+  reasons?: Array<{ code?: unknown; label?: unknown; value?: unknown }>;
 }
 
 interface SuggestMenteesDisplayPayload {
@@ -56,7 +85,7 @@ interface SuggestMenteesDisplaySuggestion {
   mentee?: { name?: unknown; subtitle?: unknown } | null;
   confidence?: unknown;
   confidenceLabel?: unknown;
-  reasons?: Array<{ label?: unknown; value?: unknown }>;
+  reasons?: Array<{ code?: unknown; label?: unknown; value?: unknown }>;
 }
 
 interface DonationAnalyticsDisplayPayload {
@@ -81,6 +110,7 @@ interface ListAvailableMentorsDisplayPayload {
   state?: unknown;
   total_available?: unknown;
   mentors?: unknown;
+  filters?: { topic?: unknown; sport?: unknown; position?: unknown } | null;
 }
 
 interface ListAvailableMentorsDisplayRow {
@@ -88,6 +118,7 @@ interface ListAvailableMentorsDisplayRow {
   open_slots?: unknown;
   current_mentee_count?: unknown;
   max_mentees?: unknown;
+  topics?: unknown;
   sports?: unknown;
   positions?: unknown;
 }
@@ -153,12 +184,7 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
 
       const reasons = Array.isArray(s.reasons)
         ? s.reasons
-            .map((r) => {
-              const label = getNonEmptyString(r?.label);
-              if (!label) return null;
-              const value = r?.value;
-              return value != null && value !== "" ? `${label}: ${value}` : label;
-            })
+            .map((r) => formatSuggestionReason(r, "mentor"))
             .filter((r): r is string => Boolean(r))
         : [];
 
@@ -292,12 +318,7 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
 
       const reasons = Array.isArray(s.reasons)
         ? s.reasons
-            .map((r) => {
-              const label = getNonEmptyString(r?.label);
-              if (!label) return null;
-              const value = r?.value;
-              return value != null && value !== "" ? `${label}: ${value}` : label;
-            })
+            .map((r) => formatSuggestionReason(r, "mentee"))
             .filter((r): r is string => Boolean(r))
         : [];
 
@@ -447,8 +468,18 @@ export function formatListAvailableMentorsResponse(data: unknown): string | null
   const state = getNonEmptyString(payload.state);
   if (!state) return null;
 
+  const filterLabel = [
+    getNonEmptyString(payload.filters?.topic),
+    getNonEmptyString(payload.filters?.sport),
+    getNonEmptyString(payload.filters?.position),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" / ");
+
   if (state === "no_results") {
-    return "There are no mentors currently available for new mentees right now.";
+    return filterLabel
+      ? `No available mentors match "${filterLabel}" right now. Try asking without the filter to see everyone with open capacity.`
+      : "There are no mentors currently available for new mentees right now.";
   }
 
   if (state !== "resolved" || !Array.isArray(payload.mentors)) return null;
@@ -467,6 +498,11 @@ export function formatListAvailableMentorsResponse(data: unknown): string | null
         typeof row.open_slots === "number" && typeof row.max_mentees === "number"
           ? `${row.open_slots} open spot${row.open_slots === 1 ? "" : "s"}`
           : null;
+      const topics = Array.isArray(row.topics)
+        ? row.topics
+            .map((value) => getNonEmptyString(value))
+            .filter((value): value is string => Boolean(value))
+        : [];
       const sports = Array.isArray(row.sports)
         ? row.sports
             .map((value) => getNonEmptyString(value))
@@ -479,6 +515,7 @@ export function formatListAvailableMentorsResponse(data: unknown): string | null
         : [];
       const details = [
         openSlots,
+        topics.length > 0 ? `Topics: ${topics.join(", ")}` : null,
         sports.length > 0 ? `Sports: ${sports.join(", ")}` : null,
         positions.length > 0 ? `Positions: ${positions.join(", ")}` : null,
       ].filter((value): value is string => Boolean(value));
@@ -492,10 +529,13 @@ export function formatListAvailableMentorsResponse(data: unknown): string | null
 
   if (mentors.length === 0) return null;
 
+  const availabilityNoun = filterLabel
+    ? `mentors available for "${filterLabel}"`
+    : "mentors currently available";
   const headline =
     totalAvailable && totalAvailable > mentors.length
-      ? `There are ${totalAvailable} mentors currently available. Here are the top matches by open capacity:`
-      : `There are ${totalAvailable ?? mentors.length} mentors currently available:`;
+      ? `There are ${totalAvailable} ${availabilityNoun}. Here are the top matches by open capacity:`
+      : `There are ${totalAvailable ?? mentors.length} ${availabilityNoun}:`;
   const lines = [headline];
   for (const [index, mentor] of mentors.entries()) {
     lines.push(`${index + 1}. ${mentor.displayLine}`);

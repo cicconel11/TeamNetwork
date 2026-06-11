@@ -81,12 +81,23 @@ export function formatMentorshipReasonLabel(code: string): string {
 }
 
 /**
+ * Reading direction for an explanation: "mentor" renders the line for a
+ * mentee looking at a suggested mentor (the default, and the historical
+ * behavior); "mentee" renders it for a mentor looking at a suggested mentee,
+ * flipping perspective-sensitive copy ("skills you want" → "wants skills you
+ * have"). Every variant stays mapped to its code in
+ * {@link REASON_CODE_LABEL_PATTERNS} (drift-tested) so grounding never breaks.
+ */
+export type MatchExplanationDirection = "mentor" | "mentee";
+
+/**
  * Human-readable explanation sentence for a single match signal.
  * Custom attributes (codes like "custom:sport") use the value field
  * which contains "Label:matchedValue" (e.g., "Sport:Lacrosse").
  */
 export function formatMatchExplanation(
-  signal: { code: string; value?: string | number }
+  signal: { code: string; value?: string | number },
+  direction: MatchExplanationDirection = "mentor"
 ): string {
   const { code, value } = signal;
 
@@ -115,14 +126,23 @@ export function formatMatchExplanation(
       return typeof value === "string" ? `Same industry: ${value}` : "Same industry";
     case "shared_role_family":
       return typeof value === "string" ? `Same career path: ${value}` : "Same career path";
-    case "graduation_gap_fit":
-      return typeof value === "number" ? `${value} years ahead in career` : "Good career gap";
+    case "graduation_gap_fit": {
+      if (typeof value !== "number") return "Good career gap";
+      return direction === "mentee"
+        ? `You're ${value} year${value === 1 ? "" : "s"} ahead in career`
+        : `${value} year${value === 1 ? "" : "s"} ahead in career`;
+    }
     case "shared_city":
       return typeof value === "string" ? `Same city: ${value}` : "Same city";
     case "shared_company":
       return typeof value === "string" ? `Same company: ${value}` : "Same company";
     case "career_trajectory": {
       const hits = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      if (direction === "mentee") {
+        return hits.length > 0
+          ? `Wants to follow your path: ${hits.join(", ")}`
+          : "Wants to follow your path";
+      }
       return hits.length > 0 ? `Has worked in ${hits.join(", ")}` : "Walked a path you want";
     }
     case "shared_school": {
@@ -133,6 +153,11 @@ export function formatMatchExplanation(
     }
     case "aspirational_skill": {
       const skills = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      if (direction === "mentee") {
+        return skills.length > 0
+          ? `Wants skills you have: ${skills.join(", ")}`
+          : "Wants skills you have";
+      }
       return skills.length > 0
         ? `Has skills you want to build: ${skills.join(", ")}`
         : "Has skills you want to build";
@@ -173,8 +198,8 @@ export const REASON_CODE_LABEL_PATTERNS: ReadonlyArray<{
   patterns: RegExp[];
 }> = [
   { code: "shared_topics", patterns: [/shared topics?/] },
-  { code: "career_trajectory", patterns: [/has worked in|walked a path you want|walked your path/] },
-  { code: "aspirational_skill", patterns: [/skills you want(?: to build)?|has skills you want/] },
+  { code: "career_trajectory", patterns: [/has worked in|walked a path you want|walked your path|wants? to follow your path/] },
+  { code: "aspirational_skill", patterns: [/skills you want(?: to build)?|has skills you want|wants? skills you have/] },
   { code: "shared_school", patterns: [/same school|shared school/] },
   { code: "shared_sport", patterns: [/shared sport|same sport/] },
   { code: "shared_position", patterns: [/shared position|same position/] },
