@@ -166,6 +166,7 @@ export function computeBioInputHash(input: BioGenerationInput): string {
     graduationYear: input.graduationYear,
     customAttributes: input.customAttributes,
     linkedinSummary: input.linkedinSummary?.slice(0, 200),
+    linkedinHeadline: input.linkedinHeadline?.slice(0, 200),
     chosenExpertiseAreas: input.chosenExpertiseAreas,
     chosenTopics: input.chosenTopics,
     chosenSports: input.chosenSports,

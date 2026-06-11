@@ -49,6 +49,21 @@ describe("computeBioInputHash", () => {
     assert.notEqual(computeBioInputHash(left), computeBioInputHash(right));
   });
 
+  it("changes when the LinkedIn headline changes", () => {
+    const left = makeInput({
+      jobTitle: "Product Manager",
+      currentCompany: "Spotify",
+      linkedinHeadline: "Product leader in audio subscriptions",
+    });
+    const right = makeInput({
+      jobTitle: "Product Manager",
+      currentCompany: "Spotify",
+      linkedinHeadline: "Advisor to student-athlete founders",
+    });
+
+    assert.notEqual(computeBioInputHash(left), computeBioInputHash(right));
+  });
+
   it("changes when chosen topics change (triggers regeneration)", () => {
     const before = makeInput({
       jobTitle: "Product Manager",
