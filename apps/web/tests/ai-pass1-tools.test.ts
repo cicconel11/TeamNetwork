@@ -961,26 +961,51 @@ describe("getForcedPass1ToolChoice", () => {
 
 describe("pass1RequiresToolBackedAnswer", () => {
   it("is true for the mentorship-suggestion pair (no-tool answers are fabrications)", () => {
+    const message = "Recommend mentees for Emily Adams";
+    const tools = getPass1Tools(message, "members", "surface_read_tools", "knowledge_query");
+    assert.deepEqual(namesOf(tools), ["suggest_mentors", "suggest_mentees"]);
+    assert.equal(pass1RequiresToolBackedAnswer(tools, message), true);
+  });
+
+  it("is true on the general surface (dashboard panel) for explicit suggestion requests", () => {
+    // The live fabrication happened here: the dashboard sends surface=general,
+    // routing falls through to the full toolset, and the exclusively-pair
+    // condition alone never fires.
+    const message = "Recommend mentees for Emily Adams";
+    const tools = getPass1Tools(message, "general", "surface_read_tools", "knowledge_query");
+    assert.ok((tools?.length ?? 0) > 2, "general surface attaches the full toolset");
+    assert.ok(namesOf(tools)?.includes("suggest_mentees"));
+    assert.equal(pass1RequiresToolBackedAnswer(tools, message), true);
+    assert.equal(
+      pass1RequiresToolBackedAnswer(tools, "Suggest mentors for Reese Price"),
+      true,
+    );
+  });
+
+  it("leaves informational mentorship questions answerable as free text", () => {
     const tools = getPass1Tools(
-      "Recommend mentees for Emily Adams",
-      "members",
+      "how do I become a mentor?",
+      "general",
       "surface_read_tools",
       "knowledge_query",
     );
-    assert.deepEqual(namesOf(tools), ["suggest_mentors", "suggest_mentees"]);
-    assert.equal(pass1RequiresToolBackedAnswer(tools), true);
+    assert.equal(pass1RequiresToolBackedAnswer(tools, "how do I become a mentor?"), false);
+    assert.equal(pass1RequiresToolBackedAnswer(tools, "who is my mentor?"), false);
+    assert.equal(
+      pass1RequiresToolBackedAnswer(tools, "what does the mentorship program involve?"),
+      false,
+    );
   });
 
   it("is false for undefined, empty, and non-mentorship toolsets", () => {
-    assert.equal(pass1RequiresToolBackedAnswer(undefined), false);
-    const availability = getPass1Tools(
-      "are any mentors available right now?",
-      "members",
-      "surface_read_tools",
-      "knowledge_query",
+    assert.equal(
+      pass1RequiresToolBackedAnswer(undefined, "Recommend mentees for Emily Adams"),
+      false,
     );
+    const message = "are any mentors available right now?";
+    const availability = getPass1Tools(message, "members", "surface_read_tools", "knowledge_query");
     assert.deepEqual(namesOf(availability), ["list_available_mentors"]);
-    assert.equal(pass1RequiresToolBackedAnswer(availability), false);
+    assert.equal(pass1RequiresToolBackedAnswer(availability, message), false);
   });
 
   it("tools loop suppresses tool-less answers for tool-required intents (source assert)", async () => {
@@ -992,7 +1017,7 @@ describe("pass1RequiresToolBackedAnswer", () => {
       ),
       "utf8",
     );
-    assert.match(src, /pass1RequiresToolBackedAnswer\(input\.pass1Tools\)/);
+    assert.match(src, /pass1RequiresToolBackedAnswer\(input\.pass1Tools,\s*input\.message\)/);
     assert.match(src, /suppressed tool-less pass-1 answer for tool-required intent/);
     assert.match(src, /matching engine, and I couldn't run it for that request/);
   });

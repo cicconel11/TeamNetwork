@@ -827,17 +827,37 @@ const TOOL_REQUIRED_PASS1_TOOL_NAMES: ReadonlySet<ToolName> = new Set<ToolName>(
 ]);
 
 /**
- * True when the routed pass-1 toolset means a free-text answer must be
- * suppressed unless a tool actually ran (see TOOL_REQUIRED_PASS1_TOOL_NAMES).
+ * Explicit "give me mentorship suggestions" requests: a suggestion verb near
+ * mentor/mentee, or suggestion-noun phrasing. Deliberately narrower than
+ * MENTOR_PROMPT_PATTERN — informational asks ("how do I become a mentor?",
+ * "who is my mentor?") must stay answerable as free text.
+ */
+export const MENTORSHIP_SUGGESTION_REQUEST_PATTERN =
+  /(?:\b(?:suggest|recommend|find|propose|pick|match)\b[\s\S]{0,60}\b(?:mentors?|mentees?)\b|\b(?:mentors?|mentees?)\b[\s\S]{0,40}\b(?:suggestions?|recommendations?|matches?)\b|\b(?:best|top)\s+(?:mentors?|mentees?)\b)/i;
+
+/**
+ * True when a free-text (tool-less) pass-1 answer must be suppressed:
+ * - the routed toolset is exclusively the mentorship suggestion pair
+ *   (members-surface mentor_intent routing), or
+ * - the user explicitly asked for mentorship suggestions and a suggestion
+ *   tool was available in the toolset but the model skipped it. The general
+ *   surface (dashboard panel — where the live fabrication occurred) attaches
+ *   the full toolset, so the exclusively-pair condition alone misses it.
  */
 export function pass1RequiresToolBackedAnswer(
-  pass1Tools: ReadonlyArray<OpenAI.Chat.ChatCompletionTool> | undefined
+  pass1Tools: ReadonlyArray<OpenAI.Chat.ChatCompletionTool> | undefined,
+  message: string,
 ): boolean {
   if (!pass1Tools || pass1Tools.length === 0) return false;
-  return pass1Tools.every(
-    (tool) =>
-      "function" in tool &&
-      TOOL_REQUIRED_PASS1_TOOL_NAMES.has(tool.function.name as ToolName),
+  const names: ToolName[] = [];
+  for (const tool of pass1Tools) {
+    if ("function" in tool) names.push(tool.function.name as ToolName);
+  }
+  if (names.length === 0) return false;
+  if (names.every((name) => TOOL_REQUIRED_PASS1_TOOL_NAMES.has(name))) return true;
+  return (
+    MENTORSHIP_SUGGESTION_REQUEST_PATTERN.test(message) &&
+    names.some((name) => TOOL_REQUIRED_PASS1_TOOL_NAMES.has(name))
   );
 }
 
