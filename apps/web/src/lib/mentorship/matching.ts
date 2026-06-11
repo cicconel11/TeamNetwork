@@ -358,8 +358,14 @@ export function scoreMentorForMentee(
   // aspirational_skill — mentor has skills the mentee wants to develop. Overlap
   // scaling mirrors shared_topics (1 -> 0.8, 2 -> 1.0, 3+ -> 1.2). No rarity
   // bucket: the LinkedIn skill vocabulary is too noisy to weight by frequency.
+  // Values already credited by shared_topics are excluded so the same word
+  // ("operations") can't score — and display — twice.
   {
-    const skillOverlap = intersectNormalized(mentor.skillsNorm, mentee.desiredSkillsNorm);
+    const creditedTopics = new Set(topicOverlap);
+    const skillOverlap = intersectNormalized(
+      mentor.skillsNorm,
+      mentee.desiredSkillsNorm,
+    ).filter((value) => !creditedTopics.has(value));
     if (skillOverlap.length > 0) {
       const overlapFactor = Math.min(skillOverlap.length, 3);
       signals.push({

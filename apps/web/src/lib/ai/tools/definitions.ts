@@ -1420,7 +1420,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_available_mentors" as const,
       description:
-        "List mentors who are currently available for new mentees within the organization. Use for inventory-style questions like are any mentors available, who can take mentees right now, or which mentors still have open capacity.",
+        "List mentors who are currently available for new mentees within the organization. Use for inventory-style questions like are any mentors available, who can take mentees right now, or which mentors still have open capacity. When the question names a topic, industry, sport, or position (e.g. 'who can mentor on technology'), pass it as the matching filter so results are relevant, not just high-capacity.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -1429,6 +1429,21 @@ const TOOL_BY_NAME = {
             minimum: 1,
             maximum: 25,
             description: "Max available mentors to return (default 5)",
+          },
+          topic: {
+            type: "string" as const,
+            description:
+              "Optional case-insensitive substring filter matched against mentor topics and industries (e.g. 'technology', 'finance').",
+          },
+          sport: {
+            type: "string" as const,
+            description:
+              "Optional case-insensitive substring filter matched against mentor sports (e.g. 'football').",
+          },
+          position: {
+            type: "string" as const,
+            description:
+              "Optional case-insensitive substring filter matched against mentor positions (e.g. 'linebacker').",
           },
         },
         additionalProperties: false as const,

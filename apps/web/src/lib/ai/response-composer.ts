@@ -144,7 +144,7 @@ export async function* composeResponse(
     });
 
     for await (const event of streamIter) {
-      const result = handleStreamEvent(event, toolCalls, onUsage);
+      const result = handleStreamEvent(event, toolCalls, onUsage, logContext);
       if (result) {
         if (Array.isArray(result)) {
           for (const yielded of result) yield yielded;
@@ -173,6 +173,7 @@ function handleStreamEvent(
   event: LlmStreamEvent,
   toolCalls: Map<number, { id: string; name: string; argsJson: string }>,
   onUsage: ((usage: UsageAccumulator) => void) | undefined,
+  logContext?: AiLogContext,
 ): SSEEvent | ToolCallRequestedEvent | Array<SSEEvent | ToolCallRequestedEvent> | null {
   if (event.type === "chunk") {
     return { type: "chunk", content: event.content };
@@ -189,6 +190,23 @@ function handleStreamEvent(
     if (event.argumentsFragment) existing.argsJson += event.argumentsFragment;
     toolCalls.set(event.index, existing);
     return null;
+  }
+
+  // Token-budget truncation: the model stopped mid-thought because it hit
+  // max_tokens (reasoning tokens count toward the budget on glm models, so
+  // this can fire well before the visible text looks long). Surface it
+  // instead of letting the answer just stop mid-word.
+  if (event.type === "finish" && event.reason === "length") {
+    aiLog(
+      "warn",
+      "response-composer",
+      "response truncated at max_tokens",
+      logContext ?? { requestId: "unknown_request", orgId: "unknown_org" },
+    );
+    return {
+      type: "chunk",
+      content: "\n\n_(Answer was cut short by a length limit — ask a follow-up to continue.)_",
+    };
   }
 
   if (event.type === "finish" && event.reason === "tool_calls") {

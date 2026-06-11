@@ -1003,6 +1003,19 @@ test("every reason code's rendered explanation round-trips to exactly that code"
       extractMentorReasonCodes(renderedWithValue).includes(code),
       `valued label for ${code} ("${renderedWithValue}") must include ${code}`
     );
+
+    // Mentee-direction variants ("wants skills you have", "wants to follow
+    // your path", "you're N years ahead") must map back to the same code.
+    for (const rendered of [
+      formatMatchExplanation({ code }, "mentee"),
+      formatMatchExplanation({ code, value: "Acme" }, "mentee"),
+      formatMatchExplanation({ code, value: 14 }, "mentee"),
+    ]) {
+      assert.ok(
+        extractMentorReasonCodes(rendered).includes(code),
+        `mentee-direction label for ${code} ("${rendered}") must include ${code}`
+      );
+    }
   }
 });
 

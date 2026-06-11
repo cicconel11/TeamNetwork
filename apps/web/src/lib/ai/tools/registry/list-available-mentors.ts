@@ -9,8 +9,17 @@ import type { ToolModule } from "./types";
 const listAvailableMentorsSchema = z
   .object({
     limit: z.number().int().min(1).max(25).optional(),
+    topic: z.string().trim().min(1).max(80).optional(),
+    sport: z.string().trim().min(1).max(80).optional(),
+    position: z.string().trim().min(1).max(80).optional(),
   })
   .strict();
+
+function matchesFilter(values: string[], needle: string | undefined): boolean {
+  if (!needle) return true;
+  const lowered = needle.toLowerCase();
+  return values.some((value) => value.toLowerCase().includes(lowered));
+}
 
 type Args = z.infer<typeof listAvailableMentorsSchema>;
 
@@ -34,7 +43,7 @@ async function runListAvailableMentors(
     const { data: mentorProfiles, error } = await sb
       .from("mentor_profiles")
       .select(
-        "user_id, topics, sports, positions, max_mentees, current_mentee_count, accepting_new, is_active",
+        "user_id, topics, sports, positions, industries, max_mentees, current_mentee_count, accepting_new, is_active",
       )
       .eq("organization_id", orgId)
       .eq("is_active", true)
@@ -59,6 +68,11 @@ async function runListAvailableMentors(
         positions: Array.isArray(profile.positions)
           ? profile.positions.filter((value: unknown): value is string => typeof value === "string")
           : [],
+        industries: Array.isArray(profile.industries)
+          ? profile.industries.filter(
+              (value: unknown): value is string => typeof value === "string",
+            )
+          : [],
         max_mentees: typeof profile.max_mentees === "number" ? profile.max_mentees : 3,
         current_mentee_count:
           typeof profile.current_mentee_count === "number" ? profile.current_mentee_count : 0,
@@ -71,16 +85,31 @@ async function runListAvailableMentors(
           topics: string[];
           sports: string[];
           positions: string[];
+          industries: string[];
           max_mentees: number;
           current_mentee_count: number;
         } =>
           Boolean(profile.user_id) && profile.max_mentees > profile.current_mentee_count,
+      )
+      // Topic questions ("mentor on technology") match the mentor's topics or
+      // industries; sport/position filter their own arrays.
+      .filter(
+        (profile) =>
+          matchesFilter([...profile.topics, ...profile.industries], args.topic) &&
+          matchesFilter(profile.sports, args.sport) &&
+          matchesFilter(profile.positions, args.position),
       );
+
+    const appliedFilters = {
+      topic: args.topic ?? null,
+      sport: args.sport ?? null,
+      position: args.position ?? null,
+    };
 
     if (eligibleMentors.length === 0) {
       return {
         kind: "ok",
-        data: { state: "no_results", total_available: 0, mentors: [] },
+        data: { state: "no_results", total_available: 0, mentors: [], filters: appliedFilters },
       };
     }
 
@@ -149,6 +178,7 @@ async function runListAvailableMentors(
           current_mentee_count: mentor.current_mentee_count,
           max_mentees: mentor.max_mentees,
           topics: mentor.topics.slice(0, 3),
+          industries: mentor.industries.slice(0, 3),
           sports: mentor.sports.slice(0, 3),
           positions: mentor.positions.slice(0, 3),
         };
@@ -165,6 +195,7 @@ async function runListAvailableMentors(
         state: "resolved",
         total_available: eligibleMentors.length,
         mentors,
+        filters: appliedFilters,
       },
     };
   } catch (error) {
