@@ -199,3 +199,118 @@ test("default suggestion limit is 4 and suggest functions use it (source assert)
   const trims = src.match(/trimHighConfidenceSuggestions\(suggestions\)/g) ?? [];
   assert.equal(trims.length, 2);
 });
+
+/* ── Differentiated rendering: shared-signal collapse, rank edge, questions ── */
+
+function lawCohortMentors() {
+  const shared = [
+    { code: "shared_topics", value: "law,leadership" },
+    { code: "shared_industry", value: "Law" },
+    { code: "shared_role_family", value: "Law" },
+    { code: "shared_school", value: "villanova university" },
+  ];
+  return {
+    state: "resolved",
+    mentee: { name: "Maya Bell" },
+    suggestions: [
+      {
+        mentor: { name: "Brandon Morgan", subtitle: "Associate Attorney at Morgan Lewis" },
+        confidence: 72,
+        confidenceLabel: "Good",
+        reasons: [...shared, { code: "graduation_gap_fit", value: 9 }],
+      },
+      {
+        mentor: { name: "Sofia Russo", subtitle: "Litigation Associate at Kirkland & Ellis" },
+        confidence: 70,
+        confidenceLabel: "Good",
+        reasons: [...shared, { code: "graduation_gap_fit", value: 12 }],
+      },
+      {
+        mentor: { name: "Brian Brooks", subtitle: "Associate Attorney at Dechert" },
+        confidence: 67,
+        confidenceLabel: "Good",
+        reasons: [...shared],
+      },
+    ],
+  };
+}
+
+test("reasons shared by every suggestion collapse into one line under the heading", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.match(out, /_All 3 share: Shared topics: law, leadership · Same industry: Law · Same career path: Law · Same school: Villanova University_/);
+  // The collapsed reasons no longer repeat as per-mentor bullets.
+  const industryBullets = out.match(/\n- Same industry: Law/g) ?? [];
+  assert.equal(industryBullets.length, 0);
+});
+
+test("per-mentor bullets show only differentiators; empty cards get a shared-signals note", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.match(out, /\n- 9 years ahead in career/);
+  assert.match(out, /\n- 12 years ahead in career/);
+  // Brian has nothing beyond the shared set.
+  assert.match(out, /\n- Matches on the shared signals above/);
+});
+
+test("the top match gets a what-sets-them-apart line against the runner-up", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.match(out, /_What sets Brandon apart from Sofia: 9 years ahead in career_/);
+});
+
+test("no edge line when the top two have identical reason sets", () => {
+  const payload = lawCohortMentors();
+  payload.suggestions = payload.suggestions.slice(2, 3).concat(payload.suggestions.slice(2, 3));
+  const out = formatSuggestMentorsResponse(payload)!;
+  assert.ok(!out.includes("What sets"));
+});
+
+test("mentor direction appends grounded conversation-starter questions for the top match", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.match(out, /\*\*Questions to ask Brandon:\*\*/);
+  assert.match(out, /- What should someone aiming for a career in Law be doing right now\?/);
+  assert.match(out, /- How did you break into Law\?/);
+  // Capped at 3.
+  const questionBullets = out.split("Questions to ask")[1].split("\n").filter((l) => l.startsWith("- "));
+  assert.equal(questionBullets.length, 3);
+});
+
+test("mentee direction never renders suggested questions", () => {
+  const out = formatSuggestMenteesResponse(resolvedMentees())!;
+  assert.ok(!out.includes("Questions to ask"));
+});
+
+test("no collapse line when fewer than two reasons are shared by all", () => {
+  const out = formatSuggestMenteesResponse(resolvedMentees())!;
+  assert.ok(!out.includes("share:"));
+  // Original per-card bullets stay intact.
+  assert.match(out, /\n- Shared topics: consulting, strategy, leadership/);
+});
+
+test("thin-data caveat appears when every suggestion carries two or fewer signals", () => {
+  const out = formatSuggestMentorsResponse({
+    state: "resolved",
+    mentee: { name: "Maya Bell" },
+    suggestions: [
+      {
+        mentor: { name: "Matthew McKillop", subtitle: null },
+        confidence: 46,
+        confidenceLabel: "Moderate",
+        reasons: [
+          { code: "career_trajectory", value: "Law" },
+          { code: "aspirational_skill", value: "leadership" },
+        ],
+      },
+    ],
+  })!;
+  assert.match(out, /limited profile data/);
+});
+
+test("rich suggestions render no thin-data caveat", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.ok(!out.includes("limited profile data"));
+});
+
+test("school names render title-cased", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.match(out, /Villanova University/);
+  assert.ok(!out.includes("villanova university"));
+});

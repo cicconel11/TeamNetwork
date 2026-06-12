@@ -146,7 +146,14 @@ export function formatMatchExplanation(
       return hits.length > 0 ? `Has worked in ${hits.join(", ")}` : "Walked a path you want";
     }
     case "shared_school": {
-      const schools = typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      // School names are stored normalized-lowercase; title-case for display.
+      const schools =
+        typeof value === "string"
+          ? value
+              .split(",")
+              .filter(Boolean)
+              .map((s) => s.trim().replace(/\b\w/g, (c) => c.toUpperCase()))
+          : [];
       if (schools.length === 1) return `Same school: ${schools[0]}`;
       if (schools.length > 1) return `Same school: ${schools.join(", ")}`;
       return "Same school";
