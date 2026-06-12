@@ -447,6 +447,7 @@ type ToolExecutionResult =
 
 - `suggest_mentors` ranks mentors for a mentee (`mentee_id` or `mentee_query`); `suggest_mentees` is the reverse — ranks mentees seeking mentorship for a mentor (`mentor_id` or `mentor_query`), backing "who should I mentor?".
 - Both are admin-only in v1, share the symmetric scorer in `src/lib/mentorship/matching.ts` (`rankMentorsForMentee` / `rankMenteesForMentor`), and return `{ state, suggestions[], disambiguation_options? }` with auditable `reasons[]` (never invent reasons beyond tool output).
+- List sizing: when no explicit `limit` is passed, both default to 4 suggestions (`DEFAULT_SUGGESTION_LIMIT`) and auto-trim to 3 when the top 3 are all High confidence (`trimHighConfidenceSuggestions` in `src/lib/mentorship/presentation.ts`). An explicit `limit` (tool arg or the suggestions API route) bypasses the trim. The admin pairing surface keeps its own default of 5.
 - Deterministic free-text + persisted LLM-derived signals (`src/lib/mentorship/goals-extraction.ts`, `signal-backfill.ts`) let a data-thin mentee still match. Both render via `formatDeterministicToolResponse` (`formatSuggestMentorsResponse` / `formatSuggestMenteesResponse`) so pass 2 is skipped.
 - The admin pairing surface (`/[orgSlug]/mentorship/admin/pairing`) uses the same engine via `suggestMentorsForPairing` with a never-empty fallback ranker and a generated "why" (`src/lib/mentorship/why-generator.ts`).
 

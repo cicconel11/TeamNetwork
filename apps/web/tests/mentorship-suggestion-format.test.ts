@@ -143,3 +143,59 @@ test("non-resolved states keep their plain copy (no markdown heading)", () => {
     "I found Brooke Esposito, but there are no eligible mentors matching their preferences right now."
   );
 });
+
+/* ── Suggestion list sizing: default 4, trim to 3 when top matches are High ── */
+
+test("trimHighConfidenceSuggestions cuts to 3 when the top 3 are all High", async () => {
+  const { trimHighConfidenceSuggestions } = await import(
+    "../src/lib/mentorship/presentation.ts"
+  );
+  const list = [
+    { confidence: 92 },
+    { confidence: 88 },
+    { confidence: 85 },
+    { confidence: 70 },
+  ];
+  assert.deepEqual(trimHighConfidenceSuggestions(list), list.slice(0, 3));
+});
+
+test("trimHighConfidenceSuggestions keeps the full list when any top match is below High", async () => {
+  const { trimHighConfidenceSuggestions } = await import(
+    "../src/lib/mentorship/presentation.ts"
+  );
+  const list = [
+    { confidence: 92 },
+    { confidence: 84 }, // Good, not High
+    { confidence: 80 },
+    { confidence: 70 },
+  ];
+  assert.deepEqual(trimHighConfidenceSuggestions(list), list);
+});
+
+test("trimHighConfidenceSuggestions leaves lists of 3 or fewer untouched", async () => {
+  const { trimHighConfidenceSuggestions } = await import(
+    "../src/lib/mentorship/presentation.ts"
+  );
+  const short = [{ confidence: 95 }, { confidence: 90 }];
+  assert.deepEqual(trimHighConfidenceSuggestions(short), short);
+});
+
+test("default suggestion limit is 4 and suggest functions use it (source assert)", async () => {
+  const { DEFAULT_SUGGESTION_LIMIT, HIGH_CONFIDENCE_TRIM_LIMIT } = await import(
+    "../src/lib/mentorship/presentation.ts"
+  );
+  assert.equal(DEFAULT_SUGGESTION_LIMIT, 4);
+  assert.equal(HIGH_CONFIDENCE_TRIM_LIMIT, 3);
+
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(
+    new URL("../src/lib/mentorship/ai-suggestions.ts", import.meta.url),
+    "utf8"
+  );
+  // Both directions default to the shared limit, never a hardcoded 5.
+  const defaults = src.match(/opts\.limit \?\? DEFAULT_SUGGESTION_LIMIT/g) ?? [];
+  assert.equal(defaults.length, 2);
+  // Auto-trim applies only when the caller passed no explicit limit.
+  const trims = src.match(/trimHighConfidenceSuggestions\(suggestions\)/g) ?? [];
+  assert.equal(trims.length, 2);
+});

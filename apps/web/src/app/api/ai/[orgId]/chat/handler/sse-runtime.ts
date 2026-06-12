@@ -43,7 +43,7 @@ export const MENTOR_PASS2_TEMPLATE = [
   "- For suggest_mentees use the heading 'Top mentees for [mentor name]' with the same shape.",
   "- One reason per bullet — never join reasons into a single 'Why:' sentence.",
   "- Omit the Confidence line when the suggestion has no confidence value.",
-  "- Use at most 5 suggestions per list.",
+  "- Render every returned suggestion, never more (the tool already caps the list at 4, or 3 when the top matches are all High confidence).",
   "- Use only the returned mentee/mentor, suggestions, reasons, and labels.",
   "- Do not mention scores, UUIDs, or internal tool details.",
   "- Do not add a concluding summary sentence.",
