@@ -332,3 +332,28 @@ export function confidenceLabel(confidence: number): ConfidenceLabel {
   if (confidence >= 45) return "Moderate";
   return "Low";
 }
+
+/**
+ * Default number of suggestions surfaced when the caller passes no explicit
+ * limit. Four keeps the list scannable; five read as too many in live QA.
+ */
+export const DEFAULT_SUGGESTION_LIMIT = 4;
+
+/** Tighter list size used when the top matches are all High confidence. */
+export const HIGH_CONFIDENCE_TRIM_LIMIT = 3;
+
+/**
+ * When the top {@link HIGH_CONFIDENCE_TRIM_LIMIT} suggestions all sit in the
+ * "High" confidence band, trim the list to just those — strong matches don't
+ * need runners-up diluting the recommendation. Otherwise return the list
+ * unchanged. Assumes suggestions are already sorted by score descending.
+ */
+export function trimHighConfidenceSuggestions<T extends { confidence: number }>(
+  suggestions: T[]
+): T[] {
+  if (suggestions.length <= HIGH_CONFIDENCE_TRIM_LIMIT) return suggestions;
+  const top = suggestions.slice(0, HIGH_CONFIDENCE_TRIM_LIMIT);
+  return top.every((s) => confidenceLabel(s.confidence) === "High")
+    ? top
+    : suggestions;
+}

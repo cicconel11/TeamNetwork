@@ -19,6 +19,8 @@ import {
   formatMentorshipReasonLabel,
   scoreToConfidence,
   confidenceLabel,
+  trimHighConfidenceSuggestions,
+  DEFAULT_SUGGESTION_LIMIT,
   type ConfidenceLabel,
 } from "@/lib/mentorship/presentation";
 import {
@@ -242,7 +244,7 @@ export async function suggestMentors(
   orgId: string,
   opts: SuggestMentorsOptions
 ): Promise<SuggestMentorsResult> {
-  const limit = opts.limit ?? 5;
+  const limit = opts.limit ?? DEFAULT_SUGGESTION_LIMIT;
 
   // 1. Resolve mentee
   const resolution = await resolveMentee(supabase, orgId, opts);
@@ -346,16 +348,20 @@ export async function suggestMentors(
     mentorInputLookup.set(mi.userId, mi);
   }
 
+  const suggestions = buildDisplaySuggestions(
+    matches,
+    mentorLookup,
+    mentorInputLookup,
+    limit,
+    theoreticalMax
+  );
+
   return {
     state: "resolved",
     mentee: menteeDisplay,
-    suggestions: buildDisplaySuggestions(
-      matches,
-      mentorLookup,
-      mentorInputLookup,
-      limit,
-      theoreticalMax
-    ),
+    // Only auto-trim when the caller didn't ask for a specific count.
+    suggestions:
+      opts.limit == null ? trimHighConfidenceSuggestions(suggestions) : suggestions,
   };
 }
 
@@ -648,7 +654,7 @@ export async function suggestMentees(
   orgId: string,
   opts: SuggestMenteesOptions
 ): Promise<SuggestMenteesResult> {
-  const limit = opts.limit ?? 5;
+  const limit = opts.limit ?? DEFAULT_SUGGESTION_LIMIT;
 
   const resolution = await resolveMentor(supabase, orgId, opts);
   if (resolution.state === "not_found") {
@@ -736,28 +742,32 @@ export async function suggestMentees(
     });
   }
 
+  const suggestions = top.map((m) => {
+    const info = lookup.get(m.menteeUserId);
+    const confidence = scoreToConfidence(m.score, theoreticalMax);
+    return {
+      mentee: {
+        user_id: m.menteeUserId,
+        name: info?.name ?? info?.email ?? "Member",
+        subtitle: null,
+      },
+      score: m.score,
+      confidence,
+      confidenceLabel: confidenceLabel(confidence),
+      reasons: m.signals.map((s) => ({
+        code: s.code,
+        label: formatMentorshipReasonLabel(s.code),
+        weight: s.weight,
+        value: s.value,
+      })),
+    };
+  });
+
   return {
     state: "resolved",
     mentor: mentorDisplay,
-    suggestions: top.map((m) => {
-      const info = lookup.get(m.menteeUserId);
-      const confidence = scoreToConfidence(m.score, theoreticalMax);
-      return {
-        mentee: {
-          user_id: m.menteeUserId,
-          name: info?.name ?? info?.email ?? "Member",
-          subtitle: null,
-        },
-        score: m.score,
-        confidence,
-        confidenceLabel: confidenceLabel(confidence),
-        reasons: m.signals.map((s) => ({
-          code: s.code,
-          label: formatMentorshipReasonLabel(s.code),
-          weight: s.weight,
-          value: s.value,
-        })),
-      };
-    }),
+    // Only auto-trim when the caller didn't ask for a specific count.
+    suggestions:
+      opts.limit == null ? trimHighConfidenceSuggestions(suggestions) : suggestions,
   };
 }
