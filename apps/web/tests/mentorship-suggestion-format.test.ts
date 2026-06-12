@@ -38,11 +38,11 @@ test("mentee suggestions render as a markdown heading with bold numbered names",
   assert.match(out, /\*\*2\. Talia Rogers\*\*/);
 });
 
-test("confidence is on its own line, not jammed into the name", () => {
+test("match score is on its own line, not jammed into the name", () => {
   const out = formatSuggestMenteesResponse(resolvedMentees())!;
-  assert.match(out, /Confidence: 68\/100 \(Good\)/);
-  // Old buried "(Confidence .. )" suffix on the name line is gone.
-  assert.ok(!/\*\*1\..*\(Confidence/.test(out));
+  assert.match(out, /Match score: 68\/100 \(Good\)/);
+  // "Confidence" copy is gone — it read like the AI guessing.
+  assert.ok(!out.includes("Confidence"));
 });
 
 test("each reason is its own bullet and comma lists get spacing", () => {
@@ -77,7 +77,7 @@ test("mentor suggestions share the same structure", () => {
   assert.ok(out);
   assert.match(out, /^### Top mentors for Brooke Esposito/);
   assert.match(out, /\*\*1\. Olivia Perez — VP at Citi\*\*/);
-  assert.match(out, /Confidence: 63\/100 \(Moderate\)/);
+  assert.match(out, /Match score: 63\/100 \(Moderate\)/);
   assert.match(out, /\n- Shared industry: Finance/);
 });
 
@@ -235,32 +235,54 @@ function lawCohortMentors() {
   };
 }
 
-test("reasons shared by every suggestion collapse into one line under the heading", () => {
+test("reasons shared by every suggestion collapse into a compact common-signals line", () => {
   const out = formatSuggestMentorsResponse(lawCohortMentors())!;
-  assert.match(out, /_All 3 share: Shared topics: law, leadership · Same industry: Law · Same career path: Law · Same school: Villanova University_/);
+  assert.match(
+    out,
+    /_Common match signals across all 3: Law interests · Leadership interests · Law industry · Law career path · Villanova University_/
+  );
   // The collapsed reasons no longer repeat as per-mentor bullets.
   const industryBullets = out.match(/\n- Same industry: Law/g) ?? [];
   assert.equal(industryBullets.length, 0);
 });
 
-test("per-mentor bullets show only differentiators; empty cards get a shared-signals note", () => {
+test("per-mentor bullets show only differentiators", () => {
   const out = formatSuggestMentorsResponse(lawCohortMentors())!;
-  assert.match(out, /\n- 9 years ahead in career/);
+  // Sofia keeps her gap bullet; Brandon's gap is consumed by the why-first line.
   assert.match(out, /\n- 12 years ahead in career/);
-  // Brian has nothing beyond the shared set.
-  assert.match(out, /\n- Matches on the shared signals above/);
+  // No card falls back to the filler line — every card has a Best for line.
+  assert.ok(!out.includes("Matches on the shared signals above"));
 });
 
-test("the top match gets a what-sets-them-apart line against the runner-up", () => {
+test("the top match gets a why-ranked-first line explaining the closer career-stage fit", () => {
   const out = formatSuggestMentorsResponse(lawCohortMentors())!;
-  assert.match(out, /_What sets Brandon apart from Sofia: 9 years ahead in career_/);
+  assert.match(
+    out,
+    /_Why Brandon ranks #1: closest career-stage fit of these matches \(9 years ahead vs 12\) — recent enough to speak to your next steps_/
+  );
+  // The gap reason is not duplicated as a bullet on Brandon's card.
+  const nineYears = out.match(/\n- 9 years ahead in career/g) ?? [];
+  assert.equal(nineYears.length, 0);
 });
 
-test("no edge line when the top two have identical reason sets", () => {
+test("every mentor card gets a Best for positioning line from its own data", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.match(
+    out,
+    /Best for: early-career advice close to your stage and the Associate Attorney perspective from Morgan Lewis/
+  );
+  assert.match(
+    out,
+    /Best for: a more seasoned view of the path and the Litigation Associate perspective from Kirkland & Ellis/
+  );
+  assert.match(out, /Best for: the Associate Attorney perspective from Dechert/);
+});
+
+test("no why-ranked-first line when the top two have identical reason sets", () => {
   const payload = lawCohortMentors();
   payload.suggestions = payload.suggestions.slice(2, 3).concat(payload.suggestions.slice(2, 3));
   const out = formatSuggestMentorsResponse(payload)!;
-  assert.ok(!out.includes("What sets"));
+  assert.ok(!out.includes("ranks #1"));
 });
 
 test("mentor direction appends grounded conversation-starter questions for the top match", () => {
@@ -280,9 +302,41 @@ test("mentee direction never renders suggested questions", () => {
 
 test("no collapse line when fewer than two reasons are shared by all", () => {
   const out = formatSuggestMenteesResponse(resolvedMentees())!;
-  assert.ok(!out.includes("share:"));
+  assert.ok(!out.includes("Common match signals"));
   // Original per-card bullets stay intact.
   assert.match(out, /\n- Shared topics: consulting, strategy, leadership/);
+});
+
+test("mentee direction renders no Best for or why-ranked lines", () => {
+  const out = formatSuggestMenteesResponse(resolvedMentees())!;
+  assert.ok(!out.includes("Best for:"));
+  assert.ok(!out.includes("ranks #1"));
+});
+
+test("mentee-direction card with no differentiators keeps the shared-signals anchor", () => {
+  const shared = [
+    { code: "shared_topics", value: "consulting,strategy" },
+    { code: "shared_industry", value: "Consulting" },
+  ];
+  const out = formatSuggestMenteesResponse({
+    state: "resolved",
+    mentor: { name: "Cole Reed" },
+    suggestions: [
+      {
+        mentee: { name: "Isaiah Walsh", subtitle: null },
+        confidence: 70,
+        confidenceLabel: "Good",
+        reasons: [...shared, { code: "graduation_gap_fit", value: 6 }],
+      },
+      {
+        mentee: { name: "Talia Rogers", subtitle: null },
+        confidence: 65,
+        confidenceLabel: "Good",
+        reasons: [...shared],
+      },
+    ],
+  })!;
+  assert.match(out, /\n- Matches on the shared signals above/);
 });
 
 test("thin-data caveat appears when every suggestion carries two or fewer signals", () => {
@@ -313,4 +367,35 @@ test("school names render title-cased", () => {
   const out = formatSuggestMentorsResponse(lawCohortMentors())!;
   assert.match(out, /Villanova University/);
   assert.ok(!out.includes("villanova university"));
+});
+
+test("Best for is signal-driven and org-agnostic — works with no subtitle at all", () => {
+  const out = formatSuggestMentorsResponse({
+    state: "resolved",
+    mentee: { name: "Jordan Diaz" },
+    suggestions: [
+      {
+        mentor: { name: "Amara Okafor", subtitle: null },
+        confidence: 74,
+        confidenceLabel: "Good",
+        reasons: [
+          { code: "shared_industry", value: "Finance" },
+          { code: "shared_topics", value: "investing,networking" },
+          { code: "shared_school", value: "howard university" },
+        ],
+      },
+      {
+        mentor: { name: "Luis Romero", subtitle: null },
+        confidence: 66,
+        confidenceLabel: "Good",
+        reasons: [
+          { code: "past_employer_overlap", value: "Goldman Sachs" },
+          { code: "shared_school", value: "howard university" },
+        ],
+      },
+    ],
+  })!;
+  // Phrasing is composed from each person's own signal values, not org-specific copy.
+  assert.match(out, /Best for: Finance industry insight and guidance on investing and networking/);
+  assert.match(out, /Best for: an inside view of Goldman Sachs/);
 });
