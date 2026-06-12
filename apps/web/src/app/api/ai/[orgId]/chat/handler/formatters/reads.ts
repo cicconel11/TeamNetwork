@@ -1,33 +1,9 @@
-import {
-  formatMatchExplanation,
-  type MatchExplanationDirection,
-} from "@/lib/mentorship/presentation";
 import { getNonEmptyString, formatIsoDate, formatDisplayRow } from "./index";
-
-/**
- * Render one suggestion reason for display. Prefers the engine code + raw
- * value (human copy via formatMatchExplanation, direction-aware), falling back
- * to the legacy "Label: value" join when the payload predates reason codes.
- */
-function formatSuggestionReason(
-  r: { code?: unknown; label?: unknown; value?: unknown } | null | undefined,
-  direction: MatchExplanationDirection,
-): string | null {
-  const code = getNonEmptyString(r?.code);
-  const value = r?.value;
-  if (code) {
-    return formatMatchExplanation(
-      {
-        code,
-        value: typeof value === "string" || typeof value === "number" ? value : undefined,
-      },
-      direction,
-    );
-  }
-  const label = getNonEmptyString(r?.label);
-  if (!label) return null;
-  return value != null && value !== "" ? `${label}: ${value}` : label;
-}
+import {
+  buildSuggestionReason,
+  renderMentorshipSuggestionList,
+  type SuggestionCard,
+} from "./mentorship-suggestions";
 
 interface AnnouncementDisplayRow {
   title?: unknown;
@@ -173,8 +149,8 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
 
   if (state !== "resolved" || !Array.isArray(payload.suggestions)) return null;
 
-  const suggestions = (payload.suggestions as SuggestMentorsDisplaySuggestion[])
-    .map((s) => {
+  const cards = (payload.suggestions as SuggestMentorsDisplaySuggestion[])
+    .map((s): SuggestionCard | null => {
       if (!s || typeof s !== "object") return null;
       const name = getNonEmptyString(s.mentor?.name);
       if (!name) return null;
@@ -184,8 +160,8 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
 
       const reasons = Array.isArray(s.reasons)
         ? s.reasons
-            .map((r) => formatSuggestionReason(r, "mentor"))
-            .filter((r): r is string => Boolean(r))
+            .map((r) => buildSuggestionReason(r, "mentor"))
+            .filter((r): r is NonNullable<typeof r> => Boolean(r))
         : [];
 
       if (reasons.length === 0) return null;
@@ -194,75 +170,18 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
           ? Math.round(s.confidence)
           : null;
       const confidenceLabel = getNonEmptyString(s.confidenceLabel);
-      return { displayLine, reasons, confidence, confidenceLabel };
+      return { name, displayLine, reasons, confidence, confidenceLabel };
     })
-    .filter(
-      (
-        s
-      ): s is {
-        displayLine: string;
-        reasons: string[];
-        confidence: number | null;
-        confidenceLabel: string | null;
-      } => Boolean(s)
-    )
+    .filter((s): s is SuggestionCard => Boolean(s))
     .slice(0, 5);
 
-  if (suggestions.length === 0) return null;
+  if (cards.length === 0) return null;
 
-  return renderMentorshipSuggestions(`Top mentors for ${menteeName}`, suggestions);
-}
-
-interface RenderableSuggestion {
-  displayLine: string;
-  reasons: string[];
-  confidence: number | null;
-  confidenceLabel: string | null;
-}
-
-/** Render a "Confidence 92/100 (High)" line body, or null when unavailable. */
-function formatConfidenceLine(s: {
-  confidence: number | null;
-  confidenceLabel: string | null;
-}): string | null {
-  if (s.confidence == null) return null;
-  const label = s.confidenceLabel ? ` (${s.confidenceLabel})` : "";
-  return `Confidence: ${s.confidence}/100${label}`;
-}
-
-/**
- * Normalize whitespace inside a reason string so comma-joined values read
- * cleanly ("consulting,strategy" -> "consulting, strategy"). Whitespace-only:
- * the label/value wording the grounding verifier inspects is unchanged.
- */
-function normalizeReasonSpacing(reason: string): string {
-  return reason.replace(/\s*,\s*/g, ", ").trim();
-}
-
-/**
- * Shared markdown renderer for the mentor/mentee suggestion lists. Bold,
- * numbered name as a heading; confidence on its own line; each reason as its
- * own bullet; a divider plus blank line between people so the assistant's
- * narrow surface stays scannable.
- */
-function renderMentorshipSuggestions(
-  heading: string,
-  suggestions: RenderableSuggestion[]
-): string {
-  const blocks = suggestions.map((suggestion, index) => {
-    const lines = [`**${index + 1}. ${suggestion.displayLine}**`];
-    const confidence = formatConfidenceLine(suggestion);
-    if (confidence) lines.push(confidence);
-    lines.push("");
-    for (const reason of suggestion.reasons) {
-      lines.push(`- ${normalizeReasonSpacing(reason)}`);
-    }
-    return lines.join("\n");
+  return renderMentorshipSuggestionList({
+    heading: `Top mentors for ${menteeName}`,
+    cards,
+    direction: "mentor",
   });
-
-  // Divider + surrounding blank lines separate each person on the narrow
-  // assistant surface.
-  return `### ${heading}\n\n${blocks.join("\n\n---\n\n")}`;
 }
 
 export function formatSuggestMenteesResponse(data: unknown): string | null {
@@ -307,8 +226,8 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
 
   if (state !== "resolved" || !Array.isArray(payload.suggestions)) return null;
 
-  const suggestions = (payload.suggestions as SuggestMenteesDisplaySuggestion[])
-    .map((s) => {
+  const cards = (payload.suggestions as SuggestMenteesDisplaySuggestion[])
+    .map((s): SuggestionCard | null => {
       if (!s || typeof s !== "object") return null;
       const name = getNonEmptyString(s.mentee?.name);
       if (!name) return null;
@@ -318,8 +237,8 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
 
       const reasons = Array.isArray(s.reasons)
         ? s.reasons
-            .map((r) => formatSuggestionReason(r, "mentee"))
-            .filter((r): r is string => Boolean(r))
+            .map((r) => buildSuggestionReason(r, "mentee"))
+            .filter((r): r is NonNullable<typeof r> => Boolean(r))
         : [];
 
       if (reasons.length === 0) return null;
@@ -328,23 +247,18 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
           ? Math.round(s.confidence)
           : null;
       const confidenceLabel = getNonEmptyString(s.confidenceLabel);
-      return { displayLine, reasons, confidence, confidenceLabel };
+      return { name, displayLine, reasons, confidence, confidenceLabel };
     })
-    .filter(
-      (
-        s
-      ): s is {
-        displayLine: string;
-        reasons: string[];
-        confidence: number | null;
-        confidenceLabel: string | null;
-      } => Boolean(s)
-    )
+    .filter((s): s is SuggestionCard => Boolean(s))
     .slice(0, 5);
 
-  if (suggestions.length === 0) return null;
+  if (cards.length === 0) return null;
 
-  return renderMentorshipSuggestions(`Top mentees for ${mentorName}`, suggestions);
+  return renderMentorshipSuggestionList({
+    heading: `Top mentees for ${mentorName}`,
+    cards,
+    direction: "mentee",
+  });
 }
 
 export function formatDonationAnalyticsResponse(data: unknown): string | null {
