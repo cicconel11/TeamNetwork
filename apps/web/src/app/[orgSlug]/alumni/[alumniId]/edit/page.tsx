@@ -50,9 +50,7 @@ export default async function EditAlumniPage({ params }: EditAlumniPageProps) {
     return notFound();
   }
 
-  // select("*") already returns enrichment_filled_fields at runtime; the
-  // generated types don't include the new column yet, hence the cast.
-  const alum = alumData as Alumni & { enrichment_filled_fields?: string[] | null };
+  const alum = alumData as Alumni;
   const navConfig = org.nav_config as NavConfig | null;
   const canEditPage = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
   const alumUserId = alum.user_id || null;

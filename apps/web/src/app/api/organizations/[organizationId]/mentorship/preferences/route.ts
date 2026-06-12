@@ -260,9 +260,7 @@ async function refreshDerivedSignals(
     if (hash === args.priorHash) return; // inputs unchanged — nothing to do
 
     const signals = await backfillMenteeSignals(input);
-    await (service as unknown as {
-      rpc: (fn: string, params: Record<string, unknown>) => Promise<unknown>;
-    }).rpc("upsert_mentee_derived_signals", {
+    await service.rpc("upsert_mentee_derived_signals", {
       p_organization_id: args.organizationId,
       p_user_id: args.userId,
       p_signals: {

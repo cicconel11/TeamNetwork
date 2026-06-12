@@ -726,6 +726,7 @@ export type Database = {
           email: string | null
           enriched_at: string | null
           enrichment_error: string | null
+          enrichment_filled_fields: string[] | null
           enrichment_retry_count: number | null
           enrichment_snapshot_id: string | null
           enrichment_status: string | null
@@ -764,6 +765,7 @@ export type Database = {
           email?: string | null
           enriched_at?: string | null
           enrichment_error?: string | null
+          enrichment_filled_fields?: string[] | null
           enrichment_retry_count?: number | null
           enrichment_snapshot_id?: string | null
           enrichment_status?: string | null
@@ -802,6 +804,7 @@ export type Database = {
           email?: string | null
           enriched_at?: string | null
           enrichment_error?: string | null
+          enrichment_filled_fields?: string[] | null
           enrichment_retry_count?: number | null
           enrichment_snapshot_id?: string | null
           enrichment_status?: string | null
@@ -2509,6 +2512,8 @@ export type Database = {
           id: string
           price_per_sub_org_cents: number | null
           pricing_model: string | null
+          pricing_model_version: string
+          pricing_v2_snapshot: Json | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -2525,6 +2530,8 @@ export type Database = {
           id?: string
           price_per_sub_org_cents?: number | null
           pricing_model?: string | null
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2541,6 +2548,8 @@ export type Database = {
           id?: string
           price_per_sub_org_cents?: number | null
           pricing_model?: string | null
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -4331,6 +4340,8 @@ export type Database = {
         Row: {
           communication_prefs: string[]
           created_at: string
+          derived_signals: Json | null
+          derived_signals_input_hash: string | null
           geographic_pref: string | null
           goals: string | null
           id: string
@@ -4350,6 +4361,8 @@ export type Database = {
         Insert: {
           communication_prefs?: string[]
           created_at?: string
+          derived_signals?: Json | null
+          derived_signals_input_hash?: string | null
           geographic_pref?: string | null
           goals?: string | null
           id?: string
@@ -4369,6 +4382,8 @@ export type Database = {
         Update: {
           communication_prefs?: string[]
           created_at?: string
+          derived_signals?: Json | null
+          derived_signals_input_hash?: string | null
           geographic_pref?: string | null
           goals?: string | null
           id?: string
@@ -4723,6 +4738,8 @@ export type Database = {
           id: string
           match_score: number | null
           match_signals: Json | null
+          match_why: string | null
+          match_why_model: string | null
           mentee_user_id: string
           mentor_user_id: string
           organization_id: string
@@ -4740,6 +4757,8 @@ export type Database = {
           id?: string
           match_score?: number | null
           match_signals?: Json | null
+          match_why?: string | null
+          match_why_model?: string | null
           mentee_user_id: string
           mentor_user_id: string
           organization_id: string
@@ -4757,6 +4776,8 @@ export type Database = {
           id?: string
           match_score?: number | null
           match_signals?: Json | null
+          match_why?: string | null
+          match_why_model?: string | null
           mentee_user_id?: string
           mentor_user_id?: string
           organization_id?: string
@@ -5658,6 +5679,8 @@ export type Database = {
           media_storage_quota_bytes: number | null
           organization_id: string
           parents_bucket: string
+          pricing_model_version: string
+          pricing_v2_snapshot: Json | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -5676,6 +5699,8 @@ export type Database = {
           media_storage_quota_bytes?: number | null
           organization_id: string
           parents_bucket?: string
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -5694,6 +5719,8 @@ export type Database = {
           media_storage_quota_bytes?: number | null
           organization_id?: string
           parents_bucket?: string
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -7337,6 +7364,7 @@ export type Database = {
         Returns: Json
       }
       alumni_bucket_limit: { Args: { p_bucket: string }; Returns: number }
+      applied_migration_versions: { Args: never; Returns: string[] }
       assert_alumni_quota: { Args: { p_org_id: string }; Returns: undefined }
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
       backfill_ai_embedding_queue: { Args: { p_org_id: string }; Returns: Json }
@@ -8135,6 +8163,15 @@ export type Database = {
           p_title: string
         }
         Returns: string
+      }
+      upsert_mentee_derived_signals: {
+        Args: {
+          p_input_hash: string
+          p_organization_id: string
+          p_signals: Json
+          p_user_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
