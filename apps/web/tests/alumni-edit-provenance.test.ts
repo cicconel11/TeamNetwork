@@ -155,8 +155,6 @@ test("edit page passes enrichmentFilledFields to EditAlumniForm", () => {
     editPageSource,
     /enrichmentFilledFields=\{alum\.enrichment_filled_fields \?\? null\}/
   );
-  // Structural cast for the not-yet-generated column.
-  assert.match(editPageSource, /enrichment_filled_fields\?: string\[\] \| null/);
 });
 
 test("form accepts the prop and gates chips on the provenance list", () => {

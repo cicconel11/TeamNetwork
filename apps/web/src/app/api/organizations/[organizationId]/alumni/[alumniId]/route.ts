@@ -19,24 +19,6 @@ interface RouteParams {
   params: Promise<{ organizationId: string; alumniId: string }>;
 }
 
-/**
- * Pre-update alumni snapshot used for access checks and the D11 provenance
- * strip. `enrichment_filled_fields` is not in the generated DB types yet
- * (migration lands in this branch), hence the structural type + cast below.
- */
-interface AlumniAccessRow {
-  id: string;
-  user_id: string | null;
-  job_title: string | null;
-  position_title: string | null;
-  current_company: string | null;
-  current_city: string | null;
-  major: string | null;
-  industry: string | null;
-  photo_url: string | null;
-  enrichment_filled_fields?: string[] | null;
-}
-
 async function resolveAlumniAccess(params: { organizationId: string; alumniId: string; userId: string }) {
   const serviceSupabase = createServiceClient();
   const [{ data: roleData, error: roleError }, { data: alumni, error: alumniError }] = await Promise.all([
@@ -66,7 +48,7 @@ async function resolveAlumniAccess(params: { organizationId: string; alumniId: s
     throw new Error("Unable to load alumni record");
   }
 
-  const alumniRow = (alumni ?? null) as AlumniAccessRow | null;
+  const alumniRow = alumni ?? null;
 
   return {
     isAdmin: roleData?.role === "admin",
@@ -166,7 +148,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       const nextFilledFields = filledFields.filter((field) => !strippedKeys.includes(field));
       const { error: stripError } = await svc
         .from("alumni")
-        .update({ enrichment_filled_fields: nextFilledFields } as Record<string, unknown> as never)
+        .update({ enrichment_filled_fields: nextFilledFields })
         .eq("id", alumniId)
         .eq("organization_id", organizationId)
         .is("deleted_at", null);
