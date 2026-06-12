@@ -10,6 +10,7 @@ import { createSupabaseStub } from "../../utils/supabaseStub.ts";
 import { emailDomainCreateSchema } from "@/lib/schemas/email-domain";
 import {
   createDomain,
+  domainApiError,
   removeDomain,
   verifyDomain,
 } from "@/lib/notifications/email-domains";
@@ -297,6 +298,18 @@ test("delete removes the row and frees the domain for re-registration", async ()
     stub
   );
   assert.strictEqual(recreated.status, 201);
+});
+
+test("sending-only Resend keys map to an actionable permission error", () => {
+  const restricted = domainApiError("This API key is restricted to only send emails", "fallback");
+  assert.ok(restricted.message.includes("RESEND_DOMAINS_API_KEY"));
+  assert.ok(restricted.message.includes("Full access"));
+
+  // Other Resend errors pass through untouched.
+  const other = domainApiError("Domain quota exceeded", "fallback");
+  assert.strictEqual(other.message, "Domain quota exceeded");
+  const empty = domainApiError(undefined, "fallback");
+  assert.strictEqual(empty.message, "fallback");
 });
 
 test("delete requires admin and an existing row", async () => {

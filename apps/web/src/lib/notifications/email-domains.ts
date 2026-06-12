@@ -2,16 +2,36 @@ import { Resend } from "resend";
 
 /**
  * Thin wrapper over the Resend Domains API used by the org email-domain
- * routes. When RESEND_API_KEY is unset (local dev), a deterministic stub
+ * routes. When no Resend key is set (local dev), a deterministic stub
  * lets the whole connect → DNS records → verify flow run end-to-end:
  * stub domains are created `pending` and flip to `verified` on verify.
  * Production callers must treat `isEmailDomainServiceConfigured() === false`
  * as a 503 — the stub is for local development only.
+ *
+ * Domain management requires a Resend key with "Full access" — a
+ * "Sending access" key (fine for the send path) is rejected by Resend.
+ * Set RESEND_DOMAINS_API_KEY to a full-access key to keep RESEND_API_KEY
+ * send-only; it falls back to RESEND_API_KEY when unset.
  */
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+const domainsApiKey = process.env.RESEND_DOMAINS_API_KEY || process.env.RESEND_API_KEY;
+
+const resend = domainsApiKey ? new Resend(domainsApiKey) : null;
+
+/**
+ * Resend rejects domain management with sending-only keys using messages
+ * like "This API key is restricted to only send emails". Translate that
+ * into something the org admin (and operator) can act on.
+ */
+export function domainApiError(rawMessage: string | undefined, fallback: string): Error {
+  const message = rawMessage || fallback;
+  if (/restricted to only send|api key.*(permission|not authorized)/i.test(message)) {
+    return new Error(
+      "The configured Resend API key can't manage domains. Create a key with 'Full access' in the Resend dashboard and set RESEND_DOMAINS_API_KEY."
+    );
+  }
+  return new Error(message);
+}
 
 export const RESEND_DOMAIN_REGION = "us-east-1";
 
@@ -120,7 +140,7 @@ export async function createDomain(domain: string): Promise<DomainSnapshot> {
     region: RESEND_DOMAIN_REGION,
   });
   if (error || !data) {
-    throw new Error(error?.message || "Failed to create domain in Resend");
+    throw domainApiError(error?.message, "Failed to create domain in Resend");
   }
   return {
     id: data.id,
@@ -136,7 +156,7 @@ export async function getDomain(id: string, domain: string): Promise<DomainSnaps
   }
   const { data, error } = await resend.domains.get(id);
   if (error || !data) {
-    throw new Error(error?.message || "Failed to fetch domain from Resend");
+    throw domainApiError(error?.message, "Failed to fetch domain from Resend");
   }
   return {
     id: data.id,
@@ -153,7 +173,7 @@ export async function verifyDomain(id: string, domain: string): Promise<DomainSn
   }
   const { error } = await resend.domains.verify(id);
   if (error) {
-    throw new Error(error.message || "Failed to trigger domain verification");
+    throw domainApiError(error.message, "Failed to trigger domain verification");
   }
   // verify() only enqueues the check; the refreshed status lives on get().
   return getDomain(id, domain);
@@ -167,6 +187,6 @@ export async function removeDomain(id: string): Promise<void> {
   const { error } = await resend.domains.remove(id);
   // A domain already gone from Resend is success for our purposes.
   if (error && !/not[_ ]?found/i.test(error.message ?? "")) {
-    throw new Error(error.message || "Failed to remove domain from Resend");
+    throw domainApiError(error.message, "Failed to remove domain from Resend");
   }
 }
