@@ -14,6 +14,7 @@ import { PermissionRoleCard } from "@/components/ui/PermissionRoleCard";
 import { PageHeader } from "@/components/layout";
 import { OrgNameCard } from "@/components/settings/OrgNameCard";
 import { BrandingCard } from "@/components/settings/BrandingCard";
+import { EmailDomainCard } from "@/components/settings/EmailDomainCard";
 import { NotificationPrefsCard } from "@/components/settings/NotificationPrefsCard";
 import { LOCALE_NAMES } from "@/i18n/config";
 import type { SupportedLocale } from "@/i18n/config";
@@ -451,6 +452,8 @@ function OrgSettingsContent() {
             initialSidebarColor={initialPrimaryColor}
             initialButtonColor={initialSecondaryColor}
           />
+
+          {isAdmin && <EmailDomainCard orgId={orgId!} orgName={orgName} />}
 
           {isAdmin && (
             <Card className="org-settings-card p-5 space-y-3 opacity-0 translate-y-2">
