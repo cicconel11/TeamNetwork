@@ -1436,8 +1436,8 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
           const content =
             outcome.status === "proposed"
-              ? `Proposed ${payload.mentor_name} as a mentor for ${payload.mentee_name} (confidence ${payload.confidence}/100). Awaiting their acceptance.`
-              : `Paired ${payload.mentee_name} with ${payload.mentor_name} (confidence ${payload.confidence}/100).`;
+              ? `Proposed ${payload.mentor_name} as a mentor for ${payload.mentee_name} (match score ${payload.confidence}/100). Awaiting their acceptance.`
+              : `Paired ${payload.mentee_name} with ${payload.mentor_name} (match score ${payload.confidence}/100).`;
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,

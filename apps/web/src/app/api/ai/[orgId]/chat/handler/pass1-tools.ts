@@ -668,10 +668,6 @@ const PASS1_ROUTING_RULES: ReadonlyArray<RoutingRule> = [
   },
 ];
 
-export const PASS1_ROUTING_RULE_IDS: ReadonlyArray<string> = PASS1_ROUTING_RULES.map(
-  (r) => r.id,
-);
-
 function buildRoutingContext(
   message: string,
   effectiveSurface: CacheSurface,
@@ -706,37 +702,6 @@ function buildRoutingContext(
     isEnterpriseScopedRequest,
     canManageEnterpriseBilling,
   };
-}
-
-/**
- * Diagnostic helper: returns the id of the first matching rule, or `null` for
- * the surface fallback. Useful when investigating why a prompt routed to a
- * given tool. Not used in production hot path.
- */
-export function matchPass1RoutingRule(
-  message: string,
-  effectiveSurface: CacheSurface,
-  toolPolicy: TurnExecutionPolicy["toolPolicy"],
-  intentType: TurnExecutionPolicy["intentType"],
-  attachment?: ChatAttachment,
-  currentPath?: string,
-  enterpriseEnabled?: boolean,
-  enterpriseRole?: EnterpriseRole,
-): string | null {
-  if (toolPolicy !== "surface_read_tools") return null;
-  const ctx = buildRoutingContext(
-    message,
-    effectiveSurface,
-    intentType,
-    attachment,
-    currentPath,
-    enterpriseEnabled,
-    enterpriseRole,
-  );
-  for (const rule of PASS1_ROUTING_RULES) {
-    if (rule.when(ctx)) return rule.id;
-  }
-  return null;
 }
 
 export function getPass1Tools(

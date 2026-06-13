@@ -327,7 +327,7 @@ export function AdminMatchQueue({ orgId, orgSlug }: AdminMatchQueueProps) {
                     {row.match_score !== null && (
                       <>
                         {" · "}
-                        {safeT("confidenceLabel", "Confidence")}:{" "}
+                        {safeT("confidenceLabel", "Match score")}:{" "}
                         {scoreToConfidence(row.match_score, DEFAULT_THEORETICAL_MAX)}/100
                       </>
                     )}

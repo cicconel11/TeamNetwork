@@ -179,8 +179,8 @@ export async function loadMentorInputs(
  * Load native mentee_preferences row and merge with alumni profile facts
  * (city, company, graduation year).
  *
- * Replaces `loadMenteeIntakeInput` as the canonical path once Phase 1 lands.
- * Returns MenteeInput shape — same contract as existing matcher.
+ * Canonical path for composing a mentee's matcher input.
+ * Returns MenteeInput shape — same contract as the matcher expects.
  *
  * Table is column-typed but generated DB types may lag the migration;
  * explicit assertions used for safety.
