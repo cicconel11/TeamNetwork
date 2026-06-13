@@ -7,7 +7,7 @@ import { useAIStream } from "@/hooks/useAIStream";
 import { getAssistantCapabilitySnapshot } from "@/lib/ai/capabilities";
 import { prepareImageUpload } from "@/lib/media/image-preparation";
 import { useAIPanel } from "./AIPanelContext";
-import { routeToSurface } from "./route-surface";
+import { isFullPageAssistantRoute, routeToSurface } from "./route-surface";
 import {
   clearPersistedActiveThreadId,
   readPersistedActiveThreadId,
@@ -756,7 +756,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
     [activeThreadId, messages, orgId, threads]
   );
 
-  if (!isOpen) return null;
+  if (!isOpen || isFullPageAssistantRoute(pathname)) return null;
 
   return (
     <>
