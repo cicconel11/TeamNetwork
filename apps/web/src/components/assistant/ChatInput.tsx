@@ -82,7 +82,7 @@ export function ChatInput({
   const attachmentControlsDisabled = isStreaming || isUploadingAttachment;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-6">
+    <div className="mx-auto w-full max-w-4xl px-4 pb-6">
       {/* Error banner */}
       {error && (
         <div className="mb-3 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
