@@ -21,12 +21,5 @@ export default async function AssistantPage({ params }: AssistantPageProps) {
   // Only admins can access the full-page assistant
   if (!isAdmin) return notFound();
 
-  return (
-    <AssistantLayout
-      orgId={orgCtx.organization.id}
-      orgSlug={orgSlug}
-      orgName={orgCtx.organization.name}
-      userRole={orgCtx.role}
-    />
-  );
+  return <AssistantLayout orgId={orgCtx.organization.id} orgSlug={orgSlug} />;
 }

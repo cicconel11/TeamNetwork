@@ -3,4 +3,3 @@ export { ConversationSidebar } from "./ConversationSidebar";
 export { ChatArea } from "./ChatArea";
 export { ChatInput } from "./ChatInput";
 export { AssistantWorkflowShortcuts } from "./AssistantWorkflowShortcuts";
-export { AssistantContextPanel } from "./AssistantContextPanel";
