@@ -5,6 +5,18 @@ import {
   type SuggestionCard,
 } from "./mentorship-suggestions";
 
+/** A valid org slug for path building — letters, digits, and hyphens only. */
+const ORG_SLUG_PATTERN = /^[a-z0-9-]+$/i;
+
+/**
+ * Build the org's mentorship page path, or null when the slug is missing or
+ * not slug-shaped (defensive: keeps a malformed slug out of a rendered link).
+ */
+function mentorshipPageHref(orgSlug: string | undefined): string | null {
+  if (!orgSlug || !ORG_SLUG_PATTERN.test(orgSlug)) return null;
+  return `/${orgSlug}/mentorship`;
+}
+
 interface AnnouncementDisplayRow {
   title?: unknown;
   published_at?: unknown;
@@ -107,7 +119,10 @@ export interface FormatterOptions extends DonationResponseOptions {
   orgSlug?: string;
 }
 
-export function formatSuggestMentorsResponse(data: unknown): string | null {
+export function formatSuggestMentorsResponse(
+  data: unknown,
+  options?: FormatterOptions,
+): string | null {
   if (!data || typeof data !== "object") return null;
 
   const payload = data as SuggestMentorsDisplayPayload;
@@ -181,10 +196,14 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
     heading: `Top mentors for ${menteeName}`,
     cards,
     direction: "mentor",
+    mentorshipHref: mentorshipPageHref(options?.orgSlug),
   });
 }
 
-export function formatSuggestMenteesResponse(data: unknown): string | null {
+export function formatSuggestMenteesResponse(
+  data: unknown,
+  options?: FormatterOptions,
+): string | null {
   if (!data || typeof data !== "object") return null;
 
   const payload = data as SuggestMenteesDisplayPayload;
@@ -258,6 +277,7 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
     heading: `Top mentees for ${mentorName}`,
     cards,
     direction: "mentee",
+    mentorshipHref: mentorshipPageHref(options?.orgSlug),
   });
 }
 

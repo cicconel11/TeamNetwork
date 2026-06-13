@@ -362,12 +362,19 @@ export async function runModelToolsLoop(
       MEMBER_ROSTER_PROMPT_PATTERN.test(input.promptSafeMessage);
     const hideDonorNames = input.ctx.hideDonorNames === true;
     const orgSlug = input.ctx.orgSlug;
+    const ORG_SLUG_FORMATTER_TOOLS = new Set([
+      "list_chat_groups",
+      "suggest_mentors",
+      "suggest_mentees",
+    ]);
+    const singleToolName =
+      input.successfulToolResults.length === 1
+        ? input.successfulToolResults[0]?.name
+        : undefined;
     const deterministicFormatterOptions =
-      input.successfulToolResults.length === 1 &&
-      input.successfulToolResults[0]?.name === "list_donations"
+      singleToolName === "list_donations"
         ? { hideDonorNames }
-        : input.successfulToolResults.length === 1 &&
-          input.successfulToolResults[0]?.name === "list_chat_groups"
+        : singleToolName && ORG_SLUG_FORMATTER_TOOLS.has(singleToolName)
         ? { orgSlug }
         : undefined;
     const deterministicToolContent =

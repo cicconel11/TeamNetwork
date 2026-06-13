@@ -399,3 +399,27 @@ test("Best for is signal-driven and org-agnostic — works with no subtitle at a
   assert.match(out, /Best for: Finance industry insight and guidance on investing and networking/);
   assert.match(out, /Best for: an inside view of Goldman Sachs/);
 });
+
+/* ── Deep link back to the mentorship page ── */
+
+test("suggestion list links to the mentorship page when an orgSlug is provided", () => {
+  const mentors = formatSuggestMentorsResponse(lawCohortMentors(), { orgSlug: "villanova" })!;
+  assert.match(mentors, /\[Open the mentorship page\]\(\/villanova\/mentorship\)/);
+
+  const mentees = formatSuggestMenteesResponse(resolvedMentees(), { orgSlug: "villanova" })!;
+  assert.match(mentees, /\[Open the mentorship page\]\(\/villanova\/mentorship\)/);
+});
+
+test("suggestion list omits the link when no orgSlug is provided", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.ok(!out.includes("Open the mentorship page"));
+});
+
+test("a malformed orgSlug never reaches the rendered link", () => {
+  // A slug with path characters would otherwise break out of /<slug>/mentorship.
+  const out = formatSuggestMentorsResponse(lawCohortMentors(), {
+    orgSlug: "../../etc/passwd",
+  })!;
+  assert.ok(!out.includes("Open the mentorship page"));
+  assert.ok(!out.includes("etc/passwd"));
+});

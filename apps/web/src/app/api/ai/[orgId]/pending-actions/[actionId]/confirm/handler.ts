@@ -1434,10 +1434,17 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             });
           }
 
+          const pairingOrgSlug =
+            typeof payload.orgSlug === "string" && /^[a-z0-9-]+$/i.test(payload.orgSlug)
+              ? payload.orgSlug
+              : null;
+          const matchesLink = pairingOrgSlug
+            ? ` [View in the match queue](/${pairingOrgSlug}/mentorship/admin/matches).`
+            : "";
           const content =
             outcome.status === "proposed"
-              ? `Proposed ${payload.mentor_name} as a mentor for ${payload.mentee_name} (match score ${payload.confidence}/100). Awaiting their acceptance.`
-              : `Paired ${payload.mentee_name} with ${payload.mentor_name} (match score ${payload.confidence}/100).`;
+              ? `Proposed ${payload.mentor_name} as a mentor for ${payload.mentee_name} (match score ${payload.confidence}/100). Awaiting their acceptance.${matchesLink}`
+              : `Paired ${payload.mentee_name} with ${payload.mentor_name} (match score ${payload.confidence}/100).${matchesLink}`;
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
             thread_id: action.thread_id,
