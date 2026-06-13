@@ -24,13 +24,21 @@ import {
   type RetryRequestIdentity,
 } from "@/components/ai-assistant/panel-state";
 import type { AIChatAttachment } from "@/hooks/useAIStream";
+import type { OrgRole } from "@/lib/auth/role-utils";
 import { ConversationSidebar } from "./ConversationSidebar";
 import { ChatArea } from "./ChatArea";
 import { ChatInput } from "./ChatInput";
+import {
+  AssistantWorkflowShortcuts,
+  type AssistantWorkflowShortcut,
+} from "./AssistantWorkflowShortcuts";
+import { AssistantContextPanel } from "./AssistantContextPanel";
 
 interface AssistantLayoutProps {
   orgId: string;
   orgSlug: string;
+  orgName: string;
+  userRole: OrgRole | null;
 }
 
 const DEFAULT_SCHEDULE_FILE_PROMPT =
@@ -81,7 +89,7 @@ async function normalizeScheduleUploadFile(file: File): Promise<File> {
   }
 }
 
-export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
+export function AssistantLayout({ orgId, orgSlug, orgName, userRole }: AssistantLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const surface = routeToSurface(pathname);
@@ -102,6 +110,7 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
   const [pendingActions, setPendingActions] = useState<PendingActionState[]>([]);
   const [pendingActionBusyIds, setPendingActionBusyIds] = useState<Set<string>>(new Set());
   const [pendingActionErrors, setPendingActionErrors] = useState<Record<string, string>>({});
+  const [activeWorkflow, setActiveWorkflow] = useState<AssistantWorkflowShortcut | null>(null);
 
   const {
     isStreaming,
@@ -503,6 +512,7 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
     clearAttachment();
     setPendingAssistantContent(null);
     setPendingActions([]);
+    setActiveWorkflow(null);
   }, [clearAttachment]);
 
   const handleSelectThread = useCallback(
@@ -511,10 +521,16 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
       clearAttachment();
       setPendingAssistantContent(null);
       setPendingActions([]);
+      setActiveWorkflow(null);
       setActiveThreadId(id);
     },
     [clearAttachment]
   );
+
+  const handleSelectWorkflow = useCallback((shortcut: AssistantWorkflowShortcut) => {
+    setActiveWorkflow(shortcut);
+    setDraftInput(shortcut.prompt);
+  }, []);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] lg:h-screen">
@@ -524,6 +540,13 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
         loading={threadsLoading}
         activeThreadId={activeThreadId}
         collapsed={sidebarCollapsed}
+        workflowSection={
+          <AssistantWorkflowShortcuts
+            activeWorkflowId={activeWorkflow?.id ?? null}
+            disabled={isStreaming}
+            onSelect={handleSelectWorkflow}
+          />
+        }
         onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
         onSelectThread={handleSelectThread}
         onNewThread={handleNewThread}
@@ -550,8 +573,10 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
                 <Sparkles className="h-4 w-4 text-org-secondary" />
               </div>
               <div>
-                <h1 className="text-sm font-semibold text-foreground">AI Assistant</h1>
-                <p className="text-[10px] text-muted-foreground">TeamNetwork tasks</p>
+                <h1 className="text-sm font-semibold text-foreground">Assistant</h1>
+                <p className="text-[10px] text-muted-foreground">
+                  Ask questions, run workflows, and take action across this organization.
+                </p>
               </div>
             </div>
           </div>
@@ -607,6 +632,14 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
           onClearError={clearError}
         />
       </div>
+
+      {/* Context panel */}
+      <AssistantContextPanel
+        orgName={orgName}
+        userRole={userRole}
+        activeWorkflowLabel={activeWorkflow?.label ?? null}
+        pendingActionsCount={pendingActions.length}
+      />
     </div>
   );
 }
