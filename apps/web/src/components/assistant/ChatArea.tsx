@@ -190,7 +190,7 @@ export function ChatArea({
   // Message list
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+      <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
         {messages
           .filter((message) => message.role !== "system")
           .map((msg) => (
