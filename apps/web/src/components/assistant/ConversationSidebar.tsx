@@ -154,6 +154,9 @@ export function ConversationSidebar({
 
       {/* Thread list */}
       <div className="flex-1 overflow-y-auto px-3 pb-3">
+        <p className="px-1 pb-2 pt-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+          Previous chats
+        </p>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-org-secondary border-t-transparent" />
