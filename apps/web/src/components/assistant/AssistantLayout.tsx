@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, Sparkles, PanelLeftClose, PanelLeft } from "lucide-react";
-import Link from "next/link";
 import { useAIStream } from "@/hooks/useAIStream";
 import { getAssistantCapabilitySnapshot } from "@/lib/ai/capabilities";
 import { prepareImageUpload } from "@/lib/media/image-preparation";
@@ -524,6 +523,15 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
     setDraftInput(shortcut.prompt);
   }, []);
 
+  const handleBack = useCallback(() => {
+    // Prefer real history navigation; fall back to org home for direct visits.
+    if (window.history.length > 1) {
+      router.back();
+    } else {
+      router.push(`/${orgSlug}`);
+    }
+  }, [orgSlug, router]);
+
   return (
     <div className="flex h-[calc(100vh-4rem)] lg:h-screen">
       {/* Sidebar */}
@@ -546,13 +554,14 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
         {/* Header */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/50 px-4">
           <div className="flex items-center gap-3">
-            <Link
-              href={`/${orgSlug}`}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Back</span>
-            </Link>
+            </button>
 
             <div className="h-5 w-px bg-border/50" />
 
