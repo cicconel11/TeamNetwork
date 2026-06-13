@@ -124,7 +124,7 @@ export function ConversationSidebar({
   }
 
   return (
-    <div className="flex h-full w-[280px] flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm">
+    <div className="flex h-full w-[280px] max-w-[85vw] flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm">
       {/* Header */}
       <div className="flex h-14 items-center justify-between border-b border-border/50 px-4">
         <h2 className="font-display text-sm font-semibold tracking-tight text-foreground">

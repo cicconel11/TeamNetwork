@@ -92,6 +92,7 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
   const starterPrompts = getStarterPrompts();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<AIPanelThread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(true);
@@ -534,20 +535,60 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] lg:h-screen">
-      {/* Sidebar */}
-      <ConversationSidebar
-        threads={threads}
-        loading={threadsLoading}
-        activeThreadId={activeThreadId}
-        collapsed={sidebarCollapsed}
-        workflowSection={
-          <AssistantWorkflowShortcuts disabled={isStreaming} onSelect={handleSelectWorkflow} />
-        }
-        onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
-        onSelectThread={handleSelectThread}
-        onNewThread={handleNewThread}
-        onDeleteThread={handleDeleteThread}
-      />
+      {/* Sidebar — in-flow on desktop, overlay drawer on mobile */}
+      <div className="hidden h-full lg:block">
+        <ConversationSidebar
+          threads={threads}
+          loading={threadsLoading}
+          activeThreadId={activeThreadId}
+          collapsed={sidebarCollapsed}
+          workflowSection={
+            <AssistantWorkflowShortcuts disabled={isStreaming} onSelect={handleSelectWorkflow} />
+          }
+          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+          onSelectThread={handleSelectThread}
+          onNewThread={handleNewThread}
+          onDeleteThread={handleDeleteThread}
+        />
+      </div>
+
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close conversations"
+            onClick={() => setMobileSidebarOpen(false)}
+            className="absolute inset-0 bg-black/50"
+          />
+          <div className="absolute inset-y-0 left-0 flex max-w-[85vw] bg-background shadow-xl">
+            <ConversationSidebar
+              threads={threads}
+              loading={threadsLoading}
+              activeThreadId={activeThreadId}
+              collapsed={false}
+              workflowSection={
+                <AssistantWorkflowShortcuts
+                  disabled={isStreaming}
+                  onSelect={(shortcut) => {
+                    handleSelectWorkflow(shortcut);
+                    setMobileSidebarOpen(false);
+                  }}
+                />
+              }
+              onToggleCollapse={() => setMobileSidebarOpen(false)}
+              onSelectThread={(id) => {
+                handleSelectThread(id);
+                setMobileSidebarOpen(false);
+              }}
+              onNewThread={() => {
+                handleNewThread();
+                setMobileSidebarOpen(false);
+              }}
+              onDeleteThread={handleDeleteThread}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Main chat area */}
       <div className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -579,14 +620,14 @@ export function AssistantLayout({ orgId, orgSlug }: AssistantLayoutProps) {
           </div>
 
           <button
-            onClick={() => setSidebarCollapsed((c) => !c)}
+            onClick={() => setMobileSidebarOpen((open) => !open)}
             className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
-            aria-label={sidebarCollapsed ? "Show conversations" : "Hide conversations"}
+            aria-label={mobileSidebarOpen ? "Hide conversations" : "Show conversations"}
           >
-            {sidebarCollapsed ? (
-              <PanelLeft className="h-5 w-5" />
-            ) : (
+            {mobileSidebarOpen ? (
               <PanelLeftClose className="h-5 w-5" />
+            ) : (
+              <PanelLeft className="h-5 w-5" />
             )}
           </button>
         </header>

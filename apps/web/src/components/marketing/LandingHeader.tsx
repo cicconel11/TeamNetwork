@@ -159,14 +159,15 @@ export function LandingHeader() {
             href="/auth/login"
             variant="landingGhost"
             size="sm"
-            className="hidden whitespace-nowrap px-2 py-2 text-sm sm:inline-flex sm:px-4 sm:py-2.5"
+            className="whitespace-nowrap px-2 py-2 text-xs min-[380px]:px-2.5 min-[380px]:text-sm sm:px-4 sm:py-2.5 sm:text-base"
           >
             Sign In
           </ButtonLink>
+          {/* Contact Sales lives in the hero, footer, and mobile drawer on small screens */}
           <ButtonLink
             href="/contact"
             variant="landingPrimary"
-            className="whitespace-nowrap px-2 py-2 text-xs min-[380px]:px-2.5 min-[380px]:text-sm sm:px-5 sm:text-base"
+            className="hidden whitespace-nowrap px-2 py-2 text-xs min-[380px]:px-2.5 min-[380px]:text-sm sm:inline-flex sm:px-5 sm:text-base"
           >
             Contact Sales
           </ButtonLink>
