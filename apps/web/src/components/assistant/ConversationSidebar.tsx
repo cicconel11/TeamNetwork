@@ -10,6 +10,8 @@ interface ConversationSidebarProps {
   loading: boolean;
   activeThreadId: string | null;
   collapsed: boolean;
+  /** Optional section rendered between the new-conversation button and the thread list. */
+  workflowSection?: React.ReactNode;
   onToggleCollapse: () => void;
   onSelectThread: (id: string) => void;
   onNewThread: () => void;
@@ -61,6 +63,7 @@ export function ConversationSidebar({
   loading,
   activeThreadId,
   collapsed,
+  workflowSection,
   onToggleCollapse,
   onSelectThread,
   onNewThread,
@@ -146,6 +149,8 @@ export function ConversationSidebar({
           New conversation
         </button>
       </div>
+
+      {workflowSection}
 
       {/* Thread list */}
       <div className="flex-1 overflow-y-auto px-3 pb-3">
