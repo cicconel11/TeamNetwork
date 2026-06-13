@@ -1,7 +1,9 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { useAIPanel } from "./AIPanelContext";
+import { isFullPageAssistantRoute } from "./route-surface";
 
 interface AIEdgeTabProps {
   isAdmin: boolean;
@@ -9,8 +11,9 @@ interface AIEdgeTabProps {
 
 export function AIEdgeTab({ isAdmin }: AIEdgeTabProps) {
   const { isOpen, togglePanel } = useAIPanel();
+  const pathname = usePathname();
 
-  if (!isAdmin) return null;
+  if (!isAdmin || isFullPageAssistantRoute(pathname)) return null;
 
   return (
     <button

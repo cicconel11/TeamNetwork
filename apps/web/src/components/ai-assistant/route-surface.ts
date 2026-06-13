@@ -21,6 +21,18 @@ const SURFACE_PREFIXES: ReadonlyArray<readonly [string, AiSurface]> = [
  * Derive AI surface from pathname. Extracts the second path segment
  * (the feature segment after /{orgSlug}/) and maps it to a surface.
  */
+/**
+ * True for the org-scoped full-page assistant route ("/{orgSlug}/assistant").
+ * The floating edge tab and drawer are suppressed there so the assistant UI
+ * is not duplicated on its own page.
+ */
+export function isFullPageAssistantRoute(pathname: string): boolean {
+  if (pathname.startsWith("/enterprise/")) return false;
+  const match = pathname.match(/^\/[^/]+(\/[^/?#]*)/);
+  const segment = match?.[1] ?? "";
+  return segment === "/assistant" || segment.startsWith("/assistant/");
+}
+
 export function routeToSurface(pathname: string): AiSurface {
   // Capture group 1: the feature segment including its leading slash.
   // Supports both "/{orgSlug}/feature" and "/enterprise/{slug}/feature".
