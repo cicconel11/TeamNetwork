@@ -28,6 +28,12 @@ import {
   computeTheoreticalMax,
   type MentorshipReasonCode,
 } from "@/lib/mentorship/matching-weights";
+import {
+  buildSyntheticMenteeFromCriteria,
+  buildSyntheticMentorFromCriteria,
+  hasMentorshipCriteria,
+  type MentorshipCriteriaInput,
+} from "@/lib/mentorship/criteria-input";
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                      */
@@ -65,6 +71,7 @@ export interface DisplayReadyMentorSuggestion {
 export interface SuggestMentorsResult {
   state: SuggestMentorsState;
   mentee: DisplayReadyMentorPerson | null;
+  criteriaLabel?: string;
   suggestions: DisplayReadyMentorSuggestion[];
   disambiguation_options?: DisplayReadyMentorPerson[];
 }
@@ -77,6 +84,10 @@ export interface SuggestMentorsOptions {
   menteeUserId?: string;
   menteeQuery?: string;
   focusAreas?: string[];
+  topics?: string[];
+  industries?: string[];
+  roleFamilies?: string[];
+  goals?: string;
   limit?: number;
 }
 
@@ -245,15 +256,25 @@ export async function suggestMentors(
   opts: SuggestMentorsOptions
 ): Promise<SuggestMentorsResult> {
   const limit = opts.limit ?? DEFAULT_SUGGESTION_LIMIT;
+  const criteria: MentorshipCriteriaInput = {
+    topics: [...(opts.topics ?? []), ...(opts.focusAreas ?? [])],
+    industries: opts.industries,
+    roleFamilies: opts.roleFamilies,
+    goals: opts.goals,
+  };
+  const canUseCriteria =
+    !opts.menteeUserId && !opts.menteeQuery && hasMentorshipCriteria(criteria);
 
   // 1. Resolve mentee
-  const resolution = await resolveMentee(supabase, orgId, opts);
+  const resolution = canUseCriteria
+    ? null
+    : await resolveMentee(supabase, orgId, opts);
 
-  if (resolution.state === "not_found") {
+  if (resolution?.state === "not_found") {
     return { state: "not_found", mentee: null, suggestions: [] };
   }
 
-  if (resolution.state === "ambiguous") {
+  if (resolution?.state === "ambiguous") {
     return {
       state: "ambiguous",
       mentee: null,
@@ -262,33 +283,45 @@ export async function suggestMentors(
     };
   }
 
-  const menteeUserId = resolution.userId;
-  const menteeDisplay = resolution.display;
+  const syntheticMentee = canUseCriteria
+    ? buildSyntheticMenteeFromCriteria(orgId, criteria)
+    : null;
+  if (canUseCriteria && !syntheticMentee) {
+    return { state: "not_found", mentee: null, suggestions: [] };
+  }
+
+  const menteeUserId = resolution?.userId ?? syntheticMentee?.input.userId;
+  const menteeDisplay = resolution?.display ?? null;
+  const criteriaLabel = syntheticMentee?.label;
 
   // 2. Load mentee native preferences + mentor inputs in parallel
   const [menteeInput, mentorInputs] = await Promise.all([
-    loadMenteePreferences(
-      supabase as unknown as Parameters<typeof loadMenteePreferences>[0],
-      orgId,
-      menteeUserId
-    ),
+    syntheticMentee
+      ? Promise.resolve(syntheticMentee.input)
+      : loadMenteePreferences(
+          supabase as unknown as Parameters<typeof loadMenteePreferences>[0],
+          orgId,
+          menteeUserId as string
+        ),
     loadMentorInputs(supabase, orgId),
   ]);
 
   // Merge focus_areas override
   const mergedMentee =
-    opts.focusAreas && opts.focusAreas.length > 0
+    !syntheticMentee && opts.focusAreas && opts.focusAreas.length > 0
       ? { ...menteeInput, focusAreas: [...(menteeInput.focusAreas ?? []), ...opts.focusAreas] }
       : menteeInput;
 
   // 3. Exclude already-paired mentors
-  const { data: existingPairs } = await supabase
-    .from("mentorship_pairs")
-    .select("mentor_user_id")
-    .eq("organization_id", orgId)
-    .eq("mentee_user_id", menteeUserId)
-    .in("status", ["proposed", "accepted", "active", "paused"])
-    .is("deleted_at", null);
+  const { data: existingPairs } = syntheticMentee
+    ? { data: [] }
+    : await supabase
+        .from("mentorship_pairs")
+        .select("mentor_user_id")
+        .eq("organization_id", orgId)
+        .eq("mentee_user_id", menteeUserId as string)
+        .in("status", ["proposed", "accepted", "active", "paused"])
+        .is("deleted_at", null);
 
   const excludeIds = new Set(
     (existingPairs ?? []).map((r) => r.mentor_user_id as string)
@@ -319,7 +352,12 @@ export async function suggestMentors(
   });
 
   if (scored.length === 0) {
-    return { state: "no_suggestions", mentee: menteeDisplay, suggestions: [] };
+    return {
+      state: "no_suggestions",
+      mentee: menteeDisplay,
+      criteriaLabel,
+      suggestions: [],
+    };
   }
 
   // Spread recommendations so the same top mentor isn't returned to everyone.
@@ -359,6 +397,7 @@ export async function suggestMentors(
   return {
     state: "resolved",
     mentee: menteeDisplay,
+    criteriaLabel,
     // Only auto-trim when the caller didn't ask for a specific count.
     suggestions:
       opts.limit == null ? trimHighConfidenceSuggestions(suggestions) : suggestions,
@@ -542,6 +581,10 @@ export async function suggestMentorsForPairing(
 export interface SuggestMenteesOptions {
   mentorUserId?: string;
   mentorQuery?: string;
+  topics?: string[];
+  industries?: string[];
+  roleFamilies?: string[];
+  goals?: string;
   limit?: number;
 }
 
@@ -557,6 +600,7 @@ export interface DisplayReadyMenteeSuggestion {
 export interface SuggestMenteesResult {
   state: SuggestMentorsState;
   mentor: DisplayReadyMentorPerson | null;
+  criteriaLabel?: string;
   suggestions: DisplayReadyMenteeSuggestion[];
   disambiguation_options?: DisplayReadyMentorPerson[];
 }
@@ -655,12 +699,22 @@ export async function suggestMentees(
   opts: SuggestMenteesOptions
 ): Promise<SuggestMenteesResult> {
   const limit = opts.limit ?? DEFAULT_SUGGESTION_LIMIT;
+  const criteria: MentorshipCriteriaInput = {
+    topics: opts.topics,
+    industries: opts.industries,
+    roleFamilies: opts.roleFamilies,
+    goals: opts.goals,
+  };
+  const canUseCriteria =
+    !opts.mentorUserId && !opts.mentorQuery && hasMentorshipCriteria(criteria);
 
-  const resolution = await resolveMentor(supabase, orgId, opts);
-  if (resolution.state === "not_found") {
+  const resolution = canUseCriteria
+    ? null
+    : await resolveMentor(supabase, orgId, opts);
+  if (resolution?.state === "not_found") {
     return { state: "not_found", mentor: null, suggestions: [] };
   }
-  if (resolution.state === "ambiguous") {
+  if (resolution?.state === "ambiguous") {
     return {
       state: "ambiguous",
       mentor: null,
@@ -669,28 +723,44 @@ export async function suggestMentees(
     };
   }
 
-  const mentorUserId = resolution.userId;
-  const mentorDisplay = resolution.display;
+  const syntheticMentor = canUseCriteria
+    ? buildSyntheticMentorFromCriteria(orgId, criteria)
+    : null;
+  if (canUseCriteria && !syntheticMentor) {
+    return { state: "not_found", mentor: null, suggestions: [] };
+  }
+
+  const mentorUserId = resolution?.userId ?? syntheticMentor?.input.userId;
+  const mentorDisplay = resolution?.display ?? null;
+  const criteriaLabel = syntheticMentor?.label;
 
   const [mentorInputs, menteeInputs] = await Promise.all([
     loadMentorInputs(supabase, orgId),
     loadSeekingMenteeInputs(supabase, orgId),
   ]);
 
-  const mentorInput = mentorInputs.find((m) => m.userId === mentorUserId);
+  const mentorInput =
+    syntheticMentor?.input ?? mentorInputs.find((m) => m.userId === mentorUserId);
   if (!mentorInput) {
     // No mentor profile → cannot rank. Surface as "no suggestions".
-    return { state: "no_suggestions", mentor: mentorDisplay, suggestions: [] };
+    return {
+      state: "no_suggestions",
+      mentor: mentorDisplay,
+      criteriaLabel,
+      suggestions: [],
+    };
   }
 
   // Exclude mentees already paired with this mentor.
-  const { data: existingPairs } = await supabase
-    .from("mentorship_pairs")
-    .select("mentee_user_id")
-    .eq("organization_id", orgId)
-    .eq("mentor_user_id", mentorUserId)
-    .in("status", ["proposed", "accepted", "active", "paused"])
-    .is("deleted_at", null);
+  const { data: existingPairs } = syntheticMentor
+    ? { data: [] }
+    : await supabase
+        .from("mentorship_pairs")
+        .select("mentee_user_id")
+        .eq("organization_id", orgId)
+        .eq("mentor_user_id", mentorUserId as string)
+        .in("status", ["proposed", "accepted", "active", "paused"])
+        .is("deleted_at", null);
   const excludeIds = new Set(
     (existingPairs ?? []).map((r) => r.mentee_user_id as string)
   );
@@ -722,7 +792,12 @@ export async function suggestMentees(
   });
 
   if (matches.length === 0) {
-    return { state: "no_suggestions", mentor: mentorDisplay, suggestions: [] };
+    return {
+      state: "no_suggestions",
+      mentor: mentorDisplay,
+      criteriaLabel,
+      suggestions: [],
+    };
   }
 
   const top = matches.slice(0, limit);
@@ -766,6 +841,7 @@ export async function suggestMentees(
   return {
     state: "resolved",
     mentor: mentorDisplay,
+    criteriaLabel,
     // Only auto-trim when the caller didn't ask for a specific count.
     suggestions:
       opts.limit == null ? trimHighConfidenceSuggestions(suggestions) : suggestions,

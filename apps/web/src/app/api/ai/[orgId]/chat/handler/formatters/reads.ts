@@ -51,6 +51,7 @@ interface SearchOrgContentDisplayRow {
 interface SuggestMentorsDisplayPayload {
   state?: unknown;
   mentee?: { name?: unknown } | null;
+  criteriaLabel?: unknown;
   suggestions?: unknown;
   disambiguation_options?: unknown;
 }
@@ -65,6 +66,7 @@ interface SuggestMentorsDisplaySuggestion {
 interface SuggestMenteesDisplayPayload {
   state?: unknown;
   mentor?: { name?: unknown } | null;
+  criteriaLabel?: unknown;
   suggestions?: unknown;
   disambiguation_options?: unknown;
 }
@@ -155,11 +157,15 @@ export function formatSuggestMentorsResponse(
       .join("\n")}`;
   }
 
+  const criteriaLabel = getNonEmptyString(payload.criteriaLabel);
   const menteeName = getNonEmptyString(payload.mentee?.name);
-  if (!menteeName) return null;
+  const targetLabel = menteeName ?? (criteriaLabel ? `"${criteriaLabel}"` : null);
+  if (!targetLabel) return null;
 
   if (state === "no_suggestions") {
-    return `I found ${menteeName}, but there are no eligible mentors matching their preferences right now.`;
+    return menteeName
+      ? `I found ${menteeName}, but there are no eligible mentors matching their preferences right now.`
+      : `There are no eligible mentors matching ${targetLabel} right now.`;
   }
 
   if (state !== "resolved" || !Array.isArray(payload.suggestions)) return null;
@@ -193,7 +199,7 @@ export function formatSuggestMentorsResponse(
   if (cards.length === 0) return null;
 
   return renderMentorshipSuggestionList({
-    heading: `Top mentors for ${menteeName}`,
+    heading: `Top mentors for ${targetLabel}`,
     cards,
     direction: "mentor",
     mentorshipHref: mentorshipPageHref(options?.orgSlug),
@@ -236,11 +242,15 @@ export function formatSuggestMenteesResponse(
       .join("\n")}`;
   }
 
+  const criteriaLabel = getNonEmptyString(payload.criteriaLabel);
   const mentorName = getNonEmptyString(payload.mentor?.name);
-  if (!mentorName) return null;
+  const targetLabel = mentorName ?? (criteriaLabel ? `"${criteriaLabel}"` : null);
+  if (!targetLabel) return null;
 
   if (state === "no_suggestions") {
-    return `I found ${mentorName}, but there are no students seeking mentorship who match right now.`;
+    return mentorName
+      ? `I found ${mentorName}, but there are no students seeking mentorship who match right now.`
+      : `There are no students seeking mentorship who match ${targetLabel} right now.`;
   }
 
   if (state !== "resolved" || !Array.isArray(payload.suggestions)) return null;
@@ -274,7 +284,7 @@ export function formatSuggestMenteesResponse(
   if (cards.length === 0) return null;
 
   return renderMentorshipSuggestionList({
-    heading: `Top mentees for ${mentorName}`,
+    heading: `Top mentees for ${targetLabel}`,
     cards,
     direction: "mentee",
     mentorshipHref: mentorshipPageHref(options?.orgSlug),
