@@ -1297,7 +1297,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "suggest_mentors" as const,
       description:
-        "Suggest mentors for a mentee within the organization. Use for mentor matching, pairing requests, or 'who could mentor X' questions. Filters to mentors accepting new mentees. Returns auditable signals for every match — never invent reasons beyond tool output.",
+        "Suggest mentors for a mentee or criteria within the organization. Use for mentor matching, pairing requests, 'who could mentor X' questions, and topic/field requests like marketing, law, finance, or career goals. When the user names a person, pass mentee_id or mentee_query. When the user asks by topic, industry, role family, or goal, pass criteria fields instead of treating the topic as a person. Filters to mentors accepting new mentees. Returns auditable signals for every match — never invent reasons beyond tool output.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -1316,6 +1316,29 @@ const TOOL_BY_NAME = {
             description:
               "Optional topic overrides (falls back to mentee intake preferences).",
           },
+          topics: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Mentorship topics or skills from a criteria request, such as marketing, leadership, law, or fundraising.",
+          },
+          industries: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Industries from a criteria request, such as Finance, Healthcare, Law, or Technology.",
+          },
+          role_families: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Career role families from a criteria request, such as Product, Legal, Engineering, or Sales.",
+          },
+          goals: {
+            type: "string" as const,
+            description:
+              "Free-text mentorship goal when the request is criteria-based rather than for a named person.",
+          },
           limit: {
             type: "integer" as const,
             minimum: 1,
@@ -1332,7 +1355,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "suggest_mentees" as const,
       description:
-        "Suggest mentees (students seeking mentorship) for a mentor within the organization. The bi-directional counterpart of suggest_mentors — use for 'who should I mentor', 'recommend mentees for X', or matching a willing mentor to students. Only considers students who opted into mentorship. Returns auditable signals for every match — never invent reasons beyond tool output.",
+        "Suggest mentees (students seeking mentorship) for a mentor or criteria within the organization. The bi-directional counterpart of suggest_mentors — use for 'who should I mentor', 'recommend mentees for X', matching a willing mentor to students, or finding mentees interested in topics/fields like marketing, law, finance, or career goals. When the user names a mentor, pass mentor_id or mentor_query. When the user asks by topic, industry, role family, or goal, pass criteria fields instead of treating the topic as a person. Only considers students who opted into mentorship. Returns auditable signals for every match — never invent reasons beyond tool output.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -1344,6 +1367,29 @@ const TOOL_BY_NAME = {
             type: "string" as const,
             description:
               "Name or email of the mentor when the user asked in natural language (e.g. the asking user themselves).",
+          },
+          topics: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Mentorship topics or skills from a criteria request, such as marketing, leadership, law, or fundraising.",
+          },
+          industries: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Industries from a criteria request, such as Finance, Healthcare, Law, or Technology.",
+          },
+          role_families: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Career role families from a criteria request, such as Product, Legal, Engineering, or Sales.",
+          },
+          goals: {
+            type: "string" as const,
+            description:
+              "Free-text mentorship goal when the request is criteria-based rather than for a named mentor.",
           },
           limit: {
             type: "integer" as const,

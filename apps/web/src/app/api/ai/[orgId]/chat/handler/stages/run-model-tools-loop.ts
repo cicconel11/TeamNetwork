@@ -44,6 +44,7 @@ import { runPass1Bypass } from "./run-pass1-bypass";
 import type { PendingEventRevisionAnalysis } from "../pending-event-revision";
 import {
   MEMBER_LIST_PASS2_INSTRUCTION,
+  MENTOR_TOOL_REQUIRED_FALLBACK,
   MENTOR_PASS2_TEMPLATE,
 } from "../sse-runtime";
 import type { RouteEntityContext } from "@/lib/ai/route-entity";
@@ -327,8 +328,7 @@ export async function runModelToolsLoop(
         input.requestLogContext,
         { droppedChars: pass1BufferedContent.length },
       );
-      const fallback =
-        "Mentorship suggestions come straight from your organization's matching engine, and I couldn't run it for that request. Please try again — for example: \"Suggest mentors for <member name>\" or \"Recommend mentees for <mentor name>\".";
+      const fallback = MENTOR_TOOL_REQUIRED_FALLBACK;
       fullContent += fallback;
       input.enqueue({ type: "chunk", content: fallback });
     } else {
@@ -362,12 +362,19 @@ export async function runModelToolsLoop(
       MEMBER_ROSTER_PROMPT_PATTERN.test(input.promptSafeMessage);
     const hideDonorNames = input.ctx.hideDonorNames === true;
     const orgSlug = input.ctx.orgSlug;
+    const ORG_SLUG_FORMATTER_TOOLS = new Set([
+      "list_chat_groups",
+      "suggest_mentors",
+      "suggest_mentees",
+    ]);
+    const singleToolName =
+      input.successfulToolResults.length === 1
+        ? input.successfulToolResults[0]?.name
+        : undefined;
     const deterministicFormatterOptions =
-      input.successfulToolResults.length === 1 &&
-      input.successfulToolResults[0]?.name === "list_donations"
+      singleToolName === "list_donations"
         ? { hideDonorNames }
-        : input.successfulToolResults.length === 1 &&
-          input.successfulToolResults[0]?.name === "list_chat_groups"
+        : singleToolName && ORG_SLUG_FORMATTER_TOOLS.has(singleToolName)
         ? { orgSlug }
         : undefined;
     const deterministicToolContent =

@@ -76,7 +76,7 @@ describe("formatPrepareMentorshipPairingResponse", () => {
     assert.ok(out);
     assert.match(out!, /Jane Doe/);
     assert.match(out!, /John Smith/);
-    assert.match(out!, /confidence 92\/100/i);
+    assert.match(out!, /match score 92\/100/i);
     assert.match(out!, /Confirm below/i);
   });
 

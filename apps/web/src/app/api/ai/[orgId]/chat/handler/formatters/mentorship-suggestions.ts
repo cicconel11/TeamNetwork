@@ -420,8 +420,10 @@ export function renderMentorshipSuggestionList(args: {
   heading: string;
   cards: SuggestionCard[];
   direction: MatchExplanationDirection;
+  /** When set, append a link back to the org's mentorship page. */
+  mentorshipHref?: string | null;
 }): string {
-  const { heading, cards, direction } = args;
+  const { heading, cards, direction, mentorshipHref } = args;
 
   const shared = sharedReasons(cards);
   const collapse = shared.length >= MIN_SHARED_TO_COLLAPSE;
@@ -496,6 +498,10 @@ export function renderMentorshipSuggestionList(args: {
     sections.push(
       "_These matches are based on limited profile data — they get sharper as members add goals, topics, and industries to their mentorship profiles._"
     );
+  }
+
+  if (mentorshipHref) {
+    sections.push(`[Open the mentorship page](${mentorshipHref}) to pair or message them.`);
   }
 
   return sections.join("\n\n");

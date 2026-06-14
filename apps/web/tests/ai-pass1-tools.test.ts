@@ -1019,7 +1019,13 @@ describe("pass1RequiresToolBackedAnswer", () => {
     );
     assert.match(src, /pass1RequiresToolBackedAnswer\(input\.pass1Tools,\s*input\.message\)/);
     assert.match(src, /suppressed tool-less pass-1 answer for tool-required intent/);
-    assert.match(src, /matching engine, and I couldn't run it for that request/);
+    assert.match(src, /MENTOR_TOOL_REQUIRED_FALLBACK/);
+    const runtimeSrc = await readFile(
+      new URL("../src/app/api/ai/[orgId]/chat/handler/sse-runtime.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(runtimeSrc, /matching engine, and I couldn't run it for that request/);
+    assert.match(runtimeSrc, /Find mentors for marketing/);
   });
 });
 

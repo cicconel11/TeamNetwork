@@ -189,15 +189,6 @@ export function resolveMentorshipConfig(
 }
 
 /**
- * Legacy compatibility wrapper — returns only the weights portion.
- */
-export function resolveMentorshipWeights(
-  orgSettings: unknown
-): MentorshipWeights {
-  return resolveMentorshipConfig(orgSettings).weights;
-}
-
-/**
  * Sum of every positive signal weight in a resolved config — the reference
  * "all signals fire at nominal weight" ceiling used to turn a raw match score
  * into a 0–100 confidence (see `scoreToConfidence` in `presentation.ts`) and

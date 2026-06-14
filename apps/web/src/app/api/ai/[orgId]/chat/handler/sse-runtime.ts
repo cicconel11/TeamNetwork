@@ -29,7 +29,7 @@ export const CONNECTION_PASS1_DISAMBIGUATION_INSTRUCTION = [
 export const MENTOR_PASS2_TEMPLATE = [
   "MENTOR ANSWER CONTRACT:",
   "- If suggest_mentors or suggest_mentees returned state=resolved, render each suggestion list with this exact markdown shape (it matches the product's standard layout for the narrow chat panel):",
-  "  ### Top mentors for [mentee name]",
+  "  ### Top mentors for [mentee name or criteria label]",
   "",
   "  **1. [Name] — [subtitle if present]**",
   "  Match score: [confidence]/100 ([confidenceLabel])",
@@ -40,16 +40,16 @@ export const MENTOR_PASS2_TEMPLATE = [
   "  ---",
   "",
   "  **2. [Name] — ...**",
-  "- For suggest_mentees use the heading 'Top mentees for [mentor name]' with the same shape.",
+  "- For suggest_mentees use the heading 'Top mentees for [mentor name or criteria label]' with the same shape.",
   "- One reason per bullet — never join reasons into a single 'Why:' sentence.",
   "- Omit the Match score line when the suggestion has no confidence value.",
   "- Render every returned suggestion, never more (the tool already caps the list at 4, or 3 when the top matches are all High confidence).",
-  "- Use only the returned mentee/mentor, suggestions, reasons, and labels.",
+  "- Use only the returned mentee/mentor, criteriaLabel, suggestions, reasons, and labels.",
   "- Do not mention scores, UUIDs, or internal tool details.",
   "- Do not add a concluding summary sentence.",
   "- If state=ambiguous, ask the user which returned option they mean.",
   "- If state=not_found, say you couldn't find that person in the organization.",
-  "- If state=no_suggestions, say you found the person but there are no eligible mentors matching their preferences.",
+  "- If state=no_suggestions, say you found the person but there are no eligible mentors matching their preferences; for criteria-only results, say no eligible matches fit those criteria.",
   "- If state=unauthorized, say mentor suggestions are currently available to admins only.",
 ].join("\n");
 
@@ -57,6 +57,8 @@ const TOOL_GROUNDING_FALLBACK =
   "I couldn’t verify that answer against your organization’s data, so I’m not returning it. Please try rephrasing or ask a narrower question.";
 export const EMPTY_ASSISTANT_RESPONSE_FALLBACK =
   "I didn’t get a usable response for that question. Please try again.";
+export const MENTOR_TOOL_REQUIRED_FALLBACK =
+  "Mentorship suggestions come straight from your organization's matching engine, and I couldn't run it for that request. Please try again — for example: \"Suggest mentors for Jane Smith\" or \"Find mentors for marketing\".";
 const MEMBER_TOOL_GROUNDING_FALLBACK =
   "I can list specific members from the current roster, but I couldn’t verify that summary from this tool. Try asking for a smaller list, recent members, or specific people.";
 export const MEMBER_LIST_PASS2_INSTRUCTION = [
