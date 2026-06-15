@@ -19,48 +19,6 @@ function typedCache<TArgs extends unknown[], TReturn>(
 }
 
 /**
- * Cached nav config for an organization. Revalidate on nav config write.
- * Tag: `nav-config-${orgId}`
- */
-export function getCachedNavConfig(orgId: string) {
-  return typedCache(
-    async (id: string) => {
-      const supabase = createServiceClient();
-      const { data, error } = await supabase
-        .from("organizations")
-        .select("nav_config")
-        .eq("id", id)
-        .single();
-      if (error) throw new Error(`Nav config query failed: ${error.message}`);
-      return data?.nav_config ?? null;
-    },
-    ["nav-config", orgId],
-    { revalidate: 300, tags: [`nav-config-${orgId}`] }
-  )(orgId);
-}
-
-/**
- * Cached organization settings. Revalidate on settings write.
- * Tag: `org-settings-${orgId}`
- */
-export function getCachedOrgSettings(orgId: string) {
-  return typedCache(
-    async (id: string) => {
-      const supabase = createServiceClient();
-      const { data, error } = await supabase
-        .from("organizations")
-        .select("id, name, slug, base_color, primary_color, secondary_color, logo_url, org_type, nav_config, stripe_connect_account_id")
-        .eq("id", id)
-        .single();
-      if (error) throw new Error(`Org settings query failed: ${error.message}`);
-      return data;
-    },
-    ["org-settings", orgId],
-    { revalidate: 300, tags: [`org-settings-${orgId}`] }
-  )(orgId);
-}
-
-/**
  * Cached donation stats for an organization. Revalidate on donation webhook.
  * Tag: `donation-stats-${orgId}`
  */
