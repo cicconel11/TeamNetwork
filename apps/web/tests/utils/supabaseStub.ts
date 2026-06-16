@@ -50,6 +50,9 @@ type TableName =
   | "enterprise_adoption_requests"
   | "user_enterprise_roles"
   | "ai_messages"
+  | "ai_document_chunks"
+  | "ai_indexing_exclusions"
+  | "announcements"
   | "organization_email_domains";
 
 type Row = Record<string, unknown>;
@@ -115,6 +118,9 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   enterprise_adoption_requests: [],
   user_enterprise_roles: [["user_id", "enterprise_id"]],
   ai_messages: [],
+  ai_document_chunks: [],
+  ai_indexing_exclusions: [],
+  announcements: [],
   organization_email_domains: ["organization_id", "domain"],
 };
 
@@ -173,6 +179,9 @@ export function createSupabaseStub() {
     enterprise_adoption_requests: [],
     user_enterprise_roles: [],
     ai_messages: [],
+    ai_document_chunks: [],
+    ai_indexing_exclusions: [],
+    announcements: [],
     organization_email_domains: [],
   };
 
@@ -375,6 +384,8 @@ export function createSupabaseStub() {
       let sortColumn: string | null = null;
       let sortAscending = true;
       let limitCount: number | null = null;
+      let rangeFrom: number | null = null;
+      let rangeTo: number | null = null;
 
       const builder = {
         eq(column: string, value: unknown) {
@@ -454,6 +465,11 @@ export function createSupabaseStub() {
           limitCount = count;
           return builder;
         },
+        range(from: number, to: number) {
+          rangeFrom = from;
+          rangeTo = to;
+          return builder;
+        },
         maybeSingle(): SupabaseResponse<Row> {
           if (errorSimulation[table]) {
             return { data: null, error: errorSimulation[table] ?? null };
@@ -511,6 +527,9 @@ export function createSupabaseStub() {
               if (aVal > bVal) return sortAscending ? 1 : -1;
               return 0;
             });
+          }
+          if (rangeFrom !== null && rangeTo !== null) {
+            rows = rows.slice(rangeFrom, rangeTo + 1);
           }
           if (limitCount !== null) {
             rows = rows.slice(0, limitCount);

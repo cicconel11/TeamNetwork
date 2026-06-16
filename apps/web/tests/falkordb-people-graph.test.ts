@@ -2645,7 +2645,10 @@ test("processGraphSyncQueue converges for replay, out-of-order mentorship work, 
     },
   ]);
   await processGraphSyncQueue(stub as any, { graphClient });
-  assert.deepEqual(graphClient.snapshot(ORG_ID).edges, []);
+  // Edge reconciliation ensures both endpoint nodes exist (from Supabase) before
+  // MERGE, so the edge forms even when the pair item is processed before its
+  // person items — out-of-order processing no longer drops the edge.
+  assert.deepEqual(graphClient.snapshot(ORG_ID).edges, ["user:mentor-user->user:mentee-user"]);
 
   stub.registerRpc("dequeue_graph_sync_queue", () => [
     {

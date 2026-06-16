@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { OrgRole } from "@/lib/auth/role-utils";
 import { generateEmbedding } from "./embeddings";
 import { aiLog, type AiLogContext } from "./logger";
 
@@ -25,8 +26,37 @@ export interface RetrieveParams {
   maxChunks?: number;
   similarityThreshold?: number;
   sourceTables?: string[];
+  /**
+   * Audience tokens the requester is allowed to see. When omitted/undefined the
+   * search is unrestricted (admin / global callers). Derive from the requester's
+   * org role via {@link audienceFilterForRole}.
+   */
+  audienceFilter?: string[];
   /** Skip ledger write (dev-admin bypass). */
   spendBypass?: boolean;
+  /** Injectable embedding generator (defaults to the real Gemini client; tests override). */
+  generateEmbeddingFn?: typeof generateEmbedding;
+}
+
+/**
+ * Map an org role to the audience tokens its members may retrieve. Returns
+ * `undefined` for admins (no restriction). Unrestricted content ('all'/'both'/
+ * unset) is always visible regardless of this list — it only gates restricted
+ * audiences. Parents see alumni-targeted content, matching announcement visibility.
+ */
+export function audienceFilterForRole(role: OrgRole): string[] | undefined {
+  switch (role) {
+    case "admin":
+      return undefined;
+    case "active_member":
+      return ["members", "active_members"];
+    case "alumni":
+      return ["alumni"];
+    case "parent":
+      return ["alumni"];
+    default:
+      return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -106,11 +136,13 @@ export async function retrieveRelevantChunks(
     maxChunks = DEFAULT_MAX_CHUNKS,
     similarityThreshold = DEFAULT_SIMILARITY_THRESHOLD,
     sourceTables,
+    audienceFilter,
     spendBypass,
+    generateEmbeddingFn = generateEmbedding,
   } = params;
 
   // Generate query embedding (expand bare domain terms first)
-  const queryEmbedding = await generateEmbedding(expandQuery(query), orgId, spendBypass);
+  const queryEmbedding = await generateEmbeddingFn(expandQuery(query), orgId, spendBypass);
 
   // Call the search RPC
   const { data, error } = await (serviceSupabase.rpc as any)(
@@ -121,6 +153,7 @@ export async function retrieveRelevantChunks(
       p_match_count: maxChunks,
       p_similarity_threshold: similarityThreshold,
       ...(sourceTables ? { p_source_tables: sourceTables } : {}),
+      ...(audienceFilter ? { p_audience_filter: audienceFilter } : {}),
     }
   );
 

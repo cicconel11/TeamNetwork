@@ -322,6 +322,39 @@ async function hasActivePair(
   return Array.isArray(data) && data.length > 0;
 }
 
+/**
+ * Resolve the canonical person node for a paired user and upsert it into the
+ * graph, returning its personKey. Fetching the member/alumni rows *by user_id*
+ * means the projected key is always `user:{userId}` when a profile row exists,
+ * so the endpoint resolves correctly even for people whose node had not yet
+ * synced (out-of-order queue processing). Returns null when the user has no
+ * active profile row in this org — that endpoint cannot be edged and is
+ * surfaced by the graph drift checker rather than silently assumed to exist.
+ *
+ * Deliberately lighter-weight than `reconcilePersonByKey`: it upserts only the
+ * node (no adjacent-pair reconciliation), which avoids mutual recursion with
+ * the edge reconciliation that calls it.
+ */
+async function ensurePersonNodeForUser(
+  serviceSupabase: SupabaseClient,
+  graphClient: FalkorQueryClient,
+  orgId: string,
+  userId: string
+): Promise<string | null> {
+  const [members, alumni] = await Promise.all([
+    fetchActiveMembersByUserId(serviceSupabase, orgId, userId),
+    fetchActiveAlumniByUserId(serviceSupabase, orgId, userId),
+  ]);
+
+  const projected = buildProjectedPeople({ members, alumni }).get(`${orgId}:user:${userId}`);
+  if (!projected) {
+    return null;
+  }
+
+  await upsertPersonNode(graphClient, orgId, projected);
+  return projected.personKey;
+}
+
 async function reconcilePairByUsers(
   serviceSupabase: SupabaseClient,
   graphClient: FalkorQueryClient,
@@ -333,11 +366,23 @@ async function reconcilePairByUsers(
     return;
   }
 
-  const mentorKey = buildPersonKey("members", mentorUserId, mentorUserId);
-  const menteeKey = buildPersonKey("members", menteeUserId, menteeUserId);
   const edgeExists = await hasActivePair(serviceSupabase, orgId, mentorUserId, menteeUserId);
 
   if (edgeExists) {
+    // Ensure both endpoint nodes exist (resolving their real person keys)
+    // before MERGE-ing the edge. A bare `MATCH … MATCH … MERGE` silently
+    // no-ops when either node has not yet synced, permanently dropping the
+    // edge; ensuring the nodes first makes edge formation independent of
+    // queue ordering and of whether the person was previously projected.
+    const [mentorKey, menteeKey] = await Promise.all([
+      ensurePersonNodeForUser(serviceSupabase, graphClient, orgId, mentorUserId),
+      ensurePersonNodeForUser(serviceSupabase, graphClient, orgId, menteeUserId),
+    ]);
+
+    if (!mentorKey || !menteeKey) {
+      return;
+    }
+
     await graphClient.query(
       orgId,
       `
@@ -350,6 +395,9 @@ async function reconcilePairByUsers(
     );
     return;
   }
+
+  const mentorKey = buildPersonKey("members", mentorUserId, mentorUserId);
+  const menteeKey = buildPersonKey("members", menteeUserId, menteeUserId);
 
   await graphClient.query(
     orgId,
