@@ -159,7 +159,7 @@ export function AdminPairingBoard({ orgId, mentees }: AdminPairingBoardProps) {
                     <h3 className="font-semibold text-foreground truncate">{c.mentor.name}</h3>
                     {c.isFallback && <Badge variant="muted">Suggested</Badge>}
                     <Badge variant="primary">
-                      Confidence {c.confidence}/100 · {c.confidenceLabel}
+                      Match score {c.confidence}/100 · {c.confidenceLabel}
                     </Badge>
                     <Badge variant={c.capacityRemaining > 0 ? "success" : "warning"}>
                       {c.capacityRemaining} {c.capacityRemaining === 1 ? "slot" : "slots"} open

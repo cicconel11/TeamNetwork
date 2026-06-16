@@ -9,14 +9,22 @@ const suggestMenteesSchema = z
   .object({
     mentor_id: z.string().uuid().optional(),
     mentor_query: z.string().trim().min(1).optional(),
+    topics: z.array(z.string().trim().min(1)).optional(),
+    industries: z.array(z.string().trim().min(1)).optional(),
+    role_families: z.array(z.string().trim().min(1)).optional(),
+    goals: z.string().trim().min(1).optional(),
     limit: z.number().int().min(1).max(25).optional(),
   })
   .refine(
     (value) =>
       (typeof value.mentor_query === "string" && value.mentor_query.length > 0) ||
-      typeof value.mentor_id === "string",
+      typeof value.mentor_id === "string" ||
+      (Array.isArray(value.topics) && value.topics.length > 0) ||
+      (Array.isArray(value.industries) && value.industries.length > 0) ||
+      (Array.isArray(value.role_families) && value.role_families.length > 0) ||
+      (typeof value.goals === "string" && value.goals.length > 0),
     {
-      message: "Expected mentor_query or mentor_id",
+      message: "Expected mentor_query, mentor_id, or mentorship criteria",
     },
   )
   .strict();
@@ -49,6 +57,10 @@ export const suggestMenteesModule: ToolModule<Args> = {
         {
           mentorUserId: args.mentor_id,
           mentorQuery: args.mentor_query,
+          topics: args.topics,
+          industries: args.industries,
+          roleFamilies: args.role_families,
+          goals: args.goals,
           limit: args.limit,
         },
       );

@@ -81,6 +81,44 @@ test("mentor suggestions share the same structure", () => {
   assert.match(out, /\n- Shared industry: Finance/);
 });
 
+test("mentor suggestions can render criteria-only headings", () => {
+  const out = formatSuggestMentorsResponse({
+    state: "resolved",
+    mentee: null,
+    criteriaLabel: "marketing",
+    suggestions: [
+      {
+        mentor: { name: "Olivia Perez", subtitle: "Growth Lead at Citi" },
+        confidence: 63,
+        confidenceLabel: "Moderate",
+        reasons: [{ code: "shared_topics", value: "marketing" }],
+      },
+    ],
+  });
+  assert.ok(out);
+  assert.match(out, /^### Top mentors for "marketing"/);
+  assert.match(out, /\*\*1\. Olivia Perez — Growth Lead at Citi\*\*/);
+});
+
+test("mentee suggestions can render criteria-only headings", () => {
+  const out = formatSuggestMenteesResponse({
+    state: "resolved",
+    mentor: null,
+    criteriaLabel: "law",
+    suggestions: [
+      {
+        mentee: { name: "Jordan Lee", subtitle: null },
+        confidence: 63,
+        confidenceLabel: "Moderate",
+        reasons: [{ code: "shared_industry", value: "Law" }],
+      },
+    ],
+  });
+  assert.ok(out);
+  assert.match(out, /^### Top mentees for "law"/);
+  assert.match(out, /\*\*1\. Jordan Lee\*\*/);
+});
+
 test("code-bearing reasons render human copy, not raw label:value", () => {
   const out = formatSuggestMentorsResponse({
     state: "resolved",
@@ -141,6 +179,14 @@ test("non-resolved states keep their plain copy (no markdown heading)", () => {
       mentee: { name: "Brooke Esposito" },
     }),
     "I found Brooke Esposito, but there are no eligible mentors matching their preferences right now."
+  );
+  assert.equal(
+    formatSuggestMentorsResponse({
+      state: "no_suggestions",
+      mentee: null,
+      criteriaLabel: "marketing",
+    }),
+    'There are no eligible mentors matching "marketing" right now.'
   );
 });
 
@@ -398,4 +444,28 @@ test("Best for is signal-driven and org-agnostic — works with no subtitle at a
   // Phrasing is composed from each person's own signal values, not org-specific copy.
   assert.match(out, /Best for: Finance industry insight and guidance on investing and networking/);
   assert.match(out, /Best for: an inside view of Goldman Sachs/);
+});
+
+/* ── Deep link back to the mentorship page ── */
+
+test("suggestion list links to the mentorship page when an orgSlug is provided", () => {
+  const mentors = formatSuggestMentorsResponse(lawCohortMentors(), { orgSlug: "villanova" })!;
+  assert.match(mentors, /\[Open the mentorship page\]\(\/villanova\/mentorship\)/);
+
+  const mentees = formatSuggestMenteesResponse(resolvedMentees(), { orgSlug: "villanova" })!;
+  assert.match(mentees, /\[Open the mentorship page\]\(\/villanova\/mentorship\)/);
+});
+
+test("suggestion list omits the link when no orgSlug is provided", () => {
+  const out = formatSuggestMentorsResponse(lawCohortMentors())!;
+  assert.ok(!out.includes("Open the mentorship page"));
+});
+
+test("a malformed orgSlug never reaches the rendered link", () => {
+  // A slug with path characters would otherwise break out of /<slug>/mentorship.
+  const out = formatSuggestMentorsResponse(lawCohortMentors(), {
+    orgSlug: "../../etc/passwd",
+  })!;
+  assert.ok(!out.includes("Open the mentorship page"));
+  assert.ok(!out.includes("etc/passwd"));
 });

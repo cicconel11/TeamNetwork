@@ -495,7 +495,7 @@ export function formatPrepareMentorshipPairingResponse(data: unknown): string | 
     const mentorName = getNonEmptyString(draft.mentor?.name) ?? "this mentor";
     const confidence =
       typeof draft.confidence === "number" && Number.isFinite(draft.confidence)
-        ? ` (confidence ${Math.round(draft.confidence)}/100)`
+        ? ` (match score ${Math.round(draft.confidence)}/100)`
         : "";
     const why = getNonEmptyString(draft.why);
     const whyLine = why ? ` ${why}` : "";

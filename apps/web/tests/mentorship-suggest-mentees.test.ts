@@ -13,7 +13,7 @@ import {
 import { extractMentorSignals } from "@/lib/mentorship/matching-signals";
 
 describe("suggest_mentees tool schema", () => {
-  it("requires mentor_id or mentor_query", () => {
+  it("accepts either a person or criteria", () => {
     assert.equal(suggestMenteesModule.name, "suggest_mentees");
     assert.equal(suggestMenteesModule.argsSchema.safeParse({}).success, false);
     assert.equal(
@@ -24,6 +24,22 @@ describe("suggest_mentees tool schema", () => {
       suggestMenteesModule.argsSchema.safeParse({
         mentor_id: "00000000-0000-0000-0000-000000000000",
       }).success,
+      true
+    );
+    assert.equal(
+      suggestMenteesModule.argsSchema.safeParse({ topics: ["marketing"] }).success,
+      true
+    );
+    assert.equal(
+      suggestMenteesModule.argsSchema.safeParse({ industries: ["Law"] }).success,
+      true
+    );
+    assert.equal(
+      suggestMenteesModule.argsSchema.safeParse({ role_families: ["Legal"] }).success,
+      true
+    );
+    assert.equal(
+      suggestMenteesModule.argsSchema.safeParse({ goals: "learn fundraising" }).success,
       true
     );
     // limit is bounded

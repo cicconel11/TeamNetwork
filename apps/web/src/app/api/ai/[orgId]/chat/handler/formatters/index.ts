@@ -310,9 +310,9 @@ export function formatDeterministicToolResponse(
     case "suggest_connections":
       return formatSuggestConnectionsResponse(data);
     case "suggest_mentors":
-      return formatSuggestMentorsResponse(data);
+      return formatSuggestMentorsResponse(data, options);
     case "suggest_mentees":
-      return formatSuggestMenteesResponse(data);
+      return formatSuggestMenteesResponse(data, options);
     case "list_available_mentors":
       return formatListAvailableMentorsResponse(data);
     case "list_events":

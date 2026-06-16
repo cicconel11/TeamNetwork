@@ -5,6 +5,18 @@ import {
   type SuggestionCard,
 } from "./mentorship-suggestions";
 
+/** A valid org slug for path building — letters, digits, and hyphens only. */
+const ORG_SLUG_PATTERN = /^[a-z0-9-]+$/i;
+
+/**
+ * Build the org's mentorship page path, or null when the slug is missing or
+ * not slug-shaped (defensive: keeps a malformed slug out of a rendered link).
+ */
+function mentorshipPageHref(orgSlug: string | undefined): string | null {
+  if (!orgSlug || !ORG_SLUG_PATTERN.test(orgSlug)) return null;
+  return `/${orgSlug}/mentorship`;
+}
+
 interface AnnouncementDisplayRow {
   title?: unknown;
   published_at?: unknown;
@@ -39,6 +51,7 @@ interface SearchOrgContentDisplayRow {
 interface SuggestMentorsDisplayPayload {
   state?: unknown;
   mentee?: { name?: unknown } | null;
+  criteriaLabel?: unknown;
   suggestions?: unknown;
   disambiguation_options?: unknown;
 }
@@ -53,6 +66,7 @@ interface SuggestMentorsDisplaySuggestion {
 interface SuggestMenteesDisplayPayload {
   state?: unknown;
   mentor?: { name?: unknown } | null;
+  criteriaLabel?: unknown;
   suggestions?: unknown;
   disambiguation_options?: unknown;
 }
@@ -107,7 +121,10 @@ export interface FormatterOptions extends DonationResponseOptions {
   orgSlug?: string;
 }
 
-export function formatSuggestMentorsResponse(data: unknown): string | null {
+export function formatSuggestMentorsResponse(
+  data: unknown,
+  options?: FormatterOptions,
+): string | null {
   if (!data || typeof data !== "object") return null;
 
   const payload = data as SuggestMentorsDisplayPayload;
@@ -140,11 +157,15 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
       .join("\n")}`;
   }
 
+  const criteriaLabel = getNonEmptyString(payload.criteriaLabel);
   const menteeName = getNonEmptyString(payload.mentee?.name);
-  if (!menteeName) return null;
+  const targetLabel = menteeName ?? (criteriaLabel ? `"${criteriaLabel}"` : null);
+  if (!targetLabel) return null;
 
   if (state === "no_suggestions") {
-    return `I found ${menteeName}, but there are no eligible mentors matching their preferences right now.`;
+    return menteeName
+      ? `I found ${menteeName}, but there are no eligible mentors matching their preferences right now.`
+      : `There are no eligible mentors matching ${targetLabel} right now.`;
   }
 
   if (state !== "resolved" || !Array.isArray(payload.suggestions)) return null;
@@ -178,13 +199,17 @@ export function formatSuggestMentorsResponse(data: unknown): string | null {
   if (cards.length === 0) return null;
 
   return renderMentorshipSuggestionList({
-    heading: `Top mentors for ${menteeName}`,
+    heading: `Top mentors for ${targetLabel}`,
     cards,
     direction: "mentor",
+    mentorshipHref: mentorshipPageHref(options?.orgSlug),
   });
 }
 
-export function formatSuggestMenteesResponse(data: unknown): string | null {
+export function formatSuggestMenteesResponse(
+  data: unknown,
+  options?: FormatterOptions,
+): string | null {
   if (!data || typeof data !== "object") return null;
 
   const payload = data as SuggestMenteesDisplayPayload;
@@ -217,11 +242,15 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
       .join("\n")}`;
   }
 
+  const criteriaLabel = getNonEmptyString(payload.criteriaLabel);
   const mentorName = getNonEmptyString(payload.mentor?.name);
-  if (!mentorName) return null;
+  const targetLabel = mentorName ?? (criteriaLabel ? `"${criteriaLabel}"` : null);
+  if (!targetLabel) return null;
 
   if (state === "no_suggestions") {
-    return `I found ${mentorName}, but there are no students seeking mentorship who match right now.`;
+    return mentorName
+      ? `I found ${mentorName}, but there are no students seeking mentorship who match right now.`
+      : `There are no students seeking mentorship who match ${targetLabel} right now.`;
   }
 
   if (state !== "resolved" || !Array.isArray(payload.suggestions)) return null;
@@ -255,9 +284,10 @@ export function formatSuggestMenteesResponse(data: unknown): string | null {
   if (cards.length === 0) return null;
 
   return renderMentorshipSuggestionList({
-    heading: `Top mentees for ${mentorName}`,
+    heading: `Top mentees for ${targetLabel}`,
     cards,
     direction: "mentee",
+    mentorshipHref: mentorshipPageHref(options?.orgSlug),
   });
 }
 
