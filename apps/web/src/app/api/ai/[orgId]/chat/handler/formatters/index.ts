@@ -301,6 +301,43 @@ export function formatGlobalLookupToolResponse(
   return lines.join("\n");
 }
 
+const MULTI_SUGGESTION_TOOL_NAMES = new Set(["suggest_mentors", "suggest_mentees"]);
+
+/**
+ * Deterministic render for "compare A and B" style asks, where pass-1 issues
+ * more than one suggest_mentors / suggest_mentees call. Each list is rendered
+ * with the same grounding-safe single-suggestion formatter and concatenated,
+ * so the answer never depends on the pass-2 compose leg (which returns empty or
+ * fails grounding for multi-tool composes — see issue #272). Mirrors the
+ * multi-tool handling in formatGlobalLookupToolResponse.
+ *
+ * Returns null (falling back to pass-2) unless there are at least two results,
+ * every result is a suggestion tool, and every list renders cleanly.
+ */
+export function formatMultiSuggestionToolResponse(
+  results: Array<{ name: string; data: unknown }>,
+  options?: FormatterOptions,
+): string | null {
+  if (
+    results.length < 2 ||
+    results.some((result) => !MULTI_SUGGESTION_TOOL_NAMES.has(result.name))
+  ) {
+    return null;
+  }
+
+  const blocks: string[] = [];
+  for (const result of results) {
+    const block =
+      result.name === "suggest_mentors"
+        ? formatSuggestMentorsResponse(result.data, options)
+        : formatSuggestMenteesResponse(result.data, options);
+    if (!block) return null;
+    blocks.push(block);
+  }
+
+  return blocks.join("\n\n");
+}
+
 export function formatDeterministicToolResponse(
   name: string,
   data: unknown,
