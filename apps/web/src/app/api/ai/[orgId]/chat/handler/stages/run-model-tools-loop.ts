@@ -33,6 +33,7 @@ import {
   formatDeterministicToolResponse,
   formatDeterministicToolErrorResponse,
   formatGlobalLookupToolResponse,
+  formatMultiSuggestionToolResponse,
 } from "../formatters/index";
 import {
   MEMBER_ROSTER_PROMPT_PATTERN,
@@ -392,6 +393,18 @@ export async function runModelToolsLoop(
       deterministicToolContent == null
         ? formatGlobalLookupToolResponse(toolResults, input.promptSafeMessage)
         : null;
+    // "Compare A and B" issues two suggest_mentors/suggest_mentees calls. Render
+    // each list with the grounding-safe single formatter and concatenate, so the
+    // answer never rides on the flaky pass-2 compose leg (issue #272). Only when
+    // every tool call succeeded — a mixed success/error set falls to pass-2 so
+    // the failure is acknowledged.
+    const deterministicMultiSuggestionContent =
+      deterministicToolContent == null &&
+      deterministicGlobalLookupContent == null &&
+      toolResults.length >= 2 &&
+      toolResults.length === input.successfulToolResults.length
+        ? formatMultiSuggestionToolResponse(input.successfulToolResults, { orgSlug })
+        : null;
     const singleToolError =
       toolResults.length === 1 &&
       input.successfulToolResults.length === 0 &&
@@ -424,10 +437,19 @@ export async function runModelToolsLoop(
     // wrongly flag a correct answer). The model never freely composed this text,
     // so there is nothing to ground — skip the check for deterministic paths.
     let renderedDeterministically = false;
-    if (deterministicToolContent || deterministicGlobalLookupContent || deterministicToolErrorContent) {
+    if (
+      deterministicToolContent ||
+      deterministicGlobalLookupContent ||
+      deterministicMultiSuggestionContent ||
+      deterministicToolErrorContent
+    ) {
       skipStage(input.stageTimings, "pass2");
       pass2BufferedContent =
-        deterministicToolContent ?? deterministicGlobalLookupContent ?? deterministicToolErrorContent ?? "";
+        deterministicToolContent ??
+        deterministicGlobalLookupContent ??
+        deterministicMultiSuggestionContent ??
+        deterministicToolErrorContent ??
+        "";
       renderedDeterministically = true;
     } else {
       const hasToolErrors =
