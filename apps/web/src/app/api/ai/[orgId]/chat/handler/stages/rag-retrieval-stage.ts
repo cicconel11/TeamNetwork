@@ -6,6 +6,7 @@
  * inlined. Returns the four downstream-facing fields exactly.
  */
 import type { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
+import { audienceFilterForRole } from "@/lib/ai/rag-retriever";
 import type { RagChunkInput } from "@/lib/ai/context-builder";
 import type { AiAuditStageTimings } from "@/lib/ai/chat-telemetry";
 import type { AiLogContext } from "@/lib/ai/logger";
@@ -44,6 +45,9 @@ export async function runRagRetrievalStage(
       serviceSupabase: input.ctx.serviceSupabase,
       stageTimings: input.stageTimings,
       logContext: { ...input.requestLogContext, threadId: input.threadId },
+      // Scope retrieval to what the requester's role is allowed to see, so the
+      // assistant cannot ground answers on audience-restricted chunks.
+      audienceFilter: audienceFilterForRole(input.ctx.role),
     });
     return {
       ragChunks: ragResult.chunks,

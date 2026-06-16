@@ -9,6 +9,7 @@ import {
 } from "@/lib/linkedin/apify";
 import { processFinishedApifyRun, recordRunTargets } from "@/lib/linkedin/enrichment-writeback";
 import { normalizeLinkedInProfileUrl } from "@/lib/alumni/linkedin-url";
+import { summarizeEnrichmentHealthGlobal } from "@/lib/linkedin/enrichment-health";
 
 const BATCH_SIZE = 30;
 const MAX_RETRIES = 3;
@@ -210,6 +211,10 @@ export function createEnrichmentProcessGetHandler(deps: EnrichmentProcessRouteDe
       const hardCutoff = new Date(Date.now() - HARD_TIMEOUT_MS).toISOString();
       hardTimedOut = await markTimedOutRunsFailed(supabase, hardCutoff);
 
+      // Surface enrichment-tagging health so silently-stalled rows are visible
+      // (userless members, exhausted retries, stuck runs, pre-provenance rows).
+      const health = await summarizeEnrichmentHealthGlobal(supabase);
+
       return NextResponse.json({
         ok: true,
         started,
@@ -217,6 +222,7 @@ export function createEnrichmentProcessGetHandler(deps: EnrichmentProcessRouteDe
         reconciled_enriched: reconciledEnriched,
         reconciled_failed: reconciledFailed,
         hard_timed_out: hardTimedOut,
+        health,
       });
     } catch (error) {
       console.error("[enrichment-process] Error:", error);

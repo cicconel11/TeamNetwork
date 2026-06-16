@@ -128,6 +128,8 @@ export async function retrieveRag(args: {
   serviceSupabase: SupabaseClient;
   stageTimings: AiAuditStageTimings;
   logContext: AiLogContext;
+  /** Audience tokens the requester may retrieve (undefined = unrestricted). */
+  audienceFilter?: string[];
 }): Promise<RagRetrievalResult> {
   try {
     const retrieved = await runTimedStage(
@@ -140,6 +142,7 @@ export async function retrieveRag(args: {
           spendBypass: args.spendBypass,
           serviceSupabase: args.serviceSupabase,
           logContext: args.logContext,
+          audienceFilter: args.audienceFilter,
         })
     );
 
