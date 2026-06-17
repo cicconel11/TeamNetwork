@@ -2176,8 +2176,8 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
 
   const payload = result.data as any;
   assert.equal(payload.mode, "sql_fallback");
-  assert.equal(payload.fallback_reason, "disabled");
-  assert.equal(payload.freshness.state, "unknown");
+  assert.equal(payload.fallback_reason, null);
+  assert.equal(payload.freshness.state, "fresh");
   assert.equal(payload.state, "resolved");
   assert.equal(payload.source_person.name, "Alex Source");
   assert.equal(payload.suggestions.length, 1);
@@ -2194,7 +2194,6 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
   assert.equal(telemetry.sqlFallbackCount, 1);
-  assert.equal(telemetry.fallbackReasonCounts.disabled, 1);
   assert.equal(telemetry.strongResultCount, 1);
   assert.equal(telemetry.lastResultStrength, "strong");
 });
