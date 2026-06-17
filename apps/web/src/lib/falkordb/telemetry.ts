@@ -1,34 +1,5 @@
-export type GraphQueueDrainState = "processed" | "empty" | "unavailable" | "degraded";
-
 export type GraphFallbackReason = "disabled" | "unavailable" | "query_failure";
 export type SuggestionResultStrength = "strong" | "weak_fallback" | "none";
-
-export interface GraphDrainTelemetrySnapshot {
-  state: GraphQueueDrainState;
-  reason: string | null;
-  processed: number;
-  skipped: number;
-  failed: number;
-  at: string | null;
-}
-
-export interface GraphFailureEvidence {
-  at: string;
-  sourceTable: "members" | "alumni" | "mentorship_pairs";
-  sourceId: string;
-  message: string;
-  attempts: number;
-  deadLetter: boolean;
-}
-
-export interface GraphFailureTelemetrySnapshot {
-  totalFailures: number;
-  deadLetterCount: number;
-  lastFailureAt: string | null;
-  lastSuccessAt: string | null;
-  lastError: string | null;
-  recentErrors: GraphFailureEvidence[];
-}
 
 export interface SuggestionObservabilitySnapshot {
   orgId: string;
@@ -50,53 +21,12 @@ export interface SuggestionObservabilitySnapshot {
   recentTopCandidateCounts: Array<{ personId: string; appearances: number }>;
 }
 
-const MAX_RECENT_ERRORS = 10;
-
-const graphFailuresByOrg = new Map<
-  string,
-  {
-    totalFailures: number;
-    deadLetterCount: number;
-    lastFailureAt: string | null;
-    lastSuccessAt: string | null;
-    lastError: string | null;
-    recentErrors: GraphFailureEvidence[];
-  }
->();
-
 const suggestionTelemetryByOrg = new Map<string, SuggestionObservabilitySnapshot>();
 const suggestionExposureByOrg = new Map<string, string[][]>();
 const MAX_RECENT_TOP_CANDIDATE_WINDOWS = 50;
 
-let lastDrainSnapshot: GraphDrainTelemetrySnapshot = {
-  state: "empty",
-  reason: null,
-  processed: 0,
-  skipped: 0,
-  failed: 0,
-  at: null,
-};
-
 function nowIso() {
   return new Date().toISOString();
-}
-
-function getOrCreateGraphFailureState(orgId: string) {
-  const existing = graphFailuresByOrg.get(orgId);
-  if (existing) {
-    return existing;
-  }
-
-  const created = {
-    totalFailures: 0,
-    deadLetterCount: 0,
-    lastFailureAt: null,
-    lastSuccessAt: null,
-    lastError: null,
-    recentErrors: [] as GraphFailureEvidence[],
-  };
-  graphFailuresByOrg.set(orgId, created);
-  return created;
 }
 
 function emptySuggestionSnapshot(orgId: string): SuggestionObservabilitySnapshot {
@@ -145,82 +75,6 @@ function buildRecentTopCandidateCounts(orgId: string) {
     });
 }
 
-export function recordGraphDrainResult(input: {
-  state: GraphQueueDrainState;
-  reason?: string | null;
-  processed: number;
-  skipped: number;
-  failed: number;
-}) {
-  lastDrainSnapshot = {
-    state: input.state,
-    reason: input.reason ?? null,
-    processed: input.processed,
-    skipped: input.skipped,
-    failed: input.failed,
-    at: nowIso(),
-  };
-}
-
-export function getLastGraphDrainResult(): GraphDrainTelemetrySnapshot {
-  return { ...lastDrainSnapshot };
-}
-
-export function recordGraphFailure(input: {
-  orgId: string;
-  sourceTable: "members" | "alumni" | "mentorship_pairs";
-  sourceId: string;
-  message: string;
-  attempts: number;
-  deadLetter: boolean;
-}) {
-  const state = getOrCreateGraphFailureState(input.orgId);
-  const evidence: GraphFailureEvidence = {
-    at: nowIso(),
-    sourceTable: input.sourceTable,
-    sourceId: input.sourceId,
-    message: input.message,
-    attempts: input.attempts,
-    deadLetter: input.deadLetter,
-  };
-
-  state.totalFailures += 1;
-  if (input.deadLetter) {
-    state.deadLetterCount += 1;
-  }
-  state.lastFailureAt = evidence.at;
-  state.lastError = input.message;
-  state.recentErrors = [evidence, ...state.recentErrors].slice(0, MAX_RECENT_ERRORS);
-}
-
-export function recordGraphSuccess(orgId: string) {
-  const state = getOrCreateGraphFailureState(orgId);
-  state.lastSuccessAt = nowIso();
-}
-
-export function getGraphFailureTelemetry(orgId: string): GraphFailureTelemetrySnapshot {
-  const state = graphFailuresByOrg.get(orgId);
-  if (!state) {
-    return {
-      totalFailures: 0,
-      deadLetterCount: 0,
-      lastFailureAt: null,
-      lastSuccessAt: null,
-      lastError: null,
-      recentErrors: [],
-    };
-  }
-
-  return {
-    totalFailures: state.totalFailures,
-    deadLetterCount: state.deadLetterCount,
-    lastFailureAt: state.lastFailureAt,
-    lastSuccessAt: state.lastSuccessAt,
-    lastError: state.lastError,
-    recentErrors: [...state.recentErrors],
-  };
-}
-
 export function recordSuggestionExecution(input: {
   orgId: string;
   mode: "falkor" | "sql_fallback";
@@ -231,7 +85,10 @@ export function recordSuggestionExecution(input: {
   const prev = suggestionTelemetryByOrg.get(input.orgId) ?? emptySuggestionSnapshot(input.orgId);
 
   const fallbackReasonCounts = input.fallbackReason
-    ? { ...prev.fallbackReasonCounts, [input.fallbackReason]: prev.fallbackReasonCounts[input.fallbackReason] + 1 }
+    ? {
+        ...prev.fallbackReasonCounts,
+        [input.fallbackReason]: prev.fallbackReasonCounts[input.fallbackReason] + 1,
+      }
     : { ...prev.fallbackReasonCounts };
 
   const next: SuggestionObservabilitySnapshot = {
@@ -257,10 +114,7 @@ export function recordSuggestionExecution(input: {
   suggestionTelemetryByOrg.set(input.orgId, next);
 }
 
-export function recordSuggestedCandidates(input: {
-  orgId: string;
-  personIds: string[];
-}) {
+export function recordSuggestedCandidates(input: { orgId: string; personIds: string[] }) {
   const uniquePersonIds = [...new Set(input.personIds.filter(Boolean))];
   if (uniquePersonIds.length === 0) {
     return;
@@ -297,15 +151,6 @@ export function getSuggestionObservabilitySnapshot(orgId: string): SuggestionObs
 }
 
 export function resetFalkorTelemetryForTests() {
-  graphFailuresByOrg.clear();
   suggestionTelemetryByOrg.clear();
   suggestionExposureByOrg.clear();
-  lastDrainSnapshot = {
-    state: "empty",
-    reason: null,
-    processed: 0,
-    skipped: 0,
-    failed: 0,
-    at: null,
-  };
 }

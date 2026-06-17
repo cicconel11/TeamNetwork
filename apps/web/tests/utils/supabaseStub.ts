@@ -21,7 +21,6 @@ type TableName =
   | "alumni"
   | "members"
   | "mentorship_pairs"
-  | "graph_sync_queue"
   | "donations"
   | "philanthropy_events"
   | "users"
@@ -90,7 +89,6 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   alumni: [],
   members: [],
   mentorship_pairs: [],
-  graph_sync_queue: [],
   donations: [],
   philanthropy_events: [],
   users: [],
@@ -150,7 +148,6 @@ export function createSupabaseStub() {
     alumni: [],
     members: [],
     mentorship_pairs: [],
-    graph_sync_queue: [],
     donations: [],
     philanthropy_events: [],
     users: [],
@@ -186,7 +183,10 @@ export function createSupabaseStub() {
   };
 
   // RPC handler registry
-  const rpcHandlers: Record<string, (params: Record<string, unknown>) => unknown | Promise<unknown>> = {};
+  const rpcHandlers: Record<
+    string,
+    (params: Record<string, unknown>) => unknown | Promise<unknown>
+  > = {};
 
   // Track which tables should fail with an error
   const errorSimulation: Partial<Record<TableName, { code?: string; message: string }>> = {};
@@ -215,7 +215,7 @@ export function createSupabaseStub() {
           uniques.some((constraint) => {
             if (Array.isArray(constraint)) {
               const allPresent = constraint.every(
-                (field) => row[field] !== undefined && row[field] !== null,
+                (field) => row[field] !== undefined && row[field] !== null
               );
               return allPresent && constraint.every((field) => existing[field] === row[field]);
             }
@@ -224,7 +224,7 @@ export function createSupabaseStub() {
               row[constraint] !== null &&
               existing[constraint] === row[constraint]
             );
-          }),
+          })
         );
         if (conflict) {
           error = { code: "23505", message: "duplicate key value" };
@@ -260,11 +260,12 @@ export function createSupabaseStub() {
       const conflictColumns = options?.onConflict?.split(",").map((c) => c.trim()) ?? [];
 
       for (const record of records) {
-        const existingIndex = conflictColumns.length > 0
-          ? storage[table].findIndex((existing) =>
-            conflictColumns.every((col) => existing[col] === record[col])
-          )
-          : -1;
+        const existingIndex =
+          conflictColumns.length > 0
+            ? storage[table].findIndex((existing) =>
+                conflictColumns.every((col) => existing[col] === record[col])
+              )
+            : -1;
 
         if (existingIndex >= 0) {
           const existing = storage[table][existingIndex];
@@ -609,7 +610,7 @@ export function createSupabaseStub() {
    */
   const registerRpc = (
     name: string,
-    handler: (params: Record<string, unknown>) => unknown | Promise<unknown>,
+    handler: (params: Record<string, unknown>) => unknown | Promise<unknown>
   ) => {
     rpcHandlers[name] = handler;
   };
@@ -627,7 +628,10 @@ export function createSupabaseStub() {
       return { data: result, error: null };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      const code = err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? (err as { code?: string }).code
+          : undefined;
       return { data: null, error: code ? { code, message } : { message } };
     }
   };

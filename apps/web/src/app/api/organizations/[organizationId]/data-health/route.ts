@@ -16,8 +16,9 @@ interface RouteParams {
 }
 
 /**
- * Admin-only consolidated data-health report for an org: people-graph drift,
- * RAG index coverage/audience tagging, and enrichment tagging health.
+ * Admin-only consolidated data-health report for an org: RAG index
+ * coverage/audience tagging and enrichment tagging health. (The people-graph is
+ * served from Postgres, so there is no separate store to drift-check.)
  */
 export async function GET(req: Request, { params }: RouteParams) {
   const { organizationId } = await params;

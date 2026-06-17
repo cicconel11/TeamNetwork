@@ -3452,53 +3452,6 @@ export type Database = {
           },
         ]
       }
-      graph_sync_queue: {
-        Row: {
-          action: string
-          attempts: number
-          created_at: string
-          error: string | null
-          id: string
-          org_id: string
-          payload: Json
-          processed_at: string | null
-          source_id: string
-          source_table: string
-        }
-        Insert: {
-          action: string
-          attempts?: number
-          created_at?: string
-          error?: string | null
-          id?: string
-          org_id: string
-          payload?: Json
-          processed_at?: string | null
-          source_id: string
-          source_table: string
-        }
-        Update: {
-          action?: string
-          attempts?: number
-          created_at?: string
-          error?: string | null
-          id?: string
-          org_id?: string
-          payload?: Json
-          processed_at?: string | null
-          source_id?: string
-          source_table?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "graph_sync_queue_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       integration_sync_log: {
         Row: {
           completed_at: string | null
@@ -7368,7 +7321,6 @@ export type Database = {
       assert_alumni_quota: { Args: { p_org_id: string }; Returns: undefined }
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
       backfill_ai_embedding_queue: { Args: { p_org_id: string }; Returns: Json }
-      backfill_graph_sync_queue: { Args: { p_org_id: string }; Returns: Json }
       backfill_ip_hashes: {
         Args: { salt: string }
         Returns: {
@@ -7615,27 +7567,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "ai_embedding_queue"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      dequeue_graph_sync_queue: {
-        Args: { p_batch_size?: number }
-        Returns: {
-          action: string
-          attempts: number
-          created_at: string
-          error: string | null
-          id: string
-          org_id: string
-          payload: Json
-          processed_at: string | null
-          source_id: string
-          source_table: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "graph_sync_queue"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -7887,10 +7818,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      increment_graph_sync_attempts: {
-        Args: { p_error: string; p_id: string }
-        Returns: undefined
-      }
       increment_mentor_bio_backfill_attempts: {
         Args: { p_error: string; p_id: string }
         Returns: undefined
@@ -7991,8 +7918,6 @@ export type Database = {
       purge_analytics_events: { Args: never; Returns: Json }
       purge_expired_ai_semantic_cache: { Args: never; Returns: number }
       purge_expired_usage_events: { Args: never; Returns: Json }
-      purge_graph_sync_queue: { Args: never; Returns: number }
-      purge_graph_sync_queue_disabled: { Args: never; Returns: number }
       purge_mentor_bio_backfill_queue: { Args: never; Returns: number }
       purge_old_data_access_logs: { Args: never; Returns: number }
       purge_old_enterprise_audit_logs: { Args: never; Returns: number }
