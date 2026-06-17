@@ -42,10 +42,6 @@
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/api/cron/graph-sync-process",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/api/cron/enrichment-process",
       "schedule": "*/5 * * * *"
     },
