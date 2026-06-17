@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { ProjectedPerson } from "../src/lib/falkordb/people.ts";
+import type { ProjectedPerson } from "../src/lib/people-graph/people.ts";
 import {
   findBestProjectedPersonNameMatches,
   normalizeHumanNameText,
   scoreProjectedPersonNameMatch,
-} from "../src/lib/falkordb/name-matching.ts";
+} from "../src/lib/people-graph/name-matching.ts";
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
 

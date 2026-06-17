@@ -6,8 +6,8 @@ import {
   damerauLevenshtein,
   findBestProjectedPersonNameMatches,
   scoreProjectedPersonNameMatch,
-} from "../src/lib/falkordb/name-matching.ts";
-import type { ProjectedPerson } from "../src/lib/falkordb/people.ts";
+} from "../src/lib/people-graph/name-matching.ts";
+import type { ProjectedPerson } from "../src/lib/people-graph/people.ts";
 
 function person(name: string, id = name.toLowerCase().replace(/\s+/g, "-")): ProjectedPerson {
   return {

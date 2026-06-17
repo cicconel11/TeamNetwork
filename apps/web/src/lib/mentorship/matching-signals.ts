@@ -3,7 +3,7 @@ import {
   canonicalizeRoleFamily,
   normalizeCareerText,
   parseMemberCareerString,
-} from "@/lib/falkordb/career-signals";
+} from "@/lib/people-graph/career-signals";
 import { extractSignalsFromGoals } from "@/lib/mentorship/goals-extraction";
 
 /**

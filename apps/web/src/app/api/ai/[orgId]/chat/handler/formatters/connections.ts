@@ -8,7 +8,7 @@ export const CONNECTION_PASS2_TEMPLATE = [
   "  Why: [reason], [reason], [reason]",
   "- Use at most 3 suggestions.",
   "- Use only the returned source_person, suggestions, subtitles, and normalized reason labels.",
-  "- Do not mention scores, UUIDs, Falkor, SQL fallback, freshness, or internal tool details.",
+  "- Do not mention scores, UUIDs, SQL fallback, freshness, or internal tool details.",
   "- Do not add a concluding summary sentence.",
   "- If state=ambiguous, ask the user which returned option they mean.",
   "- If the user's next message picks one of the ambiguous options you previously listed (by name, subtitle, or position), call suggest_connections again using the person_type and person_id from the [ref: person_type:person_id] tag on the matching line, not person_query.",

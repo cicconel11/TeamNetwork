@@ -31,7 +31,7 @@ export const suggestConnectionsModule: ToolModule<Args> = {
     const {
       suggestConnections,
       SuggestConnectionsLookupError,
-    } = await import("@/lib/falkordb/suggestions");
+    } = await import("@/lib/people-graph/suggestions");
 
     try {
       const data = await suggestConnections({

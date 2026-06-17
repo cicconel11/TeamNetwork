@@ -1,9 +1,9 @@
 import {
   areAdjacentRoleFamilies,
   normalizeCareerText,
-} from "@/lib/falkordb/career-signals";
-import type { ProjectedPerson } from "@/lib/falkordb/people";
-import type { GraphFallbackReason } from "@/lib/falkordb/telemetry";
+} from "@/lib/people-graph/career-signals";
+import type { ProjectedPerson } from "@/lib/people-graph/people";
+import type { GraphFallbackReason } from "@/lib/people-graph/telemetry";
 
 export type ConnectionReasonCode =
   | "shared_company"
@@ -72,7 +72,7 @@ export interface SuggestConnectionsFreshness {
 }
 
 export interface SuggestConnectionsResult {
-  mode: "falkor" | "sql_fallback";
+  mode: "sql_fallback";
   fallback_reason: GraphFallbackReason | null;
   freshness: SuggestConnectionsFreshness;
   state: SuggestConnectionsState;

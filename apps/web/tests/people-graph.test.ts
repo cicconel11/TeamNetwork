@@ -6,21 +6,21 @@ import {
   buildProjectedPeople,
   buildSourcePerson,
   type ProjectedPerson,
-} from "../src/lib/falkordb/people.ts";
+} from "../src/lib/people-graph/people.ts";
 import {
   buildCandidatePool,
   scoreProjectedCandidates,
   suggestConnections,
-} from "../src/lib/falkordb/suggestions.ts";
+} from "../src/lib/people-graph/suggestions.ts";
 import {
   recordSuggestedCandidates,
-  resetFalkorTelemetryForTests,
-} from "../src/lib/falkordb/telemetry.ts";
+  resetSuggestionTelemetryForTests,
+} from "../src/lib/people-graph/telemetry.ts";
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
 
 beforeEach(() => {
-  resetFalkorTelemetryForTests();
+  resetSuggestionTelemetryForTests();
 });
 
 function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
@@ -1379,7 +1379,7 @@ test("buildProjectedPeople strict org isolation: same user_id across two orgs pr
   assert.equal(personA?.memberId, "m-orga");
   assert.equal(personB?.memberId, "m-orgb");
 
-  // The personKey field stored in the node stays as user:shared-uid (no org prefix in Falkor node attribute)
+  // The personKey field stored in the node stays as user:shared-uid (no org prefix in the projected node attribute)
   assert.equal(personA?.personKey, "user:shared-uid");
   assert.equal(personB?.personKey, "user:shared-uid");
 });

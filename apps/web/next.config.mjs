@@ -278,7 +278,6 @@ const nextConfig = {
     "@supabase/ssr",
     "@js-temporal/polyfill",
     "pdf-parse",
-    "falkordb",
     "node-ical",
   ],
   images: {

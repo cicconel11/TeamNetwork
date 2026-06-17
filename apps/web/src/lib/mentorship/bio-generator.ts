@@ -4,7 +4,7 @@ import { chargeAiSpend, checkAiSpend } from "@/lib/ai/spend";
 import {
   canonicalizeIndustry,
   canonicalizeRoleFamily,
-} from "@/lib/falkordb/career-signals";
+} from "@/lib/people-graph/career-signals";
 import { createHash } from "crypto";
 
 /* ------------------------------------------------------------------ */

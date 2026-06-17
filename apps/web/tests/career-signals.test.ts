@@ -6,7 +6,7 @@ import {
   canonicalizeRoleFamily,
   normalizeCareerText,
   parseMemberCareerString,
-} from "../src/lib/falkordb/career-signals.ts";
+} from "../src/lib/people-graph/career-signals.ts";
 
 test("canonicalizeIndustry maps raw alumni industries into canonical buckets", () => {
   assert.equal(canonicalizeIndustry("Banking"), "Finance");

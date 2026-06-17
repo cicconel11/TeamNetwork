@@ -50,8 +50,6 @@
     "cheerio": "^1.2.0",
     "cmdk": "^1.1.1",
     "expo-server-sdk": "^3.10.0",
-    "falkordb": "^6.6.2",
-    "falkordblite": "^0.2.0",
     "framer-motion": "^12.38.0",
     "googleapis": "^170.0.0",
     "lucide-react": "^0.474.0",

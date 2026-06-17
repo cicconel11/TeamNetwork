@@ -7,7 +7,7 @@ import {
   type AlumniPersonRow,
   type MemberPersonRow,
   type ProjectedPerson,
-} from "@/lib/falkordb/people";
+} from "@/lib/people-graph/people";
 import {
   buildConnectionRarityStats,
   getCandidateQualificationCodes,
@@ -24,7 +24,7 @@ import {
   type ConnectionScoringContext,
   type SuggestConnectionsFreshness,
   type SuggestConnectionsResult,
-} from "@/lib/falkordb/scoring";
+} from "@/lib/people-graph/scoring";
 import {
   getSuggestedCandidateExposureCounts,
   getSuggestionObservabilitySnapshot,
@@ -32,11 +32,11 @@ import {
   recordSuggestionExecution,
   type GraphFallbackReason,
   type SuggestionResultStrength,
-} from "@/lib/falkordb/telemetry";
+} from "@/lib/people-graph/telemetry";
 import {
   findBestProjectedPersonNameMatches,
   normalizeHumanNameText,
-} from "@/lib/falkordb/name-matching";
+} from "@/lib/people-graph/name-matching";
 
 export interface SuggestConnectionsArgs {
   person_type?: "member" | "alumni";
@@ -450,7 +450,7 @@ function buildLookupOnlyResult(input: {
 }
 
 function buildResolvedResult(input: {
-  mode: "falkor" | "sql_fallback";
+  mode: "sql_fallback";
   fallbackReason: GraphFallbackReason | null;
   freshness: SuggestConnectionsFreshness;
   source: ProjectedPerson;

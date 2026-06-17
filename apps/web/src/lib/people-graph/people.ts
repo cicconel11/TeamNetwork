@@ -2,7 +2,7 @@ import {
   canonicalizeIndustry,
   canonicalizeRoleFamily,
   parseMemberCareerString,
-} from "@/lib/falkordb/career-signals";
+} from "@/lib/people-graph/career-signals";
 
 export interface MemberPersonRow {
   id: string;
