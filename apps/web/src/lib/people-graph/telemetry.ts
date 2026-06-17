@@ -4,7 +4,6 @@ export type SuggestionResultStrength = "strong" | "weak_fallback" | "none";
 export interface SuggestionObservabilitySnapshot {
   orgId: string;
   totalRequests: number;
-  falkorCount: number;
   sqlFallbackCount: number;
   strongResultCount: number;
   weakFallbackCount: number;
@@ -13,7 +12,7 @@ export interface SuggestionObservabilitySnapshot {
   staleReadCount: number;
   degradedReadCount: number;
   unknownReadCount: number;
-  lastMode: "falkor" | "sql_fallback" | null;
+  lastMode: "sql_fallback" | null;
   lastFallbackReason: GraphFallbackReason | null;
   lastFreshnessState: "fresh" | "stale" | "degraded" | "unknown" | null;
   lastResultStrength: SuggestionResultStrength | null;
@@ -33,7 +32,6 @@ function emptySuggestionSnapshot(orgId: string): SuggestionObservabilitySnapshot
   return {
     orgId,
     totalRequests: 0,
-    falkorCount: 0,
     sqlFallbackCount: 0,
     strongResultCount: 0,
     weakFallbackCount: 0,
@@ -77,7 +75,7 @@ function buildRecentTopCandidateCounts(orgId: string) {
 
 export function recordSuggestionExecution(input: {
   orgId: string;
-  mode: "falkor" | "sql_fallback";
+  mode: "sql_fallback";
   fallbackReason: GraphFallbackReason | null;
   freshnessState: "fresh" | "stale" | "degraded" | "unknown";
   resultStrength: SuggestionResultStrength;
@@ -99,8 +97,7 @@ export function recordSuggestionExecution(input: {
     lastFreshnessState: input.freshnessState,
     lastResultStrength: input.resultStrength,
     lastRequestedAt: nowIso(),
-    falkorCount: prev.falkorCount + (input.mode === "falkor" ? 1 : 0),
-    sqlFallbackCount: prev.sqlFallbackCount + (input.mode === "sql_fallback" ? 1 : 0),
+    sqlFallbackCount: prev.sqlFallbackCount + 1,
     strongResultCount: prev.strongResultCount + (input.resultStrength === "strong" ? 1 : 0),
     weakFallbackCount: prev.weakFallbackCount + (input.resultStrength === "weak_fallback" ? 1 : 0),
     emptyResultCount: prev.emptyResultCount + (input.resultStrength === "none" ? 1 : 0),
@@ -150,7 +147,7 @@ export function getSuggestionObservabilitySnapshot(orgId: string): SuggestionObs
     : emptySuggestionSnapshot(orgId);
 }
 
-export function resetFalkorTelemetryForTests() {
+export function resetSuggestionTelemetryForTests() {
   suggestionTelemetryByOrg.clear();
   suggestionExposureByOrg.clear();
 }

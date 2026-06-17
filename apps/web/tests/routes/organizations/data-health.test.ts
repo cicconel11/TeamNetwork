@@ -4,12 +4,12 @@ import assert from "node:assert/strict";
 import { createSupabaseStub } from "../../utils/supabaseStub.ts";
 import { getOrgDataHealth } from "../../../src/lib/health/org-data-health.ts";
 import { normalizeRole } from "../../../src/lib/auth/role-utils.ts";
-import { resetFalkorTelemetryForTests } from "../../../src/lib/falkordb/telemetry.ts";
+import { resetSuggestionTelemetryForTests } from "../../../src/lib/people-graph/telemetry.ts";
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
 
 beforeEach(() => {
-  resetFalkorTelemetryForTests();
+  resetSuggestionTelemetryForTests();
 });
 
 // --- admin gate (the route's authorization decision) ---

@@ -7,7 +7,7 @@ import {
   type BioGenerationResult,
 } from "@/lib/mentorship/bio-generator";
 import { resolveMentorshipConfig, type CustomAttributeDef } from "@/lib/mentorship/matching-weights";
-import { canonicalizeIndustry, canonicalizeRoleFamily } from "@/lib/falkordb/career-signals";
+import { canonicalizeIndustry, canonicalizeRoleFamily } from "@/lib/people-graph/career-signals";
 import { resolveEnrichedProfiles } from "@/lib/profile/enriched-fields";
 
 export interface MentorBioBackfillCandidate {

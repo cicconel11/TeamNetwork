@@ -2,7 +2,7 @@ import {
   canonicalizeIndustry,
   matchRoleFamiliesFromText,
   normalizeCareerText,
-} from "@/lib/falkordb/career-signals";
+} from "@/lib/people-graph/career-signals";
 
 /**
  * Deterministic, zero-cost extraction of canonical matching signals from a

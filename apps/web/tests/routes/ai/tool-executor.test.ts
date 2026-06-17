@@ -3,8 +3,8 @@ import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { getZaiImageModel } from "../../../src/lib/ai/client.ts";
 import { executeToolCall } from "../../../src/lib/ai/tools/executor.ts";
-import { getSuggestionObservabilityByOrg } from "../../../src/lib/falkordb/suggestions.ts";
-import { resetFalkorTelemetryForTests } from "../../../src/lib/falkordb/telemetry.ts";
+import { getSuggestionObservabilityByOrg } from "../../../src/lib/people-graph/suggestions.ts";
+import { resetSuggestionTelemetryForTests } from "../../../src/lib/people-graph/telemetry.ts";
 import {
   extractScheduleFromImage,
   extractScheduleFromText,
@@ -309,7 +309,7 @@ let ctx: ToolExecutionContext;
 let stub: ReturnType<typeof createToolSupabaseStub>;
 
 beforeEach(() => {
-  resetFalkorTelemetryForTests();
+  resetSuggestionTelemetryForTests();
   setScheduleExtractionDepsForTests(null);
   stub = createToolSupabaseStub({
     members: {

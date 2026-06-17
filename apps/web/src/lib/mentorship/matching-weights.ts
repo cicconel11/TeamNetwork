@@ -220,7 +220,7 @@ export const DEFAULT_THEORETICAL_MAX: number = computeTheoreticalMax({
 });
 
 /**
- * Rarity multiplier (copied shape from falkordb/scoring.ts).
+ * Rarity multiplier (copied shape from people-graph/scoring.ts).
  * Uncommon signals outweigh common ones at same overlap.
  */
 export function rarityMultiplier(count: number | undefined, totalPeople: number): number {

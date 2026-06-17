@@ -1,4 +1,4 @@
-import type { ProjectedPerson } from "@/lib/falkordb/people";
+import type { ProjectedPerson } from "@/lib/people-graph/people";
 
 const MATT_FAMILY_ALIASES = new Set(["mat", "matt", "matthew"]);
 
