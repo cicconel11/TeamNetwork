@@ -23,7 +23,9 @@ function toneClasses(tone: Tone): string {
 
 function StatePill({ label, tone }: { label: string; tone: Tone }) {
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${toneClasses(tone)}`}>
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${toneClasses(tone)}`}
+    >
       {label}
     </span>
   );
@@ -70,12 +72,6 @@ export default async function DataHealthPage({ params }: DataHealthPageProps) {
   const serviceSupabase = createServiceClient();
   const report = await getOrgDataHealth(serviceSupabase, orgCtx.organization.id);
 
-  const driftTone: Tone =
-    report.graph.drift.state === "ok"
-      ? "good"
-      : report.graph.drift.state === "degraded"
-        ? "bad"
-        : "warn";
   const ragTone: Tone =
     report.rag.state === "ok" ? "good" : report.rag.state === "degraded" ? "bad" : "warn";
   const enrichTone: Tone =
@@ -84,44 +80,15 @@ export default async function DataHealthPage({ params }: DataHealthPageProps) {
       : report.enrichment.state === "degraded"
         ? "bad"
         : "warn";
-  const freshnessTone: Tone =
-    report.graph.surface.freshness.state === "fresh"
-      ? "good"
-      : report.graph.surface.freshness.state === "degraded"
-        ? "bad"
-        : "warn";
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Data health"
-        description="Read-only correctness checks across the people-graph, the assistant's RAG index, and LinkedIn enrichment. Counts show divergence between live data and each pipeline."
+        description="Read-only correctness checks across the assistant's RAG index and LinkedIn enrichment. Counts show divergence between live data and each pipeline."
       />
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card title="People-graph freshness" tone={freshnessTone} state={report.graph.surface.freshness.state}>
-          <MetricRow label="Pending sync items" value={report.graph.surface.queue.pendingCount} />
-          <MetricRow label="Dead-letter items" value={report.graph.surface.queue.deadLetterCount} />
-          <MetricRow
-            label="Sync lag (seconds)"
-            value={report.graph.surface.freshness.lagSeconds ?? "—"}
-          />
-        </Card>
-
-        <Card title="People-graph drift" tone={driftTone} state={report.graph.drift.state}>
-          <MetricRow
-            label="Nodes (expected / actual)"
-            value={`${report.graph.drift.nodes.expected} / ${report.graph.drift.nodes.actual}`}
-          />
-          <MetricRow label="Missing nodes" value={report.graph.drift.nodes.missingKeys.length} />
-          <MetricRow label="Mis-keyed nodes" value={report.graph.drift.nodes.misKeyedNodeKeys.length} />
-          <MetricRow
-            label="Edges (expected / actual)"
-            value={`${report.graph.drift.edges.expected} / ${report.graph.drift.edges.actual}`}
-          />
-          <MetricRow label="Missing edges" value={report.graph.drift.edges.missingEdges.length} />
-        </Card>
-
         <Card title="RAG index" tone={ragTone} state={report.rag.state}>
           <MetricRow label="Missing coverage" value={report.rag.counts.missingCoverage} />
           <MetricRow label="Orphan chunks" value={report.rag.counts.orphanChunks} />
@@ -131,7 +98,10 @@ export default async function DataHealthPage({ params }: DataHealthPageProps) {
 
         <Card title="Enrichment tagging" tone={enrichTone} state={report.enrichment.state}>
           <MetricRow label="Userless member rows" value={report.enrichment.counts.userlessRows} />
-          <MetricRow label="Permanently failed" value={report.enrichment.counts.permanentlyFailed} />
+          <MetricRow
+            label="Permanently failed"
+            value={report.enrichment.counts.permanentlyFailed}
+          />
           <MetricRow label="Stalled runs" value={report.enrichment.counts.stalledRuns} />
           <MetricRow label="Pre-provenance rows" value={report.enrichment.counts.preProvenance} />
         </Card>
