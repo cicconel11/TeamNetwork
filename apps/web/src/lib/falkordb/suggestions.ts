@@ -18,7 +18,6 @@ import {
   buildDisplayReadySuggestedConnection,
   buildSuggestionForCandidate,
   clampSuggestionsLimit,
-  GRAPH_STALE_AFTER_SECONDS,
   normalizeConnectionText,
   sortSuggestedConnections,
   type CandidateQualificationCode,
@@ -27,12 +26,6 @@ import {
   type SuggestConnectionsResult,
 } from "@/lib/falkordb/scoring";
 import {
-  FalkorQueryError,
-  FalkorUnavailableError,
-  falkorClient,
-  type FalkorQueryClient,
-} from "@/lib/falkordb/client";
-import {
   getSuggestedCandidateExposureCounts,
   getSuggestionObservabilitySnapshot,
   recordSuggestedCandidates,
@@ -40,7 +33,6 @@ import {
   type GraphFallbackReason,
   type SuggestionResultStrength,
 } from "@/lib/falkordb/telemetry";
-import { MAX_GRAPH_SYNC_ATTEMPTS, readOptionalString } from "@/lib/falkordb/utils";
 import {
   findBestProjectedPersonNameMatches,
   normalizeHumanNameText,
@@ -51,24 +43,6 @@ export interface SuggestConnectionsArgs {
   person_id?: string;
   person_query?: string;
   limit?: number;
-}
-
-interface GraphSuggestionRow extends Record<string, unknown> {
-  personKey: string;
-  personType: "member" | "alumni";
-  personId: string;
-  memberId: string | null;
-  alumniId: string | null;
-  name: string;
-  email: string | null;
-  userId: string | null;
-  role: string | null;
-  major: string | null;
-  currentCompany: string | null;
-  industry: string | null;
-  roleFamily: string | null;
-  graduationYear: number | null;
-  currentCity: string | null;
 }
 
 const CHAT_CONNECTION_SUGGESTION_LIMIT = 3;
@@ -84,19 +58,6 @@ function buildFreshnessFromNow(): SuggestConnectionsFreshness {
   return {
     state: "fresh",
     as_of: new Date().toISOString(),
-  };
-}
-
-function buildFreshnessFromReason(
-  state: SuggestConnectionsFreshness["state"],
-  reason: string,
-  existing?: SuggestConnectionsFreshness
-): SuggestConnectionsFreshness {
-  return {
-    state,
-    as_of: existing?.as_of ?? new Date().toISOString(),
-    lag_seconds: existing?.lag_seconds,
-    reason,
   };
 }
 
@@ -291,8 +252,7 @@ function resolveSourceFromQuery(
 
   const topMatch = fuzzyMatches[0];
   const runnerUp = fuzzyMatches[1] ?? null;
-  const clearWinner =
-    !runnerUp || topMatch.score - runnerUp.score >= MIN_FUZZY_AUTORESOLVE_MARGIN;
+  const clearWinner = !runnerUp || topMatch.score - runnerUp.score >= MIN_FUZZY_AUTORESOLVE_MARGIN;
 
   if (clearWinner && topMatch.score >= MIN_FUZZY_AUTORESOLVE_SCORE) {
     return { state: "resolved", source: topMatch.person };
@@ -302,54 +262,6 @@ function resolveSourceFromQuery(
     state: "ambiguous",
     options: fuzzyMatches.slice(0, 3).map((match) => match.person),
   };
-}
-
-async function fetchGraphFreshness(
-  serviceSupabase: SupabaseClient,
-  orgId: string
-): Promise<SuggestConnectionsFreshness> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (serviceSupabase as any)
-      .from("graph_sync_queue")
-      .select("created_at")
-      .eq("org_id", orgId)
-      .is("processed_at", null)
-      .lt("attempts", MAX_GRAPH_SYNC_ATTEMPTS)
-      .order("created_at", { ascending: true })
-      .limit(1);
-
-    if (error) {
-      return buildFreshnessFromReason("degraded", "queue_lookup_failed");
-    }
-
-    const oldestPending = readOptionalString((data as Array<{ created_at?: unknown }> | null)?.[0]?.created_at);
-    if (!oldestPending) {
-      return buildFreshnessFromNow();
-    }
-
-    const lagSeconds = Math.max(
-      0,
-      Math.floor((Date.now() - new Date(oldestPending).getTime()) / 1_000)
-    );
-
-    if (lagSeconds > GRAPH_STALE_AFTER_SECONDS) {
-      return {
-        state: "stale",
-        as_of: oldestPending,
-        lag_seconds: lagSeconds,
-        reason: "pending_queue",
-      };
-    }
-
-    return {
-      state: "fresh",
-      as_of: oldestPending,
-      lag_seconds: lagSeconds,
-    };
-  } catch {
-    return buildFreshnessFromReason("degraded", "queue_lookup_failed");
-  }
 }
 
 async function loadOrganizationName(
@@ -523,7 +435,9 @@ function buildLookupOnlyResult(input: {
       as_of: new Date().toISOString(),
     },
     state: input.state,
-    source_person: input.sourcePerson ? buildDisplayReadyConnectionPerson(input.sourcePerson) : null,
+    source_person: input.sourcePerson
+      ? buildDisplayReadyConnectionPerson(input.sourcePerson)
+      : null,
     suggestions: [],
     ...(input.options
       ? {
@@ -557,180 +471,11 @@ function buildResolvedResult(input: {
   };
 }
 
-function graphRowToProjectedPerson(
-  row: GraphSuggestionRow,
-  orgId: string
-): ProjectedPerson | null {
-  if (!row.personKey || !row.personType || !row.personId || !row.name) {
-    return null;
-  }
-
-  return {
-    orgId,
-    personKey: row.personKey,
-    personType: row.personType,
-    personId: row.personId,
-    memberId: row.memberId ?? (row.personType === "member" ? row.personId : null),
-    alumniId: row.alumniId ?? (row.personType === "alumni" ? row.personId : null),
-    userId: row.userId ?? null,
-    name: row.name,
-    email: row.email ?? null,
-    role: row.role ?? null,
-    major: row.major ?? null,
-    currentCompany: row.currentCompany ?? null,
-    industry: row.industry ?? null,
-    roleFamily: row.roleFamily ?? null,
-    graduationYear: row.graduationYear ?? null,
-    currentCity: row.currentCity ?? null,
-  };
-}
-
-function candidateIdentityTokens(candidate: ProjectedPerson) {
-  const tokens = new Set<string>();
-
-  if (candidate.userId) {
-    tokens.add(`user:${candidate.userId}`);
-  }
-  if (candidate.memberId) {
-    tokens.add(`member:${candidate.memberId}`);
-  }
-  if (candidate.alumniId) {
-    tokens.add(`alumni:${candidate.alumniId}`);
-  }
-  tokens.add(`person:${candidate.personKey}`);
-
-  return tokens;
-}
-
-function isCanonicalCandidate(candidate: ProjectedPerson) {
-  return candidate.personKey.startsWith("user:");
-}
-
-function candidateStrength(candidate: ProjectedPerson) {
-  let score = 0;
-  if (candidate.userId) score += 4;
-  if (candidate.memberId) score += 2;
-  if (candidate.alumniId) score += 2;
-  if (isCanonicalCandidate(candidate)) score += 3;
-  return score;
-}
-
-function preferredCandidate(left: ProjectedPerson, right: ProjectedPerson) {
-  const leftScore = candidateStrength(left);
-  const rightScore = candidateStrength(right);
-
-  if (rightScore !== leftScore) {
-    return rightScore > leftScore ? right : left;
-  }
-
-  if (right.personKey !== left.personKey) {
-    return right.personKey.localeCompare(left.personKey) < 0 ? right : left;
-  }
-
-  return right.personId.localeCompare(left.personId) < 0 ? right : left;
-}
-
-function dedupeGraphCandidates(entries: ProjectedPerson[]) {
-  const groups: Array<{
-    candidate: ProjectedPerson;
-    tokens: Set<string>;
-  }> = [];
-
-  for (const candidate of entries) {
-    const entryTokens = candidateIdentityTokens(candidate);
-    const matchingIndexes = groups
-      .map((group, index) => ({ group, index }))
-      .filter(({ group }) => [...entryTokens].some((token) => group.tokens.has(token)))
-      .map(({ index }) => index);
-
-    if (matchingIndexes.length === 0) {
-      groups.push({
-        candidate,
-        tokens: entryTokens,
-      });
-      continue;
-    }
-
-    const baseIndex = matchingIndexes[0];
-    const baseGroup = groups[baseIndex];
-    baseGroup.candidate = preferredCandidate(baseGroup.candidate, candidate);
-    for (const token of entryTokens) {
-      baseGroup.tokens.add(token);
-    }
-
-    for (const index of matchingIndexes.slice(1).reverse()) {
-      const group = groups[index];
-      baseGroup.candidate = preferredCandidate(baseGroup.candidate, group.candidate);
-      for (const token of group.tokens) {
-        baseGroup.tokens.add(token);
-      }
-      groups.splice(index, 1);
-    }
-  }
-
-  return groups.map(({ candidate }) => candidate);
-}
-
-function resolveUnavailableFallbackReason(graphClient: FalkorQueryClient): GraphFallbackReason {
-  return graphClient.getUnavailableReason?.() ?? "unavailable";
-}
-
-async function fetchGraphSuggestions(input: {
-  orgId: string;
-  source: ProjectedPerson;
-  allPeople: Iterable<ProjectedPerson>;
-  limit: number;
-  graphClient: FalkorQueryClient;
-  scoringContext?: ConnectionScoringContext;
-}) {
-  const candidateRows = await input.graphClient.query<GraphSuggestionRow>(
-    input.orgId,
-    `
-      MATCH (source:Person {personKey: $sourceKey})
-      MATCH (candidate:Person)
-      WHERE candidate.personKey <> source.personKey
-      RETURN
-        candidate.personKey AS personKey,
-        candidate.personType AS personType,
-        candidate.personId AS personId,
-        candidate.memberId AS memberId,
-        candidate.alumniId AS alumniId,
-        candidate.name AS name,
-        candidate.email AS email,
-        candidate.userId AS userId,
-        candidate.role AS role,
-        candidate.major AS major,
-        candidate.currentCompany AS currentCompany,
-        candidate.industry AS industry,
-        candidate.roleFamily AS roleFamily,
-        candidate.graduationYear AS graduationYear,
-        candidate.currentCity AS currentCity
-    `,
-    { sourceKey: input.source.personKey }
-  );
-
-  const candidates = dedupeGraphCandidates(
-    candidateRows
-      .map((row) => graphRowToProjectedPerson(row, input.orgId))
-      .filter((candidate): candidate is ProjectedPerson => candidate !== null)
-  );
-
-  return scoreProjectedCandidates({
-    source: input.source,
-    allPeople: input.allPeople,
-    candidates,
-    limit: input.limit,
-    scoringContext: input.scoringContext,
-  });
-}
-
 export async function suggestConnections(input: {
   orgId: string;
   serviceSupabase: SupabaseClient;
   args: SuggestConnectionsArgs;
-  graphClient?: FalkorQueryClient;
 }): Promise<SuggestConnectionsResult> {
-  const graphClient = input.graphClient ?? falkorClient;
   const limit = clampSuggestionsLimit(input.args.limit);
   const displayLimit = Math.min(limit, CHAT_CONNECTION_SUGGESTION_LIMIT);
   const { orgId, serviceSupabase } = input;
@@ -738,18 +483,12 @@ export async function suggestConnections(input: {
   let projectedPeopleForLookup: Map<string, ProjectedPerson> | null = null;
   const organizationName = await loadOrganizationName(serviceSupabase, orgId);
   const scoringContext: ConnectionScoringContext = {
-    genericCompanyValues: [
-      "TeamNetwork",
-      normalizeConnectionText(organizationName),
-    ],
+    genericCompanyValues: ["TeamNetwork", normalizeConnectionText(organizationName)],
   };
 
   if (input.args.person_query) {
     projectedPeopleForLookup = await loadProjectedPeople(serviceSupabase, orgId);
-    const resolution = resolveSourceFromQuery(
-      projectedPeopleForLookup,
-      input.args.person_query
-    );
+    const resolution = resolveSourceFromQuery(projectedPeopleForLookup, input.args.person_query);
 
     if (resolution.state === "not_found") {
       return buildLookupOnlyResult({ state: "not_found" });
@@ -785,10 +524,11 @@ export async function suggestConnections(input: {
   const projectedPeople = projectedPeopleForLookup
     ? projectedPeopleForLookup
     : await loadProjectedPeople(serviceSupabase, orgId);
-  const projectedSource = projectedPeople.get(`${orgId}:${resolvedSource.personKey}`) ?? resolvedSource;
+  const projectedSource =
+    projectedPeople.get(`${orgId}:${resolvedSource.personKey}`) ?? resolvedSource;
 
-  async function computeSqlFallback(
-    fallbackReason: GraphFallbackReason,
+  async function computeSqlResult(
+    fallbackReason: GraphFallbackReason | null,
     freshness: SuggestConnectionsFreshness
   ): Promise<SuggestConnectionsResult> {
     const results = scoreProjectedCandidates({
@@ -825,57 +565,10 @@ export async function suggestConnections(input: {
     return result;
   }
 
-  if (!graphClient.isAvailable()) {
-    const fallbackReason = resolveUnavailableFallbackReason(graphClient);
-    return finalizeResult(
-      await computeSqlFallback(
-        fallbackReason,
-        buildFreshnessFromReason("unknown", fallbackReason)
-      )
-    );
-  }
-
-  const freshness = await fetchGraphFreshness(serviceSupabase, orgId);
-
-  try {
-    const graphResults = await fetchGraphSuggestions({
-      orgId,
-      source: projectedSource,
-      allPeople: projectedPeople.values(),
-      limit,
-      graphClient,
-      scoringContext,
-    });
-
-    return finalizeResult({
-      mode: "falkor",
-      fallback_reason: null,
-      freshness,
-      state: graphResults.length > 0 ? "resolved" : "no_suggestions",
-      source_person: buildDisplayReadyConnectionPerson(projectedSource),
-      suggestions: graphResults
-        .slice(0, displayLimit)
-        .map((suggestion) => buildDisplayReadySuggestedConnection(suggestion)),
-    });
-  } catch (error) {
-    if (!(error instanceof FalkorUnavailableError) && !(error instanceof FalkorQueryError)) {
-      console.warn("[suggest-connections] graph path failed:", error);
-    }
-
-    const fallbackReason: GraphFallbackReason =
-      error instanceof FalkorUnavailableError ? "unavailable" : "query_failure";
-
-    return finalizeResult(
-      await computeSqlFallback(
-        fallbackReason,
-        buildFreshnessFromReason(
-          fallbackReason === "query_failure" ? "degraded" : "unknown",
-          fallbackReason,
-          freshness
-        )
-      )
-    );
-  }
+  // The people-graph is served from Postgres (mentorship_pairs + member/alumni
+  // projections), not a separate graph store, so suggestions always read live
+  // SQL — the result is therefore always current.
+  return finalizeResult(await computeSqlResult(null, buildFreshnessFromNow()));
 }
 
 export function getSuggestionObservabilityByOrg(orgId: string) {

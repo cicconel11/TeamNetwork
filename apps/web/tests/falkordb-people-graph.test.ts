@@ -9,7 +9,6 @@ import {
 } from "../src/lib/falkordb/people.ts";
 import {
   buildCandidatePool,
-  getSuggestionObservabilityByOrg,
   scoreProjectedCandidates,
   suggestConnections,
 } from "../src/lib/falkordb/suggestions.ts";
@@ -110,7 +109,9 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
   ]);
 }
 
-function makeProjectedPerson(overrides: Partial<ProjectedPerson> & Pick<ProjectedPerson, "personKey" | "personId" | "name">): ProjectedPerson {
+function makeProjectedPerson(
+  overrides: Partial<ProjectedPerson> & Pick<ProjectedPerson, "personKey" | "personId" | "name">
+): ProjectedPerson {
   return {
     orgId: overrides.orgId ?? ORG_ID,
     personKey: overrides.personKey,
@@ -232,7 +233,9 @@ function createInMemoryGraphClient() {
       }
 
       if (cypher.includes("SET person = $props")) {
-        graph.nodes.set(String(params?.personKey), { ...(params?.props as Record<string, unknown>) });
+        graph.nodes.set(String(params?.personKey), {
+          ...(params?.props as Record<string, unknown>),
+        });
         return [];
       }
 
@@ -255,12 +258,18 @@ function createInMemoryGraphClient() {
       }
 
       const sourceKey = String(params?.sourceKey);
-      if (cypher.includes(")-[:MENTORS]->(candidate:Person)") && !cypher.includes("(:Person)-[:MENTORS]->")) {
+      if (
+        cypher.includes(")-[:MENTORS]->(candidate:Person)") &&
+        !cypher.includes("(:Person)-[:MENTORS]->")
+      ) {
         return outgoingEdges(graph, sourceKey)
           .filter((personKey) => personKey !== sourceKey)
           .map((personKey) => ({ personKey, distance: 1 }));
       }
-      if (cypher.includes(")<-[:MENTORS]-(candidate:Person)") && !cypher.includes("(:Person)<-[:MENTORS]-")) {
+      if (
+        cypher.includes(")<-[:MENTORS]-(candidate:Person)") &&
+        !cypher.includes("(:Person)<-[:MENTORS]-")
+      ) {
         return incomingEdges(graph, sourceKey)
           .filter((personKey) => personKey !== sourceKey)
           .map((personKey) => ({ personKey, distance: 1 }));
@@ -636,15 +645,11 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
       person_type: "alumni",
       person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
     },
-    graphClient: {
-      isAvailable: () => false,
-      query: async () => [],
-    },
   });
 
   assert.equal(result.mode, "sql_fallback");
-  assert.equal(result.fallback_reason, "unavailable");
-  assert.equal(result.freshness.state, "unknown");
+  assert.equal(result.fallback_reason, null);
+  assert.equal(result.freshness.state, "fresh");
   assert.equal(result.state, "resolved");
   assert.equal(result.source_person?.name, "Alex Source");
   assert.deepEqual(
@@ -657,12 +662,7 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
       {
         name: "Ava Attribute",
         score: 40,
-        reasonCodes: [
-          "shared_industry",
-          "shared_company",
-          "shared_city",
-          "graduation_proximity",
-        ],
+        reasonCodes: ["shared_industry", "shared_company", "shared_city", "graduation_proximity"],
       },
       {
         name: "Sam Second",
@@ -712,23 +712,16 @@ test("suggestConnections resolves Matt-family aliases and shorthand before ranki
     },
   ]);
 
-  const graphClient = {
-    isAvailable: () => false,
-    query: async () => [],
-  };
-
   const [matthew, shorthand] = await Promise.all([
     suggestConnections({
       orgId: ORG_ID,
       serviceSupabase: stub as any,
       args: { person_query: "Matthew Leonard" },
-      graphClient,
     }),
     suggestConnections({
       orgId: ORG_ID,
       serviceSupabase: stub as any,
       args: { person_query: "mat leo" },
-      graphClient,
     }),
   ]);
 
@@ -900,29 +893,21 @@ test("suggestConnections suppresses generic company matches and keeps sources di
     },
   ]);
 
-  const graphClient = {
-    isAvailable: () => false,
-    query: async () => [],
-  };
-
   const [louis, matt, matthew] = await Promise.all([
     suggestConnections({
       orgId: ORG_ID,
       serviceSupabase: stub as any,
       args: { person_query: "Louis Ciccone" },
-      graphClient,
     }),
     suggestConnections({
       orgId: ORG_ID,
       serviceSupabase: stub as any,
       args: { person_query: "Matt Leonard" },
-      graphClient,
     }),
     suggestConnections({
       orgId: ORG_ID,
       serviceSupabase: stub as any,
       args: { person_query: "Matthew McKilloop" },
-      graphClient,
     }),
   ]);
 
@@ -943,312 +928,11 @@ test("suggestConnections suppresses generic company matches and keeps sources di
     false
   );
   assert.equal(
-    matthew.suggestions.some((row) => row.reasons.some((reason) => reason.code === "shared_company")),
+    matthew.suggestions.some((row) =>
+      row.reasons.some((reason) => reason.code === "shared_company")
+    ),
     false
   );
-});
-
-test("suggestConnections graph mode matches SQL fallback ordering and reasons", async () => {
-  const stub = createSupabaseStub();
-  seedSuggestionFixture(stub);
-
-  const candidateRows = [
-    {
-      personKey: "user:00000000-0000-0000-0000-000000000002",
-      personType: "alumni",
-      personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
-      name: "Dina Direct",
-      userId: "00000000-0000-0000-0000-000000000002",
-      role: "VP Product",
-      major: null,
-      currentCompany: "Acme",
-      industry: null,
-      graduationYear: 2018,
-      currentCity: null,
-    },
-    {
-      personKey: "user:00000000-0000-0000-0000-000000000003",
-      personType: "alumni",
-      personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
-      name: "Sam Second",
-      userId: "00000000-0000-0000-0000-000000000003",
-      role: "Founder",
-      major: "Computer Science",
-      currentCompany: null,
-      industry: "Technology",
-      graduationYear: null,
-      currentCity: "Austin",
-    },
-    {
-      personKey: "user:00000000-0000-0000-0000-000000000004",
-      personType: "alumni",
-      personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
-      name: "Ava Attribute",
-      userId: "00000000-0000-0000-0000-000000000004",
-      role: "Investor",
-      major: "Computer Science",
-      currentCompany: "Acme",
-      industry: "Technology",
-      graduationYear: 2018,
-      currentCity: "Austin",
-    },
-    {
-      personKey: "user:00000000-0000-0000-0000-000000000005",
-      personType: "alumni",
-      personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5",
-      name: "Nora Sparse",
-      userId: "00000000-0000-0000-0000-000000000005",
-      role: null,
-      major: null,
-      currentCompany: null,
-      industry: null,
-      graduationYear: null,
-      currentCity: null,
-    },
-  ];
-
-  const graphClient = {
-    isAvailable: () => true,
-    query: async () => candidateRows,
-  };
-
-  const graphResult = await suggestConnections({
-    orgId: ORG_ID,
-    serviceSupabase: stub as any,
-    args: {
-      person_type: "alumni",
-      person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
-    },
-    graphClient,
-  });
-
-  const fallbackResult = await suggestConnections({
-    orgId: ORG_ID,
-    serviceSupabase: stub as any,
-    args: {
-      person_type: "alumni",
-      person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
-    },
-    graphClient: {
-      isAvailable: () => false,
-      query: async () => [],
-    },
-  });
-
-  assert.equal(graphResult.mode, "falkor");
-  assert.equal(graphResult.fallback_reason, null);
-  assert.deepEqual(graphResult.suggestions, fallbackResult.suggestions);
-});
-
-test("suggestConnections graph mode matches SQL fallback for sparse profile scoring", async () => {
-  const stub = createSupabaseStub();
-
-  stub.seed("alumni", [
-    {
-      id: "source-alumni",
-      organization_id: ORG_ID,
-      user_id: "source-user",
-      first_name: "Alex",
-      last_name: "Source",
-      email: "alex@example.com",
-      major: null,
-      current_company: null,
-      industry: null,
-      current_city: "Austin",
-      graduation_year: null,
-      position_title: null,
-      job_title: null,
-      deleted_at: null,
-      created_at: "2026-03-01T00:00:00.000Z",
-    },
-    {
-      id: "candidate-alumni",
-      organization_id: ORG_ID,
-      user_id: "candidate-user",
-      first_name: "Casey",
-      last_name: "Candidate",
-      email: "casey@example.com",
-      major: null,
-      current_company: null,
-      industry: null,
-      current_city: "Austin",
-      graduation_year: null,
-      position_title: "Founder",
-      job_title: null,
-      deleted_at: null,
-      created_at: "2026-03-02T00:00:00.000Z",
-    },
-  ]);
-
-  const graphClient = {
-    isAvailable: () => true,
-    query: async () => [
-        {
-          personKey: "user:candidate-user",
-          personType: "alumni",
-          personId: "candidate-alumni",
-          name: "Casey Candidate",
-          userId: "candidate-user",
-          role: "Founder",
-          major: null,
-          currentCompany: null,
-          industry: null,
-          graduationYear: null,
-          currentCity: "Austin",
-        },
-      ],
-  };
-
-  const graphResult = await suggestConnections({
-    orgId: ORG_ID,
-    serviceSupabase: stub as any,
-    args: {
-      person_type: "alumni",
-      person_id: "source-alumni",
-    },
-    graphClient,
-  });
-
-  const fallbackResult = await suggestConnections({
-    orgId: ORG_ID,
-    serviceSupabase: stub as any,
-    args: {
-      person_type: "alumni",
-      person_id: "source-alumni",
-    },
-    graphClient: {
-      isAvailable: () => false,
-      query: async () => [],
-    },
-  });
-
-  assert.equal(graphResult.mode, "falkor");
-  assert.equal(graphResult.fallback_reason, null);
-  assert.deepEqual(graphResult.suggestions, fallbackResult.suggestions);
-});
-
-test("suggestConnections graph mode preserves merged source attributes with duplicate complement rows", async () => {
-  const stub = createSupabaseStub();
-
-  stub.seed("alumni", [
-    {
-      id: "source-alumni",
-      organization_id: ORG_ID,
-      user_id: "source-user",
-      first_name: "Alex",
-      last_name: "Source",
-      email: "alex@example.com",
-      major: null,
-      current_company: null,
-      industry: null,
-      current_city: null,
-      graduation_year: null,
-      position_title: null,
-      job_title: null,
-      deleted_at: null,
-      created_at: "2026-03-03T00:00:00.000Z",
-    },
-  ]);
-
-  stub.seed("members", [
-    {
-      id: "member-newer",
-      organization_id: ORG_ID,
-      user_id: "source-user",
-      deleted_at: null,
-      status: "active",
-      first_name: "Alex",
-      last_name: "Source",
-      email: "alex@example.com",
-      role: "Vice President",
-      current_company: "Beta",
-      graduation_year: 2025,
-      created_at: "2026-03-02T00:00:00.000Z",
-    },
-    {
-      id: "member-older",
-      organization_id: ORG_ID,
-      user_id: "source-user",
-      deleted_at: null,
-      status: "active",
-      first_name: "Alex",
-      last_name: "Source",
-      email: "alex@example.com",
-      role: "President",
-      current_company: "Acme",
-      graduation_year: 2024,
-      created_at: "2026-03-01T00:00:00.000Z",
-    },
-  ]);
-
-  const graphClient = {
-    isAvailable: () => true,
-    query: async (_orgId: string, cypher: string) => {
-      if (cypher.includes("RETURN source.personKey AS personKey")) {
-        return [{ personKey: "user:source-user" }];
-      }
-      if (cypher.includes(" AS distance")) {
-        return [];
-      }
-      return [
-        {
-          personKey: "user:candidate-user",
-          personType: "alumni",
-          personId: "candidate-alumni",
-          name: "Casey Candidate",
-          userId: "candidate-user",
-          role: "Engineer",
-          major: null,
-          currentCompany: "Acme",
-          industry: null,
-          graduationYear: 2024,
-          currentCity: null,
-        },
-      ];
-    },
-  };
-
-  const result = await suggestConnections({
-    orgId: ORG_ID,
-    serviceSupabase: stub as any,
-    args: {
-      person_type: "alumni",
-      person_id: "source-alumni",
-    },
-    graphClient,
-  });
-
-  assert.equal(result.mode, "falkor");
-  assert.equal(result.fallback_reason, null);
-  assert.equal(result.state, "resolved");
-  assert.deepEqual(result.suggestions, [
-    {
-      person_type: "alumni",
-      person_id: "candidate-alumni",
-      name: "Casey Candidate",
-      subtitle: "Engineer • Acme",
-      score: 18,
-      preview: {
-        role: "Engineer",
-        current_company: "Acme",
-        graduation_year: 2024,
-      },
-      reasons: [
-        {
-          code: "shared_company",
-          label: "shared company",
-          weight: 15,
-          value: "Acme",
-        },
-        {
-          code: "graduation_proximity",
-          label: "graduation proximity",
-          weight: 3,
-          value: 2024,
-        },
-      ],
-    },
-  ]);
 });
 
 test("suggestConnections returns weak fallback matches for sparse member profiles", async () => {
@@ -1329,15 +1013,14 @@ test("suggestConnections returns weak fallback matches for sparse member profile
       person_type: "member",
       person_id: "member-source",
     },
-    graphClient: {
-      isAvailable: () => false,
-      query: async () => [],
-    },
   });
 
   assert.equal(result.state, "resolved");
   assert.equal(result.source_person?.name, "Louis Ciccone");
-  assert.deepEqual(result.suggestions.map((row) => row.name), ["Dana Coach"]);
+  assert.deepEqual(
+    result.suggestions.map((row) => row.name),
+    ["Dana Coach"]
+  );
   assert.deepEqual(
     result.suggestions[0]?.reasons.map((reason) => reason.code),
     ["shared_city", "graduation_proximity"]
@@ -1374,7 +1057,10 @@ test("scoreProjectedCandidates prefers shared role family over weak support only
     limit: 3,
   });
 
-  assert.deepEqual(suggestions.map((row) => row.name), ["Engineer Match"]);
+  assert.deepEqual(
+    suggestions.map((row) => row.name),
+    ["Engineer Match"]
+  );
   assert.deepEqual(
     suggestions[0].reasons.map((reason) => reason.code),
     ["shared_role_family"]
@@ -1404,7 +1090,10 @@ test("scoreProjectedCandidates falls back to weak support when no professional m
     limit: 3,
   });
 
-  assert.deepEqual(suggestions.map((row) => row.name), ["Weak Match"]);
+  assert.deepEqual(
+    suggestions.map((row) => row.name),
+    ["Weak Match"]
+  );
   assert.deepEqual(
     suggestions[0].reasons.map((reason) => reason.code),
     ["shared_city", "graduation_proximity"]
@@ -1442,7 +1131,10 @@ test("buildCandidatePool keeps adjacent role families out of the professional ov
   });
 
   assert.equal(pool.length, 5);
-  assert.equal(pool.some((entry) => entry.candidate.personId === "adjacent"), false);
+  assert.equal(
+    pool.some((entry) => entry.candidate.personId === "adjacent"),
+    false
+  );
 
   const suggestions = scoreProjectedCandidates({
     source,
@@ -1451,7 +1143,10 @@ test("buildCandidatePool keeps adjacent role families out of the professional ov
     limit: 3,
   });
 
-  assert.equal(suggestions.some((entry) => entry.name === "Adjacent Candidate"), false);
+  assert.equal(
+    suggestions.some((entry) => entry.name === "Adjacent Candidate"),
+    false
+  );
 });
 
 test("scoreProjectedCandidates boosts rarer role-family matches ahead of common ones", () => {
@@ -1557,7 +1252,9 @@ test("scoreProjectedCandidates applies exposure penalty without changing returne
 
   assert.equal(suggestions[0].name, "Fresh Candidate");
   assert.deepEqual(
-    suggestions.find((row) => row.name === "Overexposed Candidate")?.reasons.map((reason) => reason.code),
+    suggestions
+      .find((row) => row.name === "Overexposed Candidate")
+      ?.reasons.map((reason) => reason.code),
     ["shared_industry", "shared_role_family"]
   );
 });
@@ -1748,11 +1445,16 @@ test("processGraphSyncQueue merges shared-user people and syncs mentorship edges
   assert.equal(mergedNodeCall?.params?.props?.memberId, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1");
   assert.equal(mergedNodeCall?.params?.props?.alumniId, "cccccccc-cccc-cccc-cccc-ccccccccccc1");
 
-  const mentorshipEdgeCall = graphCalls.find((call) => call.cypher.includes("MERGE (mentor)-[:MENTORS]->(mentee)"));
+  const mentorshipEdgeCall = graphCalls.find((call) =>
+    call.cypher.includes("MERGE (mentor)-[:MENTORS]->(mentee)")
+  );
   assert.ok(mentorshipEdgeCall);
   assert.equal(mentorshipEdgeCall?.params?.mentorKey, "user:00000000-0000-0000-0000-000000000010");
   assert.equal(mentorshipEdgeCall?.params?.menteeKey, "user:00000000-0000-0000-0000-000000000011");
-  assert.equal(rpcCalls.some((call) => call.name === "increment_graph_sync_attempts"), false);
+  assert.equal(
+    rpcCalls.some((call) => call.name === "increment_graph_sync_attempts"),
+    false
+  );
 });
 
 test("processGraphSyncQueue preserves pending queue rows while Falkor is unavailable", async () => {
@@ -1851,8 +1553,14 @@ test("buildProjectedPeople emits exactly one org-scoped canonical user:* identit
   assert.ok(projected.has(canonicalKey), `expected Map key '${canonicalKey}' to exist`);
 
   // No standalone keys for the linked rows
-  assert.ok(!projected.has(`${ORG_ID}:member:m-linked`), "linked member must not get a standalone key");
-  assert.ok(!projected.has(`${ORG_ID}:alumni:a-linked`), "linked alumni must not get a standalone key");
+  assert.ok(
+    !projected.has(`${ORG_ID}:member:m-linked`),
+    "linked member must not get a standalone key"
+  );
+  assert.ok(
+    !projected.has(`${ORG_ID}:alumni:a-linked`),
+    "linked alumni must not get a standalone key"
+  );
 
   const person = projected.get(canonicalKey);
   assert.ok(person, "canonical person must be defined");
@@ -1906,7 +1614,11 @@ test("buildProjectedPeople deterministic attribute precedence: alumni fields tak
   assert.ok(person, "merged person must exist");
 
   // Alumni position_title beats member role
-  assert.equal(person?.role, "Director", "alumni position_title must take precedence over member role");
+  assert.equal(
+    person?.role,
+    "Director",
+    "alumni position_title must take precedence over member role"
+  );
   // Alumni current_company beats member current_company
   assert.equal(person?.currentCompany, "AlumniCorp", "alumni current_company must take precedence");
   // Alumni graduation_year beats member graduation_year
@@ -2002,7 +1714,11 @@ test("buildProjectedPeople strict org isolation: same user_id across two orgs pr
   });
 
   // Must produce two separate entries — one per org — not a single merged identity
-  assert.equal(projected.size, 2, "same user_id in two orgs must produce 2 separate entries, not 1 merged");
+  assert.equal(
+    projected.size,
+    2,
+    "same user_id in two orgs must produce 2 separate entries, not 1 merged"
+  );
 
   const orgAKey = `${ORG_A}:user:shared-uid`;
   const orgBKey = `${ORG_B}:user:shared-uid`;
@@ -2064,7 +1780,11 @@ test("buildProjectedPeople org isolation: member and alumni from different orgs 
   });
 
   // Member from ORG_A and alumni from ORG_B must NOT merge even though they share user_id
-  assert.equal(projected.size, 2, "cross-org member+alumni with shared user_id must remain separate");
+  assert.equal(
+    projected.size,
+    2,
+    "cross-org member+alumni with shared user_id must remain separate"
+  );
 
   const orgAKey = `${ORG_A}:user:cross-uid`;
   const orgBKey = `${ORG_B}:user:cross-uid`;
@@ -2170,10 +1890,7 @@ test("processGraphSyncQueue removes stale standalone nodes when linked identitie
   const snapshot = graphClient.snapshot(ORG_ID);
 
   assert.equal(stats.drainState, "processed");
-  assert.deepEqual(
-    snapshot.nodes.map((node) => node.personKey).sort(),
-    ["user:linked-user"]
-  );
+  assert.deepEqual(snapshot.nodes.map((node) => node.personKey).sort(), ["user:linked-user"]);
 });
 
 test("processGraphSyncQueue reconciles unlink, relink, and org-move transitions without leaving stale keys", async () => {
@@ -2229,7 +1946,10 @@ test("processGraphSyncQueue reconciles unlink, relink, and org-move transitions 
   ]);
   await processGraphSyncQueue(stub as any, { graphClient });
   assert.deepEqual(
-    graphClient.snapshot(ORG_ID).nodes.map((node) => node.personKey).sort(),
+    graphClient
+      .snapshot(ORG_ID)
+      .nodes.map((node) => node.personKey)
+      .sort(),
     ["user:user-a"]
   );
 
@@ -2247,7 +1967,10 @@ test("processGraphSyncQueue reconciles unlink, relink, and org-move transitions 
   ]);
   await processGraphSyncQueue(stub as any, { graphClient });
   assert.deepEqual(
-    graphClient.snapshot(ORG_ID).nodes.map((node) => node.personKey).sort(),
+    graphClient
+      .snapshot(ORG_ID)
+      .nodes.map((node) => node.personKey)
+      .sort(),
     ["member:member-transition", "user:user-a"]
   );
 
@@ -2265,7 +1988,10 @@ test("processGraphSyncQueue reconciles unlink, relink, and org-move transitions 
   ]);
   await processGraphSyncQueue(stub as any, { graphClient });
   assert.deepEqual(
-    graphClient.snapshot(ORG_ID).nodes.map((node) => node.personKey).sort(),
+    graphClient
+      .snapshot(ORG_ID)
+      .nodes.map((node) => node.personKey)
+      .sort(),
     ["user:user-a", "user:user-b"]
   );
 
@@ -2287,11 +2013,17 @@ test("processGraphSyncQueue reconciles unlink, relink, and org-move transitions 
   await processGraphSyncQueue(stub as any, { graphClient });
 
   assert.deepEqual(
-    graphClient.snapshot(ORG_ID).nodes.map((node) => node.personKey).sort(),
+    graphClient
+      .snapshot(ORG_ID)
+      .nodes.map((node) => node.personKey)
+      .sort(),
     ["user:user-a"]
   );
   assert.deepEqual(
-    graphClient.snapshot(ORG_NEW).nodes.map((node) => node.personKey).sort(),
+    graphClient
+      .snapshot(ORG_NEW)
+      .nodes.map((node) => node.personKey)
+      .sort(),
     ["user:user-b"]
   );
 });
@@ -2394,7 +2126,10 @@ test("processGraphSyncQueue reconciles old mentorship endpoints to one surviving
   await processGraphSyncQueue(stub as any, { graphClient });
   assert.deepEqual(graphClient.snapshot(ORG_ID).edges, ["user:mentor-a->user:mentee-a"]);
 
-  await (stub as any).from("mentorship_pairs").update({ mentor_user_id: "mentor-b" }).eq("id", "pair-1");
+  await (stub as any)
+    .from("mentorship_pairs")
+    .update({ mentor_user_id: "mentor-b" })
+    .eq("id", "pair-1");
   stub.registerRpc("dequeue_graph_sync_queue", () => [
     {
       id: "pair-transition",
@@ -2536,7 +2271,9 @@ test("processGraphSyncQueue reshapes people and mentorship edges for deactivatio
   ]);
   await processGraphSyncQueue(stub as any, { graphClient });
 
-  const alumniOnlyNode = graphClient.snapshot(ORG_ID).nodes.find((node) => node.personKey === "user:shared-person");
+  const alumniOnlyNode = graphClient
+    .snapshot(ORG_ID)
+    .nodes.find((node) => node.personKey === "user:shared-person");
   assert.equal(alumniOnlyNode?.memberId ?? null, null);
   assert.equal(alumniOnlyNode?.alumniId, "alumni-active");
 
@@ -2717,141 +2454,12 @@ test("processGraphSyncQueue converges for replay, out-of-order mentorship work, 
   await processGraphSyncQueue(stub as any, { graphClient });
 
   assert.deepEqual(
-    graphClient.snapshot(ORG_ID).nodes.map((node) => node.personKey).sort(),
+    graphClient
+      .snapshot(ORG_ID)
+      .nodes.map((node) => node.personKey)
+      .sort(),
     ["user:mentee-user", "user:mentor-user-new"]
   );
-});
-
-test("suggestConnections stays recommendation-safe after graph transitions and records org-scoped fallback observability", async () => {
-  const stub = createSupabaseStub();
-  const graphClient = createInMemoryGraphClient();
-
-  seedSuggestionFixture(stub);
-  graphClient.seedNode(ORG_ID, {
-    orgId: ORG_ID,
-    personKey: "user:00000000-0000-0000-0000-000000000001",
-    personType: "alumni",
-    personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
-    memberId: null,
-    alumniId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
-    userId: "00000000-0000-0000-0000-000000000001",
-    name: "Alex Source",
-    role: "Engineer",
-    major: "Computer Science",
-    currentCompany: "Acme",
-    industry: "Technology",
-    graduationYear: 2018,
-    currentCity: "Austin",
-  });
-  graphClient.seedNode(ORG_ID, {
-    orgId: ORG_ID,
-    personKey: "user:00000000-0000-0000-0000-000000000002",
-    personType: "alumni",
-    personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
-    memberId: null,
-    alumniId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
-    userId: "00000000-0000-0000-0000-000000000002",
-    name: "Dina Direct",
-    role: "VP Product",
-    major: null,
-    currentCompany: "Acme",
-    industry: null,
-    graduationYear: 2018,
-    currentCity: null,
-  });
-  graphClient.seedNode(ORG_ID, {
-    orgId: ORG_ID,
-    personKey: "alumni:stale-dina",
-    personType: "alumni",
-    personId: "stale-dina",
-    memberId: null,
-    alumniId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
-    userId: null,
-    name: "Dina Direct",
-    role: "VP Product",
-    major: null,
-    currentCompany: "Acme",
-    industry: null,
-    graduationYear: 2018,
-    currentCity: null,
-  });
-  graphClient.seedNode(ORG_ID, {
-    orgId: ORG_ID,
-    personKey: "user:00000000-0000-0000-0000-000000000003",
-    personType: "alumni",
-    personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
-    memberId: null,
-    alumniId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
-    userId: "00000000-0000-0000-0000-000000000003",
-    name: "Sam Second",
-    role: "Founder",
-    major: "Computer Science",
-    currentCompany: null,
-    industry: "Technology",
-    graduationYear: null,
-    currentCity: "Austin",
-  });
-  graphClient.seedNode(ORG_ID, {
-    orgId: ORG_ID,
-    personKey: "user:00000000-0000-0000-0000-000000000004",
-    personType: "alumni",
-    personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
-    memberId: null,
-    alumniId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
-    userId: "00000000-0000-0000-0000-000000000004",
-    name: "Ava Attribute",
-    role: "Investor",
-    major: "Computer Science",
-    currentCompany: "Acme",
-    industry: "Technology",
-    graduationYear: 2018,
-    currentCity: "Austin",
-  });
-  graphClient.seedEdge(
-    ORG_ID,
-    "user:00000000-0000-0000-0000-000000000001",
-    "user:00000000-0000-0000-0000-000000000002"
-  );
-  graphClient.seedEdge(
-    ORG_ID,
-    "user:00000000-0000-0000-0000-000000000002",
-    "user:00000000-0000-0000-0000-000000000003"
-  );
-
-  const graphResult = await suggestConnections({
-    orgId: ORG_ID,
-    serviceSupabase: stub as any,
-    args: { person_type: "alumni", person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1" },
-    graphClient,
-  });
-  const sqlFallback = await suggestConnections({
-    orgId: ORG_ID,
-    serviceSupabase: stub as any,
-    args: { person_type: "alumni", person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1" },
-    graphClient: {
-      isAvailable: () => false,
-      getUnavailableReason: () => "disabled",
-      query: async () => [],
-    },
-  });
-
-  assert.equal(graphResult.mode, "falkor");
-  assert.deepEqual(
-    graphResult.suggestions.map((row) => row.person_id),
-    [
-      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
-      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
-      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
-    ]
-  );
-  assert.deepEqual(graphResult.suggestions, sqlFallback.suggestions);
-
-  const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
-  assert.equal(telemetry.falkorCount, 1);
-  assert.equal(telemetry.sqlFallbackCount, 1);
-  assert.equal(telemetry.fallbackReasonCounts.disabled, 1);
-  assert.equal(telemetry.strongResultCount, 2);
-  assert.equal(telemetry.lastResultStrength, "strong");
 });
 
 test("graph health surface exposes lag, retries, degraded freshness, dead letters, and preserves failure evidence after recovery", async () => {
