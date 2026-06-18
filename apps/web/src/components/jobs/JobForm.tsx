@@ -164,7 +164,7 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
             ]}
           />
           {errors.experience_level && (
-            <p className="text-sm text-red-600 mt-1">{errors.experience_level}</p>
+            <p className="text-sm text-error mt-1">{errors.experience_level}</p>
           )}
         </div>
 
@@ -197,7 +197,7 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
             ]}
           />
           {errors.location_type && (
-            <p className="text-sm text-red-600 mt-1">{errors.location_type}</p>
+            <p className="text-sm text-error mt-1">{errors.location_type}</p>
           )}
         </div>
 
@@ -265,7 +265,7 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
         </div>
 
         {errors.submit && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+          <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-error">
             {errors.submit}
           </div>
         )}

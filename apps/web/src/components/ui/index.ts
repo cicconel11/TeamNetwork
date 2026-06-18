@@ -16,6 +16,7 @@ export type { TurnstileWidgetProps, TurnstileWidgetRef } from "./TurnstileWidget
 export { Captcha } from "./Captcha";
 export type { CaptchaProps, CaptchaRef, CaptchaProvider } from "./Captcha";
 export { Skeleton } from "./Skeleton";
+export { Spinner } from "./Spinner";
 export { PermissionRoleCard } from "./PermissionRoleCard";
 export { ProgressBar } from "./ProgressBar";
 export { ToggleSwitch } from "./ToggleSwitch";
