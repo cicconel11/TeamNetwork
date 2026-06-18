@@ -47,6 +47,8 @@ const SOURCE_SELECTS: Record<SourceTable, string> = {
     "id, user_id, bio, topics, organization_id",
   form_submissions:
     "id, form_id, user_id, responses, organization_id, deleted_at",
+  knowledge_documents:
+    "id, type, title, description, tags, body, audience, source_timestamp, organization_id, deleted_at",
 };
 
 // ---------------------------------------------------------------------------

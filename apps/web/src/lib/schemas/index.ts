@@ -90,3 +90,6 @@ export * from "./moderation";
 
 // Org custom email sending domain schemas
 export * from "./email-domain";
+
+// AI knowledge base (RAG authoring) schemas
+export * from "./ai-knowledge";

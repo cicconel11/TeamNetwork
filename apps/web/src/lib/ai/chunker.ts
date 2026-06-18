@@ -17,7 +17,8 @@ export type SourceTable =
   | "events"
   | "job_postings"
   | "mentor_profiles"
-  | "form_submissions";
+  | "form_submissions"
+  | "knowledge_documents";
 
 /** Parent thread context passed for discussion_replies rendering. */
 export interface ParentThreadContext {
@@ -172,6 +173,26 @@ function renderFormSubmission(record: Record<string, unknown>): ChunkInput[] {
   return splitIfNeeded(`Form submission: ${text}`, {});
 }
 
+function renderKnowledgeDocument(record: Record<string, unknown>): ChunkInput[] {
+  const title = String(record.title ?? "");
+  const body = String(record.body ?? "");
+  const type = record.type ? String(record.type) : null;
+  const description = record.description ? String(record.description) : null;
+  const tags = Array.isArray(record.tags) ? (record.tags as string[]) : [];
+  // Audience gates retrieval — always carry it into metadata so the search RPC
+  // (metadata->>'audience') can filter restricted docs per requester role.
+  const audience = record.audience ? String(record.audience) : "all";
+
+  const lines = [`Knowledge: ${title}`];
+  if (type) lines.push(`Type: ${type}`);
+  if (tags.length > 0) lines.push(`Tags: ${tags.join(", ")}`);
+  if (description) lines.push(description);
+  if (body) lines.push(body);
+
+  const text = lines.join("\n");
+  return splitIfNeeded(text, { title, type, tags, audience });
+}
+
 // ---------------------------------------------------------------------------
 // Splitting
 // ---------------------------------------------------------------------------
@@ -284,6 +305,8 @@ export function renderChunks(
       return renderMentorProfile(record);
     case "form_submissions":
       return renderFormSubmission(record);
+    case "knowledge_documents":
+      return renderKnowledgeDocument(record);
     default: {
       const _exhaustive: never = sourceTable;
       throw new Error(`Unknown source table: ${_exhaustive}`);
