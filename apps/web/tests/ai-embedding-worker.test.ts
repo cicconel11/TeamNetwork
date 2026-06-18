@@ -20,6 +20,8 @@ const VALID_SOURCE_TABLES: SourceTable[] = [
   "discussion_replies",
   "events",
   "job_postings",
+  "mentor_profiles",
+  "form_submissions",
 ];
 
 describe("embedding-worker components", () => {
@@ -31,6 +33,8 @@ describe("embedding-worker components", () => {
         discussion_threads: "id, title, body",
         discussion_replies: "id, thread_id, body",
         job_postings: "id, title, description",
+        mentor_profiles: "id, bio, topics",
+        form_submissions: "id, data",
       };
 
       for (const table of VALID_SOURCE_TABLES) {
@@ -129,6 +133,32 @@ describe("embedding-worker components", () => {
       });
       assert.ok(chunks.length >= 1);
       assert.ok(chunks[0].text.includes("Engineer"));
+    });
+
+    it("renders mentor profile chunks", () => {
+      const chunks = renderChunks("mentor_profiles", {
+        id: "mp1",
+        bio: "I mentor students interested in product leadership.",
+        topics: ["product", "leadership"],
+        industries: ["technology"],
+        is_active: true,
+        organization_id: "org1",
+      });
+      assert.ok(chunks.length >= 1);
+      assert.ok(chunks[0].text.includes("Mentor profile"));
+      assert.ok(chunks[0].text.includes("product"));
+    });
+
+    it("renders form submission chunks from the live data column", () => {
+      const chunks = renderChunks("form_submissions", {
+        id: "fs1",
+        form_id: "form1",
+        data: { goal: "Find a mentor in finance" },
+        organization_id: "org1",
+        deleted_at: null,
+      });
+      assert.ok(chunks.length >= 1);
+      assert.ok(chunks[0].text.includes("Find a mentor in finance"));
     });
   });
 

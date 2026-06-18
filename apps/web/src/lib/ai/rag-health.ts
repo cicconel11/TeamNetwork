@@ -8,11 +8,6 @@ import {
 
 /**
  * Read-only correctness checker for the RAG index (`ai_document_chunks`).
- *
- * Scoped to the source tables that can actually hold chunks per the
- * `ai_document_chunks.source_table` CHECK constraint — mentor_profiles and
- * form_submissions are intentionally excluded so coverage does not false-positive
- * on tables the index never stores.
  */
 
 const SAMPLE_CAP = 50;
@@ -42,6 +37,16 @@ const INDEXED_TABLES: IndexedTable[] = [
   {
     table: "job_postings",
     select: "id, title, company, description, location, location_type, deleted_at",
+    hasAudience: false,
+  },
+  {
+    table: "mentor_profiles",
+    select: "id, user_id, bio, topics, industries, is_active",
+    hasAudience: false,
+  },
+  {
+    table: "form_submissions",
+    select: "id, form_id, user_id, data, deleted_at",
     hasAudience: false,
   },
 ];
@@ -122,6 +127,13 @@ function degraded(orgId: string, reason: string): RagHealthReport {
   };
 }
 
+function isLiveSource(table: SourceTable, row: Record<string, unknown>): boolean {
+  if (table === "mentor_profiles") {
+    return row.is_active !== false;
+  }
+  return !row.deleted_at;
+}
+
 export async function checkRagHealth(
   serviceSupabase: SupabaseClient,
   orgId: string
@@ -187,7 +199,7 @@ export async function checkRagHealth(
     for (const row of sources) {
       const id = String(row.id);
       sourceById.set(id, row);
-      if (!row.deleted_at) liveSourceIds.add(id);
+      if (isLiveSource(config.table, row)) liveSourceIds.add(id);
     }
 
     const chunksBySource = new Map<string, ChunkRow[]>();
@@ -203,7 +215,7 @@ export async function checkRagHealth(
       const threadIds = [
         ...new Set(
           sources
-            .filter((row) => !row.deleted_at && row.thread_id)
+            .filter((row) => isLiveSource(config.table, row) && row.thread_id)
             .map((row) => String(row.thread_id))
         ),
       ];
