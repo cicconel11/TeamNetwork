@@ -44,6 +44,11 @@ const INDEXED_TABLES: IndexedTable[] = [
     select: "id, title, company, description, location, location_type, deleted_at",
     hasAudience: false,
   },
+  {
+    table: "knowledge_documents",
+    select: "id, type, title, description, body, tags, audience, deleted_at",
+    hasAudience: true,
+  },
 ];
 
 export interface RagSourceRef {
