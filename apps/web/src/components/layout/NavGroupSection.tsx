@@ -154,6 +154,7 @@ export function NavItemLink({
       <Link
         data-testid={`nav-item-${navItemSlug}`}
         data-active={isActive ? "true" : "false"}
+        aria-current={isActive ? "page" : undefined}
         href={href}
         title={isCollapsed ? item.label : undefined}
         aria-label={isCollapsed ? item.label : undefined}
@@ -169,7 +170,7 @@ export function NavItemLink({
           );
           onClose?.();
         }}
-        className={`flex items-center text-sm font-medium transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+        className={`flex items-center text-sm font-medium transition-[background-color,color,box-shadow] duration-200 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
           isCollapsed
             ? "justify-center w-10 h-10 rounded-xl"
             : "gap-3 px-3 py-2.5 rounded-xl"

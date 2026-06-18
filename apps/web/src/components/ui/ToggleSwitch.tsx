@@ -32,17 +32,19 @@ export function ToggleSwitch({
       onClick={() => onChange(!checked)}
       className={`
         relative inline-flex shrink-0 cursor-pointer items-center rounded-full
-        transition-colors duration-200 ease-in-out
+        transition-colors duration-200 ease-in-out motion-reduce:transition-none
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
         ${trackSize}
         ${checked ? "bg-green-500" : "bg-muted-foreground/30"}
         ${disabled ? "opacity-50 cursor-not-allowed" : ""}
       `}
     >
+      {/* Knob position (not just track color) signals on/off, so the state is
+          legible without relying on color perception. */}
       <span
         className={`
           pointer-events-none inline-block rounded-full bg-white shadow-sm
-          transform transition-transform duration-200 ease-in-out
+          transform transition-transform duration-200 ease-in-out motion-reduce:transition-none
           ${dotSize}
           ${checked ? dotTranslate : "translate-x-0.5"}
         `}

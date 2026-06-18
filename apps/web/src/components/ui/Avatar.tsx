@@ -43,7 +43,7 @@ export function Avatar({ src, alt, name, size = "md", className = "", ...props }
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={src}
-            alt={alt || name || "Avatar"}
+            alt={alt || (name ? `${name}'s profile photo` : "User avatar")}
             className="h-full w-full object-cover"
             loading="lazy"
             decoding="async"
@@ -53,7 +53,7 @@ export function Avatar({ src, alt, name, size = "md", className = "", ...props }
         ) : (
           <Image
             src={src}
-            alt={alt || name || "Avatar"}
+            alt={alt || (name ? `${name}'s profile photo` : "User avatar")}
             fill
             className="object-cover"
             sizes="64px"
