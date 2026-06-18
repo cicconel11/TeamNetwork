@@ -61,7 +61,10 @@ const RAW_PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
     "suggest_mentees",
   ],
   analytics: ["get_org_stats"],
-  events: ["list_events", "find_free_members"],
+  // "announcements" is not its own surface keyword, so prompts pairing events +
+  // announcements (e.g. the "Summarize activity" workflow) route here; keep
+  // list_announcements attached so the model can actually fetch them.
+  events: ["list_events", "list_announcements", "find_free_members"],
 };
 
 // Surface-specific tools come first so per-surface biasing is preserved.
