@@ -86,6 +86,10 @@ const QUERY_EXPANSIONS: Record<string, string> = {
   discussions: "discussion threads conversations",
   thread: "discussion thread conversation",
   threads: "discussion threads conversations",
+  knowledge: "knowledge base handbook documentation reference",
+  policy: "policy handbook guideline rule procedure",
+  handbook: "handbook knowledge base policy guide",
+  faq: "faq frequently asked questions help",
 };
 
 export function expandQuery(query: string): string {
