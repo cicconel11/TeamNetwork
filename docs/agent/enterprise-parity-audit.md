@@ -1,3 +1,12 @@
+---
+type: audit
+title: Enterprise AI Parity Audit
+description: Tracks enterprise UI mutations against AI tool coverage and role gates.
+resource: apps/web/src/types/enterprise.ts
+tags: [ai, enterprise, parity-audit, write-tools]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # Enterprise AI Parity Audit
 
 Tracks UI mutations in the enterprise surface against AI tool coverage. The goal: any action an enterprise user can take from the dashboard, the assistant can also take (subject to role gates and human-in-the-loop confirmation for writes).

@@ -1,3 +1,12 @@
+---
+type: codemap
+title: Falkor People Graph
+description: Falkor people graph powering suggest_connections — projection, sync, scoring, freshness, and fallback.
+resource: apps/web/src/lib/people-graph/suggestions.ts
+tags: [ai, falkor, graph, connection-suggestions]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # Falkor People Graph
 
 ## Overview

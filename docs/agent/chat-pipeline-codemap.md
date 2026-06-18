@@ -1,3 +1,12 @@
+---
+type: codemap
+title: Chat Pipeline
+description: Full chat request lifecycle — auth, policy, RAG, tool execution, SSE streaming, persistence, grounding.
+resource: apps/web/src/app/api/ai/[orgId]/chat/handler.ts
+tags: [ai, chat-pipeline, sse, tools]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # Chat Pipeline — Code Map
 
 ## Overview

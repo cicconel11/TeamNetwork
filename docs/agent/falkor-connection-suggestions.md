@@ -1,3 +1,12 @@
+---
+type: data-flow
+title: Falkor Connection Suggestions Flow
+description: Flow from chat to suggest_connections through Falkor or the SQL fallback to pass-2 render.
+resource: apps/web/src/lib/people-graph/suggestions.ts
+tags: [ai, falkor, connection-suggestions, diagram]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 ```mermaid
 flowchart TD
   subgraph User

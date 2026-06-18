@@ -1,3 +1,12 @@
+---
+type: codemap
+title: AI Intent Routing and Surface Inference
+description: Message intent routing and per-turn surface inference for context loading, caching, and tool selection.
+resource: apps/web/src/lib/ai/intent-router.ts
+tags: [ai, intent-routing, surface, chat]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # AI Intent Routing & Surface Inference — Code Map
 
 ## Overview

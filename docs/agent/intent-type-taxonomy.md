@@ -1,3 +1,12 @@
+---
+type: taxonomy
+title: Intent Type Taxonomy
+description: The intent_type classification axis (knowledge/action/navigation/casual) and its labeled-data pipeline.
+resource: apps/web/src/lib/ai/intent-router.ts
+tags: [ai, intent-type, classification, taxonomy]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # Intent Type Taxonomy — Code Map
 
 ## Overview

@@ -1,3 +1,12 @@
+---
+type: codemap
+title: UI Panel
+description: Slide-out AI assistant panel — SSE stream consumer, thread/message display, pending-action review UI.
+resource: apps/web/src/components/ai-assistant/AIPanel.tsx
+tags: [ai, ui, panel, sse]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # UI Panel — Code Map
 
 ## Overview
