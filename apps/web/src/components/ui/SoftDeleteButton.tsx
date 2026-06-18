@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "./Button";
+import { ConfirmationDialog } from "./ConfirmationDialog";
 import { createClient } from "@/lib/supabase/client";
 import { revalidatePaths as revalidatePathsAction } from "@/lib/cache";
 import { showFeedback } from "@/lib/feedback/show-feedback";
@@ -34,10 +35,10 @@ export function SoftDeleteButton({
 }: SoftDeleteButtonProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleDelete = async () => {
-    if (!window.confirm(confirmMessage)) return;
     setIsLoading(true);
     setError(null);
 
@@ -50,9 +51,12 @@ export function SoftDeleteButton({
     const { error } = await query;
     if (error) {
       setError(error.message);
+      showFeedback("Couldn't delete this item. Please try again.", "error");
       setIsLoading(false);
       return;
     }
+
+    setConfirmOpen(false);
 
     // Call optional post-delete callback (e.g., for calendar sync)
     if (onAfterDelete) {
@@ -83,10 +87,20 @@ export function SoftDeleteButton({
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <Button variant="danger" onClick={handleDelete} isLoading={isLoading} data-testid={dataTestId}>
+      <Button variant="danger" onClick={() => setConfirmOpen(true)} isLoading={isLoading} data-testid={dataTestId}>
         {label}
       </Button>
       {error && <p className="text-xs text-red-500">{error}</p>}
+      <ConfirmationDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onConfirm={handleDelete}
+        isPending={isLoading}
+        title={`${label}?`}
+        description={confirmMessage}
+        confirmLabel={label}
+        destructive
+      />
     </div>
   );
 }

@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, Badge, Button, Input } from "@/components/ui";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface MemberRow {
@@ -58,6 +60,7 @@ export function ManageMembersPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddSection, setShowAddSection] = useState(false);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [removalTarget, setRemovalTarget] = useState<{ userId: string; isSelf: boolean; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
 
@@ -169,10 +172,9 @@ export function ManageMembersPanel({
     setActionInProgress(null);
   };
 
-  const handleRemoveMember = async (userId: string) => {
-    const isSelf = userId === currentUserId;
-    if (isSelf && !confirm("Are you sure you want to leave this group?")) return;
-    if (!isSelf && !confirm("Remove this member from the group?")) return;
+  const confirmRemoveMember = async () => {
+    if (!removalTarget) return;
+    const { userId, isSelf } = removalTarget;
 
     setActionInProgress(userId);
     setError(null);
@@ -203,6 +205,7 @@ export function ManageMembersPanel({
         result: "fail_server",
       }, organizationId);
       setActionInProgress(null);
+      setRemovalTarget(null);
       return;
     }
 
@@ -227,6 +230,11 @@ export function ManageMembersPanel({
     }, organizationId);
     onMembersChanged();
     setActionInProgress(null);
+    setRemovalTarget(null);
+    // Soft-delete sets removed_at, so re-adding restores the member — offer undo.
+    toast.success(`Removed ${removalTarget.name}`, {
+      action: { label: "Undo", onClick: () => handleAddMember(userId) },
+    });
   };
 
   const roleBadgeVariant = (role: string) => {
@@ -287,7 +295,7 @@ export function ManageMembersPanel({
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => handleRemoveMember(member.user_id)}
+                    onClick={() => setRemovalTarget({ userId: member.user_id, isSelf: true, name: displayName })}
                     disabled={actionInProgress === member.user_id}
                     className="text-xs"
                   >
@@ -295,8 +303,9 @@ export function ManageMembersPanel({
                   </Button>
                 ) : !isSelf && canManage ? (
                   <button
-                    onClick={() => handleRemoveMember(member.user_id)}
+                    onClick={() => setRemovalTarget({ userId: member.user_id, isSelf: false, name: displayName })}
                     disabled={actionInProgress === member.user_id}
+                    aria-label={`Remove ${displayName} from the group`}
                     className="text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -373,6 +382,21 @@ export function ManageMembersPanel({
           )}
         </div>
       )}
+
+      <ConfirmationDialog
+        open={removalTarget !== null}
+        onOpenChange={(open) => { if (!open) setRemovalTarget(null); }}
+        onConfirm={confirmRemoveMember}
+        isPending={removalTarget !== null && actionInProgress === removalTarget.userId}
+        title={removalTarget?.isSelf ? "Leave this group?" : `Remove ${removalTarget?.name ?? "member"}?`}
+        description={
+          removalTarget?.isSelf
+            ? "You'll stop receiving messages from this group. You can be re-added later."
+            : "They'll be removed from the group. You can add them back afterward."
+        }
+        confirmLabel={removalTarget?.isSelf ? "Leave" : "Remove"}
+        destructive
+      />
     </div>
   );
 }

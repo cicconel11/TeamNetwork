@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Avatar, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { newChatGroupSchema } from "@/lib/schemas/chat";
+import { showFeedback } from "@/lib/feedback/show-feedback";
 
 interface NewChatGroupFormProps {
   orgSlug: string;
@@ -93,8 +95,13 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      setError("Group name is required");
+
+    // Validate name/description client-side (shared schema) before submitting.
+    const parsed = newChatGroupSchema
+      .pick({ name: true, description: true })
+      .safeParse({ name: formData.name, description: formData.description || undefined });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Group name is required");
       return;
     }
 
@@ -116,7 +123,9 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
       .single();
 
     if (createError || !group) {
-      setError(createError?.message || "Failed to create group");
+      console.error("[chat-group] create failed:", createError);
+      setError("Couldn't create the group. Please try again.");
+      showFeedback("Couldn't create the group. Please try again.", "error");
       setIsSubmitting(false);
       return;
     }
@@ -154,7 +163,8 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
 
     if (membersError) {
       console.error("[chat-members] Failed to add members:", membersError.message, membersError);
-      setError(`Failed to add members: ${membersError.message}`);
+      setError("The group was created, but we couldn't add everyone. Please try adding members again.");
+      showFeedback("Couldn't add some members. Please try again.", "error");
       setIsSubmitting(false);
       return;
     }
