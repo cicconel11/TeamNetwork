@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "./Button";
 import { createClient } from "@/lib/supabase/client";
 import { revalidatePaths as revalidatePathsAction } from "@/lib/cache";
+import { showFeedback } from "@/lib/feedback/show-feedback";
 
 interface SoftDeleteButtonProps {
   table: string;
@@ -58,8 +59,10 @@ export function SoftDeleteButton({
       try {
         await onAfterDelete();
       } catch (callbackError) {
-        // Log but don't block - post-delete actions should not prevent navigation
+        // Don't block navigation — the record is already deleted — but tell the
+        // user the follow-up action (e.g. calendar sync) didn't complete.
         console.error("Post-delete callback error:", callbackError);
+        showFeedback("Deleted, but a follow-up sync didn't finish. It may retry automatically.", "warning");
       }
     }
 

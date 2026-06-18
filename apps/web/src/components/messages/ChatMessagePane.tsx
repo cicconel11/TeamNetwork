@@ -14,6 +14,7 @@ import { MessageTopBar } from "@/components/messages/MessageTopBar";
 import { useChatRealtime } from "@/hooks/useChatRealtime";
 import { getBlockedUserIds } from "@/lib/moderation";
 import { ReportBlockMenu } from "@/components/moderation/ReportBlockMenu";
+import { showFeedback } from "@/lib/feedback/show-feedback";
 import type { ChatGroup, ChatGroupMember, ChatMessage, ChatPollVote, ChatFormResponse, User, ChatMessageStatus } from "@/types/database";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
@@ -322,6 +323,7 @@ export function ChatMessagePane({
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setNewMessage(messageBody);
         setIsSending(false);
+        showFeedback(responseData?.error || "Message failed to send. Your text was restored — try again.", "error");
         return;
       }
     } catch (error) {
@@ -335,6 +337,7 @@ export function ChatMessagePane({
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(messageBody);
       setIsSending(false);
+      showFeedback("Message failed to send. Your text was restored — try again.", "error");
       return;
     }
 
@@ -380,6 +383,7 @@ export function ChatMessagePane({
 
     if (error) {
       console.error("Failed to update message:", error);
+      showFeedback(`Couldn't ${action === "approved" ? "approve" : "reject"} the message. Please try again.`, "error");
       const { data } = await supabase
         .from("chat_messages")
         .select("*")
@@ -404,9 +408,11 @@ export function ChatMessagePane({
       if (!res.ok) {
         const err = await res.json();
         console.error("Vote failed:", err);
+        showFeedback("Your vote didn't go through. Please try again.", "error");
       }
     } catch (error) {
       console.error("Vote failed:", error);
+      showFeedback("Your vote didn't go through. Please try again.", "error");
     }
   }, [group.id]);
 
@@ -418,9 +424,11 @@ export function ChatMessagePane({
       if (!res.ok) {
         const err = await res.json();
         console.error("Retract vote failed:", err);
+        showFeedback("Couldn't retract your vote. Please try again.", "error");
       }
     } catch (error) {
       console.error("Retract vote failed:", error);
+      showFeedback("Couldn't retract your vote. Please try again.", "error");
     }
   }, [group.id]);
 
@@ -461,9 +469,11 @@ export function ChatMessagePane({
       } else {
         const err = await res.json();
         console.error("Create poll failed:", err);
+        showFeedback(err?.error || "Couldn't create the poll. Please try again.", "error");
       }
     } catch (error) {
       console.error("Create poll failed:", error);
+      showFeedback("Couldn't create the poll. Please try again.", "error");
     } finally {
       setIsCreatingPoll(false);
     }
@@ -496,9 +506,11 @@ export function ChatMessagePane({
       } else {
         const err = await res.json();
         console.error("Create form failed:", err);
+        showFeedback(err?.error || "Couldn't create the form. Please try again.", "error");
       }
     } catch (error) {
       console.error("Create form failed:", error);
+      showFeedback("Couldn't create the form. Please try again.", "error");
     } finally {
       setIsCreatingForm(false);
     }

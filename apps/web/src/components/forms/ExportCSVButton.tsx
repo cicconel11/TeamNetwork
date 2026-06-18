@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui";
 import { escapeCsvCell } from "@/lib/export/spreadsheet";
+import { showFeedback } from "@/lib/feedback/show-feedback";
 import type { Form, FormSubmission, FormField, User } from "@/types/database";
 
 interface ExportCSVButtonProps {
@@ -10,40 +12,51 @@ interface ExportCSVButtonProps {
 }
 
 export function ExportCSVButton({ form, submissions }: ExportCSVButtonProps) {
+  const [isExporting, setIsExporting] = useState(false);
+
   const handleExport = () => {
-    const fields = (form.fields || []) as unknown as FormField[];
+    setIsExporting(true);
+    try {
+      const fields = (form.fields || []) as unknown as FormField[];
 
-    // Build CSV headers
-    const headers = ["Submitted By", "Email", "Date", ...fields.map((f) => f.label)];
+      // Build CSV headers
+      const headers = ["Submitted By", "Email", "Date", ...fields.map((f) => f.label)];
 
-    const rows = submissions.map((sub) => {
-      const responses = (sub.data ?? {}) as Record<string, unknown>;
-      return [
-        sub.users?.name || "",
-        sub.users?.email || "",
-        sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : "",
-        ...fields.map((f) => formatValue(responses[f.name])),
-      ];
-    });
+      const rows = submissions.map((sub) => {
+        const responses = (sub.data ?? {}) as Record<string, unknown>;
+        return [
+          sub.users?.name || "",
+          sub.users?.email || "",
+          sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : "",
+          ...fields.map((f) => formatValue(responses[f.name])),
+        ];
+      });
 
-    // Create CSV content
-    const csvContent = [
-      headers.map(escapeCsvCell).join(","),
-      ...rows.map((row) => row.map(escapeCsvCell).join(",")),
-    ].join("\n");
+      // Create CSV content
+      const csvContent = [
+        headers.map(escapeCsvCell).join(","),
+        ...rows.map((row) => row.map(escapeCsvCell).join(",")),
+      ].join("\n");
 
-    // Download
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${form.title.replace(/[^a-z0-9]/gi, "_")}_submissions.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+      // Download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${form.title.replace(/[^a-z0-9]/gi, "_")}_submissions.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showFeedback(`Exported ${submissions.length} submission${submissions.length === 1 ? "" : "s"}.`, "success");
+    } catch (err) {
+      console.error("CSV export failed:", err);
+      showFeedback("Couldn't export submissions. Please try again.", "error");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
-    <Button variant="secondary" onClick={handleExport} disabled={submissions.length === 0}>
+    <Button variant="secondary" onClick={handleExport} isLoading={isExporting} disabled={submissions.length === 0}>
       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
       </svg>
