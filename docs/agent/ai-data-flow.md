@@ -1,3 +1,12 @@
+---
+type: reference
+title: AI Data Flow — Privacy and Compliance
+description: PII entering the AI pipeline, what is stored, and what is sent to the z.ai provider.
+resource: apps/web/src/lib/ai/context-builder.ts
+tags: [ai, privacy, compliance, pii]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # AI Data Flow — Privacy & Compliance Documentation
 
 **Last Updated:** June 2026

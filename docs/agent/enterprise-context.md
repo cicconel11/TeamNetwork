@@ -1,3 +1,12 @@
+---
+type: architecture
+title: Enterprise-Aware AI Context
+description: Activation criteria, prompt-context visibility, capability matrix, and response policy for enterprise AI.
+resource: apps/web/src/lib/ai/context.ts
+tags: [ai, enterprise, authorization, context]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # Enterprise-Aware AI Context
 
 The enterprise assistant experience is an extension of the existing org assistant. It uses the same `AIPanel`, the same `/api/ai/[orgId]/chat` route, and the same org-scoped thread/message/audit persistence.

@@ -1,3 +1,12 @@
+---
+type: codemap
+title: Semantic Cache
+description: Exact-match semantic cache for general first-turn prompts — eligibility, TTLs, invalidation, purge cron.
+resource: apps/web/src/lib/ai/semantic-cache.ts
+tags: [ai, semantic-cache, caching, ttl]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # Semantic Cache — Code Map
 
 ## Overview

@@ -1,3 +1,12 @@
+---
+type: codemap
+title: Thread Management
+description: CRUD for AI threads and messages — ownership resolution, cursor pagination, soft-delete, RLS.
+resource: apps/web/src/lib/ai/thread-resolver.ts
+tags: [ai, threads, pagination, crud]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # Thread Management — Code Map
 
 ## Overview

@@ -118,7 +118,9 @@ Funds route directly to org's connected Stripe account, never touching the app. 
 External schedule URLs validated before import to prevent SSRF. Domain statuses: `denied` → `pending` → `active` / `blocked`. Files: `src/lib/schedule-security/allowlist.ts`, `safe-fetch.ts`, `verifyAndEnroll.ts`.
 
 ### AI Agent
-Architecture, pipeline, and feature docs live in repo-root `docs/agent/`. When modifying AI agent code (`src/lib/ai/`, `src/app/api/ai/`, `src/app/[orgSlug]/chat/`), update the relevant doc in `docs/agent/` to reflect structural changes, new features, or revised taxonomy.
+Architecture, pipeline, and feature docs live in repo-root `docs/agent/`, structured as an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) (OKF) bundle. **Start at `docs/agent/index.md`** — it lists every doc by `type` and links into each. Each doc carries YAML frontmatter (`type`, `title`, `description`, `resource`, `tags`, `timestamp`); the `resource` field points at the primary source file the doc describes, so the bundle doubles as a concept → code index (e.g. `falkor-people-graph.md` → `src/lib/falkordb/suggestions.ts`).
+
+When modifying AI agent code (`src/lib/ai/`, `src/app/api/ai/`, `src/app/[orgSlug]/chat/`), update the relevant doc in `docs/agent/` to reflect structural changes, new features, or revised taxonomy. Keep the frontmatter current too: bump `timestamp`, and if a file moves or is renamed, update the `resource` path so the index does not rot. New docs must include valid OKF frontmatter (only `type` is required) and be linked from `index.md`.
 
 ### Schema Validation
 Centralized Zod schemas in `src/lib/schemas/` — see `index.ts` for all available domains. Usage: `import { schemaName } from "@/lib/schemas"`. Cross-app schemas live in `@teammeet/validation`.

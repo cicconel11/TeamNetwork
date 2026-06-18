@@ -16,7 +16,7 @@ packages/
 ├── validation/         # @teammeet/validation — shared Zod schemas
 └── supabase/           # @teammeet/supabase — shared Supabase helpers
 supabase/               # Migrations, config, seeds (symlinked from apps/web/supabase)
-docs/                   # Cross-cutting docs (agent/, db/, stripe-donations.md, ...)
+docs/                   # Cross-cutting docs. AI docs in agent/ are an OKF bundle — start at docs/agent/index.md
 turbo.json              # Pipeline config + globalPassThroughEnv allowlist
 ```
 

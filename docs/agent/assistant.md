@@ -1,3 +1,12 @@
+---
+type: architecture
+title: AI Assistant Architecture Overview
+description: Architecture of the admin AI assistant — scope policy, tools, enterprise extension, and pipeline.
+resource: apps/web/src/app/api/ai/[orgId]/chat/handler.ts
+tags: [ai, assistant, architecture, tools]
+timestamp: 2026-06-17T00:00:00Z
+---
+
 # AI Assistant — Architecture Overview
 
 ## Summary
