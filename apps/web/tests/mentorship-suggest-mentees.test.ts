@@ -48,6 +48,21 @@ describe("suggest_mentees tool schema", () => {
       false
     );
   });
+
+  it("strips unknown keys emitted by the model instead of erroring", () => {
+    const parsed = suggestMenteesModule.argsSchema.safeParse({
+      mentor_query: "Pat",
+      // glm-5.2 sometimes emits stray keys; these must not fail the call.
+      unexpected_extra_key: "ignored",
+    });
+    assert.equal(parsed.success, true);
+    assert.ok(parsed.success);
+    assert.equal(
+      (parsed.data as Record<string, unknown>).unexpected_extra_key,
+      undefined,
+      "unknown key should be stripped, not retained"
+    );
+  });
 });
 
 describe("formatSuggestMenteesResponse", () => {

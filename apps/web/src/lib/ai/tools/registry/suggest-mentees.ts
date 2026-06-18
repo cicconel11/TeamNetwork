@@ -5,6 +5,9 @@ import { getSafeErrorMessage } from "@/lib/ai/tools/shared";
 import { toolError } from "@/lib/ai/tools/result";
 import type { ToolModule } from "./types";
 
+// NOTE: no `.strict()` — unknown keys emitted by the model are stripped rather
+// than rejected. The `.refine()` below still enforces the real "at least one
+// criterion" contract.
 const suggestMenteesSchema = z
   .object({
     mentor_id: z.string().uuid().optional(),
@@ -26,8 +29,7 @@ const suggestMenteesSchema = z
     {
       message: "Expected mentor_query, mentor_id, or mentorship criteria",
     },
-  )
-  .strict();
+  );
 
 type Args = z.infer<typeof suggestMenteesSchema>;
 

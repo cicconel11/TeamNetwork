@@ -102,6 +102,10 @@ const PERSONALIZATION_MARKERS = ["my", "mine", "i am", "i'm", "me", "myself"];
 const LIVE_CONTEXT_MARKERS = [
   "member",
   "members",
+  "admin",
+  "admins",
+  "administrator",
+  "administrators",
   "alumni",
   "parent",
   "parents",

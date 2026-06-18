@@ -232,7 +232,13 @@ export async function executeToolCall(
   const toolName = call.name as ToolName;
 
   const validation = validateArgs(toolName, call.args);
-  if (!validation.valid) return toolError(validation.error);
+  if (!validation.valid) {
+    aiLog("warn", "ai-tools", "tool args failed validation", logContext, {
+      toolName,
+      error: validation.error,
+    });
+    return toolError(validation.error);
+  }
   const args = validation.args;
 
   if (ctx.authorization.kind === "verify_membership") {
