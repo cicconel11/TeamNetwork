@@ -8,6 +8,8 @@ export { EmptyState } from "./EmptyState";
 export { Select } from "./Select";
 export { Textarea } from "./Textarea";
 export { SoftDeleteButton } from "./SoftDeleteButton";
+export { Modal } from "./Modal";
+export type { ModalProps } from "./Modal";
 export { ConfirmationDialog } from "./ConfirmationDialog";
 export type { ConfirmationDialogCopy } from "./ConfirmationDialog";
 export { ConfirmActionButton } from "./ConfirmActionButton";
@@ -16,6 +18,7 @@ export type { TurnstileWidgetProps, TurnstileWidgetRef } from "./TurnstileWidget
 export { Captcha } from "./Captcha";
 export type { CaptchaProps, CaptchaRef, CaptchaProvider } from "./Captcha";
 export { Skeleton } from "./Skeleton";
+export { Spinner } from "./Spinner";
 export { PermissionRoleCard } from "./PermissionRoleCard";
 export { ProgressBar } from "./ProgressBar";
 export { ToggleSwitch } from "./ToggleSwitch";

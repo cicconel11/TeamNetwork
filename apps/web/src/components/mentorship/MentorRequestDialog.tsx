@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
 import { scoreToConfidence } from "@/lib/mentorship/presentation";
 // The signal "+weights" below explain the match; the headline is a
@@ -103,26 +103,15 @@ export function MentorRequestDialog({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <Modal
+      open
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="md"
       data-testid="mentor-request-dialog"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
+      title={t("requestIntroTitle", { name: mentor.name })}
+      description={t("whyThisMatch")}
     >
-      <div
-        className="bg-[var(--background)] rounded-lg shadow-xl max-w-md w-full p-6 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div>
-          <h2 className="text-lg font-semibold">
-            {t("requestIntroTitle", { name: mentor.name })}
-          </h2>
-          <p className="text-sm text-[var(--muted-foreground)] mt-1">
-            {t("whyThisMatch")}
-          </p>
-        </div>
-
+      <div className="mt-4 space-y-4">
         <div className="rounded-md border border-[var(--border)] p-3 text-sm">
           {loading ? (
             <p className="text-[var(--muted-foreground)]">{t("loadingSignals")}</p>
@@ -181,6 +170,6 @@ export function MentorRequestDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

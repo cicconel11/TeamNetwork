@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { addPointsFormSchema } from "@/lib/schemas/competition";
+import { showFeedback } from "@/lib/feedback/show-feedback";
 
 type TeamOption = { id: string; name: string };
 
@@ -73,8 +75,11 @@ export default function AddPointsPage() {
       return;
     }
 
-    if (!formData.team_id && !formData.team_name) {
-      setError("Select a team or enter a team name");
+    // Validate client-side before hitting the database so the user sees a clear,
+    // field-level message rather than a raw constraint error after submit.
+    const parsed = addPointsFormSchema.safeParse(formData);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Please check the form and try again.");
       return;
     }
 
@@ -86,19 +91,22 @@ export default function AddPointsPage() {
     const { error: insertError } = await supabase.from("competition_points").insert({
       competition_id: competitionId,
       organization_id: organizationId,
-      team_id: formData.team_id || null,
-      team_name: formData.team_name || null,
-      points: parseInt(formData.points),
-      notes: formData.notes || null,
-      reason: formData.reason || null,
+      team_id: parsed.data.team_id || null,
+      team_name: parsed.data.team_name || null,
+      points: parseInt(parsed.data.points, 10),
+      notes: parsed.data.notes || null,
+      reason: parsed.data.reason || null,
     });
 
     if (insertError) {
-      setError(insertError.message);
+      console.error("[add-points] insert failed:", insertError);
+      setError("Couldn't save these points. Please try again.");
+      showFeedback("Couldn't save these points. Please try again.", "error");
       setIsLoading(false);
       return;
     }
 
+    showFeedback("Points added", "success");
     router.push(`/${orgSlug}/competition`);
     router.refresh();
   };
@@ -114,7 +122,10 @@ export default function AddPointsPage() {
       <Card className="max-w-2xl">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {error && (
-            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm"
+            >
               {error}
             </div>
           )}
@@ -139,9 +150,10 @@ export default function AddPointsPage() {
           <Input
             label="Points"
             type="number"
+            step={1}
             value={formData.points}
             onChange={(e) => setFormData({ ...formData, points: e.target.value })}
-            placeholder="Enter points (can be negative)"
+            placeholder="Enter a whole number (can be negative)"
             required
           />
 
@@ -173,4 +185,3 @@ export default function AddPointsPage() {
     </div>
   );
 }
-

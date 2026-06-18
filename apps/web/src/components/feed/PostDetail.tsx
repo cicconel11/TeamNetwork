@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { UserContent } from "@/components/i18n/UserContent";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { showFeedback } from "@/lib/feedback/show-feedback";
+import { getMutationErrorMessage } from "@/lib/client/use-mutation-action";
 import { LikeButton } from "./LikeButton";
 import { PostMedia } from "./PostMedia";
 import type { PostWithAuthor } from "./types";
@@ -30,19 +33,22 @@ function formatDateTime(dateString: string): string {
 export function PostDetail({ post, orgSlug, currentUserId, isAdmin }: PostDetailProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const canDelete = post.author_id === currentUserId || isAdmin;
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this post?")) return;
-
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/feed/${post.id}`, { method: "DELETE" });
-      if (response.ok) {
-        router.push(`/${orgSlug}/feed`);
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || "Failed to delete post");
       }
-    } catch {
+      showFeedback("Post deleted", "success");
+      router.push(`/${orgSlug}/feed`);
+    } catch (err) {
+      showFeedback(getMutationErrorMessage(err, "Couldn't delete the post. Please try again."), "error");
       setIsDeleting(false);
     }
   };
@@ -58,8 +64,8 @@ export function PostDetail({ post, orgSlug, currentUserId, isAdmin }: PostDetail
           {formatDateTime(post.created_at)}
         </div>
         {canDelete && (
-          <Button onClick={handleDelete} disabled={isDeleting} variant="ghost" size="sm">
-            {isDeleting ? "Deleting..." : "Delete"}
+          <Button onClick={() => setConfirmOpen(true)} disabled={isDeleting} variant="ghost" size="sm">
+            Delete
           </Button>
         )}
       </div>
@@ -77,6 +83,16 @@ export function PostDetail({ post, orgSlug, currentUserId, isAdmin }: PostDetail
           {post.comment_count} {post.comment_count === 1 ? "comment" : "comments"}
         </span>
       </div>
+      <ConfirmationDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onConfirm={handleDelete}
+        isPending={isDeleting}
+        title="Delete post?"
+        description="This post will be removed for everyone. This can't be undone."
+        confirmLabel="Delete"
+        destructive
+      />
     </Card>
   );
 }

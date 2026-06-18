@@ -217,7 +217,9 @@ export function SettingsDangerSection({ orgId, orgSlug, orgName, isAdmin, subscr
       Alert.alert("Deleted", "Your organization has been deleted.");
       router.replace("/(app)");
     } catch (e) {
-      Alert.alert("Error", (e as Error).message);
+      const message =
+        e instanceof Error && e.message ? e.message : "Couldn't delete the organization. Please try again.";
+      Alert.alert("Couldn't delete organization", message);
     } finally {
       setDeleting(false);
       setShowDeleteConfirm(false);

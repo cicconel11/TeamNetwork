@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Input } from "@/components/ui";
+import { Button, Input, Modal } from "@/components/ui";
 import { linkedInProfileUrlSchema } from "@/lib/alumni/linkedin-url";
 import { shouldShowLinkedInPrompt } from "@/lib/linkedin/prompt-logic";
 
@@ -144,9 +144,14 @@ export function LinkedInUrlPrompt() {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
-      <Card className="w-full max-w-md p-6 space-y-4" role="dialog" aria-modal="true">
-        <div className="flex items-center gap-3">
+    <Modal
+      open
+      onOpenChange={(nextOpen) => { if (!nextOpen) handleSkip(); }}
+      size="md"
+      ariaLabel="Add your LinkedIn profile"
+    >
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 pr-8">
           <svg
             className="h-8 w-8 text-[#0A66C2] shrink-0"
             viewBox="0 0 24 24"
@@ -179,7 +184,7 @@ export function LinkedInUrlPrompt() {
             disabled={state.saving}
           />
           {state.error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
+            <p className="text-sm text-error">{state.error}</p>
           )}
         </div>
 
@@ -200,7 +205,7 @@ export function LinkedInUrlPrompt() {
             {state.saving ? "Saving..." : "Save"}
           </Button>
         </div>
-      </Card>
-    </div>
+      </div>
+    </Modal>
   );
 }

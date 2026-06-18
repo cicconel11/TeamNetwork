@@ -30,7 +30,10 @@ export function ConfirmationDialog({
   destructive = false,
 }: ConfirmationDialogProps) {
   return (
-    <Dialog.Root open={open} onOpenChange={(nextOpen) => !isPending && onOpenChange(nextOpen)}>
+    // Cancel/Escape stay available even while pending so a hung request never
+    // traps the user. Double-confirm is already prevented by the disabled
+    // confirm button below.
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 text-foreground shadow-xl focus:outline-none">
@@ -40,7 +43,7 @@ export function ConfirmationDialog({
           </Dialog.Description>
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Dialog.Close asChild>
-              <Button type="button" variant="secondary" disabled={isPending}>
+              <Button type="button" variant="secondary">
                 {cancelLabel}
               </Button>
             </Dialog.Close>

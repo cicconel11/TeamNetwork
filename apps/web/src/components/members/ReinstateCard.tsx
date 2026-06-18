@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button } from "@/components/ui";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 
 interface ReinstateCardProps {
   orgId: string;
@@ -13,6 +14,7 @@ interface ReinstateCardProps {
 export function ReinstateCard({ orgId, memberId, memberName }: ReinstateCardProps) {
   const router = useRouter();
   const [isReinstating, setIsReinstating] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -30,6 +32,7 @@ export function ReinstateCard({ orgId, memberId, memberName }: ReinstateCardProp
     if (!response.ok) {
       setError(data.error || "Failed to reinstate member");
     } else {
+      setConfirmOpen(false);
       setSuccess(true);
       router.refresh();
     }
@@ -63,7 +66,7 @@ export function ReinstateCard({ orgId, memberId, memberName }: ReinstateCardProp
           </p>
         </div>
         <Button
-          onClick={handleReinstate}
+          onClick={() => setConfirmOpen(true)}
           isLoading={isReinstating}
           variant="secondary"
           className="whitespace-nowrap"
@@ -74,6 +77,15 @@ export function ReinstateCard({ orgId, memberId, memberName }: ReinstateCardProp
       {error && (
         <p className="mt-2 text-sm text-red-600">{error}</p>
       )}
+      <ConfirmationDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onConfirm={handleReinstate}
+        isPending={isReinstating}
+        title={`Reinstate ${memberName}?`}
+        description="They'll move from alumni back to an active member and will need approval before regaining full access."
+        confirmLabel="Reinstate"
+      />
     </Card>
   );
 }

@@ -21,6 +21,8 @@ const INITIAL_DISPLAY = 3;
 export function InlineComments({ postId, commentCount, currentUserId, orgSlug, onCountChange }: InlineCommentsProps) {
   const [comments, setComments] = useState<CommentWithAuthor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [body, setBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,9 +34,13 @@ export function InlineComments({ postId, commentCount, currentUserId, orgSlug, o
   useEffect(() => {
     let cancelled = false;
     async function fetchComments() {
+      if (!cancelled) {
+        setIsLoading(true);
+        setLoadError(false);
+      }
       try {
         const res = await fetch(`/api/feed/${postId}/comments`);
-        if (!res.ok) return;
+        if (!res.ok) throw new Error("request_failed");
         const data = await res.json();
         if (!cancelled) {
           setComments(data.comments);
@@ -42,12 +48,15 @@ export function InlineComments({ postId, commentCount, currentUserId, orgSlug, o
           setIsLoading(false);
         }
       } catch {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setLoadError(true);
+          setIsLoading(false);
+        }
       }
     }
     fetchComments();
     return () => { cancelled = true; };
-  }, [postId, onCountChange]);
+  }, [postId, onCountChange, reloadKey]);
 
   useEffect(() => {
     if (!isLoading && inputRef.current) {
@@ -212,6 +221,17 @@ export function InlineComments({ postId, commentCount, currentUserId, orgSlug, o
               </div>
             </div>
           ))}
+        </div>
+      ) : loadError ? (
+        <div className="flex items-center justify-between gap-2 px-1 py-2 text-xs text-muted-foreground">
+          <span>Couldn&apos;t load comments.</span>
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="font-medium text-org-primary hover:text-org-primary/80 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
