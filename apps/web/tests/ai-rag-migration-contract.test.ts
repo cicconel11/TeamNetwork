@@ -197,6 +197,45 @@ describe("RAG migration contract", () => {
     });
   });
 
+  describe("20261223000000_ai_chunks_source_table_check_sync.sql", () => {
+    let sql: string;
+
+    it("migration file exists", () => {
+      sql = readMigration("20261223000000_ai_chunks_source_table_check_sync.sql");
+      assert.ok(sql.length > 0);
+    });
+
+    it("adds the widened source_table CHECK as NOT VALID before validation", () => {
+      assert.match(sql, /ADD CONSTRAINT ai_document_chunks_source_table_check[\s\S]*NOT VALID/);
+      assert.match(sql, /VALIDATE CONSTRAINT ai_document_chunks_source_table_check/);
+    });
+
+    it("allows all worker source tables", () => {
+      const tables = [
+        "announcements",
+        "discussion_threads",
+        "discussion_replies",
+        "events",
+        "job_postings",
+        "mentor_profiles",
+        "form_submissions",
+      ];
+      for (const table of tables) {
+        assert.ok(sql.includes(`'${table}'`), `Missing source table: ${table}`);
+      }
+    });
+
+    it("adds triggers for mentor profiles and form submissions", () => {
+      assert.ok(sql.includes("trg_ai_embed_mentor_profiles"));
+      assert.ok(sql.includes("trg_ai_embed_form_submissions"));
+    });
+
+    it("backfill includes mentor profiles and form submissions", () => {
+      assert.match(sql, /SELECT p_org_id, 'mentor_profiles', mp\.id, 'upsert'/);
+      assert.match(sql, /SELECT p_org_id, 'form_submissions', fs\.id, 'upsert'/);
+    });
+  });
+
   describe("20260807000000_fix_ai_embedding_trigger_field_access.sql", () => {
     let sql: string;
 

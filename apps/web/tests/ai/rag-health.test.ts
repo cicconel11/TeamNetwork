@@ -3,16 +3,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createSupabaseStub } from "../utils/supabaseStub.ts";
 import { checkRagHealth } from "../../src/lib/ai/rag-health.ts";
-import { computeContentHash, renderChunks } from "../../src/lib/ai/chunker.ts";
+import { computeContentHash, renderChunks, type SourceTable } from "../../src/lib/ai/chunker.ts";
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
 
 /** Render an announcement the same way the embedding worker does, to derive
  * the canonical chunk rows (index + hash + metadata) for that source. */
-function chunkRowsFor(record: Record<string, unknown>) {
-  return renderChunks("announcements", record).map((chunk) => ({
+function chunkRowsFor(record: Record<string, unknown>, table: SourceTable = "announcements") {
+  return renderChunks(table, record).map((chunk) => ({
     org_id: ORG_ID,
-    source_table: "announcements",
+    source_table: table,
     source_id: String(record.id),
     chunk_index: chunk.chunkIndex,
     content_text: chunk.text,
@@ -46,6 +46,59 @@ test("checkRagHealth reports ok when every eligible source has a current chunk",
     staleSources: 0,
     untaggedAudience: 0,
   });
+});
+
+test("checkRagHealth includes mentor profiles and treats inactive mentors as orphans", async () => {
+  const stub = createSupabaseStub();
+  const activeMentor = {
+    id: "mentor-active",
+    organization_id: ORG_ID,
+    user_id: "user-1",
+    bio: "I help students prepare for careers in finance.",
+    topics: ["finance"],
+    industries: ["finance"],
+    is_active: true,
+  };
+  const inactiveMentor = {
+    ...activeMentor,
+    id: "mentor-inactive",
+    is_active: false,
+  };
+  stub.seed("mentor_profiles", [activeMentor, inactiveMentor]);
+  stub.seed("ai_document_chunks", [
+    ...chunkRowsFor(activeMentor, "mentor_profiles"),
+    ...chunkRowsFor(inactiveMentor, "mentor_profiles"),
+  ]);
+
+  const report = await checkRagHealth(stub as any, ORG_ID);
+
+  assert.equal(report.state, "gaps");
+  assert.equal(report.counts.orphanChunks, 1);
+  assert.deepEqual(report.orphanChunks, [
+    { sourceTable: "mentor_profiles", sourceId: "mentor-inactive" },
+  ]);
+});
+
+test("checkRagHealth includes form submissions in coverage checks", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("form_submissions", [
+    {
+      id: "submission-missing",
+      organization_id: ORG_ID,
+      form_id: "form-1",
+      user_id: "user-1",
+      data: { goals: "Find a mentor in healthcare." },
+      deleted_at: null,
+    },
+  ]);
+
+  const report = await checkRagHealth(stub as any, ORG_ID);
+
+  assert.equal(report.state, "gaps");
+  assert.equal(report.counts.missingCoverage, 1);
+  assert.deepEqual(report.missingCoverage, [
+    { sourceTable: "form_submissions", sourceId: "submission-missing" },
+  ]);
 });
 
 test("checkRagHealth flags a source with no chunk as missing coverage", async () => {
