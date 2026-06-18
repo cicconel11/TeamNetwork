@@ -41,4 +41,12 @@ Each document's `resource` field points at the primary source file it describes,
 
 ## Type vocabulary
 
-The bundle uses a deliberately small `type` set: `architecture`, `codemap`, `taxonomy`, `reference`, `data-flow`, `audit`, and `index` (this file).
+The bundle uses a deliberately small `type` set: `architecture`, `codemap`, `taxonomy`, `reference`, `data-flow`, `audit`, `index` (this file), and `log` (the history file below).
+
+## History
+
+- [OKF Bundle History](/docs/agent/log.md) — reserved change log: when documents were added, restructured, and when resource paths drifted or were repaired.
+
+## Visualizing this bundle
+
+Because this bundle is plain markdown with YAML frontmatter, it can be rendered by Google's Open Knowledge Format static HTML visualizer. Point the visualizer in [GoogleCloudPlatform/knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) at this directory (`docs/agent/`) to browse the documents and their `resource` links interactively. No build step or server is required — the visualizer reads the frontmatter directly.
