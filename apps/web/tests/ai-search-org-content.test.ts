@@ -16,11 +16,14 @@ function createStubSb(options: {
   rpcRows?: Array<Record<string, unknown>>;
   announcementRows?: Array<Record<string, unknown>>;
   eventRows?: Array<Record<string, unknown>>;
+  knowledgeRows?: Array<Record<string, unknown>>;
 }) {
   const queriedTables: string[] = [];
+  const inFilters: Array<{ table: string; column: string; values: unknown }> = [];
 
   return {
     queriedTables,
+    inFilters,
     sb: {
       rpc(fn: string, args: Record<string, unknown>) {
         assert.equal(fn, "search_org_content");
@@ -42,11 +45,17 @@ function createStubSb(options: {
             ? (options.announcementRows ?? [])
             : table === "events"
               ? (options.eventRows ?? [])
-              : [];
+              : table === "knowledge_documents"
+                ? (options.knowledgeRows ?? [])
+                : [];
         const chain: Record<string, unknown> = {};
         for (const method of ["select", "eq", "is", "or", "order", "limit"]) {
           chain[method] = () => chain;
         }
+        chain.in = (column: string, values: unknown) => {
+          inFilters.push({ table, column, values });
+          return chain;
+        };
         chain.then = (resolve: (value: unknown) => void) =>
           resolve({ data: rows, error: null });
         return chain;
@@ -106,7 +115,7 @@ describe("search_org_content fallback gating", () => {
     const rows = result.data as Array<Record<string, unknown>>;
     assert.equal(rows[0]?.entity_type, "announcement");
     assert.equal(rows[0]?.url_path, "/acme/announcements");
-    assert.deepEqual(stub.queriedTables, ["announcements", "events"]);
+    assert.deepEqual(stub.queriedTables, ["announcements", "events", "knowledge_documents"]);
   });
 
   it("runs fallback reads when the requested content type is missing from RPC rows", async () => {
@@ -134,9 +143,45 @@ describe("search_org_content fallback gating", () => {
 
     const result = await execute({ query: "find announcements about picnic", limit: 10 }, stub);
     assert.equal(result.kind, "ok");
-    assert.deepEqual(stub.queriedTables, ["announcements", "events"]);
+    assert.deepEqual(stub.queriedTables, ["announcements", "events", "knowledge_documents"]);
     if (result.kind !== "ok") return;
     const rows = result.data as Array<Record<string, unknown>>;
     assert.ok(rows.some((row) => row.entity_type === "announcement"));
+  });
+
+  it("surfaces a knowledge document via the fallback path", async () => {
+    const stub = createStubSb({
+      rpcRows: [],
+      knowledgeRows: [
+        {
+          id: "kd-1",
+          title: "Travel Budget Policy",
+          body: "The annual travel budget ceiling is set each season.",
+          description: "Finance handbook",
+        },
+      ],
+    });
+
+    const result = await execute({ query: "what's our travel budget policy?" }, stub);
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    const rows = result.data as Array<Record<string, unknown>>;
+    const knowledge = rows.find((row) => row.entity_type === "knowledge");
+    assert.ok(knowledge, "expected a knowledge row");
+    assert.equal(knowledge?.title, "Travel Budget Policy");
+    assert.equal(knowledge?.url_path, "/acme/assistant");
+  });
+
+  it("gates the knowledge fallback to broad audiences only", async () => {
+    const stub = createStubSb({ rpcRows: [], knowledgeRows: [] });
+
+    await execute({ query: "find the handbook policy", limit: 10 }, stub);
+
+    // The keyword path must restrict knowledge docs to all/both — admins-restricted
+    // docs are reachable only via the role-gated vector path (D1, security).
+    const knowledgeFilter = stub.inFilters.find((f) => f.table === "knowledge_documents");
+    assert.ok(knowledgeFilter, "expected an audience filter on knowledge_documents");
+    assert.equal(knowledgeFilter?.column, "audience");
+    assert.deepEqual(knowledgeFilter?.values, ["all", "both"]);
   });
 });
