@@ -1,0 +1,145 @@
+---
+type: index
+title: "Database schema OKF bundle"
+description: "OKF bundle of 130 Postgres tables generated from /apps/web/src/types/database.ts."
+resource: /apps/web/src/types/database.ts
+tags: [db, schema, index]
+timestamp: 2026-06-17T00:00:00Z
+---
+
+# Database schema OKF bundle
+
+Generated from `/apps/web/src/types/database.ts`. 130 public tables. Each table doc links to the tables it references via foreign keys; those links form the OKF graph. Regenerate with `bun run gen:db-okf`.
+
+## Tables
+
+- [academic_schedules](./academic_schedules.md) — 15 columns
+- [ai_audit_log](./ai_audit_log.md) — 33 columns
+- [ai_document_chunks](./ai_document_chunks.md) — 12 columns
+- [ai_draft_sessions](./ai_draft_sessions.md) — 12 columns
+- [ai_embedding_queue](./ai_embedding_queue.md) — 9 columns
+- [ai_feedback](./ai_feedback.md) — 6 columns
+- [ai_indexing_exclusions](./ai_indexing_exclusions.md) — 6 columns
+- [ai_messages](./ai_messages.md) — 13 columns
+- [ai_pending_actions](./ai_pending_actions.md) — 16 columns
+- [ai_semantic_cache](./ai_semantic_cache.md) — 13 columns
+- [ai_spend_ledger](./ai_spend_ledger.md) — 7 columns
+- [ai_threads](./ai_threads.md) — 9 columns
+- [alumni](./alumni.md) — 37 columns
+- [alumni_external_ids](./alumni_external_ids.md) — 7 columns
+- [analytics_consent](./analytics_consent.md) — 4 columns
+- [analytics_events](./analytics_events.md) — 11 columns
+- [analytics_ops_events](./analytics_ops_events.md) — 13 columns
+- [announcements](./announcements.md) — 14 columns
+- [apify_webhook_events](./apify_webhook_events.md) — 4 columns
+- [badges](./badges.md) — 7 columns
+- [breach_incidents](./breach_incidents.md) — 12 columns
+- [calendar_events](./calendar_events.md) — 16 columns
+- [calendar_feeds](./calendar_feeds.md) — 13 columns
+- [calendar_sync_preferences](./calendar_sync_preferences.md) — 13 columns
+- [chat_form_responses](./chat_form_responses.md) — 7 columns
+- [chat_group_members](./chat_group_members.md) — 9 columns
+- [chat_groups](./chat_groups.md) — 11 columns
+- [chat_messages](./chat_messages.md) — 16 columns
+- [chat_poll_votes](./chat_poll_votes.md) — 8 columns
+- [competition_points](./competition_points.md) — 12 columns
+- [competition_teams](./competition_teams.md) — 6 columns
+- [competitions](./competitions.md) — 6 columns
+- [compliance_audit_log](./compliance_audit_log.md) — 5 columns
+- [content_reports](./content_reports.md) — 13 columns
+- [data_access_log](./data_access_log.md) — 8 columns
+- [dev_admin_audit_logs](./dev_admin_audit_logs.md) — 13 columns
+- [discussion_replies](./discussion_replies.md) — 9 columns
+- [discussion_threads](./discussion_threads.md) — 12 columns
+- [donations](./donations.md) — 10 columns
+- [dsr_requests](./dsr_requests.md) — 25 columns
+- [enterprise_adoption_requests](./enterprise_adoption_requests.md) — 9 columns
+- [enterprise_audit_logs](./enterprise_audit_logs.md) — 14 columns
+- [enterprise_deletion_requests](./enterprise_deletion_requests.md) — 8 columns
+- [enterprise_invites](./enterprise_invites.md) — 11 columns
+- [enterprise_subscriptions](./enterprise_subscriptions.md) — 16 columns
+- [enterprises](./enterprises.md) — 11 columns
+- [error_events](./error_events.md) — 11 columns
+- [error_groups](./error_groups.md) — 16 columns
+- [event_calendar_entries](./event_calendar_entries.md) — 11 columns
+- [event_reminder_sends](./event_reminder_sends.md) — 3 columns
+- [event_rsvps](./event_rsvps.md) — 10 columns
+- [events](./events.md) — 23 columns
+- [expenses](./expenses.md) — 10 columns
+- [feed_comments](./feed_comments.md) — 8 columns
+- [feed_likes](./feed_likes.md) — 5 columns
+- [feed_poll_votes](./feed_poll_votes.md) — 7 columns
+- [feed_posts](./feed_posts.md) — 11 columns
+- [form_document_submissions](./form_document_submissions.md) — 10 columns
+- [form_documents](./form_documents.md) — 13 columns
+- [form_submissions](./form_submissions.md) — 7 columns
+- [forms](./forms.md) — 12 columns
+- [integration_sync_log](./integration_sync_log.md) — 11 columns
+- [internal_advisor_snapshots](./internal_advisor_snapshots.md) — 3 columns
+- [job_postings](./job_postings.md) — 17 columns
+- [linkedin_connections](./linkedin_connections.md) — 12 columns
+- [linkedin_enrichment_runs](./linkedin_enrichment_runs.md) — 11 columns
+- [linkedin_manual_sync_attempts](./linkedin_manual_sync_attempts.md) — 8 columns
+- [live_activity_tokens](./live_activity_tokens.md) — 11 columns
+- [mcp_resources](./mcp_resources.md) — 9 columns
+- [media_album_items](./media_album_items.md) — 5 columns
+- [media_albums](./media_albums.md) — 12 columns
+- [media_items](./media_items.md) — 28 columns
+- [media_uploads](./media_uploads.md) — 15 columns
+- [member_badges](./member_badges.md) — 4 columns
+- [member_streaks](./member_streaks.md) — 8 columns
+- [members](./members.md) — 30 columns
+- [mentee_preferences](./mentee_preferences.md) — 19 columns
+- [mentor_bio_backfill_queue](./mentor_bio_backfill_queue.md) — 8 columns
+- [mentor_profiles](./mentor_profiles.md) — 26 columns
+- [mentorship_audit_log](./mentorship_audit_log.md) — 7 columns
+- [mentorship_logs](./mentorship_logs.md) — 10 columns
+- [mentorship_meetings](./mentorship_meetings.md) — 15 columns
+- [mentorship_pairs](./mentorship_pairs.md) — 17 columns
+- [mentorship_reminders](./mentorship_reminders.md) — 6 columns
+- [mentorship_tasks](./mentorship_tasks.md) — 11 columns
+- [mobile_auth_handoffs](./mobile_auth_handoffs.md) — 8 columns
+- [notification_jobs](./notification_jobs.md) — 19 columns
+- [notification_preferences](./notification_preferences.md) — 33 columns
+- [notification_reads](./notification_reads.md) — 3 columns
+- [notifications](./notifications.md) — 14 columns
+- [ops_events](./ops_events.md) — 14 columns
+- [org_donation_embeds](./org_donation_embeds.md) — 8 columns
+- [org_integration_oauth_state](./org_integration_oauth_state.md) — 7 columns
+- [org_integrations](./org_integrations.md) — 14 columns
+- [org_member_role_audit](./org_member_role_audit.md) — 12 columns
+- [org_philanthropy_embeds](./org_philanthropy_embeds.md) — 8 columns
+- [organization_donation_stats](./organization_donation_stats.md) — 5 columns
+- [organization_donations](./organization_donations.md) — 17 columns
+- [organization_invites](./organization_invites.md) — 11 columns
+- [organization_subscriptions](./organization_subscriptions.md) — 18 columns
+- [organizations](./organizations.md) — 33 columns
+- [parent_invites](./parent_invites.md) — 9 columns
+- [parents](./parents.md) — 29 columns
+- [payment_attempts](./payment_attempts.md) — 20 columns
+- [performance_notes](./performance_notes.md) — 4 columns
+- [philanthropy_events](./philanthropy_events.md) — 10 columns
+- [rate_limit_analytics](./rate_limit_analytics.md) — 6 columns
+- [reactions](./reactions.md) — 7 columns
+- [records](./records.md) — 10 columns
+- [schedule_allowed_domains](./schedule_allowed_domains.md) — 11 columns
+- [schedule_domain_rules](./schedule_domain_rules.md) — 5 columns
+- [schedule_events](./schedule_events.md) — 12 columns
+- [schedule_files](./schedule_files.md) — 9 columns
+- [schedule_sources](./schedule_sources.md) — 17 columns
+- [stripe_events](./stripe_events.md) — 7 columns
+- [ui_profiles](./ui_profiles.md) — 8 columns
+- [usage_events](./usage_events.md) — 10 columns
+- [usage_summaries](./usage_summaries.md) — 12 columns
+- [user_agreements](./user_agreements.md) — 6 columns
+- [user_blocks](./user_blocks.md) — 5 columns
+- [user_calendar_connections](./user_calendar_connections.md) — 14 columns
+- [user_deletion_requests](./user_deletion_requests.md) — 9 columns
+- [user_enterprise_roles](./user_enterprise_roles.md) — 5 columns
+- [user_linkedin_connections](./user_linkedin_connections.md) — 22 columns
+- [user_onboarding_progress](./user_onboarding_progress.md) — 10 columns
+- [user_organization_roles](./user_organization_roles.md) — 7 columns
+- [user_push_tokens](./user_push_tokens.md) — 7 columns
+- [users](./users.md) — 7 columns
+- [workout_logs](./workout_logs.md) — 9 columns
+- [workouts](./workouts.md) — 9 columns
