@@ -37,6 +37,19 @@ describe("global search migrations (contract)", () => {
     assert.match(sql, /v_key <> 'query_length'/);
   });
 
+  it("adds knowledge_documents to search_org_content with hardening and broad-only gating", () => {
+    const sql = read("20261225000000_search_org_content_knowledge.sql");
+    assert.match(sql, /CREATE OR REPLACE FUNCTION public\.search_org_content/i);
+    assert.match(sql, /SECURITY DEFINER/);
+    assert.match(sql, /SET search_path = ''/);
+    assert.match(sql, /REVOKE ALL ON FUNCTION public\.search_org_content/);
+    assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.search_org_content[^;]+TO authenticated/);
+    // Broad-only audience gate (D1): admins-restricted docs never flow through keyword search.
+    assert.match(sql, /COALESCE\(kd\.audience, 'all'\) IN \('all', 'both'\)/);
+    assert.match(sql, /knowledge_rows/);
+    assert.match(sql, /SELECT \* FROM knowledge_rows/);
+  });
+
   it("defines a hardened compact org stats snapshot RPC", () => {
     const sql = read("20261027000000_ai_org_stats_snapshot.sql");
     assert.match(sql, /CREATE OR REPLACE FUNCTION public\.get_org_stats_snapshot/i);
