@@ -31,6 +31,8 @@ export function SelectField({
       <Text style={styles.fieldLabel}>{label}</Text>
       <Pressable
         onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${value || placeholder}`}
         style={({ pressed }) => [
           styles.selectField,
           pressed && styles.selectFieldPressed,
@@ -69,12 +71,19 @@ export function SelectModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+      <Pressable
+        style={styles.modalBackdrop}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
         <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{title}</Text>
             <Pressable
               onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={styles.modalCloseText}>Close</Text>

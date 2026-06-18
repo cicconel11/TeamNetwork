@@ -51,7 +51,7 @@ export function OverflowMenu({
     },
     overlay: {
       flex: 1,
-      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      backgroundColor: n.overlay,
       justifyContent: "flex-end" as const,
       paddingHorizontal: SPACING.md,
       paddingBottom: SPACING.xl,
@@ -130,7 +130,12 @@ export function OverflowMenu({
         animationType="fade"
         onRequestClose={handleClose}
       >
-        <Pressable style={styles.overlay} onPress={handleClose}>
+        <Pressable
+          style={styles.overlay}
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close menu"
+        >
           <View style={styles.menuContainer}>
             <View style={styles.menu}>
               {items.map((item, index) => (
@@ -142,6 +147,8 @@ export function OverflowMenu({
                     pressed && { opacity: 0.7 },
                   ]}
                   onPress={() => handleItemPress(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
                 >
                   {item.icon && <View style={styles.menuItemIcon}>{item.icon}</View>}
                   <Text
@@ -159,6 +166,8 @@ export function OverflowMenu({
             <Pressable
               style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.7 }]}
               onPress={handleClose}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
