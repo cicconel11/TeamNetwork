@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { Avatar, Button } from "@/components/ui";
+import { Avatar, Button, Modal } from "@/components/ui";
 import { labelMatchSignal, pickSignalCode } from "@/lib/mentorship/signals";
 
 export interface MentorDetailSignal {
@@ -63,15 +62,6 @@ export function MentorDetailModal({
 }: MentorDetailModalProps) {
   const t = useTranslations("mentorship");
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose]);
-
   if (!isOpen || !mentor) return null;
 
   const chips = [...(mentor.topics ?? []), ...(mentor.expertise_areas ?? [])];
@@ -87,17 +77,14 @@ export function MentorDetailModal({
   const reasonLabel = (code: string | null | undefined): string => labelMatchSignal(code, t);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
+    <Modal
+      open
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="lg"
+      ariaLabel={mentor.name}
     >
-      <div
-        className="bg-[var(--background)] rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start gap-4">
+      <div className="space-y-4">
+        <div className="flex items-start gap-4 pr-8">
           <Avatar src={mentor.photo_url} name={mentor.name} size="lg" />
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-semibold text-[var(--foreground)]">
@@ -195,6 +182,6 @@ export function MentorDetailModal({
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

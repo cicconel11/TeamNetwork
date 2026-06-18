@@ -8,7 +8,7 @@ import {
   getBulkDeletePartialFailureMessage,
   getBulkDeleteSuccessMessage,
 } from "@/lib/media/delete-media-client";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, Modal } from "@/components/ui";
 import { MediaCard, type MediaItem } from "./MediaCard";
 import { MediaDetailModal } from "./MediaDetailModal";
 import { MediaUploadPanel } from "./MediaUploadPanel";
@@ -623,20 +623,15 @@ export function AlbumView({
         />
       )}
 
-      {showDeleteModal && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
-            onClick={() => {
-              if (!deletingMode) setShowDeleteModal(false);
-            }}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div
-              role="dialog"
-              aria-label="Delete album options"
-              className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
-            >
+      <Modal
+        open={showDeleteModal}
+        onOpenChange={(nextOpen) => { if (!nextOpen && !deletingMode) setShowDeleteModal(false); }}
+        size="md"
+        noPadding
+        hideCloseButton
+        ariaLabel="Delete album options"
+      >
+        <div>
               <div className="border-b border-[var(--border)] px-5 py-4">
                 <h3 className="text-base font-semibold text-[var(--foreground)]">Delete album</h3>
                 <p className="mt-1 text-sm text-[var(--muted-foreground)]">
@@ -690,10 +685,8 @@ export function AlbumView({
                   </span>
                 )}
               </div>
-            </div>
-          </div>
-        </>
-      )}
+        </div>
+      </Modal>
     </div>
   );
 }

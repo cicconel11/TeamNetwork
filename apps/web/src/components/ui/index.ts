@@ -8,6 +8,8 @@ export { EmptyState } from "./EmptyState";
 export { Select } from "./Select";
 export { Textarea } from "./Textarea";
 export { SoftDeleteButton } from "./SoftDeleteButton";
+export { Modal } from "./Modal";
+export type { ModalProps } from "./Modal";
 export { ConfirmationDialog } from "./ConfirmationDialog";
 export type { ConfirmationDialogCopy } from "./ConfirmationDialog";
 export { ConfirmActionButton } from "./ConfirmActionButton";

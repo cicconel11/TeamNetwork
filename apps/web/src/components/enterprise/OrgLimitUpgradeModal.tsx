@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import {
   ALUMNI_BUCKET_PRICING,
   ENTERPRISE_SEAT_PRICING,
@@ -46,41 +45,6 @@ type OrgLimitUpgradeModalProps = SubOrgUpgradeProps | AlumniBucketUpgradeProps;
 
 export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
   const { isOpen, onClose, onConfirm, isLoading, upgradeType } = props;
-  const modalRef = useRef<HTMLDivElement>(null);
-
-  const handleOverlayClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget && !isLoading) {
-        onClose();
-      }
-    },
-    [onClose, isLoading]
-  );
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen && !isLoading) {
-        onClose();
-      }
-    },
-    [isOpen, onClose, isLoading]
-  );
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isOpen]);
 
   const handleConfirm = async () => {
     await onConfirm();
@@ -103,19 +67,15 @@ export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
   )}/${subOrgInterval === "month" ? "mo" : "yr"}`;
 
   return (
-    <div
-      className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={handleOverlayClick}
-      aria-hidden="false"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="upgrade-modal-title"
+    <Modal
+      open
+      onOpenChange={(nextOpen) => { if (!nextOpen && !isLoading) onClose(); }}
+      size="md"
+      noPadding
+      hideCloseButton
+      ariaLabel={title}
     >
-      <div
-        ref={modalRef}
-        className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 id="upgrade-modal-title" className="text-lg font-semibold text-foreground">
@@ -286,6 +246,6 @@ export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

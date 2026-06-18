@@ -14,7 +14,7 @@ import {
   setAnalyticsPolicy,
   type ConsentState,
 } from "@/lib/analytics/events";
-import { Button, Card } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 
 interface ConsentModalState {
   isOpen: boolean;
@@ -173,8 +173,16 @@ export function ConsentModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
-      <Card className="w-full max-w-xl p-6 space-y-4" role="dialog" aria-modal="true">
+    // A consent gate: the user must choose Decline or Accept, so this modal is
+    // intentionally not dismissible via Escape/overlay (onOpenChange is a no-op).
+    <Modal
+      open
+      onOpenChange={() => {}}
+      size="xl"
+      hideCloseButton
+      ariaLabel="Help us improve TeamNetwork"
+    >
+      <div className="space-y-4">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Help us improve TeamNetwork</h2>
           <p className="text-sm text-muted-foreground mt-2">
@@ -191,7 +199,7 @@ export function ConsentModal() {
         </div>
 
         {state.message && (
-          <p className="text-sm text-red-600 dark:text-red-400">{state.message}</p>
+          <p className="text-sm text-error">{state.message}</p>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -216,7 +224,7 @@ export function ConsentModal() {
             </Button>
           </div>
         </div>
-      </Card>
-    </div>
+      </div>
+    </Modal>
   );
 }

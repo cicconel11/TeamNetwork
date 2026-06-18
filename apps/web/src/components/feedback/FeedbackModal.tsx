@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Button, Textarea } from "@/components/ui";
+import { Button, Textarea, Modal } from "@/components/ui";
 
 type FeedbackStatus = "idle" | "submitting" | "success" | "error";
 
@@ -44,7 +44,6 @@ export function FeedbackModal({
   const [fileError, setFileError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
 
   const resetForm = useCallback(() => {
     setMessage("");
@@ -62,40 +61,6 @@ export function FeedbackModal({
     resetForm();
     onClose();
   }, [onClose, resetForm]);
-
-  const handleOverlayClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        handleClose();
-      }
-    },
-    [handleClose]
-  );
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
-        handleClose();
-      }
-    },
-    [isOpen, handleClose]
-  );
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isOpen]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -170,19 +135,15 @@ export function FeedbackModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={handleOverlayClick}
-      aria-hidden="false"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="feedback-modal-title"
+    <Modal
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) handleClose(); }}
+      size="md"
+      noPadding
+      hideCloseButton
+      ariaLabel={t("shareFeedback")}
     >
-      <div
-        ref={modalRef}
-        className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 id="feedback-modal-title" className="text-lg font-semibold text-foreground">
@@ -374,6 +335,6 @@ export function FeedbackModal({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
