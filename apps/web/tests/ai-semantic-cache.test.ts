@@ -324,6 +324,15 @@ describe("checkCacheEligibility", () => {
     assert.equal(result.reason, "requires_live_org_context");
   });
 
+  it("returns ineligible with requires_live_org_context for admin-roster questions", () => {
+    const result = checkCacheEligibility({
+      message: "Who are the admins of this organization?",
+      surface: "general",
+    });
+    assert.equal(result.eligible, false);
+    assert.equal(result.reason, "requires_live_org_context");
+  });
+
   it("returns ineligible with implies_write_or_tool for 'Create an annual event'", () => {
     const result = checkCacheEligibility({
       message: "Create a welcome page for the organization",
@@ -385,6 +394,8 @@ describe("checkCacheEligibility", () => {
     { name: "event details", message: "Describe the event for our chapter" },
     { name: "discussion threads", message: "What are people saying in the discussion" },
     { name: "job postings", message: "Show open job postings for our org" },
+    { name: "org admins", message: "Who are the admins of this organization" },
+    { name: "single administrator", message: "Who is the administrator here" },
   ];
 
   for (const tc of liveContextRegressionCases) {

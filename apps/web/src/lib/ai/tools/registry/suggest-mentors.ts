@@ -5,14 +5,26 @@ import { getSafeErrorMessage } from "@/lib/ai/tools/shared";
 import { toolError } from "@/lib/ai/tools/result";
 import type { ToolModule } from "./types";
 
+/**
+ * Accept either a single string or an array of strings, normalizing to an
+ * array. Tolerates glm-5.2 emitting a bare string where the schema expects a
+ * list, without weakening the per-element validation.
+ */
+const stringOrStringArray = z
+  .union([z.string().trim().min(1), z.array(z.string().trim().min(1))])
+  .transform((value) => (Array.isArray(value) ? value : [value]));
+
+// NOTE: no `.strict()` — unknown keys emitted by the model are stripped rather
+// than rejected. The `.refine()` below still enforces the real "at least one
+// criterion" contract.
 const suggestMentorsSchema = z
   .object({
     mentee_id: z.string().uuid().optional(),
     mentee_query: z.string().trim().min(1).optional(),
-    focus_areas: z.array(z.string().trim().min(1)).optional(),
-    topics: z.array(z.string().trim().min(1)).optional(),
-    industries: z.array(z.string().trim().min(1)).optional(),
-    role_families: z.array(z.string().trim().min(1)).optional(),
+    focus_areas: stringOrStringArray.optional(),
+    topics: stringOrStringArray.optional(),
+    industries: stringOrStringArray.optional(),
+    role_families: stringOrStringArray.optional(),
     goals: z.string().trim().min(1).optional(),
     limit: z.number().int().min(1).max(25).optional(),
   })
@@ -28,8 +40,7 @@ const suggestMentorsSchema = z
     {
       message: "Expected mentee_query, mentee_id, or mentorship criteria",
     },
-  )
-  .strict();
+  );
 
 type Args = z.infer<typeof suggestMentorsSchema>;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import type { AIPanelThread } from "@/components/ai-assistant/panel-state";
 import { formatThreadUpdatedAt } from "@/components/ai-assistant/thread-date";
@@ -58,6 +58,19 @@ function groupThreadsByTime(threads: AIPanelThread[]): ThreadGroup[] {
     .map(([label, threads]) => ({ label, threads }));
 }
 
+function ThreadListSkeleton() {
+  return (
+    <div className="space-y-2 px-1 py-2" aria-hidden="true">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex flex-col gap-1.5 rounded-lg px-3 py-2">
+          <div className="h-3 w-3/4 animate-pulse rounded bg-muted/70" />
+          <div className="h-2 w-2/5 animate-pulse rounded bg-muted/40" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ConversationSidebar({
   threads,
   loading,
@@ -84,7 +97,24 @@ export function ConversationSidebar({
     }
   };
 
-  const groupedThreads = groupThreadsByTime(threads);
+  // Guard against selecting a thread that is mid-deletion.
+  const handleSelect = (threadId: string) => {
+    if (deletingId === threadId) return;
+    onSelectThread(threadId);
+  };
+
+  // role="button" rows are not natively keyboard-activatable; replicate the
+  // native button contract for Enter/Space.
+  const handleRowKeyDown = (threadId: string, e: React.KeyboardEvent) => {
+    if (deletingId === threadId) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelectThread(threadId);
+    }
+  };
+
+  // groupThreadsByTime walks every thread; only recompute when threads change.
+  const groupedThreads = useMemo(() => groupThreadsByTime(threads), [threads]);
 
   if (collapsed) {
     return (
@@ -158,9 +188,7 @@ export function ConversationSidebar({
           Previous chats
         </p>
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-org-secondary border-t-transparent" />
-          </div>
+          <ThreadListSkeleton />
         ) : threads.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="mb-3 rounded-full bg-muted/50 p-3">
@@ -200,15 +228,20 @@ export function ConversationSidebar({
                         }`}
                       />
 
-                      <button
-                        type="button"
-                        onClick={() => onSelectThread(thread.id)}
-                        disabled={deletingId === thread.id}
-                        className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-all ${
+                      {/* Row is a div with role="button" (not a real <button>) so the
+                          delete control can be a sibling instead of an illegal nested
+                          <button>, which triggers a React hydration error. */}
+                      <div
+                        role="button"
+                        tabIndex={deletingId === thread.id ? -1 : 0}
+                        aria-disabled={deletingId === thread.id}
+                        onClick={() => handleSelect(thread.id)}
+                        onKeyDown={(e) => handleRowKeyDown(thread.id, e)}
+                        className={`flex w-full cursor-pointer items-start gap-2 rounded-lg py-2 pl-3 pr-9 text-left transition-all ${
                           activeThreadId === thread.id
                             ? "bg-org-secondary/10"
                             : "hover:bg-muted/50"
-                        } ${deletingId === thread.id ? "opacity-50" : ""}`}
+                        } ${deletingId === thread.id ? "cursor-default opacity-50" : ""}`}
                       >
                         <div className="min-w-0 flex-1">
                           <p
@@ -224,16 +257,18 @@ export function ConversationSidebar({
                             {formatThreadUpdatedAt(thread.updated_at)}
                           </p>
                         </div>
+                      </div>
 
-                        <button
-                          type="button"
-                          onClick={(e) => handleDelete(thread.id, e)}
-                          disabled={deletingId === thread.id}
-                          aria-label="Delete conversation"
-                          className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-all hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                      {/* Sibling of the row, not a descendant. Still revealed by the
+                          .group hover on the wrapper, plus on keyboard focus. */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleDelete(thread.id, e)}
+                        disabled={deletingId === thread.id}
+                        aria-label="Delete conversation"
+                        className="absolute right-2 top-2 shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-all hover:bg-red-500/10 hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}

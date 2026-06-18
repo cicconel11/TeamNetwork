@@ -112,6 +112,20 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
     try {
       parsedArgs = JSON.parse(toolEvent.argsJson);
     } catch {
+      aiLog(
+        "warn",
+        "ai-chat",
+        "tool call dropped: malformed args JSON",
+        {
+          ...input.requestLogContext,
+          threadId: input.threadId ?? undefined,
+        },
+        {
+          toolName: toolEvent.name,
+          // PII-safe: log only the length of the unparseable payload.
+          argsJsonLength: toolEvent.argsJson.length,
+        },
+      );
       input.enqueue({
         type: "tool_status",
         toolName: toolEvent.name,
@@ -501,6 +515,20 @@ export function createToolCallHandler(input: CreateToolCallHandlerInput) {
         });
         return "continue";
       case "tool_error":
+        aiLog(
+          "warn",
+          "ai-chat",
+          "tool call returned tool_error",
+          {
+            ...input.requestLogContext,
+            threadId: input.threadId ?? undefined,
+          },
+          {
+            toolName: toolEvent.name,
+            error_code: result.code,
+            error: result.error,
+          },
+        );
         addToolCallTiming(input.stageTimings, {
           name: toolEvent.name,
           status: "failed",
