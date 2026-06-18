@@ -26,7 +26,8 @@
     "format:check": "prettier --check .",
     "test": "turbo run test --filter=@teammeet/web",
     "test:e2e": "bun run --cwd apps/web test:e2e",
-    "validate:okf": "node scripts/validate-okf-frontmatter.mjs docs/agent"
+    "validate:okf": "node scripts/validate-okf-frontmatter.mjs docs/agent",
+    "gen:db-okf": "node scripts/generate-db-okf.mjs"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0",
