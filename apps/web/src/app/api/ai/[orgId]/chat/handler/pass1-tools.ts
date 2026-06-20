@@ -73,6 +73,18 @@ export const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = Object.fromEnt
   ]),
 ) as Record<CacheSurface, ToolName[]>;
 
+function getFallbackPass1ToolNames(
+  effectiveSurface: CacheSurface,
+  intentType: TurnExecutionPolicy["intentType"],
+): ToolName[] {
+  const names = PASS1_TOOL_NAMES[effectiveSurface];
+  if (intentType !== "knowledge_query") {
+    return names;
+  }
+
+  return names.filter((toolName) => toolName !== "search_org_content");
+}
+
 export const CONNECTION_PROMPT_PATTERN =
   /(?<!\w)(?:connection|connections|connect|networking|introduc(?:e|tion))(?!\w)/i;
 export const MENTOR_PROMPT_PATTERN =
@@ -734,7 +746,9 @@ export function getPass1Tools(
     }
   }
 
-  return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
+  return getFallbackPass1ToolNames(effectiveSurface, intentType).map(
+    (toolName) => AI_TOOL_MAP[toolName],
+  );
 }
 
 export const FORCED_PASS1_TOOL_CHOICE_ELIGIBLE: ReadonlySet<ToolName> = new Set<ToolName>([
