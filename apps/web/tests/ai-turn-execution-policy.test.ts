@@ -99,6 +99,27 @@ test("buildTurnExecutionPolicy keeps mixed structured-plus-context queries on re
   assert.equal(policy.retrieval.reason, "general_knowledge_query");
 });
 
+test("buildTurnExecutionPolicy allows retrieval for budget knowledge-doc lookups", () => {
+  // "budget" routes to analytics, but without reporting language this is a
+  // policy/knowledge lookup that must reach vector RAG (regression: previously
+  // skipped, so the admin budget doc was never retrieved).
+  const policy = buildPolicy("What's the travel budget ceiling?", "general");
+
+  assert.equal(policy.profile, "live_lookup");
+  assert.equal(policy.retrieval.mode, "allow");
+  assert.equal(policy.retrieval.reason, "general_knowledge_query");
+});
+
+test("buildTurnExecutionPolicy still skips retrieval for structured analytics reporting", () => {
+  // Reporting language ("by month") = a genuine analytics-tool query; retrieval
+  // stays skipped so the fix does not regress the analytics fast path.
+  const policy = buildPolicy("Show the donation budget breakdown by month", "general");
+
+  assert.equal(policy.profile, "live_lookup");
+  assert.equal(policy.retrieval.mode, "skip");
+  assert.equal(policy.retrieval.reason, "tool_only_structured_query");
+});
+
 test("buildTurnExecutionPolicy skips retrieval for tool-only follow-up refinements", () => {
   const policy = buildPolicy("and alumni?", "members", "thread-1");
 
