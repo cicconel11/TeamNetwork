@@ -145,6 +145,17 @@ function hasContextDependentLanguage(normalized: string): boolean {
   );
 }
 
+// Reporting verbs that mark a *genuinely* structured analytics request (one the
+// analytics tool answers from aggregates) vs. a knowledge-doc lookup that merely
+// mentions a financial term. "donation trends by month" is structured; "what's
+// the travel budget ceiling?" is a policy lookup that must reach vector RAG.
+const ANALYTICS_REPORTING_RE =
+  /\b(?:trend|trends|breakdown|report|reporting|monthly|weekly|daily|by month|by week|by day|average|largest|growth|compare|total|totals|count|counts|how many|how much)\b/i;
+
+function isAnalyticsReportingRequest(normalized: string): boolean {
+  return ANALYTICS_REPORTING_RE.test(normalized);
+}
+
 function isMobileAppAvailabilityQuestion(normalized: string): boolean {
   return (
     /\b(?:mobile app|app store|download (?:the )?app|ios app|android app|iphone app)\b/i.test(normalized) &&
@@ -375,12 +386,20 @@ function buildRetrievalDecision(input: {
     return { mode: "allow", reason: "ambiguous_query" };
   }
 
+  // analytics_query is "structured" only when the message carries reporting
+  // language (aggregates the analytics tool answers). Without it, the query is
+  // likely a knowledge-doc lookup that merely mentions a financial term (e.g.
+  // "travel budget ceiling") and must reach vector RAG.
+  const skipForStructuredIntent =
+    isStructuredToolIntent(intent, intentType) &&
+    (intent !== "analytics_query" || isAnalyticsReportingRequest(normalizedMessage));
+
   if (hasThread) {
     if (hasContextDependentLanguage(normalizedMessage)) {
       return { mode: "allow", reason: "follow_up_requires_context" };
     }
 
-    if (isStructuredToolIntent(intent, intentType)) {
+    if (skipForStructuredIntent) {
       return { mode: "skip", reason: "tool_only_structured_query" };
     }
 
@@ -391,7 +410,7 @@ function buildRetrievalDecision(input: {
     return { mode: "allow", reason: "general_knowledge_query" };
   }
 
-  if (isStructuredToolIntent(intent, intentType)) {
+  if (skipForStructuredIntent) {
     return { mode: "skip", reason: "tool_only_structured_query" };
   }
 
