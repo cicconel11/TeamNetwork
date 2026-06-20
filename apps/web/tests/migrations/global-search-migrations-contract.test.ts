@@ -50,6 +50,25 @@ describe("global search migrations (contract)", () => {
     assert.match(sql, /SELECT \* FROM knowledge_rows/);
   });
 
+  it("hardens knowledge_documents: audience CHECK, hard-delete cleanup, backfill parity", () => {
+    const sql = read("20261226000000_knowledge_documents_hardening.sql");
+    // (#3) audience allowlist CHECK with the exact supported tokens.
+    assert.match(sql, /knowledge_documents_audience_check/);
+    assert.match(
+      sql,
+      /CHECK \(audience IN \('all', 'both', 'members', 'active_members', 'alumni', 'admins'\)\)/
+    );
+    // (#2) AFTER DELETE chunk-cleanup path using OLD, wired to knowledge_documents.
+    assert.match(sql, /CREATE OR REPLACE FUNCTION public\.enqueue_ai_embedding_delete/i);
+    assert.match(sql, /SECURITY DEFINER/);
+    assert.match(sql, /SET search_path = ''/);
+    assert.match(sql, /VALUES \(OLD\.organization_id, TG_TABLE_NAME, OLD\.id, 'delete'\)/);
+    assert.match(sql, /AFTER DELETE ON public\.knowledge_documents/);
+    // (#4) backfill parity: the two previously-missing source tables are now scanned.
+    assert.match(sql, /source_table = 'mentor_profiles'/);
+    assert.match(sql, /source_table = 'form_submissions'/);
+  });
+
   it("defines a hardened compact org stats snapshot RPC", () => {
     const sql = read("20261027000000_ai_org_stats_snapshot.sql");
     assert.match(sql, /CREATE OR REPLACE FUNCTION public\.get_org_stats_snapshot/i);
