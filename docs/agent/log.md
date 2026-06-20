@@ -3,12 +3,16 @@ type: log
 title: OKF Bundle History
 description: Reserved change history for the TeamNetwork AI agent OKF bundle — when documents were added, restructured, and when resource paths drifted or were repaired.
 tags: [ai, okf, history, changelog]
-timestamp: 2026-06-17T00:00:00Z
+timestamp: 2026-06-19T00:00:00Z
 ---
 
 # OKF Bundle History
 
 A reserved history file for the `docs/agent/` Open Knowledge Format bundle. Entries are grouped by ISO date, newest first. This log exists so that drift in the bundle (renamed source files, restructured docs) leaves a paper trail next to the validator that catches it.
+
+## 2026-06-19
+
+- **Added `knowledge-documents.md` (type `data-flow`).** Documents `knowledge_documents` as the 8th RAG source, its trigger → `ai_embedding_queue` → embedding-worker → `ai_document_chunks` ingestion, the audience token semantics, and the two retrieval paths. The security-critical record is decision **D1**: the keyword path (`search_org_content` RPC + the `tools/registry/search-org-content.ts` fallback) is broad-only — `audience='admins'` docs are never keyword-visible to anyone, and admins reach restricted knowledge only via the role-gated `search_ai_documents` vector path. Linked from `index.md`; cross-referenced from `ai-data-flow.md` (new §6.1) and `assistant.md` (search enumeration). `resource:` points at `apps/web/src/lib/ai/chunker.ts`.
 
 ## 2026-06-17
 

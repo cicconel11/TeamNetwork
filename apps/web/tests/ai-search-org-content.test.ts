@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { searchOrgContentModule } from "../src/lib/ai/tools/registry/search-org-content.ts";
+import {
+  searchOrgContentModule,
+  snippetFrom,
+} from "../src/lib/ai/tools/registry/search-org-content.ts";
 
 const ctx = {
   orgId: "org-1",
@@ -183,5 +186,46 @@ describe("search_org_content fallback gating", () => {
     assert.ok(knowledgeFilter, "expected an audience filter on knowledge_documents");
     assert.equal(knowledgeFilter?.column, "audience");
     assert.deepEqual(knowledgeFilter?.values, ["all", "both"]);
+  });
+
+  it("collapses whitespace and caps fallback snippets at 140 chars", async () => {
+    const longBody = `   ${"word ".repeat(200)}\n\nmore`;
+    const stub = createStubSb({
+      rpcRows: [],
+      announcementRows: [
+        {
+          id: "ann-long",
+          title: "Long announcement",
+          body: longBody,
+          created_at: "2026-04-03T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const result = await execute({ query: "search announcements about anything" }, stub);
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    const rows = result.data as Array<Record<string, unknown>>;
+    const snippet = rows.find((row) => row.entity_type === "announcement")?.snippet as string;
+    assert.ok(snippet, "expected an announcement snippet");
+    assert.equal(snippet.length, 140);
+    assert.ok(!/\s{2,}/.test(snippet), "snippet must be whitespace-collapsed");
+    assert.ok(!snippet.includes("\n"), "snippet must not contain raw newlines");
+  });
+});
+
+describe("snippetFrom", () => {
+  it("collapses runs of whitespace into single spaces and trims", () => {
+    assert.equal(snippetFrom("  a\n\n b\t c  "), "a b c");
+  });
+
+  it("caps output at the requested max length", () => {
+    assert.equal(snippetFrom("x".repeat(500)).length, 140);
+    assert.equal(snippetFrom("x".repeat(500), 10).length, 10);
+  });
+
+  it("treats null and undefined as empty strings", () => {
+    assert.equal(snippetFrom(null), "");
+    assert.equal(snippetFrom(undefined), "");
   });
 });

@@ -4,7 +4,7 @@ title: AI Data Flow — Privacy and Compliance
 description: PII entering the AI pipeline, what is stored, and what is sent to the z.ai provider.
 resource: apps/web/src/lib/ai/context-builder.ts
 tags: [ai, privacy, compliance, pii]
-timestamp: 2026-06-17T00:00:00Z
+timestamp: 2026-06-19T00:00:00Z
 ---
 
 # AI Data Flow — Privacy & Compliance Documentation
@@ -58,6 +58,7 @@ User → Chat Panel (client)
 | Event titles/descriptions | `events` table | Calendar context for scheduling questions |
 | Mentee goals free text | `mentee_preferences.goals` | Mentorship signal extraction |
 | Organization metadata | `organizations` table | Org name, settings, member counts |
+| Admin-curated knowledge docs | `knowledge_documents` (title/type/tags/description/body) | RAG source for handbook, FAQ, and policy answers (audience-gated; see below) |
 
 ### 3.2 What is Sent to the External API (z.ai)
 
@@ -128,6 +129,17 @@ Admins can exclude specific content from the AI indexing pipeline:
 - **Mechanism:** Admins mark content types or specific records as excluded
 - **Effect:** Excluded content is not chunked, embedded, or included in RAG retrieval
 - **Audit:** The `excluded_by` column tracks which admin created each exclusion (SET NULL on user deletion to preserve the record)
+
+### 6.1 Admin-Curated Knowledge Documents (8th RAG Source)
+
+`knowledge_documents` is an admin-managed org knowledge base (handbook, FAQ, policy, reference docs) and the 8th source indexed for RAG, alongside `announcements`, `discussion_threads`, `discussion_replies`, `events`, `job_postings`, `mentor_profiles`, and `form_submissions`. Rows flow through the same trigger → `ai_embedding_queue` → embedding-worker → `ai_document_chunks` pipeline as every other source.
+
+It is retrievable two ways, with different audience exposure:
+
+- **Vector path (role-gated):** `search_ai_documents` filters chunks by the requester's audience allowlist (`audienceFilterForRole()`). Admins (NULL filter) can retrieve `audience='admins'` docs; non-admins see only broad (`all`/`both`/unset) docs. This is the **only** route to admin-restricted knowledge.
+- **Keyword path (broad-only, D1):** `search_org_content` (RPC + the TS fallback in `tools/registry/search-org-content.ts`) returns ONLY `COALESCE(audience,'all') IN ('all','both')` docs. `audience='admins'` docs are **never** keyword-visible to anyone, including admins. Safe-by-default: the keyword path backs global search and an `admin`/`active_member`/`alumni`-callable tool, so it is held to the narrowest audience.
+
+See [Knowledge Documents — RAG Source and Audience Gating](/docs/agent/knowledge-documents.md) for the full pipeline and gating details.
 
 ---
 

@@ -3,7 +3,7 @@ type: index
 title: TeamNetwork AI Agent Knowledge Bundle
 description: Open Knowledge Format index for the TeamNetwork AI assistant codemaps, architecture, and taxonomies.
 tags: [ai, index, okf]
-timestamp: 2026-06-17T00:00:00Z
+timestamp: 2026-06-19T00:00:00Z
 ---
 
 # TeamNetwork AI Agent Knowledge Bundle
@@ -30,6 +30,7 @@ Each document's `resource` field points at the primary source file it describes,
 
 - [Intent Type Taxonomy](/docs/agent/intent-type-taxonomy.md) — the `intent_type` classification axis.
 - [AI Data Flow — Privacy and Compliance](/docs/agent/ai-data-flow.md) — PII in the pipeline, storage, and external-provider surface.
+- [Knowledge Documents — RAG Source and Audience Gating](/docs/agent/knowledge-documents.md) — the admin-curated 8th RAG source, its embedding pipeline, both retrieval paths, and the broad-only keyword gate (D1).
 
 ## Flows
 

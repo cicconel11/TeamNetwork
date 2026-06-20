@@ -24,6 +24,13 @@ interface SearchRpcRow {
 }
 
 const PER_TYPE_CAP = 5;
+const SNIPPET_MAX = 140;
+
+// Mirror the RPC's snippet shaping: collapse whitespace and cap length so the
+// keyword fallback does not ship full document bodies (~50k chars) to the LLM.
+export function snippetFrom(text: string | null | undefined, max = SNIPPET_MAX): string {
+  return (text ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+}
 
 function buildSearchVariants(query: string): string[] {
   const trimmed = query.trim();
@@ -157,7 +164,7 @@ export const searchOrgContentModule: ToolModule<Args> = {
                 entity_type: "announcement",
                 entity_id: row.id,
                 title: row.title,
-                snippet: row.body,
+                snippet: snippetFrom(row.body),
                 url_path: `/${orgSlug}/announcements`,
                 rank: 0.5,
                 metadata: { announcement_id: row.id },
@@ -168,7 +175,7 @@ export const searchOrgContentModule: ToolModule<Args> = {
                 entity_type: "event",
                 entity_id: row.id,
                 title: row.title,
-                snippet: row.description,
+                snippet: snippetFrom(row.description),
                 url_path: `/${orgSlug}/calendar/events/${row.id}`,
                 rank: 0.5,
                 metadata: {},
@@ -179,7 +186,7 @@ export const searchOrgContentModule: ToolModule<Args> = {
                 entity_type: "knowledge",
                 entity_id: row.id,
                 title: row.title,
-                snippet: row.body,
+                snippet: snippetFrom(row.body),
                 url_path: `/${orgSlug}/assistant`,
                 rank: 0.5,
                 metadata: { knowledge_id: row.id },
