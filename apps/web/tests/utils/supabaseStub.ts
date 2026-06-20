@@ -51,6 +51,7 @@ type TableName =
   | "ai_messages"
   | "ai_document_chunks"
   | "ai_indexing_exclusions"
+  | "knowledge_documents"
   | "announcements"
   | "organization_email_domains";
 
@@ -118,6 +119,7 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   ai_messages: [],
   ai_document_chunks: [],
   ai_indexing_exclusions: [],
+  knowledge_documents: [],
   announcements: [],
   organization_email_domains: ["organization_id", "domain"],
 };
@@ -178,6 +180,7 @@ export function createSupabaseStub() {
     ai_messages: [],
     ai_document_chunks: [],
     ai_indexing_exclusions: [],
+    knowledge_documents: [],
     announcements: [],
     organization_email_domains: [],
   };

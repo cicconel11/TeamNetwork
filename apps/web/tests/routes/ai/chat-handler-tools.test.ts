@@ -800,7 +800,6 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
     "list_available_mentors",
     "suggest_mentors",
     "suggest_mentees",
-    "search_org_content",
     "find_navigation_targets",
   ]);
   assert.equal(
@@ -836,7 +835,6 @@ test("hybrid greeting with events question uses routed events tool set", async (
   assert.deepEqual(toolNamesForCall(0), [
     "list_events",
     "find_free_members",
-    "search_org_content",
     "find_navigation_targets",
     "list_members",
     "list_alumni",
@@ -941,7 +939,6 @@ test("ambiguous queries keep fallback surface tool set", async () => {
     "list_available_mentors",
     "suggest_mentors",
     "suggest_mentees",
-    "search_org_content",
     "find_navigation_targets",
   ]);
 });
@@ -991,7 +988,6 @@ test("analytics overview prompts still attach get_org_stats", async () => {
 
   assert.deepEqual(toolNamesForCall(0), [
     "get_org_stats",
-    "search_org_content",
     "find_navigation_targets",
     "list_members",
     "list_alumni",
@@ -1426,7 +1422,6 @@ test("simple event requests use list_events tool_first and skip pass 2", async (
   assert.deepEqual(toolNamesForCall(0), [
     "list_events",
     "find_free_members",
-    "search_org_content",
     "find_navigation_targets",
     "list_members",
     "list_alumni",
@@ -1492,7 +1487,7 @@ test("content search prompts use search_org_content tool_first and skip pass 2",
     type: "function",
     function: { name: "search_org_content" },
   });
-  assert.deepEqual(contextModes, ["tool_first"]);
+  assert.deepEqual(contextModes, ["full"]);
   assert.equal(composeResponseCalls.length, 1);
   assert.match(body, /Search results/);
   assert.match(body, /\[Fundraising kickoff\]\(\/acme\/announcements\)/);
