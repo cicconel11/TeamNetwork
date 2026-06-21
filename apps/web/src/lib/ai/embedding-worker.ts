@@ -43,10 +43,8 @@ const SOURCE_SELECTS: Record<SourceTable, string> = {
   discussion_replies: "id, thread_id, body, organization_id, deleted_at",
   job_postings:
     "id, title, company, description, location, location_type, organization_id, deleted_at",
-  mentor_profiles:
-    "id, user_id, bio, topics, organization_id",
-  form_submissions:
-    "id, form_id, user_id, responses, organization_id, deleted_at",
+  mentor_profiles: "id, user_id, bio, topics, organization_id",
+  form_submissions: "id, form_id, user_id, responses, organization_id, deleted_at",
   knowledge_documents:
     "id, type, title, description, tags, body, audience, source_timestamp, organization_id, deleted_at",
 };
@@ -201,9 +199,10 @@ export async function processEmbeddingQueue(
   const stats: QueueStats = { processed: 0, skipped: 0, failed: 0 };
 
   // 1. Dequeue pending items with row-level locking (FOR UPDATE SKIP LOCKED)
-  const { data: queueItems, error: dequeueError } = await (
-    serviceSupabase as any
-  ).rpc("dequeue_ai_embeddings", { p_batch_size: batchSize });
+  const { data: queueItems, error: dequeueError } = await (serviceSupabase as any).rpc(
+    "dequeue_ai_embeddings",
+    { p_batch_size: batchSize }
+  );
 
   if (dequeueError || !queueItems || queueItems.length === 0) {
     if (dequeueError) {
@@ -218,9 +217,7 @@ export async function processEmbeddingQueue(
   const byTable = new Map<string, QueueItem[]>();
   for (const item of items) {
     if (!isValidSourceTable(item.source_table)) {
-      console.warn(
-        `[embedding-worker] unknown source_table: ${item.source_table}`
-      );
+      console.warn(`[embedding-worker] unknown source_table: ${item.source_table}`);
       stats.skipped++;
       // Already marked processed_at by dequeue RPC — leave as-is
       continue;
@@ -236,11 +233,7 @@ export async function processEmbeddingQueue(
 
   for (const [table, tableItems] of byTable) {
     const ids = tableItems.map((i) => i.source_id);
-    const records = await fetchSourceRecords(
-      serviceSupabase,
-      table as SourceTable,
-      ids
-    );
+    const records = await fetchSourceRecords(serviceSupabase, table as SourceTable, ids);
     sourceRecords.set(table, records);
 
     // For replies, collect parent thread IDs
@@ -249,10 +242,7 @@ export async function processEmbeddingQueue(
       for (const record of records.values()) {
         if (record.thread_id) threadIds.add(String(record.thread_id));
       }
-      parentThreads = await fetchParentThreads(
-        serviceSupabase,
-        Array.from(threadIds)
-      );
+      parentThreads = await fetchParentThreads(serviceSupabase, Array.from(threadIds));
     }
   }
 
@@ -260,10 +250,7 @@ export async function processEmbeddingQueue(
   const orgIds = new Set(items.map((i) => i.org_id));
   const exclusionsByOrg = new Map<string, Set<string> | null>();
   for (const orgId of orgIds) {
-    exclusionsByOrg.set(
-      orgId,
-      await fetchExclusions(serviceSupabase, orgId)
-    );
+    exclusionsByOrg.set(orgId, await fetchExclusions(serviceSupabase, orgId));
   }
 
   // 4. Process items — separate deletes and upserts
@@ -354,12 +341,7 @@ export async function processEmbeddingQueue(
       byOrg.set(item.org_id, list);
     }
     for (const [orgId, sourceIds] of byOrg) {
-      const hashes = await batchFetchExistingHashes(
-        serviceSupabase,
-        orgId,
-        table,
-        sourceIds
-      );
+      const hashes = await batchFetchExistingHashes(serviceSupabase, orgId, table, sourceIds);
       hashLookupByKey.set(`${orgId}:${table}`, hashes);
     }
   }
@@ -371,11 +353,7 @@ export async function processEmbeddingQueue(
         ? parentThreads.get(String(record.thread_id))
         : undefined;
 
-    const chunks = renderChunks(
-      item.source_table as SourceTable,
-      record,
-      parentContext
-    );
+    const chunks = renderChunks(item.source_table as SourceTable, record, parentContext);
 
     if (chunks.length === 0) {
       // Content too short — clean up any existing chunks for this source
@@ -402,25 +380,29 @@ export async function processEmbeddingQueue(
       (idx) => !newChunkIndexes.has(idx)
     );
 
+    const renderedChunks = chunks.map((chunk) => ({
+      item,
+      text: chunk.text,
+      chunkIndex: chunk.chunkIndex,
+      contentHash: computeContentHash(chunk.text),
+      metadata: chunk.metadata,
+    }));
+
     let allUnchanged = !hasOrphanedChunks;
-    for (const chunk of chunks) {
-      const hash = computeContentHash(chunk.text);
-      if (existingHashes.get(chunk.chunkIndex) === hash) {
+    // replace_ai_chunks replaces the entire source record. If any chunk changed,
+    // resend every rendered chunk so unchanged indexes are preserved.
+    for (const chunk of renderedChunks) {
+      if (existingHashes.get(chunk.chunkIndex) === chunk.contentHash) {
         continue; // Skip unchanged chunk
       }
       allUnchanged = false;
-      pendingChunks.push({
-        item,
-        text: chunk.text,
-        chunkIndex: chunk.chunkIndex,
-        contentHash: hash,
-        metadata: chunk.metadata,
-      });
     }
 
     if (allUnchanged) {
       stats.skipped++;
       // Already marked processed_at by dequeue RPC
+    } else {
+      pendingChunks.push(...renderedChunks);
     }
   }
 
@@ -470,21 +452,18 @@ export async function processEmbeddingQueue(
       const firstChunk = itemChunks[0].chunk;
 
       // Atomic chunk replacement via RPC (delete + insert in one transaction)
-      const { error: replaceError } = await (serviceSupabase as any).rpc(
-        "replace_ai_chunks",
-        {
-          p_org_id: firstChunk.item.org_id,
-          p_source_table: firstChunk.item.source_table,
-          p_source_id: firstChunk.item.source_id,
-          p_chunks: itemChunks.map(({ chunk, embedding }) => ({
-            chunk_index: chunk.chunkIndex,
-            content_text: chunk.text,
-            content_hash: chunk.contentHash,
-            embedding: JSON.stringify(embedding),
-            metadata: chunk.metadata,
-          })),
-        }
-      );
+      const { error: replaceError } = await (serviceSupabase as any).rpc("replace_ai_chunks", {
+        p_org_id: firstChunk.item.org_id,
+        p_source_table: firstChunk.item.source_table,
+        p_source_id: firstChunk.item.source_id,
+        p_chunks: itemChunks.map(({ chunk, embedding }) => ({
+          chunk_index: chunk.chunkIndex,
+          content_text: chunk.text,
+          content_hash: chunk.contentHash,
+          embedding: JSON.stringify(embedding),
+          metadata: chunk.metadata,
+        })),
+      });
 
       if (replaceError) {
         console.error("[embedding-worker] replace_ai_chunks RPC failed:", replaceError);
@@ -497,8 +476,7 @@ export async function processEmbeddingQueue(
     }
   } catch (err) {
     // Embedding API failure — increment attempts for all pending items
-    const errorMsg =
-      err instanceof Error ? err.message : "embedding_api_failed";
+    const errorMsg = err instanceof Error ? err.message : "embedding_api_failed";
     console.error("[embedding-worker] batch embedding failed:", err);
 
     const failedIds = new Set(pendingChunks.map((c) => c.item.id));

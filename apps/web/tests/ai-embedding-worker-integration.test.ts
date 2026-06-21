@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { renderChunks, computeContentHash } from "../src/lib/ai/chunker.ts";
 
 /**
@@ -12,6 +15,10 @@ import { renderChunks, computeContentHash } from "../src/lib/ai/chunker.ts";
  * - Atomic retry increment via RPC
  * - Orphaned chunk detection
  */
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const WORKER_PATH = join(__dirname, "..", "src", "lib", "ai", "embedding-worker.ts");
 
 // ---------------------------------------------------------------------------
 // Mock Supabase factory — fully chainable
@@ -81,10 +88,8 @@ function createChainableMock(opts: {
       chain.maybeSingle = () => resolveData();
 
       // Make chain thenable so `await supabase.from(...).select(...)...` resolves
-      chain.then = (
-        resolve: (v: unknown) => unknown,
-        reject?: (e: unknown) => unknown
-      ) => Promise.resolve(resolveData()).then(resolve, reject);
+      chain.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+        Promise.resolve(resolveData()).then(resolve, reject);
 
       return chain;
     },
@@ -104,21 +109,13 @@ describe("embedding-worker integration", () => {
         dequeueResult: { data: [], error: null },
       });
 
-      const { processEmbeddingQueue } = await import(
-        "../src/lib/ai/embedding-worker.ts"
-      );
+      const { processEmbeddingQueue } = await import("../src/lib/ai/embedding-worker.ts");
 
       await processEmbeddingQueue(mock as any);
 
-      const dequeueCall = mock.rpcCalls.find(
-        (c) => c.fn === "dequeue_ai_embeddings"
-      );
+      const dequeueCall = mock.rpcCalls.find((c) => c.fn === "dequeue_ai_embeddings");
       assert.ok(dequeueCall, "Should call dequeue_ai_embeddings RPC");
-      assert.equal(
-        dequeueCall.params.p_batch_size,
-        50,
-        "Default batch size should be 50"
-      );
+      assert.equal(dequeueCall.params.p_batch_size, 50, "Default batch size should be 50");
     });
 
     it("returns empty stats when dequeue returns no items", async () => {
@@ -126,9 +123,7 @@ describe("embedding-worker integration", () => {
         dequeueResult: { data: [], error: null },
       });
 
-      const { processEmbeddingQueue } = await import(
-        "../src/lib/ai/embedding-worker.ts"
-      );
+      const { processEmbeddingQueue } = await import("../src/lib/ai/embedding-worker.ts");
 
       const stats = await processEmbeddingQueue(mock as any);
       assert.equal(stats.processed, 0);
@@ -141,9 +136,7 @@ describe("embedding-worker integration", () => {
         dequeueResult: { data: null, error: { message: "connection timeout" } },
       });
 
-      const { processEmbeddingQueue } = await import(
-        "../src/lib/ai/embedding-worker.ts"
-      );
+      const { processEmbeddingQueue } = await import("../src/lib/ai/embedding-worker.ts");
 
       const stats = await processEmbeddingQueue(mock as any);
       assert.equal(stats.processed, 0);
@@ -155,15 +148,11 @@ describe("embedding-worker integration", () => {
         dequeueResult: { data: [], error: null },
       });
 
-      const { processEmbeddingQueue } = await import(
-        "../src/lib/ai/embedding-worker.ts"
-      );
+      const { processEmbeddingQueue } = await import("../src/lib/ai/embedding-worker.ts");
 
       await processEmbeddingQueue(mock as any, { batchSize: 10 });
 
-      const dequeueCall = mock.rpcCalls.find(
-        (c) => c.fn === "dequeue_ai_embeddings"
-      );
+      const dequeueCall = mock.rpcCalls.find((c) => c.fn === "dequeue_ai_embeddings");
       assert.equal(dequeueCall?.params.p_batch_size, 10);
     });
   });
@@ -173,27 +162,40 @@ describe("embedding-worker integration", () => {
       const mock = createChainableMock({
         dequeueResult: {
           data: [
-            { id: "q1", org_id: "org1", source_table: "announcements", source_id: "a1", action: "upsert" },
+            {
+              id: "q1",
+              org_id: "org1",
+              source_table: "announcements",
+              source_id: "a1",
+              action: "upsert",
+            },
           ],
           error: null,
         },
         exclusionResult: { data: null, error: { message: "DB connection failed" } },
         sourceRecords: new Map([
-          ["announcements", [{ id: "a1", title: "Test", body: "Content", organization_id: "org1", deleted_at: null }]],
+          [
+            "announcements",
+            [
+              {
+                id: "a1",
+                title: "Test",
+                body: "Content",
+                organization_id: "org1",
+                deleted_at: null,
+              },
+            ],
+          ],
         ]),
       });
 
-      const { processEmbeddingQueue } = await import(
-        "../src/lib/ai/embedding-worker.ts"
-      );
+      const { processEmbeddingQueue } = await import("../src/lib/ai/embedding-worker.ts");
 
       const stats = await processEmbeddingQueue(mock as any);
 
       assert.equal(stats.failed, 1, "Should fail the item when exclusions can't be fetched");
 
-      const incrementCall = mock.rpcCalls.find(
-        (c) => c.fn === "increment_ai_queue_attempts"
-      );
+      const incrementCall = mock.rpcCalls.find((c) => c.fn === "increment_ai_queue_attempts");
       assert.ok(incrementCall, "Should call increment_ai_queue_attempts RPC");
       assert.ok(
         String(incrementCall.params.p_error).includes("exclusion_fetch_failed"),
@@ -212,11 +214,15 @@ describe("embedding-worker integration", () => {
           rpcCalls.push({ fn, params: params ?? {} });
           if (fn === "dequeue_ai_embeddings") {
             return {
-              data: [{
-                id: "q1", org_id: "org1",
-                source_table: "announcements", source_id: "a1",
-                action: "delete",
-              }],
+              data: [
+                {
+                  id: "q1",
+                  org_id: "org1",
+                  source_table: "announcements",
+                  source_id: "a1",
+                  action: "delete",
+                },
+              ],
               error: null,
             };
           }
@@ -238,7 +244,9 @@ describe("embedding-worker integration", () => {
             }
             if (table === "ai_document_chunks") {
               // Simulate chunk soft-delete failure
-              return Promise.resolve({ data: null, error: { message: "update_failed" } }).then(resolve);
+              return Promise.resolve({ data: null, error: { message: "update_failed" } }).then(
+                resolve
+              );
             }
             // Source record not found → triggers delete path
             return Promise.resolve({ data: [], error: null }).then(resolve);
@@ -248,16 +256,12 @@ describe("embedding-worker integration", () => {
         },
       };
 
-      const { processEmbeddingQueue } = await import(
-        "../src/lib/ai/embedding-worker.ts"
-      );
+      const { processEmbeddingQueue } = await import("../src/lib/ai/embedding-worker.ts");
 
       const stats = await processEmbeddingQueue(mock as any);
 
       assert.equal(stats.failed, 1);
-      const incrementCall = rpcCalls.find(
-        (c) => c.fn === "increment_ai_queue_attempts"
-      );
+      const incrementCall = rpcCalls.find((c) => c.fn === "increment_ai_queue_attempts");
       assert.ok(incrementCall, "Should use RPC for atomic increment");
     });
   });
@@ -295,10 +299,7 @@ describe("embedding-worker integration", () => {
         (idx) => !newChunkIndexes.has(idx)
       );
 
-      assert.ok(
-        hasOrphanedChunks,
-        "Should detect orphaned chunks when content shrinks"
-      );
+      assert.ok(hasOrphanedChunks, "Should detect orphaned chunks when content shrinks");
     });
 
     it("does not flag orphans when chunk count is unchanged", () => {
@@ -313,10 +314,14 @@ describe("embedding-worker integration", () => {
         (idx) => !newChunkIndexes.has(idx)
       );
 
-      assert.ok(
-        !hasOrphanedChunks,
-        "Should not flag orphans when chunk count matches"
-      );
+      assert.ok(!hasOrphanedChunks, "Should not flag orphans when chunk count matches");
+    });
+
+    it("resends every rendered chunk when a source needs replacement", () => {
+      const source = readFileSync(WORKER_PATH, "utf-8");
+
+      assert.match(source, /replace_ai_chunks replaces the entire source record/);
+      assert.match(source, /pendingChunks\.push\(\.\.\.renderedChunks\)/);
     });
   });
 
