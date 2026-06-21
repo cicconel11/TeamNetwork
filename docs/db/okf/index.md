@@ -1,7 +1,7 @@
 ---
 type: index
 title: "Database schema OKF bundle"
-description: "OKF bundle of 130 Postgres tables generated from /apps/web/src/types/database.ts."
+description: "OKF bundle of 131 Postgres tables generated from /apps/web/src/types/database.ts."
 resource: /apps/web/src/types/database.ts
 tags: [db, schema, index]
 timestamp: 2026-06-17T00:00:00Z
@@ -9,7 +9,7 @@ timestamp: 2026-06-17T00:00:00Z
 
 # Database schema OKF bundle
 
-Generated from `/apps/web/src/types/database.ts`. 130 public tables. Each table doc links to the tables it references via foreign keys; those links form the OKF graph. Regenerate with `bun run gen:db-okf`.
+Generated from `/apps/web/src/types/database.ts`. 131 public tables. Each table doc links to the tables it references via foreign keys; those links form the OKF graph. Regenerate with `bun run gen:db-okf`.
 
 ## Tables
 
@@ -77,6 +77,7 @@ Generated from `/apps/web/src/types/database.ts`. 130 public tables. Each table 
 - [integration_sync_log](./integration_sync_log.md) — 11 columns
 - [internal_advisor_snapshots](./internal_advisor_snapshots.md) — 3 columns
 - [job_postings](./job_postings.md) — 17 columns
+- [knowledge_documents](./knowledge_documents.md) — 14 columns
 - [linkedin_connections](./linkedin_connections.md) — 12 columns
 - [linkedin_enrichment_runs](./linkedin_enrichment_runs.md) — 11 columns
 - [linkedin_manual_sync_attempts](./linkedin_manual_sync_attempts.md) — 8 columns
