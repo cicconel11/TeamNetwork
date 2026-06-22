@@ -92,6 +92,66 @@ purchase to end users on iOS.
 Contact for reviewer questions: mleonard@myteamnetwork.com
 ```
 
+## Resolution Center reply — Guideline 2.1 (Apple Pay)
+
+Paste this into **App Store Connect → (version) → App Review → Resolution
+Center** when replying to a 2.1 "unable to verify Apple Pay" rejection. It
+answers the reviewer's exact ask (where is Apple Pay) in the first line.
+
+**Prerequisites before replying** (otherwise it bounces again):
+- A build that contains the captcha bypass + "Donate with Apple Pay" label is
+  selected on the version (first such build: **1.0 (62)** — build 61 still
+  shows the captcha).
+- `APP_REVIEW_REVIEWER_USER_IDS` set in Vercel prod to the reviewer's Supabase
+  user id (`03c0b18b-ef47-46d8-a643-9ca9ecff0d0e`) and the build redeployed.
+- The demo org reached by the walkthrough renders Apple Pay: it is named
+  **"Villanova Women's Lacrosse"** (slug `villanova-football`),
+  `donation_eligible_ios = true`, Connect onboarded. The reviewer account's
+  OTHER org (Penn Sprint Football) is intentionally web-only — make sure the
+  reply names the Villanova org so the reviewer doesn't open the wrong one.
+- Sign-In Required filled with the reviewer creds + a screen recording of the
+  Apple Pay sheet attached.
+
+```
+Re: Guideline 2.1 — Apple Pay integration location
+
+Thank you for the review. Apple Pay is integrated and is used for charitable
+donations to verified nonprofit organizations, via Stripe's Apple Pay Payment
+Sheet. Here is exactly where to find it.
+
+Test account (required — TeamNetwork is invite-only, so the app is empty
+without it):
+  Email:    test-reviewer@myteamnetwork.com
+  Password: AppleReview2026!
+
+Steps to reach Apple Pay:
+1. Sign in with the account above.
+2. Open the "Villanova Women's Lacrosse" organization (this org is enabled for
+   in-app donations and has a fully onboarded payment account, so the Payment
+   Sheet renders).
+3. Tap the organization logo in the top-left to open the drawer.
+4. Choose Money -> Donations -> "Make a Donation".
+5. Enter any amount (e.g. 5) and tap "Donate with Apple Pay".
+6. Stripe's Payment Sheet opens with Apple Pay as a payment option.
+
+Two notes to avoid a dead end:
+- For this test account the security check (captcha) is skipped, so you go
+  straight to the Payment Sheet — there is nothing to solve.
+- If the review device has no card in Apple Wallet, tapping Apple Pay shows the
+  standard "Add Card to Apple Pay" sheet — this still confirms the Apple Pay
+  integration. Adding any Apple Pay sandbox card completes a donation end to end.
+
+Apple Pay appears only on iOS and only for organizations verified as nonprofits
+(Guideline 3.2.1(vi)); other organizations show a web-only message, which is
+why a non-verified org would not display it. TeamNetwork takes no fee —
+donations route directly to the organization's own Stripe account.
+
+Separately, the PassKit framework is also used for Apple Wallet passes (member
+cards, event tickets, donation receipts) — not as a payment mechanism.
+
+We're happy to provide a screen recording of the full flow if helpful. Thank you.
+```
+
 ## Privacy → App Privacy
 
 Declare these data types as collected, **linked to identity**, not used for
