@@ -14,6 +14,8 @@ import { useNavigation, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { isAppReviewEmail, APP_REVIEW_CAPTCHA_TOKEN } from "@/lib/app-review";
 import { getWebAppUrl } from "@/lib/web-api";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
 import { APP_CHROME } from "@/lib/chrome";
@@ -177,7 +179,12 @@ export default function NewDonationScreen() {
   >({ kind: "idle" });
   const { start: startPaymentSheet, isProcessing: paymentSheetBusy } =
     useDonationPaymentSheet();
+  const { user } = useAuth();
   const isIOS = Platform.OS === "ios";
+  // Apple Guideline 2.1: the App Review account skips the captcha on iOS so the
+  // reviewer can reach the Apple Pay Payment Sheet. Server-side bypass is gated
+  // to the same allowlisted identity, so the sentinel token is safe to send.
+  const isReviewer = isAppReviewEmail(user?.email);
 
   // Webhook lag: organization_donations is created by the Stripe Connect
   // webhook asynchronously after Payment Sheet completes. Poll the receipt
@@ -246,6 +253,12 @@ export default function NewDonationScreen() {
     const amountValue = Number(amount.trim());
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       setError("Enter a donation amount greater than zero.");
+      return;
+    }
+
+    // App Review (iOS): bypass the captcha so the reviewer reaches Apple Pay.
+    if (isIOS && isReviewer) {
+      void handleCaptchaVerify(APP_REVIEW_CAPTCHA_TOKEN);
       return;
     }
 
@@ -524,6 +537,12 @@ export default function NewDonationScreen() {
             />
           </View>
 
+          {isIOS && (
+            <Text style={styles.formSubtitle}>
+              You&apos;ll complete your donation securely with Apple Pay.
+            </Text>
+          )}
+
           <Pressable
             onPress={handleSubmit}
             disabled={isSaving || paymentSheetBusy}
@@ -537,7 +556,7 @@ export default function NewDonationScreen() {
               <ActivityIndicator color="#ffffff" />
             ) : (
               <Text style={styles.primaryButtonText}>
-                {isIOS ? "Donate" : "Continue to Stripe"}
+                {isIOS ? "Donate with Apple Pay" : "Continue to Stripe"}
               </Text>
             )}
           </Pressable>

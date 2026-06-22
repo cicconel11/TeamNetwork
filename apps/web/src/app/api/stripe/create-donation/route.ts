@@ -59,6 +59,22 @@ const donationSchema = z
     }
   });
 
+/**
+ * App Review reviewer allowlist. Apple's reviewer must reach the native Apple
+ * Pay Payment Sheet to verify the PassKit integration (Guideline 2.1), but the
+ * donate flow is gated by a Turnstile captcha that reviewers routinely cannot
+ * pass. The documented review account is allowed to skip captcha verification
+ * on iOS. Scoped to specific Supabase user IDs supplied via env; an empty/unset
+ * value disables the bypass entirely (default closed). Only the verified bearer
+ * identity is trusted here — never a client-supplied body field.
+ */
+function getAppReviewReviewerIds(): string[] {
+  return (process.env.APP_REVIEW_REVIEWER_USER_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 export async function POST(req: Request) {
   const supabase = createServiceClient();
 
@@ -155,13 +171,34 @@ export async function POST(req: Request) {
     );
   }
 
-  const captchaResult = await verifyCaptcha(body.captchaToken, clientIp);
-  if (!captchaResult.success) {
-    const errorCode = captchaResult.error_codes?.[0];
-    if (errorCode === "missing-input-response") {
-      return respond({ error: "Captcha verification required" }, 400);
+  // Guideline 2.1: let the verified App Review account skip the captcha on iOS
+  // so the reviewer can reach the Apple Pay Payment Sheet. Resolved from the
+  // bearer token (set by the mobile client's fetchWithAuth), not from the body.
+  let reviewerCaptchaBypass = false;
+  const reviewerIds = getAppReviewReviewerIds();
+  if (isIosClient && reviewerIds.length > 0) {
+    const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (bearer) {
+      try {
+        const { data: userData } = await supabase.auth.getUser(bearer);
+        if (userData.user && reviewerIds.includes(userData.user.id)) {
+          reviewerCaptchaBypass = true;
+        }
+      } catch {
+        // Invalid/expired token — fall through to normal captcha verification.
+      }
     }
-    return respond({ error: "Captcha verification failed" }, 403);
+  }
+
+  if (!reviewerCaptchaBypass) {
+    const captchaResult = await verifyCaptcha(body.captchaToken, clientIp);
+    if (!captchaResult.success) {
+      const errorCode = captchaResult.error_codes?.[0];
+      if (errorCode === "missing-input-response") {
+        return respond({ error: "Captcha verification required" }, 400);
+      }
+      return respond({ error: "Captcha verification failed" }, 403);
+    }
   }
 
   if (!resolvedOrg.stripe_connect_account_id) {

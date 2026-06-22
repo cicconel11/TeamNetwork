@@ -34,6 +34,8 @@ interface DonationRequest {
   idempotencyKey: string;
   mode?: "checkout" | "payment_intent" | "payment_sheet";
   platform?: "ios" | "web";
+  /** Supabase user id resolved from the bearer token (not a body field). */
+  reviewerUserId?: string | null;
 }
 
 interface DonationResult {
@@ -60,6 +62,8 @@ interface DonationContext {
     isReady: boolean;
     lookupFailed?: boolean;
   };
+  /** Supabase user ids allowed to bypass captcha (APP_REVIEW_REVIEWER_USER_IDS). */
+  reviewerAllowlist?: string[];
 }
 
 // Constants
@@ -102,6 +106,18 @@ function simulateCreateDonation(
 
   if (request.mode === "payment_sheet" && request.platform !== "ios") {
     return { status: 400, error: "payment_sheet mode is only available on the iOS client." };
+  }
+
+  // Captcha verification (presence checked above). The verified App Review
+  // account skips verification on iOS; every other caller must pass. The
+  // sentinel token "app-review-bypass" only succeeds for an allowlisted
+  // reviewer — for anyone else it fails verification like any other bad token.
+  const reviewerBypass =
+    request.platform === "ios" &&
+    !!request.reviewerUserId &&
+    (ctx.reviewerAllowlist ?? []).includes(request.reviewerUserId);
+  if (!reviewerBypass && request.captchaToken !== "valid_token") {
+    return { status: 403, error: "Captcha verification failed" };
   }
 
   // If Stripe account lookup fails, surface temporary failure
@@ -691,4 +707,189 @@ test("create-donation accepts valid currencies", () => {
 
     assert.strictEqual(result.status, 200, `Currency ${currency} should be accepted`);
   }
+});
+
+// --- App Review captcha bypass (Guideline 2.1) ---
+
+const REVIEWER_ID = "reviewer-user-uuid";
+const SENTINEL = "app-review-bypass";
+
+test("create-donation lets the allowlisted reviewer reach Apple Pay without a valid captcha", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      captchaToken: SENTINEL, // sentinel, not a verified token
+      organizationId: "org-1",
+      amountCents: 500,
+      idempotencyKey: "key-reviewer",
+      mode: "payment_sheet",
+      platform: "ios",
+      reviewerUserId: REVIEWER_ID,
+      donorEmail: "donor@example.com",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: true,
+      },
+      connectStatus: { isReady: true },
+      reviewerAllowlist: [REVIEWER_ID],
+    }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.stripeAccountId, "acct_connected_123");
+});
+
+test("create-donation rejects the sentinel token for a non-reviewer", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      captchaToken: SENTINEL,
+      organizationId: "org-1",
+      amountCents: 500,
+      idempotencyKey: "key-nonreviewer",
+      mode: "payment_sheet",
+      platform: "ios",
+      reviewerUserId: "some-other-user",
+      donorEmail: "donor@example.com",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: true,
+      },
+      connectStatus: { isReady: true },
+      reviewerAllowlist: [REVIEWER_ID],
+    }
+  );
+
+  assert.strictEqual(result.status, 403);
+  assert.strictEqual(result.error, "Captcha verification failed");
+});
+
+test("create-donation rejects the sentinel token for an anonymous (no bearer) caller", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.unauthenticated,
+      captchaToken: SENTINEL,
+      organizationId: "org-1",
+      amountCents: 500,
+      idempotencyKey: "key-anon-sentinel",
+      mode: "payment_sheet",
+      platform: "ios",
+      reviewerUserId: null, // bearer did not resolve to a user
+      donorEmail: "donor@example.com",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: true,
+      },
+      connectStatus: { isReady: true },
+      reviewerAllowlist: [REVIEWER_ID],
+    }
+  );
+
+  assert.strictEqual(result.status, 403);
+  assert.strictEqual(result.error, "Captcha verification failed");
+});
+
+test("create-donation bypass is default-closed when the allowlist is empty", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      captchaToken: SENTINEL,
+      organizationId: "org-1",
+      amountCents: 500,
+      idempotencyKey: "key-empty-allowlist",
+      mode: "payment_sheet",
+      platform: "ios",
+      reviewerUserId: REVIEWER_ID,
+      donorEmail: "donor@example.com",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: true,
+      },
+      connectStatus: { isReady: true },
+      reviewerAllowlist: [], // env unset/empty
+    }
+  );
+
+  assert.strictEqual(result.status, 403);
+  assert.strictEqual(result.error, "Captcha verification failed");
+});
+
+test("create-donation eligibility gate still applies to the reviewer", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      captchaToken: SENTINEL,
+      organizationId: "org-1",
+      amountCents: 500,
+      idempotencyKey: "key-reviewer-ineligible",
+      mode: "payment_sheet",
+      platform: "ios",
+      reviewerUserId: REVIEWER_ID,
+      donorEmail: "donor@example.com",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: false, // not a verified nonprofit
+      },
+      connectStatus: { isReady: true },
+      reviewerAllowlist: [REVIEWER_ID],
+    }
+  );
+
+  assert.strictEqual(result.status, 403);
+  assert.strictEqual(result.reason, "org_not_eligible_ios");
+});
+
+test("create-donation bypass does not apply to non-iOS callers", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      captchaToken: SENTINEL,
+      organizationId: "org-1",
+      amountCents: 500,
+      idempotencyKey: "key-reviewer-web",
+      mode: "checkout",
+      platform: "web",
+      reviewerUserId: REVIEWER_ID,
+      donorEmail: "donor@example.com",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        stripe_connect_account_id: "acct_connected_123",
+        donation_eligible_ios: true,
+      },
+      connectStatus: { isReady: true },
+      reviewerAllowlist: [REVIEWER_ID],
+    }
+  );
+
+  assert.strictEqual(result.status, 403);
+  assert.strictEqual(result.error, "Captcha verification failed");
 });
