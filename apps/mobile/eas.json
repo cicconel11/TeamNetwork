@@ -32,7 +32,8 @@
       "distribution": "store",
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_MOBILE_LIVE_ACTIVITIES_ENABLED": "true"
+        "EXPO_PUBLIC_MOBILE_LIVE_ACTIVITIES_ENABLED": "true",
+        "EXPO_PUBLIC_APP_REVIEW_EMAIL": "test-reviewer@myteamnetwork.com"
       }
     }
   },

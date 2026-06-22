@@ -62,18 +62,24 @@ Payment flows covered by Apple's exemptions, not StoreKit:
      Donations are voluntary and do not unlock any digital content or
      functionality in the app.
    - Where to find Apple Pay (this is the PassKit integration App Review
-     asked about under 2.1): sign in with the test account, open the
+     asked about under 2.1): sign in with the test account above, open the
      "Villanova Women's Lacrosse" org (slug villanova-football — it is
      donation_eligible_ios = true AND has an onboarded Stripe Connect
-     account, so the Payment Sheet renders), tap the org logo in the
-     top-left to open the drawer,
-     choose Money → Donations → "Make a Donation", enter an amount, tap
-     "Donate", and complete the captcha. Stripe's Payment Sheet then
-     opens with Apple Pay as a payment option (the test device must have
-     a card in Apple Wallet). Apple Pay only appears on iOS, only for
-     orgs flagged donation_eligible_ios; other orgs fall back to a
-     web-only message, which is why a reviewer testing a non-flagged org
-     would not see it.
+     account, so the Payment Sheet renders). Tap the org logo in the
+     top-left to open the drawer, choose Money → Donations →
+     "Make a Donation", enter any amount (e.g. 5), and tap
+     "Donate with Apple Pay". Stripe's Payment Sheet opens with Apple Pay
+     as a payment option.
+       • IMPORTANT: for THIS test account the security captcha is skipped,
+         so the reviewer is taken straight to the Payment Sheet — there is
+         no challenge to solve. (Captcha still applies to all real donors.)
+       • If the review device has no card in Apple Wallet, tapping Apple
+         Pay shows the standard "Add Card to Apple Pay" sheet — that still
+         demonstrates the Apple Pay integration. Adding any Apple Pay
+         sandbox test card lets you complete a charge end to end.
+       • Apple Pay only appears on iOS, only for orgs flagged
+         donation_eligible_ios; other orgs fall back to a web-only message,
+         which is why a reviewer testing a non-flagged org would not see it.
 
 3) Apple Wallet
    - Member cards, event tickets, and donation receipts are issued as
@@ -184,6 +190,14 @@ Code-side gates — verify these before each submission:
       `Platform.OS !== 'ios'`)
 - [ ] In-app account deletion works end-to-end on a test account
       (`apps/mobile/app/(app)/(drawer)/delete-account.tsx`)
+- [ ] App Review captcha bypass is wired so the reviewer reaches Apple Pay:
+      set `EXPO_PUBLIC_APP_REVIEW_EMAIL=test-reviewer@myteamnetwork.com` for the
+      EAS production build, and `APP_REVIEW_REVIEWER_USER_IDS` in Vercel to the
+      reviewer's Supabase user id (`03c0b18b-ef47-46d8-a643-9ca9ecff0d0e`, the
+      `test-reviewer@myteamnetwork.com` account). Both are default-closed when
+      unset. Verify on a TestFlight build that signing in as the reviewer and
+      tapping "Donate with Apple Pay" opens the Payment Sheet with NO captcha,
+      while a normal account still gets the captcha.
 - [ ] Donation success path stays in-app (Payment Sheet, no Safari
       redirect) for `donation_eligible_ios = true` orgs on iOS
 - [ ] The org named in the Review Notes donation walkthrough is BOTH
@@ -240,5 +254,6 @@ Ops-side gates:
 | 3.1.1 IAP required | Reviewer assumes subscription is consumer-facing | Reply citing 3.1.3(c) Enterprise Services: the alumni tier is paid by orgs/admins from an org budget on behalf of members; not a consumer subscription. Offer to demo on a call. |
 | 3.2.1(vi) donations | Org not recognized as a nonprofit | Provide the determination letter; if not 501(c)(3), pull the org from iOS via `donation_eligible_ios = false` instead of arguing. |
 | 5.1.1(v) account deletion | Delete account flow broken or hidden | Verify the delete-account screen is reachable from Profile and actually signs the user out + marks for deletion. |
+| 2.1 "unable to verify Apple Pay" | Reviewer could not traverse the captcha- and eligibility-gated donate path, so they never reached the Payment Sheet. | Point to the exact path in the Notes block above and stress that the captcha is bypassed for the test account. Confirm (1) the test account is an active member of `villanova-football`, (2) that org is `donation_eligible_ios = true` with a Connect account whose `charges_enabled = true`, and (3) `APP_REVIEW_REVIEWER_USER_IDS` (web) + `EXPO_PUBLIC_APP_REVIEW_EMAIL` (mobile build) are set. Offer a screen recording of the flow. |
 | 2.1(a) "client_secret does not match PaymentIntent" on donate | PaymentSheet confirmed against the platform account, but the PaymentIntent lives on the org's **connected** account (direct charge). `stripeAccountId` was passed to `initPaymentSheet`, which silently ignores it — it belongs to the SDK init params. | Fixed in `useDonationPaymentSheet.ts`: call `initStripe({ publishableKey, stripeAccountId })` with the connected account before opening the sheet, restore the platform context in `finally`. Verify the donation walkthrough org's Connect account is fully onboarded. |
 | 2.3.6 Age Assurance not found | "Age Assurance" / In-App Controls declared in age rating, but the app's age gate is a custom dropdown, not the Declared Age Range API | Metadata-only: ASC → App Information → Age Rating → set **Age Assurance** (and Parental Controls) to **None**. |
