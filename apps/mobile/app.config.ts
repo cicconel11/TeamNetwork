@@ -39,6 +39,13 @@ const config: ExpoConfig = {
   },
   ios: {
     supportsTablet: true,
+    // Phone-first, portrait-only app. With requireFullScreen omitted (default
+    // false), Expo's prebuild FORCES all four orientations into
+    // UISupportedInterfaceOrientations~ipad for multitasking compatibility,
+    // so iPadOS rotates the portrait-designed UI into a broken landscape
+    // layout. Requiring full screen disables Split View/Stage Manager and lets
+    // the portrait-only orientation stick on iPad (Apple permits this).
+    requireFullScreen: true,
     appleTeamId: "5GWLTFG43T",
     bundleIdentifier: "com.myteamnetwork.teammeet",
     buildNumber: "29",
@@ -54,6 +61,13 @@ const config: ExpoConfig = {
       NSSupportsLiveActivities: true,
       NSSupportsLiveActivitiesFrequentUpdates: true,
       ITSAppUsesNonExemptEncryption: false,
+      // Explicit portrait-only for iPad. ios.requireFullScreen (above) stops
+      // Expo's prebuild from forcing all four orientations here; this key makes
+      // the portrait lock unambiguous in the shipped plist.
+      "UISupportedInterfaceOrientations~ipad": [
+        "UIInterfaceOrientationPortrait",
+        "UIInterfaceOrientationPortraitUpsideDown",
+      ],
       NSCameraUsageDescription:
         "Scan a TeamNetwork QR code to join your organization or check members in at events.",
       NSCalendarsFullAccessUsageDescription:
