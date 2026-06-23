@@ -36,24 +36,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     isMountedRef.current = true;
 
+    // Restore the persisted session, but never let a slow or hung getSession()
+    // pin the app on AuthLoadingScreen at launch. The first of {resolve,
+    // reject, 8s timeout} flips isLoading off exactly once (settled guard). On
+    // timeout we treat it as "no session yet"; onAuthStateChange still delivers
+    // the real session independently if/when it arrives.
+    let settled = false;
+    const finishLoading = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    };
+
+    const timeoutId = setTimeout(finishLoading, 8000);
+
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => {
-        if (isMountedRef.current) {
+        if (!settled && isMountedRef.current) {
           setSession(session);
         }
       })
       .catch((error: Error) => {
         sentry.captureException(error, { context: "AuthContext.getSession" });
-        if (isMountedRef.current) {
+        if (!settled && isMountedRef.current) {
           setSession(null);
         }
       })
-      .finally(() => {
-        if (isMountedRef.current) {
-          setIsLoading(false);
-        }
-      });
+      .finally(finishLoading);
 
     const {
       data: { subscription },
@@ -66,6 +79,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       isMountedRef.current = false;
+      clearTimeout(timeoutId);
       subscription?.unsubscribe();
     };
   }, []);

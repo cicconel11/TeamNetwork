@@ -50,6 +50,13 @@ import { ErrorState } from "@/components/ui/ErrorState";
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   captureException(error, { context: "RootErrorBoundary" });
 
+  // The native splash is locked open at module load (preventAutoHideAsync) and
+  // is normally hidden inside RootLayoutInner. If a provider throws during the
+  // first render, that code never runs and the error screen would sit invisibly
+  // behind a frozen splash — exactly the "only a splash screen" launch hang.
+  // Dismiss it here so the retryable error UI is actually visible.
+  SplashScreen.hideAsync().catch(() => {});
+
   return (
     <ColorSchemeProvider>
       <SafeAreaView style={{ flex: 1, backgroundColor: "#0f172a" }}>
@@ -137,12 +144,16 @@ function RootLayoutInner() {
   const segments = useSegments() as string[];
   const { session, isLoading } = useAuth();
   const prevUserIdRef = useRef<string | undefined>(undefined);
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     DMSerifDisplay_400Regular,
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
   });
+  // A font load that errors or never resolves must not pin the app on the
+  // splash screen. Treat an error as "fonts done" and fall back to system
+  // fonts (cosmetic degradation) rather than blocking launch forever.
+  const fontsReady = fontsLoaded || !!fontError;
 
   // Track screen views automatically
   useScreenTracking();
@@ -159,12 +170,25 @@ function RootLayoutInner() {
   // Bump users.last_active_at on sign-in + every foreground.
   useActivityHeartbeat(session?.user?.id ?? null);
 
-  // Hide splash screen once fonts are loaded
+  // Hide splash screen once fonts are loaded — or once a font error makes it
+  // clear they never will. hideAsync() rejects if the splash is already hidden
+  // (e.g. raced with the timeout below), so swallow that rejection.
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
+
+  // Hard safety net: never let the splash outlive a stalled/never-resolving
+  // font load. App Review installs fresh (no warmed asset cache), where slow
+  // font I/O surfaces as "only a splash screen appeared on launch". This fires
+  // regardless of font state so the splash is always dismissed within 3s.
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   // Initialize analytics on mount
   useEffect(() => {
@@ -279,7 +303,7 @@ function RootLayoutInner() {
     }
   }, [session, isLoading, segments, router]);
 
-  if (!fontsLoaded || isLoading) {
+  if (!fontsReady || isLoading) {
     return <AuthLoadingScreen />;
   }
 
