@@ -98,19 +98,51 @@ Paste this into **App Store Connect → (version) → App Review → Resolution
 Center** when replying to a 2.1 "unable to verify Apple Pay" rejection. It
 answers the reviewer's exact ask (where is Apple Pay) in the first line.
 
-**Prerequisites before replying** (otherwise it bounces again):
-- A build that contains the captcha bypass + "Donate with Apple Pay" label is
-  selected on the version (first such build: **1.0 (62)** — build 61 still
-  shows the captcha).
-- `APP_REVIEW_REVIEWER_USER_IDS` set in Vercel prod to the reviewer's Supabase
-  user id (`03c0b18b-ef47-46d8-a643-9ca9ecff0d0e`) and the build redeployed.
-- The demo org reached by the walkthrough renders Apple Pay: it is named
-  **"Villanova Women's Lacrosse"** (slug `villanova-football`),
-  `donation_eligible_ios = true`, Connect onboarded. The reviewer account's
-  OTHER org (Penn Sprint Football) is intentionally web-only — make sure the
-  reply names the Villanova org so the reviewer doesn't open the wrong one.
-- Sign-In Required filled with the reviewer creds + a screen recording of the
-  Apple Pay sheet attached.
+**Prerequisites before replying — verify ALL of these LIVE, every time**
+(otherwise it bounces again; this is why builds 61→62→63 all failed). The
+bypass *code* and the *production DB* state are correct — what breaks the
+reviewer path is one of the external gates below silently returning a 4xx so
+Apple Pay never renders. Verified-green-in-DB items are marked ✅; the rest
+MUST be checked live before each resubmit:
+
+- ✅ Demo org `villanova-football` (Villanova Women's Lacrosse):
+  `donation_eligible_ios = true` AND `stripe_connect_account_id` set
+  (`acct_1SkEaaKv9KV1FrU0`). Confirmed in prod. The reviewer account's OTHER
+  org (Penn Sprint Football) is intentionally web-only — name the Villanova org
+  in the reply so the reviewer doesn't open the wrong one.
+- ✅ Reviewer account `test-reviewer@myteamnetwork.com` = user id
+  `03c0b18b-ef47-46d8-a643-9ca9ecff0d0e`, email confirmed, admin of
+  `villanova-football`. Confirmed in prod.
+- **A. Stripe Connect onboarding** on `acct_1SkEaaKv9KV1FrU0` is fully live.
+  There is NO cached status column — the server hits Stripe on every request,
+  so this can lapse silently. If not all-true, donate returns 400 "Stripe
+  onboarding is not completed" and Apple Pay never appears:
+  ```bash
+  stripe accounts retrieve acct_1SkEaaKv9KV1FrU0 \
+    | grep -E '"charges_enabled"|"payouts_enabled"|"details_submitted"'
+  # all three must be true
+  ```
+- **B. `APP_REVIEW_REVIEWER_USER_IDS`** set in **Vercel production** to
+  `03c0b18b-ef47-46d8-a643-9ca9ecff0d0e` AND redeployed after setting (env
+  changes need a fresh deploy to take effect). Unset/stale → no bypass →
+  captcha → dead end:
+  ```bash
+  vercel env ls production | grep APP_REVIEW_REVIEWER_USER_IDS
+  ```
+- **C. `EXPO_PUBLIC_APP_REVIEW_EMAIL=test-reviewer@myteamnetwork.com`** present
+  in the **EAS production build** that produced the selected build (env *value*,
+  not just code). Absent → mobile never substitutes the sentinel token →
+  captcha → dead end:
+  ```bash
+  eas env:list --environment production | grep EXPO_PUBLIC_APP_REVIEW_EMAIL
+  ```
+- The build selected on the version contains the captcha bypass +
+  "Donate with Apple Pay" label: **1.0 (62) or later** (build 61 still shows the
+  captcha). `app.config.ts` `buildNumber` is a stale local base — EAS
+  auto-increments remotely, so check the real number in ASC/TestFlight.
+- **D. Sign-In Required** filled with the reviewer creds AND a **screen
+  recording of the Apple Pay sheet attached** (see Step 2 below). Always attach
+  it — do not rely on the reviewer reproducing the gated flow.
 
 ```
 Re: Guideline 2.1 — Apple Pay integration location
@@ -149,8 +181,29 @@ donations route directly to the organization's own Stripe account.
 Separately, the PassKit framework is also used for Apple Wallet passes (member
 cards, event tickets, donation receipts) — not as a payment mechanism.
 
-We're happy to provide a screen recording of the full flow if helpful. Thank you.
+A screen recording of the full flow (sign-in → Donate with Apple Pay → Payment
+Sheet) is attached to this submission so you can confirm the integration even if
+the review device has no Apple Pay card set up. Thank you.
 ```
+
+## Add-for-review checklist (Step 2 — record the proof)
+
+On a real device running the production-profile TestFlight build (1.0 (62)+):
+
+1. Sign in as `test-reviewer@myteamnetwork.com`.
+2. Open **Villanova Women's Lacrosse** → tap the org logo (top-left) → Money →
+   Donations → "Make a Donation".
+3. Enter $5 → tap **"Donate with Apple Pay"** → the Stripe Payment Sheet opens
+   with Apple Pay and **no captcha challenge**.
+4. **Screen-record 10–20s of this.** If no card is in Wallet, the standard
+   "Add Card to Apple Pay" sheet still proves the integration — capture that.
+5. Attach the recording to the version's App Review submission, then paste the
+   reply above into Resolution Center.
+
+⚠️ This routes a reviewer test donation through `villanova-football`'s LIVE
+Connect account (a real customer, ~133 members). Refund the test charge in
+Stripe after review. See "Submission Pre-Flight" for the standing
+recommendation to provision a dedicated throwaway review org.
 
 ## Privacy → App Privacy
 
@@ -306,6 +359,12 @@ Ops-side gates:
 - [ ] TestFlight external beta cycled at least once with a non-employee
       tester before promoting
 
+## Rejection log
+
+| Date | Version / build | Submission ID | Citation | Root cause / action |
+|------|-----------------|---------------|----------|---------------------|
+| 2026-06-23 | 1.0 (63) | `63c01db9-e467-457d-898a-ddbe91494f37` | 2.1 Apple Pay | Recurred despite the build containing the captcha bypass. The bypass code and prod DB state were verified correct (reviewer `03c0b18b…` is admin of `villanova-football`; org `donation_eligible_ios = true` + Connect `acct_1SkEaaKv9KV1FrU0`). So the dead end was an UN-checked external gate: Stripe Connect `charges_enabled` (live), `APP_REVIEW_REVIEWER_USER_IDS` in Vercel prod, `EXPO_PUBLIC_APP_REVIEW_EMAIL` in the EAS build, or no screen recording attached. Action: re-verify all four (see "Prerequisites before replying"), attach a recording, resubmit. |
+
 ## If Review Rejects
 
 | Rejection citation | Likely cause | Response |
@@ -314,6 +373,6 @@ Ops-side gates:
 | 3.1.1 IAP required | Reviewer assumes subscription is consumer-facing | Reply citing 3.1.3(c) Enterprise Services: the alumni tier is paid by orgs/admins from an org budget on behalf of members; not a consumer subscription. Offer to demo on a call. |
 | 3.2.1(vi) donations | Org not recognized as a nonprofit | Provide the determination letter; if not 501(c)(3), pull the org from iOS via `donation_eligible_ios = false` instead of arguing. |
 | 5.1.1(v) account deletion | Delete account flow broken or hidden | Verify the delete-account screen is reachable from Profile and actually signs the user out + marks for deletion. |
-| 2.1 "unable to verify Apple Pay" | Reviewer could not traverse the captcha- and eligibility-gated donate path, so they never reached the Payment Sheet. | Point to the exact path in the Notes block above and stress that the captcha is bypassed for the test account. Confirm (1) the test account is an active member of `villanova-football`, (2) that org is `donation_eligible_ios = true` with a Connect account whose `charges_enabled = true`, and (3) `APP_REVIEW_REVIEWER_USER_IDS` (web) + `EXPO_PUBLIC_APP_REVIEW_EMAIL` (mobile build) are set. Offer a screen recording of the flow. |
+| 2.1 "unable to verify Apple Pay" | Reviewer could not traverse the captcha- and eligibility-gated donate path, so they never reached the Payment Sheet — OR no Notes/recording pointed them to it. | Run the full "Prerequisites before replying" checklist above (A: Stripe `charges_enabled` live, B: `APP_REVIEW_REVIEWER_USER_IDS` in Vercel prod + redeploy, C: `EXPO_PUBLIC_APP_REVIEW_EMAIL` in the EAS build, build ≥ 62), **attach a screen recording** (do not merely offer one), paste the Resolution Center reply, and resubmit. The bypass code itself is correct and unit-tested — assume the failure is an external gate, not code. |
 | 2.1(a) "client_secret does not match PaymentIntent" on donate | PaymentSheet confirmed against the platform account, but the PaymentIntent lives on the org's **connected** account (direct charge). `stripeAccountId` was passed to `initPaymentSheet`, which silently ignores it — it belongs to the SDK init params. | Fixed in `useDonationPaymentSheet.ts`: call `initStripe({ publishableKey, stripeAccountId })` with the connected account before opening the sheet, restore the platform context in `finally`. Verify the donation walkthrough org's Connect account is fully onboarded. |
 | 2.3.6 Age Assurance not found | "Age Assurance" / In-App Controls declared in age rating, but the app's age gate is a custom dropdown, not the Declared Age Range API | Metadata-only: ASC → App Information → Age Rating → set **Age Assurance** (and Parental Controls) to **None**. |
