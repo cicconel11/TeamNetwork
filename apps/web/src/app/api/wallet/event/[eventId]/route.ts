@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateEventTicketPass } from "@teammeet/wallet";
-import { getCurrentUser } from "@/lib/auth/roles";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 
@@ -58,7 +57,10 @@ export async function GET(
     return buildRateLimitResponse(rateLimit);
   }
 
-  const user = await getCurrentUser();
+  // Authenticate via Bearer token (mobile) or cookies (web). The mobile client
+  // sends `Authorization: Bearer <token>` with no cookies, so a cookie-only
+  // check would 401 every native request.
+  const { supabase, user } = await createAuthenticatedApiClient(req);
   if (!user) {
     return NextResponse.json(
       { error: "Unauthorized" },
@@ -66,7 +68,6 @@ export async function GET(
     );
   }
 
-  const supabase = await createClient();
   const { data: event } = await supabase
     .from("events")
     .select(
