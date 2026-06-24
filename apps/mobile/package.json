@@ -73,6 +73,7 @@
     "expo-quick-actions": "^6.0.1",
     "expo-router": "~6.0.21",
     "expo-secure-store": "^55.0.11",
+    "expo-sharing": "~14.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-updates": "~29.0.16",
     "expo-web-browser": "~15.0.10",

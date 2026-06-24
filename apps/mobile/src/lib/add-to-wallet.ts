@@ -1,5 +1,6 @@
-import { Linking, Platform } from "react-native";
+import { Platform } from "react-native";
 import { Directory, File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { supabase } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
 
@@ -17,9 +18,13 @@ export type AddToWalletResult =
   | { status: "error"; message: string };
 
 /**
- * Shared helper: downloads a signed `.pkpass` from the platform API and hands
- * it off to iOS Wallet via `Linking.openURL`. Use one of the typed wrappers
- * (`addMemberCardToWallet`, etc.) rather than calling this directly.
+ * Shared helper: downloads a signed `.pkpass` from the platform API and presents
+ * it to iOS Wallet. iOS cannot open a local `.pkpass` `file://` URL via
+ * `Linking.openURL` — passes must go through PassKit/QuickLook — so we hand the
+ * downloaded file to the system share sheet (`Sharing.shareAsync` with the
+ * `com.apple.pkpass` UTI), which previews the pass with an "Add" affordance.
+ * Use one of the typed wrappers (`addMemberCardToWallet`, etc.) rather than
+ * calling this directly.
  */
 export async function addToWallet(input: AddToWalletInput): Promise<AddToWalletResult> {
   if (Platform.OS !== "ios") {
@@ -44,10 +49,17 @@ export async function addToWallet(input: AddToWalletInput): Promise<AddToWalletR
       idempotent: true,
     });
 
-    const opened = await Linking.openURL(downloaded.uri);
-    if (opened === false) {
-      return { status: "error", message: "Could not open the pass in Wallet." };
+    if (!(await Sharing.isAvailableAsync())) {
+      return { status: "error", message: "Sharing is not available on this device." };
     }
+
+    // Resolves when the sheet is dismissed; iOS routes `.pkpass` to the Wallet
+    // "Add" preview. We can't observe whether the user tapped Add, so treat a
+    // successfully presented sheet as success.
+    await Sharing.shareAsync(downloaded.uri, {
+      UTI: "com.apple.pkpass",
+      mimeType: "application/vnd.apple.pkpass",
+    });
     return { status: "added" };
   } catch (e) {
     return {
