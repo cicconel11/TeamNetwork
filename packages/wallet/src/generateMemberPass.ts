@@ -1,7 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { PKPass } from "passkit-generator";
+import { ICON_PNG_BASE64 } from "./templates";
 
 export type WalletCertificates = {
   wwdr: string | Buffer;
@@ -50,16 +48,13 @@ export type DonationReceiptPassInput = {
   certificates: WalletCertificates;
 };
 
-const TEMPLATE_DIR_FROM_PACKAGE = "../templates";
+// icon.png and icon@2x.png are byte-identical, so one decoded buffer backs both
+// required asset keys. Embedded (see ./templates) rather than read from disk so
+// generation never depends on the bundler preserving the template files.
+const ICON_BUFFER = Buffer.from(ICON_PNG_BASE64, "base64");
 
-async function loadSharedTemplateBuffers(): Promise<Record<string, Buffer>> {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const templateDir = join(here, TEMPLATE_DIR_FROM_PACKAGE);
-  const filenames = ["icon.png", "icon@2x.png"];
-  const entries = await Promise.all(
-    filenames.map(async (name) => [name, await readFile(join(templateDir, name))] as const),
-  );
-  return Object.fromEntries(entries);
+function loadSharedTemplateBuffers(): Record<string, Buffer> {
+  return { "icon.png": ICON_BUFFER, "icon@2x.png": ICON_BUFFER };
 }
 
 function buildAndSerialize(
@@ -84,7 +79,7 @@ function buildAndSerialize(
  * otherwise scope this so a leaked pass cannot be replayed.
  */
 export async function generateMemberPass(input: MemberPassInput): Promise<Buffer> {
-  const templateBuffers = await loadSharedTemplateBuffers();
+  const templateBuffers = loadSharedTemplateBuffers();
 
   const passJson: Record<string, unknown> = {
     formatVersion: 1,
@@ -140,7 +135,7 @@ export async function generateMemberPass(input: MemberPassInput): Promise<Buffer
 export async function generateEventTicketPass(
   input: EventTicketPassInput,
 ): Promise<Buffer> {
-  const templateBuffers = await loadSharedTemplateBuffers();
+  const templateBuffers = loadSharedTemplateBuffers();
 
   const passJson: Record<string, unknown> = {
     formatVersion: 1,
@@ -202,7 +197,7 @@ export async function generateEventTicketPass(
 export async function generateDonationReceiptPass(
   input: DonationReceiptPassInput,
 ): Promise<Buffer> {
-  const templateBuffers = await loadSharedTemplateBuffers();
+  const templateBuffers = loadSharedTemplateBuffers();
 
   const passJson: Record<string, unknown> = {
     formatVersion: 1,
