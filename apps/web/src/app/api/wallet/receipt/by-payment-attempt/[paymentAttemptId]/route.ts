@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/roles";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
@@ -37,7 +37,10 @@ export async function GET(
     return buildRateLimitResponse(rateLimit);
   }
 
-  const user = await getCurrentUser();
+  // Authenticate via Bearer token (mobile) or cookies (web). The donation
+  // success screen on iOS polls this with `Authorization: Bearer <token>` and
+  // no cookies, so a cookie-only check would 401 every native request.
+  const { user } = await createAuthenticatedApiClient(req);
   if (!user) {
     return NextResponse.json(
       { error: "Unauthorized" },
