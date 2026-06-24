@@ -31,6 +31,19 @@ interface ProcessOptions {
   batchSize?: number;
 }
 
+/**
+ * The retrieval-gating fields of an already-stored chunk, fetched per
+ * (source_id, chunk_index) so the worker can decide whether a re-embed is
+ * required. `content_hash` covers the chunk TEXT; `audience` covers the
+ * retrieval gate, which lives in metadata (NOT the text) and so is invisible
+ * to the text hash on its own.
+ */
+interface StoredChunk {
+  contentHash: string;
+  /** `metadata->>'audience'` of the stored chunk, or null if absent. */
+  audience: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Source table column selects
 // ---------------------------------------------------------------------------
@@ -153,30 +166,96 @@ async function incrementAttempts(
 }
 
 /**
- * Batch-fetch existing chunk hashes for multiple source IDs in one query.
- * Returns Map<source_id, Map<chunk_index, content_hash>>.
+ * Decide whether a freshly rendered chunk must be re-embedded versus the
+ * stored chunk at the same index. Returns true (re-embed) if no stored chunk
+ * exists, if the TEXT hash differs, OR if the retrieval-gating `audience`
+ * metadata differs — even when the text is byte-identical.
+ *
+ * Audience gates retrieval (the search RPC filters on `metadata->>'audience'`),
+ * so a doc that flips public→restricted with unchanged text MUST replace its
+ * chunk; skipping it would leave stale `audience` visible to non-admins. This
+ * is a security boundary, so it biases toward re-embedding when in doubt.
+ */
+export function isChunkChanged(
+  stored: StoredChunk | undefined,
+  next: { contentHash: string; audience: string | null }
+): boolean {
+  if (!stored) return true;
+  if (stored.contentHash !== next.contentHash) return true;
+  return stored.audience !== next.audience;
+}
+
+/** Read the retrieval-gating `audience` out of chunk metadata, normalized to
+ * string | null so it compares cleanly against the stored column value. */
+function audienceOf(metadata: Record<string, unknown>): string | null {
+  const a = metadata.audience;
+  return a == null ? null : String(a);
+}
+
+/**
+ * Decide whether a source's chunk set must be re-written, given the freshly
+ * rendered chunks and what is currently stored. Returns true when ANY rendered
+ * chunk changed (text or audience) OR a stored chunk index is now orphaned
+ * (content shrank). False only when every chunk matches and nothing is orphaned.
+ *
+ * The caller MUST resend the FULL rendered set when this is true:
+ * `replace_ai_chunks` soft-deletes all existing chunks for the source and
+ * re-inserts only the payload, so a partial payload silently drops the
+ * unchanged chunks. Deciding at the set level (not per-chunk) makes that
+ * all-or-nothing contract explicit.
+ */
+export function chunkSetNeedsReplacement(
+  rendered: Array<{ chunkIndex: number; contentHash: string; audience: string | null }>,
+  existing: Map<number, StoredChunk>
+): boolean {
+  const renderedIndexes = new Set(rendered.map((c) => c.chunkIndex));
+  const hasOrphan = Array.from(existing.keys()).some(
+    (idx) => !renderedIndexes.has(idx)
+  );
+  if (hasOrphan) return true;
+  return rendered.some((c) =>
+    isChunkChanged(existing.get(c.chunkIndex), {
+      contentHash: c.contentHash,
+      audience: c.audience,
+    })
+  );
+}
+
+/**
+ * Batch-fetch existing chunks (text hash + audience gate) for multiple source
+ * IDs in one query. Returns Map<source_id, Map<chunk_index, StoredChunk>>.
+ * `metadata` is selected so audience changes are detected even when the chunk
+ * TEXT — and thus its content_hash — is unchanged.
  */
 async function batchFetchExistingHashes(
   supabase: SupabaseClient,
   orgId: string,
   sourceTable: string,
   sourceIds: string[]
-): Promise<Map<string, Map<number, string>>> {
-  const hashLookup = new Map<string, Map<number, string>>();
+): Promise<Map<string, Map<number, StoredChunk>>> {
+  const hashLookup = new Map<string, Map<number, StoredChunk>>();
   if (sourceIds.length === 0) return hashLookup;
 
   const { data } = await (supabase as any)
     .from("ai_document_chunks")
-    .select("source_id, chunk_index, content_hash")
+    .select("source_id, chunk_index, content_hash, metadata")
     .eq("org_id", orgId)
     .eq("source_table", sourceTable)
     .in("source_id", sourceIds)
     .is("deleted_at", null);
 
   if (data) {
-    for (const ec of data as { source_id: string; chunk_index: number; content_hash: string }[]) {
+    for (const ec of data as {
+      source_id: string;
+      chunk_index: number;
+      content_hash: string;
+      metadata: Record<string, unknown> | null;
+    }[]) {
       if (!hashLookup.has(ec.source_id)) hashLookup.set(ec.source_id, new Map());
-      hashLookup.get(ec.source_id)!.set(ec.chunk_index, ec.content_hash);
+      hashLookup.get(ec.source_id)!.set(ec.chunk_index, {
+        contentHash: ec.content_hash,
+        audience: audienceOf(ec.metadata ?? {}),
+      });
     }
   }
 
@@ -342,8 +421,8 @@ export async function processEmbeddingQueue(
 
   const pendingChunks: PendingChunk[] = [];
 
-  // Batch-fetch existing hashes per (org, table) to avoid N+1 queries
-  const hashLookupByKey = new Map<string, Map<string, Map<number, string>>>();
+  // Batch-fetch existing chunks per (org, table) to avoid N+1 queries
+  const hashLookupByKey = new Map<string, Map<string, Map<number, StoredChunk>>>();
   for (const [table, tableItems] of byTable) {
     // Group items by org within table
     const byOrg = new Map<string, string[]>();
@@ -391,24 +470,40 @@ export async function processEmbeddingQueue(
       continue;
     }
 
-    // Use batch-fetched hashes instead of per-item query
+    // Use batch-fetched chunks instead of per-item query
     const lookupKey = `${item.org_id}:${item.source_table}`;
     const orgTableHashes = hashLookupByKey.get(lookupKey);
-    const existingHashes = orgTableHashes?.get(item.source_id) ?? new Map<number, string>();
+    const existingChunks =
+      orgTableHashes?.get(item.source_id) ?? new Map<number, StoredChunk>();
 
-    // Check for orphaned chunks (old indexes not in new chunks)
-    const newChunkIndexes = new Set(chunks.map((c) => c.chunkIndex));
-    const hasOrphanedChunks = Array.from(existingHashes.keys()).some(
-      (idx) => !newChunkIndexes.has(idx)
+    // A chunk is changed when its TEXT hash differs OR its audience gate differs
+    // (audience lives in metadata, not the hashed text, so a public→restricted
+    // flip with identical text must still replace the chunk — security boundary).
+    const renderedChunks = chunks.map((chunk) => ({
+      chunk,
+      hash: computeContentHash(chunk.text),
+      audience: audienceOf(chunk.metadata),
+    }));
+
+    const needsReplacement = chunkSetNeedsReplacement(
+      renderedChunks.map(({ chunk, hash, audience }) => ({
+        chunkIndex: chunk.chunkIndex,
+        contentHash: hash,
+        audience,
+      })),
+      existingChunks
     );
 
-    let allUnchanged = !hasOrphanedChunks;
-    for (const chunk of chunks) {
-      const hash = computeContentHash(chunk.text);
-      if (existingHashes.get(chunk.chunkIndex) === hash) {
-        continue; // Skip unchanged chunk
-      }
-      allUnchanged = false;
+    if (!needsReplacement) {
+      stats.skipped++;
+      // Already marked processed_at by dequeue RPC
+      continue;
+    }
+
+    // replace_ai_chunks soft-deletes ALL existing chunks for the source and
+    // re-inserts only what we send, so a partial payload would silently drop
+    // the unchanged chunks. When anything changed, resend the FULL rendered set.
+    for (const { chunk, hash } of renderedChunks) {
       pendingChunks.push({
         item,
         text: chunk.text,
@@ -416,11 +511,6 @@ export async function processEmbeddingQueue(
         contentHash: hash,
         metadata: chunk.metadata,
       });
-    }
-
-    if (allUnchanged) {
-      stats.skipped++;
-      // Already marked processed_at by dequeue RPC
     }
   }
 

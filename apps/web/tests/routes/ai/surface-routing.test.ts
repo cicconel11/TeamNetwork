@@ -169,7 +169,8 @@ const SURFACE_BIAS_CASES: RoutingCase[] = [
     surface: "events",
     intentType: "knowledge_query",
     expectFirst: "list_events",
-    expectIncludes: ["list_events", "search_org_content", "list_members"],
+    expectIncludes: ["list_events", "list_members"],
+    expectExcludes: ["search_org_content"],
   },
   {
     name: "events surface: 'whats on the calendar this week' still leads with list_events",
@@ -185,7 +186,8 @@ const SURFACE_BIAS_CASES: RoutingCase[] = [
     surface: "analytics",
     intentType: "knowledge_query",
     expectFirst: "get_org_stats",
-    expectIncludes: ["get_org_stats", "search_org_content"],
+    expectIncludes: ["get_org_stats"],
+    expectExcludes: ["search_org_content"],
   },
   {
     name: "members surface: 'what is going on around here' leads with list_members",
@@ -193,7 +195,8 @@ const SURFACE_BIAS_CASES: RoutingCase[] = [
     surface: "members",
     intentType: "knowledge_query",
     expectFirst: "list_members",
-    expectIncludes: ["list_members", "search_org_content"],
+    expectIncludes: ["list_members"],
+    expectExcludes: ["search_org_content"],
   },
 ];
 

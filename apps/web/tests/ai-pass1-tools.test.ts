@@ -290,7 +290,6 @@ describe("getPass1Tools — single-tool cascade priorities", () => {
         "list_available_mentors",
         "suggest_mentors",
         "suggest_mentees",
-        "search_org_content",
         "find_navigation_targets",
       ],
     },
@@ -730,7 +729,6 @@ describe("getPass1Tools — surface defaults", () => {
       "list_available_mentors",
       "suggest_mentors",
       "suggest_mentees",
-      "search_org_content",
       "find_navigation_targets",
     ]);
   });
@@ -753,7 +751,6 @@ describe("getPass1Tools — surface defaults", () => {
       "list_available_mentors",
       "suggest_mentors",
       "suggest_mentees",
-      "search_org_content",
       "find_navigation_targets",
     ]);
   });
@@ -767,7 +764,6 @@ describe("getPass1Tools — surface defaults", () => {
     );
     assert.deepEqual(namesOf(tools), [
       "get_org_stats",
-      "search_org_content",
       "find_navigation_targets",
       "list_members",
       "list_alumni",
@@ -785,7 +781,6 @@ describe("getPass1Tools — surface defaults", () => {
     assert.deepEqual(namesOf(tools), [
       "list_events",
       "find_free_members",
-      "search_org_content",
       "find_navigation_targets",
       "list_members",
       "list_alumni",
@@ -804,7 +799,7 @@ describe("getPass1Tools — surface global read merge (regression for surface ro
     );
     const names = namesOf(tools);
     assert.equal(names[0], "list_events", "list_events must come first to preserve surface bias");
-    assert.ok(names.includes("search_org_content"));
+    assert.ok(!names.includes("search_org_content"));
     assert.ok(names.includes("list_members"));
   });
 
@@ -832,6 +827,19 @@ describe("getPass1Tools — surface global read merge (regression for surface ro
     assert.deepEqual(names, ["search_org_content"]);
   });
 
+  it("analytics knowledge budget questions do not expose keyword content search", () => {
+    const tools = getPass1Tools(
+      "What's the travel budget ceiling?",
+      "analytics",
+      "surface_read_tools",
+      "knowledge_query",
+    );
+    const names = namesOf(tools);
+    assert.equal(names[0], "get_org_stats");
+    assert.ok(!names.includes("search_org_content"));
+    assert.ok(names.includes("find_navigation_targets"));
+  });
+
   it("members surface dedupes — list_members appears exactly once", () => {
     const tools = getPass1Tools(
       "what is going on around here",
@@ -854,10 +862,9 @@ describe("getPass1Tools — surface global read merge (regression for surface ro
     assert.deepEqual(namesOf(tools), ["prepare_event"]);
   });
 
-  it("every surface contains all five global read tools", () => {
+  it("knowledge-query fallbacks omit keyword content search so RAG context can answer", () => {
     const surfaces: CacheSurface[] = ["general", "members", "analytics", "events"];
     const required = [
-      "search_org_content",
       "find_navigation_targets",
       "list_members",
       "list_alumni",
@@ -871,12 +878,29 @@ describe("getPass1Tools — surface global read merge (regression for surface ro
         "knowledge_query",
       );
       const names = namesOf(tools);
+      assert.ok(
+        !names.includes("search_org_content"),
+        `surface=${surface} must not include search_org_content for default knowledge-query fallbacks (got: ${names.join(", ")})`,
+      );
       for (const tool of required) {
         assert.ok(
           names.includes(tool),
           `surface=${surface} must include ${tool} in its merged pass-1 tool list (got: ${names.join(", ")})`,
         );
       }
+    }
+  });
+
+  it("explicit content searches still expose search_org_content on every surface", () => {
+    const surfaces: CacheSurface[] = ["general", "members", "analytics", "events"];
+    for (const surface of surfaces) {
+      const tools = getPass1Tools(
+        "search announcements about team dinner",
+        surface,
+        "surface_read_tools",
+        "knowledge_query",
+      );
+      assert.deepEqual(namesOf(tools), ["search_org_content"]);
     }
   });
 });

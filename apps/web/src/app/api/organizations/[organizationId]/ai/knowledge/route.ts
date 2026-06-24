@@ -96,9 +96,7 @@ export async function POST(
   }
 
   const input = parsed.data;
-  // knowledge_documents is not yet in generated DB types; cast like the worker
-  // and other pre-type-regen routes (e.g. parents) do.
-  const serviceSupabase = createServiceClient() as any;
+  const serviceSupabase = createServiceClient();
 
   const { data, error } = await serviceSupabase
     .from("knowledge_documents")
@@ -157,8 +155,7 @@ export async function DELETE(
     );
   }
 
-  // knowledge_documents is not yet in generated DB types; cast as above.
-  const serviceSupabase = createServiceClient() as any;
+  const serviceSupabase = createServiceClient();
 
   const { data, error } = await serviceSupabase
     .from("knowledge_documents")

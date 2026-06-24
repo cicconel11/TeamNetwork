@@ -1439,7 +1439,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "search_org_content" as const,
       description:
-        "Keyword/topic search across organization CONTENT (announcements, events, discussions, job postings) for a specific phrase or subject. Returns up to 5 results per entity type with title, snippet, and deep-link path. REQUIRED for any request that filters content by keyword, topic, or phrase — the list_* tools cannot filter by keyword. Examples: 'search announcements for team meeting', 'find posts mentioning fundraising', 'look up events about networking', 'any announcements about the picnic?'. DO NOT use this for finding a specific person by name — use list_members, list_alumni, or list_parents for people lookups.",
+        "Keyword/topic search across organization CONTENT (announcements, events, discussions, job postings, and knowledge documents like policies, handbooks, and FAQs) for a specific phrase or subject. Returns up to 5 results per entity type with title, snippet, and deep-link path. REQUIRED for any request that filters content by keyword, topic, or phrase — the list_* tools cannot filter by keyword. Examples: 'search announcements for team meeting', 'find posts mentioning fundraising', 'look up events about networking', 'any announcements about the picnic?', 'what's our travel budget policy?'. DO NOT use this for finding a specific person by name — use list_members, list_alumni, or list_parents for people lookups.",
       parameters: {
         type: "object" as const,
         properties: {

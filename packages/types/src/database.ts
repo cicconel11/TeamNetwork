@@ -3585,6 +3585,72 @@ export type Database = {
           },
         ]
       }
+      knowledge_documents: {
+        Row: {
+          audience: string
+          body: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          organization_id: string
+          resource: string | null
+          source_timestamp: string | null
+          tags: string[] | null
+          title: string
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          body: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          organization_id: string
+          resource?: string | null
+          source_timestamp?: string | null
+          tags?: string[] | null
+          title: string
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          organization_id?: string
+          resource?: string | null
+          source_timestamp?: string | null
+          tags?: string[] | null
+          title?: string
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       linkedin_connections: {
         Row: {
           connected_at: string
