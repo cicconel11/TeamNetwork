@@ -129,13 +129,16 @@ MUST be checked live before each resubmit:
   ```bash
   vercel env ls production | grep APP_REVIEW_REVIEWER_USER_IDS
   ```
-- **C. `EXPO_PUBLIC_APP_REVIEW_EMAIL=test-reviewer@myteamnetwork.com`** present
-  in the **EAS production build** that produced the selected build (env *value*,
-  not just code). Absent → mobile never substitutes the sentinel token →
-  captcha → dead end:
+- **C. `EXPO_PUBLIC_APP_REVIEW_EMAIL=test-reviewer@myteamnetwork.com`** baked
+  into the iOS build. It lives in the `production` profile's inline `env` block in
+  `apps/mobile/eas.json` (since 6/21, commit `713c6867e`) — so any build ≥ 1.0 (62)
+  has it. ⚠️ It will NOT show in `eas env:list` (that lists only the EAS env store,
+  not eas.json inline env) — check the file, not the store:
   ```bash
-  eas env:list --environment production | grep EXPO_PUBLIC_APP_REVIEW_EMAIL
+  grep EXPO_PUBLIC_APP_REVIEW_EMAIL apps/mobile/eas.json
   ```
+  Absent from the build that produced the selected version → mobile never
+  substitutes the sentinel token → captcha → dead end.
 - The build selected on the version contains the captcha bypass +
   "Donate with Apple Pay" label: **1.0 (62) or later** (build 61 still shows the
   captcha). `app.config.ts` `buildNumber` is a stale local base — EAS
@@ -363,7 +366,7 @@ Ops-side gates:
 
 | Date | Version / build | Submission ID | Citation | Root cause / action |
 |------|-----------------|---------------|----------|---------------------|
-| 2026-06-23 | 1.0 (63) | `63c01db9-e467-457d-898a-ddbe91494f37` | 2.1 Apple Pay | Recurred despite the build containing the captcha bypass. Verified-correct on 2026-06-23: bypass code; prod DB (reviewer `03c0b18b…` admin of `villanova-football`; org `donation_eligible_ios = true`); AND Stripe Connect `acct_1SkEaaKv9KV1FrU0` is fully live (`charges_enabled`/`payouts_enabled`/`details_submitted` all true, `disabled_reason: null`). That rules out the backend onboarding 400. Remaining causes narrow to: `APP_REVIEW_REVIEWER_USER_IDS` not live in Vercel prod (→ captcha 403), `EXPO_PUBLIC_APP_REVIEW_EMAIL` absent in the EAS build (→ sentinel never sent), or no Notes/recording attached. Action: verify B/C in their dashboards, attach a recording, resubmit. |
+| 2026-06-23 | 1.0 (63) | `63c01db9-e467-457d-898a-ddbe91494f37` | 2.1 Apple Pay | Recurred, then ALL bypass prerequisites verified correct on 2026-06-23: (1) `EXPO_PUBLIC_APP_REVIEW_EMAIL` is in the `production` profile's inline `env` in `eas.json` since 6/21 commit `713c6867e` — NOTE it does NOT appear in `eas env:list` (that shows only the EAS env store, not eas.json inline env), so don't be misled; build 63 has it. (2) Vercel `APP_REVIEW_REVIEWER_USER_IDS = 03c0b18b-…` confirmed via `vercel env pull`, and prod redeployed 23h ago (after the var was set). (3) Stripe `acct_1SkEaaKv9KV1FrU0` fully live (`charges_enabled`/`payouts_enabled`/`details_submitted` true). (4) Prod DB reviewer/membership/org flags correct. Conclusion: both bypass halves are wired NOW. The 6/23 failure was most likely the Vercel var not yet live at the exact review moment AND/OR no Notes+recording attached. Action: test build 63 as-is on TestFlight (no new build needed unless the Apple Pay sheet still shows a captcha → then build 63 predates the bypass), record the flow, resubmit build 63 with the reply + recording. |
 
 ## If Review Rejects
 
