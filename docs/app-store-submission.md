@@ -363,7 +363,7 @@ Ops-side gates:
 
 | Date | Version / build | Submission ID | Citation | Root cause / action |
 |------|-----------------|---------------|----------|---------------------|
-| 2026-06-23 | 1.0 (63) | `63c01db9-e467-457d-898a-ddbe91494f37` | 2.1 Apple Pay | Recurred despite the build containing the captcha bypass. The bypass code and prod DB state were verified correct (reviewer `03c0b18b…` is admin of `villanova-football`; org `donation_eligible_ios = true` + Connect `acct_1SkEaaKv9KV1FrU0`). So the dead end was an UN-checked external gate: Stripe Connect `charges_enabled` (live), `APP_REVIEW_REVIEWER_USER_IDS` in Vercel prod, `EXPO_PUBLIC_APP_REVIEW_EMAIL` in the EAS build, or no screen recording attached. Action: re-verify all four (see "Prerequisites before replying"), attach a recording, resubmit. |
+| 2026-06-23 | 1.0 (63) | `63c01db9-e467-457d-898a-ddbe91494f37` | 2.1 Apple Pay | Recurred despite the build containing the captcha bypass. Verified-correct on 2026-06-23: bypass code; prod DB (reviewer `03c0b18b…` admin of `villanova-football`; org `donation_eligible_ios = true`); AND Stripe Connect `acct_1SkEaaKv9KV1FrU0` is fully live (`charges_enabled`/`payouts_enabled`/`details_submitted` all true, `disabled_reason: null`). That rules out the backend onboarding 400. Remaining causes narrow to: `APP_REVIEW_REVIEWER_USER_IDS` not live in Vercel prod (→ captcha 403), `EXPO_PUBLIC_APP_REVIEW_EMAIL` absent in the EAS build (→ sentinel never sent), or no Notes/recording attached. Action: verify B/C in their dashboards, attach a recording, resubmit. |
 
 ## If Review Rejects
 
