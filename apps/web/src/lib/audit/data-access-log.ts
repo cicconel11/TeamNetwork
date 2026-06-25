@@ -1,7 +1,13 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { hashIp, getClientIp } from "@/lib/compliance/audit-log";
 
-type ResourceType = "member_profile" | "form_submission" | "data_export" | "roster_download";
+type ResourceType =
+  | "member_profile"
+  | "form_submission"
+  | "data_export"
+  | "roster_download"
+  | "alumni_user_link"
+  | "alumni_reinvite";
 
 /**
  * Log an access event to the data_access_log table.
