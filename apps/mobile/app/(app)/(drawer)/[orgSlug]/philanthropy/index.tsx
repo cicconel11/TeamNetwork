@@ -38,7 +38,7 @@ import type { Event, OrganizationDonationStat } from "@teammeet/types";
 
 type PhilanthropyView = "upcoming" | "past";
 
-// Accent color for philanthropy — heart/charity theme
+// Accent color for the Team Funding hub
 const ACCENT = "#059669"; // emerald-600
 
 export default function PhilanthropyScreen() {

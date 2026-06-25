@@ -35,9 +35,9 @@ type PaymentSheetResponse = {
 };
 
 /**
- * Drives the Apple Pay / Stripe Payment Sheet flow for org donations. Calls
+ * Drives the Apple Pay / Stripe Payment Sheet flow for org contributions. Calls
  * the platform `create-donation` API with `mode=payment_sheet` + an `x-platform`
- * header so the server can apply Guideline 3.2.1(vi) eligibility gating.
+ * header so the server can apply per-org eligibility gating (donation_eligible_ios).
  */
 export function useDonationPaymentSheet() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
