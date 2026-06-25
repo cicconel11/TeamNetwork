@@ -230,8 +230,32 @@ describe("getAiOrgContext", () => {
     }
   });
 
-  it("refuses parent role even when kill is lifted", async () => {
+  it("admits parent when kill is lifted and allowedRoles permits", async () => {
     liftKill();
+    try {
+      const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
+      const mockUser = { id: "user-id", email: "p@t.com" };
+      const mockServiceSupabase = createMockServiceSupabaseWithOrg({
+        role: "parent",
+      });
+      const result = await getAiOrgContext(
+        "org-id",
+        mockUser as unknown as User,
+        mockRateLimit,
+        { serviceSupabase: mockServiceSupabase },
+        { allowedRoles: ["admin", "active_member", "alumni", "parent"] },
+      );
+      assert.equal(result.ok, true);
+      if (result.ok) {
+        assert.equal(result.role, "parent");
+      }
+    } finally {
+      restoreKill();
+    }
+  });
+
+  it("returns 403 for parent when kill switch is active", async () => {
+    process.env.AI_MEMBER_ACCESS_KILL = "1";
     try {
       const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
       const mockUser = { id: "user-id", email: "p@t.com" };

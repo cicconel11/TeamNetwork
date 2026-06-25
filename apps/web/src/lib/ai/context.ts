@@ -164,12 +164,6 @@ export async function getAiOrgContext(
         response: respond({ error: "AI assistant is not available for your role" }, 403),
       };
     }
-    if (rawRole === "parent") {
-      return {
-        ok: false,
-        response: respond({ error: "AI assistant is not available for your role" }, 403),
-      };
-    }
   }
 
   let enterpriseId: string | undefined;

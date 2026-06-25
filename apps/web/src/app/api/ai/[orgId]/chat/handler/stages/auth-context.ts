@@ -85,7 +85,7 @@ export async function runAuthContextStage(
         user,
         rateLimit,
         { supabase, logContext: baseLogContext },
-        { allowedRoles: ["admin", "active_member", "alumni"] },
+        { allowedRoles: ["admin", "active_member", "alumni", "parent"] },
       ),
   );
   if (!ctx.ok) {
