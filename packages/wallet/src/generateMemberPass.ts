@@ -204,17 +204,17 @@ export async function generateDonationReceiptPass(
     passTypeIdentifier: input.passTypeIdentifier,
     teamIdentifier: input.teamIdentifier,
     organizationName: input.organizationName,
-    description: `Donation receipt — ${input.organizationName}`,
+    description: `Contribution receipt — ${input.organizationName}`,
     serialNumber: `${input.organizationSlug}.donation.${input.donationId}`,
     foregroundColor: "rgb(255, 255, 255)",
     backgroundColor: "rgb(15, 23, 42)",
     labelColor: "rgb(148, 163, 184)",
     generic: {
       primaryFields: [
-        { key: "amount", label: "DONATION", value: input.amountFormatted },
+        { key: "amount", label: "CONTRIBUTION", value: input.amountFormatted },
       ],
       secondaryFields: [
-        { key: "donor", label: "DONOR", value: input.donorName },
+        { key: "donor", label: "SUPPORTER", value: input.donorName },
         ...(input.purpose
           ? [{ key: "purpose", label: "PURPOSE", value: input.purpose }]
           : []),
@@ -231,15 +231,15 @@ export async function generateDonationReceiptPass(
       backFields: [
         {
           key: "disclaimer",
-          label: "Tax deductibility",
+          label: "Receipt note",
           value:
-            "This pass is a record of your contribution and is not an official tax receipt. Your organization will provide tax documentation if applicable.",
+            "This pass is a record of your contribution to support the team and is not an official tax receipt.",
         },
         {
           key: "support",
           label: "Support",
           value:
-            "Questions about this donation? Contact your organization administrator.",
+            "Questions about this contribution? Contact your organization administrator.",
         },
       ],
     },

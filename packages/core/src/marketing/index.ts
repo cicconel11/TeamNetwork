@@ -36,7 +36,7 @@ export interface DemoOrg {
 export const BRAND_TAGLINE = "Built for teams that go the distance";
 
 export const HERO_SUB_COPY =
-  "Member directories, events, donations, philanthropy, and records — all in one place. Built for sports teams, students, clubs, and organizations of all kinds.";
+  "Member directories, events, contributions, team funding, and records — all in one place. Built for sports teams, students, clubs, and organizations of all kinds.";
 
 export const DEMO_ORG: DemoOrg = {
   name: "South Rock Ridge High School",
@@ -73,7 +73,7 @@ export const FEATURES: MarketingFeature[] = [
     id: "fundraising",
     title: "Fundraising",
     description:
-      "Accept donations for new equipment or travel expenses directly to your team's Stripe account.",
+      "Accept contributions for new equipment or travel expenses directly to your team's Stripe account.",
     icon: "dollar-sign",
   },
   {
