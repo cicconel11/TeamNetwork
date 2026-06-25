@@ -80,6 +80,12 @@ export default async function DataHealthPage({ params }: DataHealthPageProps) {
       : report.enrichment.state === "degraded"
         ? "bad"
         : "warn";
+  const reachTone: Tone =
+    report.reachability.state === "ok"
+      ? "good"
+      : report.reachability.state === "degraded"
+        ? "bad"
+        : "warn";
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -88,7 +94,7 @@ export default async function DataHealthPage({ params }: DataHealthPageProps) {
         description="Read-only correctness checks across the assistant's RAG index and LinkedIn enrichment. Counts show divergence between live data and each pipeline."
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card title="RAG index" tone={ragTone} state={report.rag.state}>
           <MetricRow label="Missing coverage" value={report.rag.counts.missingCoverage} />
           <MetricRow label="Orphan chunks" value={report.rag.counts.orphanChunks} />
@@ -104,6 +110,19 @@ export default async function DataHealthPage({ params }: DataHealthPageProps) {
           />
           <MetricRow label="Stalled runs" value={report.enrichment.counts.stalledRuns} />
           <MetricRow label="Pre-provenance rows" value={report.enrichment.counts.preProvenance} />
+        </Card>
+
+        <Card title="Reachability" tone={reachTone} state={report.reachability.state}>
+          <MetricRow label="Total alumni" value={report.reachability.counts.totalAlumni} />
+          <MetricRow label="Linked alumni" value={report.reachability.counts.linkedAlumni} />
+          <MetricRow
+            label="Chat-eligible %"
+            value={`${report.reachability.counts.chatEligiblePercent}%`}
+          />
+          <MetricRow
+            label="Unclaimed with email"
+            value={report.reachability.counts.unclaimedWithEmail}
+          />
         </Card>
       </div>
     </div>
