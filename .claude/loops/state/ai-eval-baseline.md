@@ -31,6 +31,9 @@ rule changed. The loop's job: let those changes in only when they raise the scor
   hand-authored **hard cases** (ambiguous, adversarial, empty) — the set's value is its coverage of
   the cases a keyword bump would silently break.
 
+<!-- grammar (machine-parseable, do not break): `baseline: <P> / <T> @ <shortsha>`.
+     P = passing count, T = total rows, shortsha = the commit the score was computed on.
+     Any prose after the SHA (in parens) is an ignored human note. Parse only up to the SHA. -->
 baseline: 20 / 20   @ 619898d1 (auto-loop turn 5: +3 edge rows — case-insensitivity, whitespace, analytics/events tie; 0 regressions)
 <!-- bump `baseline` to the new passing count + the candidate's commit SHA only on a PASS that beats it -->
 <!-- history:

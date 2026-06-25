@@ -36,8 +36,9 @@ For each candidate, decide — and write down the decision, not just the item:
 - Is it **actionable now**, or noise (flake already retried, dependabot churn)? Skip noise.
 - Does it **block a release** (App Store build, Stripe/webhook, wallet pass signing)? → `priority`.
 - Is it **already tracked** by an open PR or an earlier `triage.md` row? → skip.
-- Is the fix **small and well-scoped** (lint, flaky test, null-deref, stale dep)? → eligible for a
-  worktree agent. Anything architectural or ambiguous → **inbox**, not a worktree.
+- Is the fix **small and well-scoped** — touches ≤ ~3 files, has a deterministic one-sentence
+  stop-condition, and needs no schema/migration/auth/billing decision (lint, flaky test, null-deref,
+  stale dep)? → eligible for a worktree agent. Anything failing that bar → **inbox**, not a worktree.
 
 Keep only what is worth opening a worktree for **today**.
 
@@ -74,8 +75,13 @@ worktree=fix/<slug>  goal=<deterministic stop-condition>  e.g. "test/auth passes
 
 Each finding gets its **own** git worktree so parallel agents never touch the same files
 (`Agent(..., isolation: "worktree")` in-session, or `claude --worktree` from the CLI).
-The drafting agent is the **generator**; it must hand its diff to the `reviewer` agent
-(the **evaluator**) before anything opens as a PR.
+
+The task line and the draft PR are two **stages of one pipeline**, not two competing mechanisms:
+
+1. This skill emits the `worktree=…` task line — and nothing more. **The skill itself never opens a PR.**
+2. A worktree agent (the **generator**) fixes the finding and hands its diff to the `reviewer` agent
+   (the **evaluator**).
+3. Only after `reviewer` returns `VERDICT: PASS` does a draft PR open.
 
 ## Stop (the boundary you keep for yourself — DO NOT REMOVE)
 
@@ -83,6 +89,9 @@ This section is not boilerplate; it is the one place the loop's limits are writt
 The loop will faithfully do everything above and nothing this section forbids.
 
 - **Never merge. Never delete. Never force-push.** PRs open in draft; humans merge.
-- Anything you are **less than confident** about → `.claude/loops/inbox/` for a human, not a PR.
-- **Token cap:** stop after the configured per-run budget; do not spawn unbounded retries.
+- If you **cannot name the exact passing check that proves the fix**, or the fix touches
+  secrets/billing/auth/migration/production data → `.claude/loops/inbox/` for a human, not a PR.
+- **Token cap:** the per-run budget is the `--max-turns` cap in `.github/workflows/loop-triage.yml`
+  (currently 40) for cloud runs, or the local `/loop` cap when run by hand. The number is authoritative in
+  the YAML; this skill only references it. Stop when it is reached; do not spawn unbounded retries.
 - Touch only `cicconel11/teamnetwork`. Never act on secrets, billing, or production data.

@@ -45,15 +45,11 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # DISCOVERY is a skill, not a wall of text pasted into a cron job.
+          # The skill is the single source of truth; this prompt is a launcher, not a re-statement.
           prompt: |
-            Run the `ai-eval-loop` skill. Read the golden set + baseline in
-            .claude/loops/state/ai-eval-baseline.md FIRST. Find candidate improvements to
-            resolveSurfaceRouting (apps/web/src/lib/ai/intent-router.ts) that fix a currently-failing
-            golden row or a confirmed real miss from feedback-evals. For each candidate, apply it in an
-            isolated worktree, run the FULL golden set, and hand the diff + score to the `ai-eval-judge`
-            agent. Open a DRAFT PR (classifier diff + golden-set additions + baseline bump) ONLY if the
-            judge returns PASS — candidate beats baseline with zero regressions. Anything that ties,
-            regresses, or touches safety/access/spend goes to .claude/loops/inbox/ for a human. NEVER
-            merge, NEVER edit the golden set to manufacture a pass, NEVER force-push.
+            Run the `ai-eval-loop` skill end to end — it is the single source of truth for discovery,
+            scoring, candidate sources, budget, and the `ai-eval-judge` handoff; follow it exactly.
+            First read .claude/loops/state/ai-eval-baseline.md. Obey the skill's Stop boundary verbatim
+            (draft PRs only, never merge/force-push, never edit the golden set, never touch
+            safety/access/spend). Hard cap is `--max-turns` below.
           claude_args: '--max-turns 40'   # hard cap: bounds an idle loop's spend

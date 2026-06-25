@@ -25,7 +25,9 @@ Then gather candidate improvements from, in order of trust:
 - **Real misses (highest value)** — `apps/web/src/lib/ai/feedback-evals.ts` turns thumbs-down
   `ai_feedback` into eval candidates; `apps/web/src/lib/ai/feedback-golden-bridge.ts` converts each into
   a `GoldenRowProposal` carrying the real prompt, the surface, and what the *current* router does with it.
-  Run `feedbackCandidatesToGoldenProposals(...)`; for each proposal a HUMAN sets the correct
+  This bridge is wired only as the **manual** export `bun run --cwd apps/web evals:ai:feedback` —
+  there is **no automatic in-loop call** today. Treat exported `GoldenRowProposal`s as input you are
+  handed; do NOT assume the loop fetches them itself. For each proposal a HUMAN sets the correct
   `expectIntent`/`expectSurface` (a thumbs-down means a human judged the turn wrong — only a human supplies
   ground truth, never this loop). A proposal whose `current` routing disagrees with the human's ground
   truth is the strongest possible row: a real user, a real miss, traceable by `feedbackId`. Promote it.
@@ -52,11 +54,25 @@ For each eligible candidate:
 
 1. Apply the candidate diff in an isolated worktree (handoff — never in the main checkout).
 2. Run the golden set against `resolveSurfaceRouting` for **every** row (baseline rows + new rows).
-   The runner is a deterministic node test (see `apps/web/tests/ai-fast-path-classifier.test.ts` for the
-   house style — `node:test` + `assert/strict`, no live model). Record `passing / total`.
-3. Hand the candidate + its score to the `ai-eval-judge` agent. It re-runs the set itself (never trust a
-   score it did not compute) and returns PASS only if `candidate ≥ baseline` AND no previously-passing row
-   regressed.
+   The runner is a deterministic node test (`node:test` + `assert/strict`, no live model). From `apps/web/`,
+   run exactly:
+   ```
+   node --import ./tests/register-ts-loader.mjs --test tests/ai-intent-golden.test.ts
+   ```
+   `ai-intent-golden.test.ts` is the golden runner (it imports `resolveSurfaceRouting`); do NOT confuse it
+   with `ai-fast-path-classifier.test.ts`, which tests the unrelated `classifyFastPath`. Record
+   `passing / total`.
+3. Hand the candidate to the `ai-eval-judge` agent as a structured object:
+   ```
+   candidate_diff: <the worktree diff to intent-router.ts>
+   worktree: <path to the isolated worktree where the diff is applied>
+   claimed_score: <passing / total you recorded in step 2>
+   baseline: <P / T from ai-eval-baseline.md>
+   golden_rows_added: <rows this candidate adds to the set, if any; else none>
+   ```
+   The judge re-runs the set itself (never trusting a score it did not compute) and treats `claimed_score`
+   as a **hypothesis to falsify**, not a fact. It returns PASS only if its recomputed `candidate > baseline`
+   AND no previously-passing row regressed.
 4. On PASS-that-beats-baseline: open a DRAFT PR with the classifier diff AND the golden-set additions, and
    bump `baseline:` to the new passing count + the candidate SHA in the same PR. On REJECT or tie: write
    the attempt to `.claude/loops/inbox/` and change nothing.
@@ -69,5 +85,7 @@ For each eligible candidate:
 - **Out of scope:** safety gate, access policy, spend caps, anything calling a live model in the scored
   path. Routing keywords and thresholds only.
 - **No PII** in the golden set or inbox. Synthetic or anonymized inputs only.
-- **Token cap:** stop after the configured per-run budget; no unbounded retry of a candidate that keeps
-  failing — failing twice is an inbox item, not a third attempt.
+- **Token cap:** the per-run budget is the `--max-turns` cap in `.github/workflows/loop-ai-eval.yml`
+  (currently 40) for cloud runs, or the local `/loop` cap when run by hand. The number is authoritative in
+  the YAML; this skill only references it. Stop when it is reached; no unbounded retry of a candidate that
+  keeps failing — failing twice is an inbox item, not a third attempt.

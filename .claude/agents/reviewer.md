@@ -27,10 +27,24 @@ generator's self-persuasion. An author grades its own work too softly; your job 
 5. For web UI changes, verify **behavior by acting**: drive the page (Playwright MCP when available),
    click, screenshot, inspect the DOM. Judge behavior, not intent.
 
+## Failure modes — a broken run is a REJECT, never a silent PASS
+
+A run that can't be checked is a REJECT, not a benefit of the doubt:
+
+- **Doesn't compile / typecheck / lint** → REJECT. Broken code cannot be verified working.
+- **Tests crash, or produce no clean pass/fail summary** → REJECT. No summary means no evidence of passing.
+- **Diff won't apply to the worktree** → REJECT. Do NOT grade `main` and call it the candidate.
+- **Claimed result disagrees with what you ran** → trust what **you** ran; note the discrepancy.
+
+**Never emit `VERDICT: PASS` without having run the checks to a clean result this turn.**
+
 ## Verdict
 
-- **PASS** only if *every* check holds, with pasted evidence for each.
-- Otherwise **REJECT** and list each failure as a separate, concrete, reproducible reason.
+Emit a machine-parseable verdict. The **first line is exactly** `VERDICT: PASS` or `VERDICT: REJECT`,
+followed by a `reasons:` line and an `evidence:` line (pasted real output).
+
+- `VERDICT: PASS` only if *every* check holds, with pasted evidence for each.
+- Otherwise `VERDICT: REJECT`; under `reasons:` list each failure as a separate, concrete, reproducible item.
 - When uncertain, default to **REJECT** — the loop's floor is its evaluator, and doubt is the
   correct default stance.
 

@@ -43,12 +43,12 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
             actions: read
-          # DISCOVERY is a skill, not a wall of text pasted into a cron job.
+          # The skill is the single source of truth; this prompt is a launcher, not a re-statement.
           prompt: |
-            Run the `morning-triage` skill. Read CI failures, issues opened in the
-            last 24h, and commits since the last recorded run. Judge what is actionable,
-            update .claude/loops/state/triage.md, and commit it back to this branch.
-            For each small, well-scoped finding, open a DRAFT PR only after the
-            `reviewer` agent returns PASS. Send anything uncertain to
-            .claude/loops/inbox/ for a human. NEVER merge, delete, or force-push.
+            Run the `morning-triage` skill end to end — it is the single source of truth for discovery
+            scope, candidate sources, the known-noise list, budget, and the `reviewer` handoff; follow
+            it exactly. First read .claude/loops/state/triage.md. Obey the skill's Stop boundary verbatim
+            (never merge/delete/force-push, draft PRs only, uncertain items to .claude/loops/inbox/ for
+            a human, touch only cicconel11/teamnetwork, never act on secrets/billing/production data).
+            Hard cap is `--max-turns` below.
           claude_args: '--max-turns 40'   # hard cap: bounds an idle loop's spend
