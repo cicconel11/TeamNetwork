@@ -85,7 +85,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "/expenses", label: "Expenses", i18nKey: "expenses", icon: ReceiptIcon, roles: ["admin", "active_member"], group: "finance" },
   { href: "/records", label: "Records", i18nKey: "records", icon: TrophyIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "activity" },
   { href: "/calendar", label: "Calendar", i18nKey: "calendar", icon: BookOpenIcon, roles: ["admin", "active_member", "alumni", "parent"] },
-  { href: "/assistant", label: "Assistant", i18nKey: "assistant", icon: SparklesIcon, roles: ["admin"], configurable: false },
+  { href: "/assistant", label: "Assistant", i18nKey: "assistant", icon: SparklesIcon, roles: ["admin", "active_member", "alumni", "parent"], configurable: false },
   { href: "/jobs", label: "Jobs", i18nKey: "jobs", icon: BriefcaseIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/forms", label: "Forms", i18nKey: "forms", icon: ClipboardIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/media", label: "Media", i18nKey: "media", icon: GridIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
