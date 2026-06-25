@@ -121,10 +121,9 @@ export async function POST(req: Request) {
         : "checkout";
   const platformHeader = req.headers.get("x-platform")?.toLowerCase() ?? null;
   const isIosClient = platformHeader === "ios";
-  // TeamNetwork takes NO platform fee on donations. Donations are direct charges
-  // on the org's connected Stripe account; the org receives the full amount minus
-  // only Stripe's own processing fee. (No application_fee_amount — see Apple
-  // Guideline 3.2.1(vi) and the customer-facing "no fees" promise.)
+  // TeamNetwork takes NO platform fee on contributions. Contributions are direct
+  // charges on the org's connected Stripe account; the org receives the full
+  // amount minus only Stripe's own processing fee (no application_fee_amount).
   const idempotencyKey = body.idempotencyKey ?? null;
   const paymentAttemptId = body.paymentAttemptId ?? null;
 
@@ -151,14 +150,14 @@ export async function POST(req: Request) {
   }
   const resolvedOrg = org as unknown as DonationOrganization;
 
-  // Apple Guideline 3.2.1(vi): donations from iOS may only be collected by
-  // verified nonprofits. Block both payment_sheet (native) and checkout
-  // (Safari) flows from the iOS client if the org has not been verified —
-  // the safer default is "redirect to the web for this org".
+  // In-app contribution collection is enabled per-org via donation_eligible_ios.
+  // Contributions support the (for-profit) team's real-world activities and
+  // expenses — they are not charitable donations. When an org has not enabled
+  // in-app collection, iOS clients fall back to the web flow.
   if (isIosClient && !resolvedOrg.donation_eligible_ios) {
     return respond(
       {
-        error: "Donations to this organization are only available on the web.",
+        error: "Contributions to this organization are only available on the web.",
         reason: "org_not_eligible_ios",
       },
       403,

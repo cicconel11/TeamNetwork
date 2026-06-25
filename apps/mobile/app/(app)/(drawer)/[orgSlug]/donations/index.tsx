@@ -407,9 +407,9 @@ export default function DonationsScreen() {
         </View>
       </View>
 
-      {/* Make a Donation Button — hidden on iOS for orgs not verified as
-          donation-eligible (Apple Guideline 3.2.1(vi)); we surface a neutral
-          web-managed notice instead so the screen never dead-ends. */}
+      {/* Support This Team button — on iOS this is shown when the org has
+          in-app contributions enabled (donation_eligible_ios); otherwise a
+          web-managed notice is surfaced so the screen never dead-ends. */}
       {showDonateCta ? (
         <>
           <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>

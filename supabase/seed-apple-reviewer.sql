@@ -5,13 +5,12 @@
 -- they can demo every feature surface in TeamNetwork.
 --
 -- The reviewer is granted membership in three orgs:
---   1. "Apple Review Test Org"  — created here, donation_eligible_ios = false
---      (so the in-app native payment flow stays gated OFF and the reviewer sees
---      the compliant "Contributions are managed on the web" notice that links
---      out to Safari — no in-app money collection, per the 3.2.2(iv)
---      resubmission). Reviewer is admin. This org is fully populated below:
---      every feature tab (calendar, feed, discussions, announcements, alumni,
---      workouts, jobs, forms, media, expenses, records, team funding,
+--   1. "Apple Review Test Org"  — created here, donation_eligible_ios = true
+--      (enables the in-app Apple Pay flow for voluntary contributions that
+--      support this for-profit team's real-world activities and expenses — not
+--      a charitable donation). Reviewer is admin. This org is fully populated
+--      below: every feature tab (calendar, feed, discussions, announcements,
+--      alumni, workouts, jobs, forms, media, expenses, records, team funding,
 --      contributions, parents, competition, chat, mentorship) has demo data.
 --   2. "CHSFL - Test Organization" — REAL production org, looked up by slug,
 --      never created/modified by this script. Reviewer is added as admin so a
@@ -68,24 +67,24 @@ BEGIN
   END IF;
   RAISE NOTICE 'Reviewer user: % (%)', v_reviewer_email, v_user_id;
 
-  -- ---- Org 1: Apple Review Test Org (donation_eligible_ios = false) ----
-  -- Keep the flag FALSE so iOS never presents the native in-app payment sheet;
-  -- the reviewer sees the "Contributions are managed on the web" notice that
-  -- links out to Safari (no in-app collection — required for 3.2.2(iv)).
+  -- ---- Org 1: Apple Review Test Org (donation_eligible_ios = true) ----
+  -- TRUE so iOS presents the in-app Apple Pay contribution sheet to the
+  -- reviewer. Contributions support this for-profit team's real-world
+  -- activities/expenses (not a charitable donation).
   SELECT id INTO org FROM organizations WHERE slug = 'apple-review-test-org';
   IF org IS NULL THEN
     INSERT INTO organizations (name, slug, description, donation_eligible_ios)
     VALUES (
       'Apple Review Test Org',
       'apple-review-test-org',
-      'Populated org for Apple App Store review. donation_eligible_ios = false (web-managed contributions).',
-      false
+      'Populated org for Apple App Store review. donation_eligible_ios = true (in-app Apple Pay contributions).',
+      true
     )
     RETURNING id INTO org;
     RAISE NOTICE 'Created Apple Review Test Org: %', org;
   ELSE
-    UPDATE organizations SET donation_eligible_ios = false WHERE id = org;
-    RAISE NOTICE 'Apple Review Test Org already existed: % (flag ensured false)', org;
+    UPDATE organizations SET donation_eligible_ios = true WHERE id = org;
+    RAISE NOTICE 'Apple Review Test Org already existed: % (flag ensured true)', org;
   END IF;
 
   INSERT INTO user_organization_roles (user_id, organization_id, role)

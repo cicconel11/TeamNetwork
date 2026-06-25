@@ -99,7 +99,7 @@ function simulateCreateDonation(
   if (request.platform === "ios" && !ctx.organization.donation_eligible_ios) {
     return {
       status: 403,
-      error: "Donations to this organization are only available on the web.",
+      error: "Contributions to this organization are only available on the web.",
       reason: "org_not_eligible_ios",
     };
   }
