@@ -145,7 +145,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
       },
       {
         icon: <HandCoins size={24} color={ICON_COLOR} />,
-        label: "Record Donation",
+        label: "Record Contribution",
         onPress: () => {
           onRecordDonation?.();
           onClose();

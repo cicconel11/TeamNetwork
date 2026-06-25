@@ -11,7 +11,7 @@ function prefersReducedMotion(): boolean {
 const STATS = [
   { value: 127, label: "Members", prefix: "", format: "number" },
   { value: 24, label: "Events", prefix: "", format: "number" },
-  { value: 8200, label: "Donations", prefix: "$", format: "compact" },
+  { value: 8200, label: "Contributions", prefix: "$", format: "compact" },
 ] as const;
 
 const FEATURE_SETS = [

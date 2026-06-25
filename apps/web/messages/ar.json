@@ -19,8 +19,8 @@
       "competition": "المنافسة",
       "events": "الفعاليات",
       "announcements": "الإعلانات",
-      "philanthropy": "العمل الخيري",
-      "donations": "التبرعات",
+      "philanthropy": "تمويل الفريق",
+      "donations": "المساهمات",
       "expenses": "المصروفات",
       "records": "السجلات",
       "calendar": "التقويم",
@@ -661,11 +661,11 @@
     "upcoming": "القادمة",
     "pastLabel": "السابقة",
     "general": "عام",
-    "philanthropy": "العمل الخيري",
+    "philanthropy": "المجتمع",
     "game": "مباراة",
     "meeting": "اجتماع",
     "social": "اجتماعي",
-    "fundraiser": "جمع تبرعات",
+    "fundraiser": "جمع المساهمات",
     "practice": "تدريب",
     "class": "صف",
     "workout": "تمرين",
@@ -678,7 +678,7 @@
   "donations": {
     "totalRaised": "إجمالي المبالغ المجموعة",
     "contributions": "المساهمات",
-    "averageGift": "متوسط التبرع",
+    "averageGift": "متوسط المساهمة",
     "byPurpose": "حسب الغرض",
     "recentLabel": "{label} الأخيرة",
     "generalSupport": "دعم عام",
@@ -686,34 +686,34 @@
     "stripeNotConnected": "Stripe غير متصل بعد",
     "willGroupHere": "{label} سيتم تجميعها هنا بمجرد استلامها.",
     "willAppear": "{label} ستظهر بعد إكمال Stripe للدفعة.",
-    "donor": "المتبرع",
+    "donor": "الداعم",
     "purpose": "الغرض",
-    "donateWithStripe": "تبرع عبر Stripe",
+    "donateWithStripe": "المساهمة عبر Stripe",
     "redirectToStripe": "ستتم إعادة توجيهك إلى Stripe Checkout. تذهب الأموال مباشرة إلى المنظمة.",
     "stripeConnected": "Stripe متصل",
     "setupRequired": "الإعداد مطلوب",
     "amountUSD": "المبلغ (بالدولار الأمريكي)",
-    "donorName": "اسم المتبرع",
+    "donorName": "اسم الداعم",
     "donorNamePlaceholder": "Jane Doe",
     "emailForReceipt": "البريد الإلكتروني للإيصال",
-    "emailPlaceholder": "donor@example.com",
+    "emailPlaceholder": "supporter@example.com",
     "designation": "التخصيص",
-    "specificEvent": "فعالية خيرية محددة",
+    "specificEvent": "فعالية مجتمعية محددة",
     "otherPurpose": "غرض آخر",
     "chooseEvent": "اختيار فعالية",
     "selectEvent": "اختر فعالية",
-    "donateAnonymously": "تبرع بشكل مجهول",
-    "anonymousNote": "(سيتم إخفاء اسمك في صفحة التبرعات)",
+    "donateAnonymously": "المساهمة بشكل مجهول",
+    "anonymousNote": "(سيتم إخفاء اسمك في صفحة المساهمات)",
     "noteOptional": "ملاحظة أو غرض (اختياري)",
     "notePlaceholder": "أضف رسالة للمسؤولين أو وصف التخصيص",
     "captchaRequired": "يرجى إكمال التحقق من الكابتشا",
     "preparingCheckout": "جارٍ تحضير الدفع... يرجى المحاولة مرة أخرى.",
-    "amountRequired": "أدخل مبلغ تبرع أكبر من صفر.",
-    "stripeNotEnabled": "لم يتم تفعيل تبرعات Stripe بعد. اطلب من مسؤول ربط Stripe.",
-    "donationsNotEnabledForOrg": "لم يتم تفعيل التبرعات لهذه المنظمة بعد.",
-    "eventDonation": "تبرع لفعالية خيرية",
-    "directedDonation": "تبرع موجّه",
-    "intentCreated": "تم إنشاء طلب التبرع. أكمل الدفع عبر Stripe.",
+    "amountRequired": "أدخل مبلغ مساهمة أكبر من صفر.",
+    "stripeNotEnabled": "لم يتم تفعيل مساهمات Stripe بعد. اطلب من مسؤول ربط Stripe.",
+    "donationsNotEnabledForOrg": "لم يتم تفعيل المساهمات لهذه المنظمة بعد.",
+    "eventDonation": "مساهمة لفعالية مجتمعية",
+    "directedDonation": "مساهمة موجّهة",
+    "intentCreated": "تم إنشاء طلب المساهمة. أكمل الدفع عبر Stripe.",
     "unableToStart": "تعذر بدء Stripe Checkout"
   },
   "forms": {
@@ -763,20 +763,20 @@
     "unavailableDescription": "تعذر تحميل لوحة الوظائف الآن. يرجى تحديث الصفحة أو المحاولة مرة أخرى بعد قليل."
   },
   "philanthropy": {
-    "description": "الخدمة المجتمعية وجمع التبرعات لمنظمتك.",
+    "description": "الخدمة المجتمعية وجمع المساهمات لمنظمتك.",
     "addEvent": "إضافة فعالية",
-    "stripeConnectedSuccess": "تم ربط حساب Stripe بنجاح! يمكنك الآن استقبال التبرعات.",
+    "stripeConnectedSuccess": "تم ربط حساب Stripe بنجاح! يمكنك الآن استقبال المساهمات.",
     "stripeSubmitted": "تم إرسال إعداد حساب Stripe. التحقق جارٍ — يستغرق عادة يوم إلى يومين عمل.",
     "stripeNotCompleted": "لم يكتمل إعداد Stripe. يرجى المحاولة مرة أخرى عندما تكون جاهزاً.",
-    "stripeDonations": "تبرعات Stripe",
+    "stripeDonations": "مساهمات Stripe",
     "contributionsRecorded": "مساهمات مسجلة",
-    "connectStripe": "اربط Stripe لاستقبال التبرعات",
+    "connectStripe": "اربط Stripe لاستقبال المساهمات",
     "totalEvents": "إجمالي الفعاليات",
     "completed": "مكتملة",
     "noPastEvents": "لا توجد فعاليات {label} سابقة",
     "noUpcomingEvents": "لا توجد فعاليات {label} قادمة",
     "completedWillAppear": "ستظهر الفعاليات المكتملة هنا.",
-    "addNewEvent": "أضف فعالية خيرية جديدة للبدء."
+    "addNewEvent": "أضف فعالية مجتمعية جديدة للبدء."
   },
   "records": {
     "record": "سجل",
@@ -1139,12 +1139,12 @@
         "desc": "التجمعات والحفلات الاجتماعية"
       },
       "fundraiser": {
-        "label": "جمع التبرعات",
-        "desc": "فعاليات وحملات جمع التبرعات"
+        "label": "جمع المساهمات",
+        "desc": "فعاليات وحملات جمع المساهمات"
       },
       "philanthropy": {
-        "label": "العمل الخيري",
-        "desc": "فعاليات الخدمة المجتمعية والعمل الخيري"
+        "label": "المجتمع",
+        "desc": "فعاليات الخدمة المجتمعية والمشاركة المجتمعية"
       }
     }
   },
@@ -1284,7 +1284,7 @@
       "alumni": "الخريجون",
       "parents": "أولياء الأمور",
       "upcomingEvents": "الفعاليات القادمة",
-      "totalDonations": "إجمالي التبرعات"
+      "totalDonations": "إجمالي المساهمات"
     },
     "feed": {
       "emptyTitle": "لا توجد منشورات بعد",
@@ -1322,7 +1322,7 @@
       "sendDescription": "أنشئ وأرسل إشعاراً إلى منظمتك"
     },
     "philanthropy": {
-      "description": "الخدمة المجتمعية وجمع التبرعات لمنظمتك."
+      "description": "الخدمة المجتمعية وجمع المساهمات لمنظمتك."
     },
     "actions": {
       "add": "إضافة",

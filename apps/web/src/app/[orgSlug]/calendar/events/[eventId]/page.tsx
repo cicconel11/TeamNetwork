@@ -137,7 +137,7 @@ export default async function CalendarEventDetailPage({ params, searchParams }: 
             )}
             <Badge variant="muted" className="capitalize">{event.event_type}</Badge>
             {event.is_philanthropy && (
-              <Badge variant="primary">Philanthropy</Badge>
+              <Badge variant="primary">Community</Badge>
             )}
             {isRecurring && (
               <Badge variant="muted">

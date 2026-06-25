@@ -19,8 +19,8 @@
       "competition": "Competition",
       "events": "Evenements",
       "announcements": "Annonces",
-      "philanthropy": "Philanthropie",
-      "donations": "Dons",
+      "philanthropy": "Financement de l'équipe",
+      "donations": "Contributions",
       "expenses": "Depenses",
       "records": "Archives",
       "calendar": "Calendrier",
@@ -661,7 +661,7 @@
     "upcoming": "A venir",
     "pastLabel": "Passes",
     "general": "General",
-    "philanthropy": "Philanthropie",
+    "philanthropy": "Communauté",
     "game": "Match",
     "meeting": "Reunion",
     "social": "Social",
@@ -678,7 +678,7 @@
   "donations": {
     "totalRaised": "Total recolte",
     "contributions": "Contributions",
-    "averageGift": "Don moyen",
+    "averageGift": "Contribution moyenne",
     "byPurpose": "Par objectif",
     "recentLabel": "{label} recents",
     "generalSupport": "Soutien general",
@@ -686,34 +686,34 @@
     "stripeNotConnected": "Stripe pas encore connecte",
     "willGroupHere": "{label} seront regroupes ici une fois recus.",
     "willAppear": "{label} apparaitra apres qu'un paiement Stripe soit complete.",
-    "donor": "Donateur",
+    "donor": "Contributeur",
     "purpose": "Objectif",
-    "donateWithStripe": "Faire un don avec Stripe",
+    "donateWithStripe": "Contribuer avec Stripe",
     "redirectToStripe": "Vous serez redirige vers Stripe Checkout. Les fonds vont directement a l'organisation.",
     "stripeConnected": "Stripe connecte",
     "setupRequired": "Configuration requise",
     "amountUSD": "Montant (USD)",
-    "donorName": "Nom du donateur",
+    "donorName": "Nom du contributeur",
     "donorNamePlaceholder": "Jean Dupont",
     "emailForReceipt": "E-mail pour le recu",
-    "emailPlaceholder": "donateur@exemple.com",
+    "emailPlaceholder": "contributeur@exemple.com",
     "designation": "Designation",
-    "specificEvent": "Evenement philanthropique specifique",
+    "specificEvent": "Evenement communautaire specifique",
     "otherPurpose": "Autre objectif",
     "chooseEvent": "Choisir un evenement",
     "selectEvent": "Selectionner un evenement",
-    "donateAnonymously": "Faire un don anonyme",
-    "anonymousNote": "(votre nom sera masque sur la page des dons)",
+    "donateAnonymously": "Contribuer anonymement",
+    "anonymousNote": "(votre nom sera masque sur la page des contributions)",
     "noteOptional": "Note ou objectif (facultatif)",
     "notePlaceholder": "Ajoutez un message pour les administrateurs ou decrivez la designation",
     "captchaRequired": "Veuillez completer la verification captcha",
     "preparingCheckout": "Preparation du paiement... veuillez reessayer.",
-    "amountRequired": "Saisissez un montant de don superieur a zero.",
-    "stripeNotEnabled": "Les dons Stripe ne sont pas encore actives. Demandez a un administrateur de connecter Stripe.",
-    "donationsNotEnabledForOrg": "Les dons ne sont pas encore actives pour cette organisation.",
-    "eventDonation": "Don pour evenement philanthropique",
-    "directedDonation": "Don dirige",
-    "intentCreated": "Intention de don creee. Finalisez le paiement via Stripe.",
+    "amountRequired": "Saisissez un montant de contribution superieur a zero.",
+    "stripeNotEnabled": "Les contributions Stripe ne sont pas encore activees. Demandez a un administrateur de connecter Stripe.",
+    "donationsNotEnabledForOrg": "Les contributions ne sont pas encore activees pour cette organisation.",
+    "eventDonation": "Contribution pour evenement communautaire",
+    "directedDonation": "Contribution dirigee",
+    "intentCreated": "Intention de contribution creee. Finalisez le paiement via Stripe.",
     "unableToStart": "Impossible de lancer Stripe Checkout"
   },
   "forms": {
@@ -763,20 +763,20 @@
     "unavailableDescription": "Nous n'avons pas pu charger le tableau des offres. Actualisez la page ou réessayez dans un instant."
   },
   "philanthropy": {
-    "description": "Service communautaire et collecte de fonds pour votre organisation.",
+    "description": "Service communautaire et soutien de l'équipe pour votre organisation.",
     "addEvent": "Ajouter un evenement",
-    "stripeConnectedSuccess": "Compte Stripe connecte avec succes ! Vous pouvez maintenant accepter les dons.",
+    "stripeConnectedSuccess": "Compte Stripe connecte avec succes ! Vous pouvez maintenant accepter les contributions.",
     "stripeSubmitted": "Configuration du compte Stripe soumise. La verification est en cours — cela prend generalement 1 a 2 jours ouvrables.",
     "stripeNotCompleted": "La configuration Stripe n'a pas ete terminee. Veuillez reessayer quand vous serez pret.",
-    "stripeDonations": "Dons Stripe",
+    "stripeDonations": "Contributions Stripe",
     "contributionsRecorded": "contributions enregistrees",
-    "connectStripe": "Connecter Stripe pour accepter les dons",
+    "connectStripe": "Connecter Stripe pour accepter les contributions",
     "totalEvents": "Total des evenements",
     "completed": "Termine",
     "noPastEvents": "Aucun evenement {label} passe",
     "noUpcomingEvents": "Aucun evenement {label} a venir",
     "completedWillAppear": "Les evenements termines apparaitront ici.",
-    "addNewEvent": "Ajoutez un nouvel evenement philanthropique pour commencer."
+    "addNewEvent": "Ajoutez un nouvel evenement communautaire pour commencer."
   },
   "records": {
     "record": "Record",
@@ -1143,8 +1143,8 @@
         "desc": "Evenements et campagnes de collecte de fonds"
       },
       "philanthropy": {
-        "label": "Philanthropie",
-        "desc": "Evenements de service communautaire et de philanthropie"
+        "label": "Communauté",
+        "desc": "Evenements de service communautaire et de soutien de l'équipe"
       }
     }
   },
@@ -1284,7 +1284,7 @@
       "alumni": "Anciens",
       "parents": "Parents",
       "upcomingEvents": "Evenements a venir",
-      "totalDonations": "Total des dons"
+      "totalDonations": "Total des contributions"
     },
     "feed": {
       "emptyTitle": "Aucune publication pour le moment",
@@ -1322,7 +1322,7 @@
       "sendDescription": "Creez et envoyez une notification a votre organisation"
     },
     "philanthropy": {
-      "description": "Service communautaire et collecte de fonds pour votre organisation."
+      "description": "Service communautaire et soutien de l'équipe pour votre organisation."
     },
     "actions": {
       "add": "Ajouter",

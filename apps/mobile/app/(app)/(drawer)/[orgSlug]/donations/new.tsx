@@ -252,7 +252,7 @@ export default function NewDonationScreen() {
 
     const amountValue = Number(amount.trim());
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      setError("Enter a donation amount greater than zero.");
+      setError("Enter a contribution amount greater than zero.");
       return;
     }
 
@@ -273,13 +273,13 @@ export default function NewDonationScreen() {
 
     const amountValue = Number(amount.trim());
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      setError("Enter a donation amount greater than zero.");
+      setError("Enter a contribution amount greater than zero.");
       return;
     }
 
     if (isIOS) {
       const amountBucket = donationAmountBucket(amountValue);
-      track("donation_checkout_start", {
+      track("support_checkout_start", {
         org_slug: orgSlug,
         amount_bucket: amountBucket,
         has_purpose: !!purpose.trim(),
@@ -297,7 +297,7 @@ export default function NewDonationScreen() {
       });
 
       if (result.status === "completed") {
-        track("donation_checkout_result", {
+        track("support_checkout_result", {
           org_slug: orgSlug,
           amount_bucket: amountBucket,
           channel: "payment_sheet",
@@ -307,7 +307,7 @@ export default function NewDonationScreen() {
         return;
       }
       if (result.status === "canceled") {
-        track("donation_checkout_result", {
+        track("support_checkout_result", {
           org_slug: orgSlug,
           amount_bucket: amountBucket,
           channel: "payment_sheet",
@@ -316,7 +316,7 @@ export default function NewDonationScreen() {
         return;
       }
       if (result.status === "ineligible_ios") {
-        track("donation_checkout_result", {
+        track("support_checkout_result", {
           org_slug: orgSlug,
           amount_bucket: amountBucket,
           channel: "payment_sheet",
@@ -324,11 +324,11 @@ export default function NewDonationScreen() {
           error_code: "org_not_eligible_ios",
         });
         setError(
-          "Donations for this organization are only available on the web. Please open the web app to contribute.",
+          "Contributions for this organization are only available on the web. Please open the web app to contribute.",
         );
         return;
       }
-      track("donation_checkout_result", {
+      track("support_checkout_result", {
         org_slug: orgSlug,
         amount_bucket: amountBucket,
         channel: "payment_sheet",
@@ -372,7 +372,7 @@ export default function NewDonationScreen() {
       }
 
       if (data?.url) {
-        track("donation_checkout_start", {
+        track("support_checkout_start", {
           org_slug: orgSlug,
           amount_bucket: donationAmountBucket(amountValue),
           has_purpose: !!(purpose.trim()),
@@ -384,9 +384,9 @@ export default function NewDonationScreen() {
         return;
       }
 
-      setError("Donation intent created. Complete payment in the browser.");
+      setError("Contribution started. Complete payment in the browser.");
     } catch (e) {
-      setError((e as Error).message || "Unable to start donation checkout.");
+      setError((e as Error).message || "Unable to start contribution checkout.");
     } finally {
       setIsSaving(false);
     }
@@ -403,7 +403,7 @@ export default function NewDonationScreen() {
             <Pressable onPress={handleBack} style={styles.orgLogoButton} hitSlop={8}>
               <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
             </Pressable>
-            <Text style={styles.headerTitle}>Record Donation</Text>
+            <Text style={styles.headerTitle}>Contribute</Text>
             <View style={styles.headerSpacer} />
           </View>
         </SafeAreaView>
@@ -424,11 +424,11 @@ export default function NewDonationScreen() {
 
           <View style={styles.formHeader}>
             <Text style={styles.formTitle}>
-              {succeededAttemptId ? "Thank you!" : "Make a Donation"}
+              {succeededAttemptId ? "Thank you!" : "Support This Team"}
             </Text>
             <Text style={styles.formSubtitle}>
               {succeededAttemptId
-                ? "Your donation was received. Save a receipt to Apple Wallet for your records."
+                ? "Your contribution was received. Save a receipt to Apple Wallet for your records."
                 : "Support the team with a contribution"}
             </Text>
           </View>
@@ -501,7 +501,7 @@ export default function NewDonationScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Donor name</Text>
+            <Text style={styles.fieldLabel}>Supporter name</Text>
             <TextInput
               value={donorName}
               onChangeText={setDonorName}
@@ -512,11 +512,11 @@ export default function NewDonationScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Donor email</Text>
+            <Text style={styles.fieldLabel}>Supporter email</Text>
             <TextInput
               value={donorEmail}
               onChangeText={setDonorEmail}
-              placeholder="donor@example.com"
+              placeholder="supporter@example.com"
               placeholderTextColor={neutral.placeholder}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -539,7 +539,7 @@ export default function NewDonationScreen() {
 
           {isIOS && (
             <Text style={styles.formSubtitle}>
-              You&apos;ll complete your donation securely with Apple Pay.
+              You&apos;ll complete your contribution securely with Apple Pay.
             </Text>
           )}
 
@@ -556,7 +556,7 @@ export default function NewDonationScreen() {
               <ActivityIndicator color="#ffffff" />
             ) : (
               <Text style={styles.primaryButtonText}>
-                {isIOS ? "Donate with Apple Pay" : "Continue to Stripe"}
+                {isIOS ? "Contribute with Apple Pay" : "Continue to Stripe"}
               </Text>
             )}
           </Pressable>

@@ -50,8 +50,8 @@ export const FAQ_ITEMS = [
     answer: "TeamNetwork is built for any organization that wants to stay connected — sports teams, Greek life chapters, clubs, volunteer groups, and alumni associations. Whether you're managing a high school booster club or a college fraternity, we bridge the gap between active members and alumni.",
   },
   {
-    question: "Do you take a cut of our donations?",
-    answer: "No. You connect your own Stripe account, so 100% of donations (minus standard Stripe processing fees) go directly to your program.",
+    question: "Do you take a cut of our contributions?",
+    answer: "No. You connect your own Stripe account, so 100% of contributions (minus standard Stripe processing fees) go directly to your program.",
   },
   {
     question: "How does alumni pricing work?",

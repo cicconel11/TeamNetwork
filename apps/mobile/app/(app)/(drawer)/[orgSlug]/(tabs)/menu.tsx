@@ -462,7 +462,7 @@ export default function MenuScreen() {
   if (permissions.canViewDonations) {
     communityItems.push({
       icon: <Heart size={20} color={neutral.muted} />,
-      label: "Donations",
+      label: "Contributions",
       onPress: () => router.push(`/(app)/${orgSlug}/donations`),
     });
   }

@@ -224,7 +224,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
               <Card interactive className="p-5 border-l-4 border-l-[var(--color-org-primary)]">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-semibold text-foreground">{event.title}</h3>
-                  <Badge variant="muted">Philanthropy</Badge>
+                  <Badge variant="muted">Community</Badge>
                 </div>
                 {event.description && (
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">

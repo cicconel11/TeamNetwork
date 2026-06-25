@@ -8116,6 +8116,9 @@ export type Database = {
         | "donation_flow_start"
         | "donation_checkout_start"
         | "donation_checkout_result"
+        | "support_flow_start"
+        | "support_checkout_start"
+        | "support_checkout_result"
         | "chat_thread_open"
         | "chat_message_send"
         | "chat_participants_change"
@@ -8296,6 +8299,9 @@ export const Constants = {
         "donation_flow_start",
         "donation_checkout_start",
         "donation_checkout_result",
+        "support_flow_start",
+        "support_checkout_start",
+        "support_checkout_result",
         "chat_thread_open",
         "chat_message_send",
         "chat_participants_change",

@@ -57,7 +57,7 @@ export function DonationDrawer({
         className="absolute right-0 top-0 h-full w-full max-w-lg bg-card border-l border-border shadow-xl animate-slide-in-right"
       >
         <div className="flex items-center justify-between p-6 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">Make a Donation</h2>
+          <h2 className="text-lg font-semibold text-foreground">Support This Team</h2>
           <button
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"

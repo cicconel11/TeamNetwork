@@ -35,7 +35,7 @@ const privacySections: PrivacySection[] = [
       "Account Information: Name, email address, and password when you create an account.",
       "Profile Information: Organization details, role, and other profile data you choose to provide.",
       "Content: Information you submit through the Service, including events, announcements, forms, and other organizational data.",
-      "Payment Information: When you make purchases or donations, payment details are processed securely by our payment processor (Stripe). We do not store full credit card numbers.",
+      "Payment Information: When you make purchases or contributions, payment details are processed securely by our payment processor (Stripe). We do not store full credit card numbers.",
       "Usage Data (opt-in): With explicit consent, we collect minimal, privacy-first usage events (e.g., route views, navigation clicks, and feature interactions) without identities or content.",
       "Ops/Security Telemetry: Limited error and reliability signals (e.g., API error codes, HTTP status, retryable flags) to keep the Service secure and stable. No content or user identifiers are included.",
       "Device Information: Browser type and device class (mobile/tablet/desktop).",
@@ -83,7 +83,7 @@ const privacySections: PrivacySection[] = [
     ],
     bullets: [
       "Supabase: Database and authentication services.",
-      "Stripe: Payment processing for subscriptions and donations.",
+      "Stripe: Payment processing for subscriptions and contributions.",
       "Google Calendar: Optional calendar synchronization (requires your explicit authorization).",
       "Cloudflare Turnstile: Bot protection and security verification.",
       "These services have their own privacy policies, and we encourage you to review them.",

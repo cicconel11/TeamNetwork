@@ -125,7 +125,7 @@ export default function PhilanthropyScreen() {
         }
       } catch (fetchError) {
         if (isMountedRef.current) {
-          setError((fetchError as Error).message || "Failed to load philanthropy data.");
+          setError((fetchError as Error).message || "Failed to load community data.");
         }
       } finally {
         if (isMountedRef.current) {
@@ -646,7 +646,7 @@ export default function PhilanthropyScreen() {
               )}
             </Pressable>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>Philanthropy</Text>
+              <Text style={styles.headerTitle}>Team Funding</Text>
               <Text style={styles.headerMeta}>
                 {totalEvents} {totalEvents === 1 ? "event" : "events"}
               </Text>
@@ -696,7 +696,7 @@ export default function PhilanthropyScreen() {
           {loading && allEvents.length === 0 ? (
             <View style={styles.loadingState}>
               <ActivityIndicator color={ACCENT} />
-              <Text style={styles.loadingText}>Loading philanthropy...</Text>
+              <Text style={styles.loadingText}>Loading community...</Text>
             </View>
           ) : (
             <>
@@ -727,14 +727,14 @@ export default function PhilanthropyScreen() {
 
               {/* Donations + Action */}
               <Animated.View entering={FadeInDown.delay(80).duration(300)} style={styles.donationsSection}>
-                <Text style={styles.sectionLabel}>Donations</Text>
+                <Text style={styles.sectionLabel}>Contributions</Text>
                 <View style={styles.donationRow}>
                   <View style={styles.donationCard}>
                     <View style={styles.donationHeader}>
                       <View style={styles.donationIconCircle}>
                         <DollarSign size={18} color={ACCENT} />
                       </View>
-                      <Text style={styles.donationLabel}>Stripe Donations</Text>
+                      <Text style={styles.donationLabel}>Stripe Contributions</Text>
                     </View>
                     <Text style={styles.donationValue}>
                       ${totalRaised.toLocaleString(undefined, {
@@ -772,11 +772,11 @@ export default function PhilanthropyScreen() {
                   <View style={styles.actionCard}>
                     <View style={styles.actionContent}>
                       <Text style={styles.actionTitle}>
-                        {showDonateCta ? "Donate" : "Donations on the web"}
+                        {showDonateCta ? "Support Team" : "Contributions on the web"}
                       </Text>
                       <Text style={styles.actionSubtitle}>
                         {showDonateCta
-                          ? "Record a contribution or share a donation link."
+                          ? "Record a contribution or share a contribution link."
                           : "Contributions for this organization are managed through its website."}
                       </Text>
                     </View>
@@ -792,7 +792,7 @@ export default function PhilanthropyScreen() {
                       ]}
                     >
                       <Text style={styles.secondaryButtonText}>
-                        {showDonateCta ? "Open Donations" : "Open on web"}
+                        {showDonateCta ? "Open Contributions" : "Open on web"}
                       </Text>
                     </Pressable>
                   </View>
@@ -861,7 +861,7 @@ export default function PhilanthropyScreen() {
                           <View style={styles.eventHeader}>
                             <Text style={styles.eventTitle}>{event.title}</Text>
                             <View style={styles.eventBadge}>
-                              <Text style={styles.eventBadgeText}>Philanthropy</Text>
+                              <Text style={styles.eventBadgeText}>Community</Text>
                             </View>
                           </View>
                           {event.description ? (
@@ -902,8 +902,8 @@ export default function PhilanthropyScreen() {
                   </Text>
                   <Text style={styles.emptySubtitle}>
                     {view === "past"
-                      ? "Completed philanthropy events will appear here."
-                      : "Add a new philanthropy event to get started."}
+                      ? "Completed community events will appear here."
+                      : "Add a new community event to get started."}
                   </Text>
                   {canEdit ? (
                     <Pressable

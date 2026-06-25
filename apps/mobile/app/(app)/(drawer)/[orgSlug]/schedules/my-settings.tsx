@@ -48,7 +48,7 @@ const SYNC_LABELS: Array<{
   { key: "sync_meeting", label: "Meetings", hint: "Team meetings and planning sessions." },
   { key: "sync_social", label: "Social", hint: "Social events and team culture activities." },
   { key: "sync_fundraiser", label: "Fundraisers", hint: "Fundraising events added to the calendar." },
-  { key: "sync_philanthropy", label: "Philanthropy", hint: "Service and philanthropy events." },
+  { key: "sync_philanthropy", label: "Community", hint: "Service and community events." },
 ];
 
 function formatSyncStatus(value: boolean) {

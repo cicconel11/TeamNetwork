@@ -16,7 +16,7 @@ function mapConnectError(message: string): string {
     return "Only organization admins can set up Stripe. Please contact your admin.";
   }
   if (message.includes("read-only") || message.includes("grace period")) {
-    return "Your subscription is inactive. Please renew to enable donations.";
+    return "Your subscription is inactive. Please renew to enable contributions.";
   }
   if (message.includes("rate limit") || message.includes("429")) {
     return "Too many requests. Please wait a moment and try again.";
@@ -186,9 +186,9 @@ export function ConnectSetup({ organizationId, isConnected, connectStatus }: Con
             </svg>
           </div>
           <div>
-            <CardTitle>Donations Enabled</CardTitle>
+            <CardTitle>Contributions Enabled</CardTitle>
             <CardDescription className="mt-1">
-              Donations are enabled, but payouts to your bank are pending verification.
+              Contributions are enabled, but payouts to your bank are pending verification.
               Check your{" "}
               <a href="https://dashboard.stripe.com/" target="_blank" rel="noopener noreferrer" className="text-org-primary hover:underline">
                 Stripe Dashboard
@@ -211,9 +211,9 @@ export function ConnectSetup({ organizationId, isConnected, connectStatus }: Con
             </svg>
           </div>
           <div>
-            <CardTitle>Donations Enabled</CardTitle>
+            <CardTitle>Contributions Enabled</CardTitle>
             <CardDescription className="mt-1">
-              Your organization is connected to Stripe. Donations go directly to your account.
+              Your organization is connected to Stripe. Contributions go directly to your account.
               Manage payouts and view transactions in your{" "}
               <a
                 href="https://dashboard.stripe.com/"
@@ -240,9 +240,9 @@ export function ConnectSetup({ organizationId, isConnected, connectStatus }: Con
           </svg>
         </div>
         <div className="flex-1">
-          <CardTitle>Enable Online Donations</CardTitle>
+          <CardTitle>Enable Online Contributions</CardTitle>
           <CardDescription className="mt-1 mb-4">
-            Connect your Stripe account to accept online donations directly. Funds go straight to your
+            Connect your Stripe account to accept online contributions directly. Funds go straight to your
             organization — we don&apos;t take any fees.
           </CardDescription>
 

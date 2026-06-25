@@ -1,6 +1,6 @@
 export const EVENT_TYPE_OPTIONS = [
   { value: "general", label: "General" },
-  { value: "philanthropy", label: "Philanthropy" },
+  { value: "philanthropy", label: "Community" },
   { value: "game", label: "Game" },
   { value: "practice", label: "Practice" },
   { value: "meeting", label: "Meeting" },

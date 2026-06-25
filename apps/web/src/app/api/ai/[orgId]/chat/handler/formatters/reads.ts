@@ -1300,7 +1300,7 @@ export function formatDonationsResponse(
   }
 
   if (data.length === 0) {
-    return "I couldn't find any donations for this organization.";
+    return "I couldn't find any contributions for this organization.";
   }
 
   const rows = data
@@ -1313,7 +1313,7 @@ export function formatDonationsResponse(
         options?.hideDonorNames === true ||
         (row as { hide_donor_names?: unknown }).hide_donor_names === true;
       const donorName = hideDonorNames
-        ? "Anonymous donor"
+        ? "Anonymous supporter"
         : (getNonEmptyString((row as { donor_name?: unknown }).donor_name) ?? "Unknown");
       const amountDollars = typeof (row as { amount_dollars?: unknown }).amount_dollars === "number"
         ? `$${((row as { amount_dollars: number }).amount_dollars).toFixed(2)}`
@@ -1336,7 +1336,7 @@ export function formatDonationsResponse(
     return null;
   }
 
-  return ["Donations", ...rows].join("\n");
+  return ["Contributions", ...rows].join("\n");
 }
 
 export function formatParentsResponse(data: unknown): string | null {
@@ -1385,7 +1385,7 @@ export function formatPhilanthropyEventsResponse(data: unknown): string | null {
   }
 
   if (data.length === 0) {
-    return "I couldn't find any philanthropy events for this organization.";
+    return "I couldn't find any community events for this organization.";
   }
 
   const rows = data
@@ -1422,7 +1422,7 @@ export function formatPhilanthropyEventsResponse(data: unknown): string | null {
     return null;
   }
 
-  const lines = ["Philanthropy events"];
+  const lines = ["Community events"];
   for (const row of rows) {
     lines.push(`- ${row.title}${row.metadata.length > 0 ? ` - ${row.metadata.join(" - ")}` : ""}`);
     if (row.description) {
@@ -1567,7 +1567,7 @@ export function formatNavigationTargetsResponse(data: unknown): string | null {
   }
 
   if (state === "not_found") {
-    return `I couldn't find a matching page for "${query}". Try naming the feature, like announcements, members, events, donations, or navigation settings.`;
+    return `I couldn't find a matching page for "${query}". Try naming the feature, like announcements, members, events, contributions, or navigation settings.`;
   }
 
   if (state !== "resolved" || !Array.isArray(payload.matches)) {

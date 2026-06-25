@@ -1580,7 +1580,7 @@ test("deterministic donation and chat-group turns do not need post-tool organiza
       params: Promise.resolve({ orgId: ORG_ID }),
     })
   ).text();
-  assert.match(donationsBody, /Anonymous donor/);
+  assert.match(donationsBody, /Anonymous supporter/);
 
   composeResponseCalls = [];
   executeToolCallCalls = [];
@@ -3896,7 +3896,7 @@ test("list_donations takes the forced tool-first fast path and skips pass 2", as
     function: { name: "list_donations" },
   });
   assert.equal(composeResponseCalls.length, 1);
-  assert.match(body, /Donations/);
+  assert.match(body, /Contributions/);
   assert.match(body, /John McKillop/);
   assert.match(body, /\$125\.00/);
   assert.match(body, /Alumni Campaign/);
@@ -3982,8 +3982,8 @@ test("list_donations deterministic responses redact donor names when hide_donor_
     })
   ).text();
 
-  assert.match(body, /Donations/);
-  assert.match(body, /Anonymous donor/);
+  assert.match(body, /Contributions/);
+  assert.match(body, /Anonymous supporter/);
   assert.match(body, /\$125\.00/);
   assert.match(body, /Alumni Campaign/);
   assert.doesNotMatch(body, /John McKillop/);
@@ -4057,8 +4057,8 @@ test("list_donations deterministic responses redact from tool payloads without o
     })
   ).text();
 
-  assert.match(body, /Donations/);
-  assert.match(body, /Anonymous donor/);
+  assert.match(body, /Contributions/);
+  assert.match(body, /Anonymous supporter/);
   assert.doesNotMatch(body, /John McKillop/);
   assert.doesNotMatch(body, /john@example\.com/);
 });
@@ -4212,7 +4212,7 @@ test("list_philanthropy_events takes the forced tool-first fast path and skips p
     function: { name: "list_philanthropy_events" },
   });
   assert.equal(composeResponseCalls.length, 1);
-  assert.match(body, /Philanthropy events/);
+  assert.match(body, /Community events/);
   assert.match(body, /Beach Cleanup/);
   assert.match(body, /Ocean Beach/);
   assert.match(body, /"type":"done"/);

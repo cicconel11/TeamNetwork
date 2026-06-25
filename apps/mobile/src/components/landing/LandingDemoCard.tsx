@@ -39,7 +39,7 @@ export function LandingDemoCard({ org }: LandingDemoCardProps) {
         <View style={styles.statDivider} />
         <Stat value={String(org.stats.events)} label="Events" />
         <View style={styles.statDivider} />
-        <Stat value={org.stats.donations} label="Donations" />
+        <Stat value={org.stats.donations} label="Contributions" />
       </View>
 
       {/* Feature rows */}
