@@ -5,12 +5,14 @@
 -- they can demo every feature surface in TeamNetwork.
 --
 -- The reviewer is granted membership in three orgs:
---   1. "Apple Review Test Org"  — created here, donation_eligible_ios = true
---      (so the native Apple Pay donation flow is reachable per Guideline
---      3.2.1(vi)). Reviewer is admin. This org is fully populated below: every
---      feature tab (calendar, feed, discussions, announcements, alumni,
---      workouts, jobs, forms, media, expenses, records, philanthropy,
---      donations, parents, competition, chat, mentorship) has demo data.
+--   1. "Apple Review Test Org"  — created here, donation_eligible_ios = false
+--      (so the in-app native payment flow stays gated OFF and the reviewer sees
+--      the compliant "Contributions are managed on the web" notice that links
+--      out to Safari — no in-app money collection, per the 3.2.2(iv)
+--      resubmission). Reviewer is admin. This org is fully populated below:
+--      every feature tab (calendar, feed, discussions, announcements, alumni,
+--      workouts, jobs, forms, media, expenses, records, team funding,
+--      contributions, parents, competition, chat, mentorship) has demo data.
 --   2. "CHSFL - Test Organization" — REAL production org, looked up by slug,
 --      never created/modified by this script. Reviewer is added as admin so a
 --      large, realistic roster is demoable.
@@ -66,21 +68,24 @@ BEGIN
   END IF;
   RAISE NOTICE 'Reviewer user: % (%)', v_reviewer_email, v_user_id;
 
-  -- ---- Org 1: Apple Review Test Org (donation_eligible_ios = true) ----
+  -- ---- Org 1: Apple Review Test Org (donation_eligible_ios = false) ----
+  -- Keep the flag FALSE so iOS never presents the native in-app payment sheet;
+  -- the reviewer sees the "Contributions are managed on the web" notice that
+  -- links out to Safari (no in-app collection — required for 3.2.2(iv)).
   SELECT id INTO org FROM organizations WHERE slug = 'apple-review-test-org';
   IF org IS NULL THEN
     INSERT INTO organizations (name, slug, description, donation_eligible_ios)
     VALUES (
       'Apple Review Test Org',
       'apple-review-test-org',
-      'Populated org for Apple App Store review. donation_eligible_ios = true.',
-      true
+      'Populated org for Apple App Store review. donation_eligible_ios = false (web-managed contributions).',
+      false
     )
     RETURNING id INTO org;
     RAISE NOTICE 'Created Apple Review Test Org: %', org;
   ELSE
-    UPDATE organizations SET donation_eligible_ios = true WHERE id = org;
-    RAISE NOTICE 'Apple Review Test Org already existed: % (flag ensured true)', org;
+    UPDATE organizations SET donation_eligible_ios = false WHERE id = org;
+    RAISE NOTICE 'Apple Review Test Org already existed: % (flag ensured false)', org;
   END IF;
 
   INSERT INTO user_organization_roles (user_id, organization_id, role)
@@ -138,7 +143,7 @@ BEGIN
   FROM (VALUES
     ('Spring Practice','Field drills and conditioning', interval '2 days','Main Field','practice'),
     ('Team Meeting','Weekly sync', interval '5 days','Clubhouse','meeting'),
-    ('Charity 5K','Fundraiser run', interval '12 days','City Park','fundraiser'),
+    ('Community 5K','Fundraiser run', interval '12 days','City Park','fundraiser'),
     ('Alumni Mixer','Social gathering', interval '20 days','Downtown Hall','social'),
     ('Season Opener','First game', interval '30 days','Stadium','game'),
     ('Strength Workshop','Workout clinic', interval '45 days','Gym','workout')
@@ -151,7 +156,7 @@ BEGIN
   FROM (VALUES
     ('Welcome to the team feed! Excited for the season ahead.'),
     ('Great turnout at practice today — keep it up everyone.'),
-    ('Reminder: charity 5K signups close Friday.'),
+    ('Reminder: community 5K signups close Friday.'),
     ('Congrats to our seniors on a fantastic year!')
   ) AS f(b)
   WHERE NOT EXISTS (SELECT 1 FROM feed_posts WHERE organization_id = org AND body = f.b);
@@ -250,7 +255,7 @@ BEGIN
   INSERT INTO philanthropy_events (organization_id, title, description, date, location, slots_available)
   SELECT org, p.t, p.d, now()+p.off, p.loc, p.slots
   FROM (VALUES
-    ('Food Bank Volunteering','Help sort donations.', interval '10 days','Community Center',20),
+    ('Food Bank Volunteering','Help sort and pack food items.', interval '10 days','Community Center',20),
     ('Beach Cleanup','Morning cleanup event.', interval '25 days','Shoreline Park',30)
   ) AS p(t,d,off,loc,slots)
   WHERE NOT EXISTS (SELECT 1 FROM philanthropy_events WHERE organization_id = org AND title = p.t);

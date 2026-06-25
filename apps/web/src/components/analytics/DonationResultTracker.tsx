@@ -19,13 +19,13 @@ export function DonationResultTracker({ organizationId }: DonationResultTrackerP
     if (!status) return;
 
     if (status === "success") {
-      trackBehavioralEvent("donation_checkout_result", {
+      trackBehavioralEvent("support_checkout_result", {
         result: "success",
       }, organizationId);
     }
 
     if (status === "cancelled" || status === "cancel") {
-      trackBehavioralEvent("donation_checkout_result", {
+      trackBehavioralEvent("support_checkout_result", {
         result: "cancel",
       }, organizationId);
     }

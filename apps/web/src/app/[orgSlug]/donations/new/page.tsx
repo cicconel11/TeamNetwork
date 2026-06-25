@@ -12,21 +12,21 @@ export default function NewDonationPage() {
   return (
     <div className="animate-fade-in space-y-4">
       <PageHeader
-        title="Record Donation"
-        description="Donations are now processed via Stripe Checkout. Use the donation form to start a payment."
+        title="Record Contribution"
+        description="Contributions are now processed via Stripe Checkout. Use the contribution form to start a payment."
         backHref={`/${orgSlug}/donations`}
       />
 
       <Card className="p-6 space-y-3">
         <p className="text-sm text-muted-foreground">
-          Manual donation recording has been replaced by real-time Stripe webhooks. Start a donation from the Donations or Philanthropy pages to ensure totals and counts stay in sync automatically.
+          Manual contribution recording has been replaced by real-time Stripe webhooks. Start a contribution from the Contributions or Team Funding pages to ensure totals and counts stay in sync automatically.
         </p>
         <div className="flex gap-3">
           <Link href={`/${orgSlug}/donations`}>
-            <Button>Go to Donations</Button>
+            <Button>Go to Contributions</Button>
           </Link>
           <Link href={`/${orgSlug}/philanthropy`}>
-            <Button variant="secondary">Philanthropy</Button>
+            <Button variant="secondary">Team Funding</Button>
           </Link>
         </div>
       </Card>

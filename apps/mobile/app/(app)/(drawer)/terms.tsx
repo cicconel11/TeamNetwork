@@ -92,9 +92,9 @@ const termsSections: TermsSection[] = [
   {
     id: "donations",
     number: "8",
-    title: "Donations and Mentorship",
+    title: "Contributions and Mentorship",
     paragraphs: [
-      "The Service may include options to donate to teams or programs, or participate in mentorship opportunities. Users understand that all donations are voluntary and may be subject to separate terms and conditions.",
+      "The Service may include options to contribute funds in support of teams or programs, or participate in mentorship opportunities. Users understand that all contributions are voluntary and may be subject to separate terms and conditions.",
       "TeamNetwork does not guarantee mentorship outcomes or engagement levels; participation is at the discretion of mentors and teams.",
     ],
   },

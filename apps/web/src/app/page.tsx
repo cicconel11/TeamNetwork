@@ -29,11 +29,11 @@ import "./landing-styles.css";
 export const metadata: Metadata = {
   title: "TeamNetwork — The Platform for Connected Organizations",
   description:
-    "Build your network with member directories, events, donations, philanthropy, and records — all in one place for clubs, organizations, sports teams, and more.",
+    "Build your network with member directories, events, contributions, team funding, and records — all in one place for clubs, organizations, sports teams, and more.",
   openGraph: {
     title: "TeamNetwork — The Platform for Connected Organizations",
     description:
-      "Build your network with member directories, events, donations, philanthropy, and records — all in one place for clubs, organizations, sports teams, and more.",
+      "Build your network with member directories, events, contributions, team funding, and records — all in one place for clubs, organizations, sports teams, and more.",
     url: "https://myteamnetwork.com",
     siteName: "TeamNetwork",
     images: [{ url: "https://myteamnetwork.com/og-image.png", width: 1200, height: 630 }],
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "TeamNetwork — The Platform for Connected Organizations",
     description:
-      "Build your network with member directories, events, donations, philanthropy, and records — all in one place for clubs, organizations, sports teams, and more.",
+      "Build your network with member directories, events, contributions, team funding, and records — all in one place for clubs, organizations, sports teams, and more.",
     images: ["https://myteamnetwork.com/og-image.png"],
   },
 };

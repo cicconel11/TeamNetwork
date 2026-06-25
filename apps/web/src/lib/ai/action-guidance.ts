@@ -84,16 +84,16 @@ const GUIDANCE_BY_FEATURE: Record<GuidanceFeature, Omit<ActionGuidance, "userCan
     assistantCanHelpWith: ["Find the correct forms page and explain where to create or manage forms."],
   },
   philanthropy: {
-    manualSteps: ["Open philanthropy to manage events, fundraising links, or volunteer activity."],
-    assistantCanHelpWith: ["List philanthropy events and summarize donation or fundraising activity."],
+    manualSteps: ["Open Team Funding to manage events, fundraising links, or volunteer activity."],
+    assistantCanHelpWith: ["List community events and summarize contribution or fundraising activity."],
   },
   donations: {
-    manualSteps: ["Open donations to review donor records, record gifts, or manage donation workflows."],
-    assistantCanHelpWith: ["Summarize donation trends, list donations, and break down giving by purpose."],
+    manualSteps: ["Open Contributions to review supporter records, record contributions, or manage contribution workflows."],
+    assistantCanHelpWith: ["Summarize contribution trends, list contributions, and break down giving by purpose."],
   },
   expenses: {
     manualSteps: ["Open expenses to add, review, or manage expense records."],
-    assistantCanHelpWith: ["Find finance pages and summarize available donation or philanthropy context."],
+    assistantCanHelpWith: ["Find finance pages and summarize available contribution or team-funding context."],
   },
   mentorship: {
     manualSteps: ["Open mentorship to review profiles, matches, tasks, or program activity."],

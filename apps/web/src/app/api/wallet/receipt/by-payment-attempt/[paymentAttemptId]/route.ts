@@ -97,7 +97,7 @@ export async function GET(
   const donorEmail = donation.donor_email?.toLowerCase() ?? "";
   if (donation.anonymous || donorEmail === "" || callerEmail !== donorEmail) {
     return NextResponse.json(
-      { error: "You can only download receipts for your own donations." },
+      { error: "You can only download receipts for your own contributions." },
       { status: 403, headers: rateLimit.headers },
     );
   }

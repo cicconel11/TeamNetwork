@@ -219,9 +219,9 @@ function getStarterPrompts(pathname: string, surface: ReturnType<typeof routeToS
       ];
     case "analytics":
       return [
-        "Show donation trends for the last 90 days",
-        "Break down donations by purpose",
-        "Which philanthropy events are coming up?",
+        "Show contribution trends for the last 90 days",
+        "Break down contributions by purpose",
+        "Which community events are coming up?",
       ];
     default:
       return [
@@ -257,7 +257,7 @@ function getInputPlaceholder(pathname: string, surface: ReturnType<typeof routeT
     case "events":
       return "Ask about events, or ask me to open the right page...";
     case "analytics":
-      return "Ask about trends, donation breakdowns, philanthropy activity, or reporting questions...";
+      return "Ask about trends, contribution breakdowns, community activity, or reporting questions...";
     default:
       return "Ask about announcements, discussions, jobs, or where to go...";
   }
@@ -269,7 +269,7 @@ function getEmptyStateDescription(
 ): string {
   const segment = getFeatureSegment(pathname);
   if (segment === "donations" || segment === "philanthropy" || surface === "analytics") {
-    return "Ask about donation trends, fundraising performance, top purposes, or philanthropy activity.";
+    return "Ask about contribution trends, fundraising performance, top purposes, or community activity.";
   }
 
   return "Ask about your organization's members, events, discussions, or announcements.";

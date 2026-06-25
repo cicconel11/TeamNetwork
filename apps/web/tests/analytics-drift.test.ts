@@ -102,12 +102,25 @@ describe("Analytics drift - schema/type alignment", () => {
     assert.strictEqual(names.length, 19);
   });
 
+  // Enum values retired from the client allowlist but retained in the DB enum.
+  // Postgres enum values cannot be dropped, so when an event is renamed the old
+  // value stays defined-but-unused. donation_* were reframed to support_* for
+  // Apple App Review (no charitable-donation framing); they remain in the DB
+  // enum for backward compatibility but are no longer in BEHAVIORAL_EVENT_NAMES.
+  const DEPRECATED_DB_EVENT_NAMES = new Set([
+    "donation_flow_start",
+    "donation_checkout_start",
+    "donation_checkout_result",
+  ]);
+
   it("generated database analytics_event_name constants match BEHAVIORAL_EVENT_NAMES", () => {
     const behavioralNames = new Set(extractBehavioralEventNames());
     const databaseNames = new Set(extractDatabaseEventNames());
 
     const inBehavioralNotDatabase = [...behavioralNames].filter((name) => !databaseNames.has(name));
-    const inDatabaseNotBehavioral = [...databaseNames].filter((name) => !behavioralNames.has(name));
+    const inDatabaseNotBehavioral = [...databaseNames].filter(
+      (name) => !behavioralNames.has(name) && !DEPRECATED_DB_EVENT_NAMES.has(name),
+    );
 
     assert.deepStrictEqual(
       inBehavioralNotDatabase,
@@ -117,7 +130,7 @@ describe("Analytics drift - schema/type alignment", () => {
     assert.deepStrictEqual(
       inDatabaseNotBehavioral,
       [],
-      `Events in database constants but missing from BEHAVIORAL_EVENT_NAMES: ${inDatabaseNotBehavioral.join(", ")}`,
+      `Events in database constants but missing from BEHAVIORAL_EVENT_NAMES (and not a documented deprecation): ${inDatabaseNotBehavioral.join(", ")}`,
     );
   });
 });

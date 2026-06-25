@@ -31,7 +31,7 @@ export const PLAYBOOK_STEPS = [
   {
     step: "3",
     title: "Build your legacy",
-    desc: "Track events, manage donations, and connect generations.",
+    desc: "Track events, manage contributions, and connect generations.",
   },
 ] as const;
 export type PlaybookStep = (typeof PLAYBOOK_STEPS)[number];

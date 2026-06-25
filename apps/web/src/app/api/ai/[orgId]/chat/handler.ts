@@ -92,7 +92,7 @@ const MESSAGE_SAFETY_FALLBACK =
   "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
 
 const SCOPE_REFUSAL_FALLBACK =
-  "I can only help with TeamNetwork tasks for your organization — like members, events, announcements, discussions, jobs, donations, or finding the right page. That request is outside what I do.";
+  "I can only help with TeamNetwork tasks for your organization — like members, events, announcements, discussions, jobs, contributions, or finding the right page. That request is outside what I do.";
 
 /**
  * Resolve the Pass-1 bypass flag fail-closed: any unrecognized value (or

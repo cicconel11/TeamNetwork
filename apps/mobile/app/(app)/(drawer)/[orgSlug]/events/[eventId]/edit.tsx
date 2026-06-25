@@ -46,7 +46,7 @@ const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
   { value: "game", label: "Game" },
   { value: "social", label: "Social" },
   { value: "fundraiser", label: "Fundraiser" },
-  { value: "philanthropy", label: "Philanthropy" },
+  { value: "philanthropy", label: "Community" },
 ];
 
 function mergeDateAndTime(date: Date, time: Date) {

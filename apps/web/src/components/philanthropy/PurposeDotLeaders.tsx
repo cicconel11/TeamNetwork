@@ -7,7 +7,7 @@ export function PurposeDotLeaders({ purposeTotals, emptyMessage }: PurposeDotLea
   const entries = Object.entries(purposeTotals).sort(([, a], [, b]) => b - a);
 
   if (entries.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyMessage || "No donations yet."}</p>;
+    return <p className="text-sm text-muted-foreground">{emptyMessage || "No contributions yet."}</p>;
   }
 
   return (

@@ -571,7 +571,7 @@ export default function NewCalendarEventPage() {
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
             />
             <label htmlFor="is_philanthropy" className="text-sm text-foreground">
-              Mark as philanthropy event (will show in Philanthropy section)
+              Mark as community event (will show in Team Funding section)
             </label>
           </div>
 

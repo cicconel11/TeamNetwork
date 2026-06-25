@@ -1,6 +1,6 @@
 export const SITE_URL = "https://www.myteamnetwork.com";
 export const SITE_NAME = "TeamNetwork";
-export const SITE_DESCRIPTION = "Multi-organization hub for members, events, donations, and more";
+export const SITE_DESCRIPTION = "Multi-organization hub for members, events, contributions, and more";
 export const SITE_ICON_VERSION = "tn-20260325b";
 
 export const SITE_ICON_PATHS = {

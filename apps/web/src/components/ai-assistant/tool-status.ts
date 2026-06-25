@@ -21,9 +21,9 @@ export function formatToolStatusLabel(toolName: string): string {
     case "list_job_postings":
       return "Looking up job postings...";
     case "list_donations":
-      return "Loading donations...";
+      return "Loading contributions...";
     case "list_philanthropy_events":
-      return "Loading philanthropy events...";
+      return "Loading community events...";
     case "prepare_announcement":
       return "Preparing announcement...";
     case "prepare_job_posting":
@@ -43,7 +43,7 @@ export function formatToolStatusLabel(toolName: string): string {
     case "get_org_stats":
       return "Checking organization stats...";
     case "get_donation_analytics":
-      return "Summarizing donation analytics...";
+      return "Summarizing contribution analytics...";
     case "suggest_connections":
       return "Finding connections...";
     case "suggest_mentors":

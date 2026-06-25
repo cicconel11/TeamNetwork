@@ -209,12 +209,12 @@ export default function NewPhilanthropyEventScreen() {
             onPress={handleBack}
             style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}
             accessibilityRole="button"
-            accessibilityLabel="Back to philanthropy"
+            accessibilityLabel="Back to community"
           >
             <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
           </Pressable>
           <Text style={styles.navTitle} numberOfLines={1}>
-            New Philanthropy Event
+            New Community Event
           </Text>
         </View>
       </SafeAreaView>
@@ -337,7 +337,7 @@ export default function NewPhilanthropyEventScreen() {
   if (roleLoading) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: "New Philanthropy Event" }} />
+        <Stack.Screen options={{ title: "New Community Event" }} />
         {renderHeader()}
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
@@ -355,7 +355,7 @@ export default function NewPhilanthropyEventScreen() {
   if (!canEdit) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: "New Philanthropy Event" }} />
+        <Stack.Screen options={{ title: "New Community Event" }} />
         {renderHeader()}
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
@@ -363,7 +363,7 @@ export default function NewPhilanthropyEventScreen() {
         >
           <View style={styles.errorCard}>
             <Text selectable style={styles.errorText}>
-              You do not have access to add philanthropy events.
+              You do not have access to add community events.
             </Text>
           </View>
         </ScrollView>
@@ -373,7 +373,7 @@ export default function NewPhilanthropyEventScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: "New Philanthropy Event" }} />
+      <Stack.Screen options={{ title: "New Community Event" }} />
       {renderHeader()}
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
@@ -381,7 +381,7 @@ export default function NewPhilanthropyEventScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>New Philanthropy Event</Text>
+          <Text style={styles.headerTitle}>New Community Event</Text>
           <Text style={styles.headerSubtitle}>Add a volunteer or community service event</Text>
         </View>
 
@@ -398,7 +398,7 @@ export default function NewPhilanthropyEventScreen() {
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="e.g., Charity 5K Run, Food Bank Volunteering"
+          placeholder="e.g., Community 5K Run, Food Bank Volunteering"
           placeholderTextColor={neutral.placeholder}
           style={styles.input}
         />
@@ -409,7 +409,7 @@ export default function NewPhilanthropyEventScreen() {
         <TextInput
           value={description}
           onChangeText={setDescription}
-          placeholder="Describe the philanthropy event, what volunteers will be doing, any requirements..."
+          placeholder="Describe the community event, what volunteers will be doing, any requirements..."
           placeholderTextColor={neutral.placeholder}
           multiline
           textAlignVertical="top"

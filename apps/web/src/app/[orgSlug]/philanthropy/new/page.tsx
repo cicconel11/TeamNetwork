@@ -74,7 +74,7 @@ export default function NewPhilanthropyEventPage() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="New Philanthropy Event"
+        title="New Community Event"
         description="Add a volunteer or community service event"
         backHref={`/${orgSlug}/philanthropy`}
       />
@@ -91,7 +91,7 @@ export default function NewPhilanthropyEventPage() {
             label="Event Title"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            placeholder="e.g., Charity 5K Run, Food Bank Volunteering"
+            placeholder="e.g., Community 5K Run, Food Bank Volunteering"
             required
           />
 
@@ -99,7 +99,7 @@ export default function NewPhilanthropyEventPage() {
             label="Description"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Describe the philanthropy event, what volunteers will be doing, any requirements..."
+            placeholder="Describe the community event, what volunteers will be doing, any requirements..."
             rows={4}
           />
 

@@ -194,8 +194,8 @@ export function ConsentModal() {
 
         <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
           {isLimitedAnalytics
-            ? "Your account or organization is limited to page-level analytics only. We never log message content, form answers, donation details, or detailed interaction history tied to a person."
-            : "We never log message content, form answers, or donation details tied to a person. We only store anonymized usage patterns like page views and feature interactions."}
+            ? "Your account or organization is limited to page-level analytics only. We never log message content, form answers, contribution details, or detailed interaction history tied to a person."
+            : "We never log message content, form answers, or contribution details tied to a person. We only store anonymized usage patterns like page views and feature interactions."}
         </div>
 
         {state.message && (

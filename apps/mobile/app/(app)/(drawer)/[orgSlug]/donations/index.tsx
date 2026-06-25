@@ -394,7 +394,7 @@ export default function DonationsScreen() {
       {/* Stats Cards */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Total Raised</Text>
+          <Text style={styles.statLabel}>Funds Raised</Text>
           <Text style={styles.statValue}>${formatCurrency(totalAmount * 100)}</Text>
         </View>
         <View style={styles.statCard}>
@@ -402,7 +402,7 @@ export default function DonationsScreen() {
           <Text style={styles.statValue}>{donationCount}</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Average Gift</Text>
+          <Text style={styles.statLabel}>Average Contribution</Text>
           <Text style={styles.statValue}>${formatCurrency(avgDonation * 100)}</Text>
         </View>
       </View>
@@ -414,17 +414,17 @@ export default function DonationsScreen() {
         <>
           <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>
             <Plus size={20} color="#ffffff" />
-            <Text style={styles.donateButtonText}>Make a Donation</Text>
+            <Text style={styles.donateButtonText}>Support This Team</Text>
           </Pressable>
           {Platform.OS === "ios" && donationEligibleIos && (
             <Text style={styles.verifiedNonprofitCaption}>
-              Contributions go directly to this verified 501(c)(3) nonprofit.
+              Contributions go directly to this team.
             </Text>
           )}
         </>
       ) : (
         <View style={styles.webNotice}>
-          <Text style={styles.webNoticeTitle}>Donations are managed on the web</Text>
+          <Text style={styles.webNoticeTitle}>Contributions are managed on the web</Text>
           <Text style={styles.webNoticeBody}>
             Contributions for this organization are handled through its
             website.
@@ -457,17 +457,17 @@ export default function DonationsScreen() {
         </View>
       )}
 
-      {/* Recent Donations Header */}
-      <Text style={styles.sectionTitle}>Recent Donations</Text>
+      {/* Recent Contributions Header */}
+      <Text style={styles.sectionTitle}>Recent Contributions</Text>
     </View>
   );
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <DollarSign size={40} color={semantic.success} />
-      <Text style={styles.emptyTitle}>No donations yet</Text>
+      <Text style={styles.emptyTitle}>No contributions yet</Text>
       <Text style={styles.emptySubtitle}>
-        Donations will appear here after payments are completed via Stripe.
+        Contributions will appear here after payments are completed via Stripe.
       </Text>
     </View>
   );
@@ -489,14 +489,14 @@ export default function DonationsScreen() {
             )}
           </Pressable>
           <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Donations</Text>
+            <Text style={styles.headerTitle}>Contributions</Text>
             <Text style={styles.headerMeta}>
               {donationCount} {donationCount === 1 ? "contribution" : "contributions"} · $
               {formatCurrency(totalAmount * 100)}
             </Text>
           </View>
           {adminMenuItems.length > 0 && (
-            <OverflowMenu items={adminMenuItems} accessibilityLabel="Donation options" />
+            <OverflowMenu items={adminMenuItems} accessibilityLabel="Contribution options" />
           )}
         </View>
       </SafeAreaView>
@@ -520,7 +520,7 @@ export default function DonationsScreen() {
         {renderNavHeader()}
         <ErrorState
           onRetry={handleRefresh}
-          title="Unable to load donations"
+          title="Unable to load contributions"
           isOffline={isOffline}
         />
       </View>

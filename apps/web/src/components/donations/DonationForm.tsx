@@ -69,7 +69,7 @@ export function DonationForm({
   useEffect(() => {
     if (!didTrackOpenRef.current) {
       didTrackOpenRef.current = true;
-      trackBehavioralEvent("donation_flow_start", {
+      trackBehavioralEvent("support_flow_start", {
         campaign_id: eventId ?? undefined,
       }, organizationId);
     }
@@ -127,7 +127,7 @@ export function DonationForm({
     };
 
     try {
-      trackBehavioralEvent("donation_checkout_start", {
+      trackBehavioralEvent("support_checkout_start", {
         campaign_id: eventId ?? undefined,
         amount_bucket:
           amountNumber < 10 ? "<10" :
@@ -155,7 +155,7 @@ export function DonationForm({
 
       setMessage(tDonations("intentCreated"));
     } catch (err) {
-      trackBehavioralEvent("donation_checkout_result", {
+      trackBehavioralEvent("support_checkout_result", {
         campaign_id: eventId ?? undefined,
         result: "fail",
         error_code: "checkout_failed",
