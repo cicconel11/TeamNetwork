@@ -1668,6 +1668,7 @@ test("prepare_discussion_reply creates a pending confirmation action when comple
 
 test("prepare_chat_message returns missing_fields when the body is missing", async () => {
   const recipientMemberId = "11111111-1111-4111-8111-111111111111";
+  const recipientUserId = "22222222-2222-4222-8222-222222222222";
   const chatStub = createToolSupabaseStub({
     members: {
       select: {
@@ -1675,12 +1676,26 @@ test("prepare_chat_message returns missing_fields when the body is missing", asy
           {
             id: recipientMemberId,
             organization_id: ORG_ID,
-            user_id: "22222222-2222-4222-8222-222222222222",
+            user_id: recipientUserId,
             status: "active",
             deleted_at: null,
             first_name: "Jason",
             last_name: "Leonard",
             email: "jason@example.com",
+          },
+        ],
+        error: null,
+      },
+    },
+    user_organization_roles: {
+      select: {
+        data: [
+          { organization_id: ORG_ID, user_id: USER_ID, role: "admin", status: "active" },
+          {
+            organization_id: ORG_ID,
+            user_id: recipientUserId,
+            role: "alumni",
+            status: "active",
           },
         ],
         error: null,
@@ -1728,6 +1743,20 @@ test("prepare_chat_message creates a pending confirmation action when complete",
             first_name: "Jason",
             last_name: "Leonard",
             email: "jason@example.com",
+          },
+        ],
+        error: null,
+      },
+    },
+    user_organization_roles: {
+      select: {
+        data: [
+          { organization_id: ORG_ID, user_id: USER_ID, role: "admin", status: "active" },
+          {
+            organization_id: ORG_ID,
+            user_id: recipientUserId,
+            role: "alumni",
+            status: "active",
           },
         ],
         error: null,

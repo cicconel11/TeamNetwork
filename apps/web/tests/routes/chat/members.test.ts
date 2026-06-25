@@ -9,6 +9,10 @@ import {
   AuthPresets,
 } from "../../utils/authMock.ts";
 import { createSupabaseStub } from "../../utils/supabaseStub.ts";
+import {
+  mergeChatProfileCandidates,
+  uniqueChatEligibleUserIds,
+} from "../../../src/lib/chat/recipient-eligibility.ts";
 
 /**
  * Tests for /api/chat/[groupId]/members
@@ -66,8 +70,13 @@ interface SimulationContext {
   groupId: string;
   /** Chat group members pre-seeded in the context */
   groupMembers: ChatGroupMemberRow[];
-  /** User IDs of active org members */
-  activeOrgMemberUserIds: string[];
+  /** Org role rows used to validate add-member targets */
+  orgRoles: Array<{
+    user_id: string;
+    organization_id: string;
+    role: "admin" | "active_member" | "alumni" | "parent";
+    status: "active" | "revoked" | "pending";
+  }>;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -149,10 +158,17 @@ function simulateAddMembers(
     return { status: 403, error: "Forbidden" };
   }
 
-  // Validate each user_id is an active org member
-  const invalidIds = request.user_ids.filter(
-    (uid) => !ctx.activeOrgMemberUserIds.includes(uid)
+  // Validate each user_id is an active org member, including active alumni.
+  const activeChatEligibleUserIds = new Set(
+    ctx.orgRoles
+      .filter((role) => role.organization_id === ctx.organizationId)
+      .filter((role) => role.status === "active")
+      .filter((role) =>
+        ["admin", "active_member", "alumni", "parent"].includes(role.role)
+      )
+      .map((role) => role.user_id)
   );
+  const invalidIds = request.user_ids.filter((uid) => !activeChatEligibleUserIds.has(uid));
   if (invalidIds.length > 0) {
     return { status: 400, error: "Some users are not active org members" };
   }
@@ -265,7 +281,11 @@ const PARENT_USER_ID = "00000000-0000-4000-8000-000000000301";
 const OUTSIDER_USER_ID = "00000000-0000-4000-8000-000000000400";
 const NEW_USER_1_ID = "00000000-0000-4000-8000-000000000500";
 const NEW_USER_2_ID = "00000000-0000-4000-8000-000000000600";
+const ALUMNI_USER_ID = "00000000-0000-4000-8000-000000000601";
+const REVOKED_ALUMNI_USER_ID = "00000000-0000-4000-8000-000000000602";
+const OTHER_ORG_ALUMNI_USER_ID = "00000000-0000-4000-8000-000000000603";
 const ORG_ADMIN_USER_ID = "00000000-0000-4000-8000-000000000700";
+const OTHER_ORG_ID = "00000000-0000-4000-8000-000000000999";
 
 function createTestContext(
   overrides?: Partial<SimulationContext>
@@ -309,14 +329,17 @@ function createTestContext(
         removed_at: null,
       },
     ],
-    activeOrgMemberUserIds: [
-      ADMIN_USER_ID,
-      MOD_USER_ID,
-      MEMBER_USER_ID,
-      PARENT_USER_ID,
-      OUTSIDER_USER_ID,
-      NEW_USER_1_ID,
-      NEW_USER_2_ID,
+    orgRoles: [
+      { organization_id: ORG_ID, user_id: ADMIN_USER_ID, role: "active_member", status: "active" },
+      { organization_id: ORG_ID, user_id: MOD_USER_ID, role: "active_member", status: "active" },
+      { organization_id: ORG_ID, user_id: MEMBER_USER_ID, role: "active_member", status: "active" },
+      { organization_id: ORG_ID, user_id: PARENT_USER_ID, role: "parent", status: "active" },
+      { organization_id: ORG_ID, user_id: OUTSIDER_USER_ID, role: "active_member", status: "active" },
+      { organization_id: ORG_ID, user_id: NEW_USER_1_ID, role: "active_member", status: "active" },
+      { organization_id: ORG_ID, user_id: NEW_USER_2_ID, role: "active_member", status: "active" },
+      { organization_id: ORG_ID, user_id: ALUMNI_USER_ID, role: "alumni", status: "active" },
+      { organization_id: ORG_ID, user_id: REVOKED_ALUMNI_USER_ID, role: "alumni", status: "revoked" },
+      { organization_id: OTHER_ORG_ID, user_id: OTHER_ORG_ALUMNI_USER_ID, role: "alumni", status: "active" },
     ],
     ...overrides,
   };
@@ -495,6 +518,36 @@ test("POST: org admin can add members", () => {
   assert.strictEqual(result.skipped, 0);
 });
 
+test("POST: group moderator can add active alumni", () => {
+  const ctx = createTestContext();
+  const result = simulateAddMembers(
+    { auth: groupModeratorAuth, groupId: GROUP_ID, user_ids: [ALUMNI_USER_ID] },
+    ctx
+  );
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.added, 1);
+});
+
+test("POST: revoked alumni cannot be added", () => {
+  const ctx = createTestContext();
+  const result = simulateAddMembers(
+    { auth: groupModeratorAuth, groupId: GROUP_ID, user_ids: [REVOKED_ALUMNI_USER_ID] },
+    ctx
+  );
+  assert.strictEqual(result.status, 400);
+  assert.ok(result.error?.includes("not active org members"));
+});
+
+test("POST: alumni from another org cannot be added", () => {
+  const ctx = createTestContext();
+  const result = simulateAddMembers(
+    { auth: groupModeratorAuth, groupId: GROUP_ID, user_ids: [OTHER_ORG_ALUMNI_USER_ID] },
+    ctx
+  );
+  assert.strictEqual(result.status, 400);
+  assert.ok(result.error?.includes("not active org members"));
+});
+
 test("POST: empty user_ids returns 400", () => {
   const ctx = createTestContext();
   const result = simulateAddMembers(
@@ -550,6 +603,86 @@ test("POST: re-adding a soft-deleted member reactivates them", () => {
     (m) => m.user_id === MEMBER_USER_ID && m.removed_at === null
   );
   assert.ok(restored);
+});
+
+test("chat candidate helpers dedupe active org-role users", () => {
+  assert.deepStrictEqual(
+    uniqueChatEligibleUserIds([
+      { user_id: NEW_USER_1_ID },
+      { user_id: NEW_USER_1_ID },
+      { user_id: null },
+      {},
+      { user_id: ALUMNI_USER_ID },
+    ]),
+    [NEW_USER_1_ID, ALUMNI_USER_ID]
+  );
+});
+
+test("channel member candidates include alumni-only users and prefer member profiles for duplicates", () => {
+  const candidates = mergeChatProfileCandidates({
+    members: [
+      {
+        id: "member-profile",
+        user_id: NEW_USER_1_ID,
+        first_name: "Jordan",
+        last_name: "Member",
+        email: "jordan@example.com",
+        photo_url: "member.jpg",
+        role: "Captain",
+      },
+      {
+        id: "manual-member",
+        user_id: null,
+        first_name: "Manual",
+        last_name: "Only",
+        email: "manual@example.com",
+        photo_url: null,
+      },
+    ],
+    alumni: [
+      {
+        id: "duplicate-alumni-profile",
+        user_id: NEW_USER_1_ID,
+        first_name: "Jordan",
+        last_name: "Alum",
+        email: "alum-duplicate@example.com",
+        photo_url: "alum.jpg",
+        position_title: "Founder",
+      },
+      {
+        id: "alumni-profile",
+        user_id: ALUMNI_USER_ID,
+        first_name: "Taylor",
+        last_name: "Alum",
+        email: "taylor@example.com",
+        photo_url: null,
+        job_title: "Advisor",
+      },
+    ],
+  });
+
+  assert.deepStrictEqual(candidates, [
+    {
+      id: "member-profile",
+      user_id: NEW_USER_1_ID,
+      first_name: "Jordan",
+      last_name: "Member",
+      email: "jordan@example.com",
+      photo_url: "member.jpg",
+      role: "Captain",
+      profileType: "member",
+    },
+    {
+      id: "alumni-profile",
+      user_id: ALUMNI_USER_ID,
+      first_name: "Taylor",
+      last_name: "Alum",
+      email: "taylor@example.com",
+      photo_url: null,
+      role: "Advisor",
+      profileType: "alumni",
+    },
+  ]);
 });
 
 // ─── DELETE Tests ────────────────────────────────────────────────────────────

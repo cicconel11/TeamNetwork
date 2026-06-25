@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
@@ -14,6 +15,7 @@ import { EnrichmentStatusBadge } from "@/components/alumni/EnrichmentStatusBadge
 import { ClaimAlumniBanner } from "@/components/alumni/ClaimAlumniBanner";
 import { ReportBlockMenu } from "@/components/moderation/ReportBlockMenu";
 import { LinkedInProfileLink, formatPersonHeadline, EnrichmentSections } from "@/components/shared";
+import { CHAT_ELIGIBLE_ORG_ROLES } from "@/lib/chat/recipient-eligibility";
 
 interface AlumniDetailPageProps {
   params: Promise<{ orgSlug: string; alumniId: string }>;
@@ -93,7 +95,29 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   // U12: enrichment status surfacing. Validate the raw column value so an
   // unexpected DB value degrades to "render nothing" instead of a bad pill.
   const isAdmin = role === "admin";
-  const isSelf = Boolean(user?.id && alumUserId === user.id);
+  const currentUserId = user?.id ?? null;
+  const isSelf = Boolean(currentUserId && alumUserId === currentUserId);
+  const chatEligibleUserIds = new Set<string>();
+  if (currentUserId && alumUserId && currentUserId !== alumUserId) {
+    const { data: chatEligibleRoles } = await dataClient
+      .from("user_organization_roles")
+      .select("user_id")
+      .eq("organization_id", orgId)
+      .eq("status", "active")
+      .in("role", CHAT_ELIGIBLE_ORG_ROLES)
+      .in("user_id", [currentUserId, alumUserId]);
+
+    for (const row of chatEligibleRoles || []) {
+      if (row.user_id) chatEligibleUserIds.add(row.user_id);
+    }
+  }
+  const canMessageProfile = Boolean(
+    currentUserId &&
+      alumUserId &&
+      !isSelf &&
+      chatEligibleUserIds.has(currentUserId) &&
+      chatEligibleUserIds.has(alumUserId),
+  );
   const enrichmentStatus =
     alum.enrichment_status === "pending" ||
     alum.enrichment_status === "enriched" ||
@@ -272,6 +296,20 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
 
             {/* Contact actions */}
             <div className="flex flex-wrap gap-2 pt-3 border-t border-border">
+              {canMessageProfile && (
+                <form action={`/api/organizations/${orgId}/direct-chat/profile`} method="post">
+                  <input type="hidden" name="profileType" value="alumni" />
+                  <input type="hidden" name="profileId" value={alumniId} />
+                  <input type="hidden" name="orgSlug" value={orgSlug} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-[var(--muted)]/50 text-foreground hover:bg-[var(--muted)] transition-colors"
+                  >
+                    <MessageSquare className="h-4 w-4 opacity-70" aria-hidden="true" />
+                    Message
+                  </button>
+                </form>
+              )}
               {alum.email && (
                 <a
                   href={`mailto:${alum.email}`}

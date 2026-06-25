@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CHAT_ELIGIBLE_ORG_ROLES } from "@/lib/chat/recipient-eligibility";
 
 export type DirectChatSupabase = Pick<SupabaseClient, "from">;
 
@@ -11,6 +12,17 @@ interface MemberRow {
   status?: string | null;
   deleted_at?: string | null;
 }
+
+interface AlumniRow {
+  id: string;
+  user_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  deleted_at?: string | null;
+}
+
+type ChatPersonRow = MemberRow & { profile_kind: "member" | "alumni" };
 
 interface ChatGroupRow {
   id: string;
@@ -70,11 +82,31 @@ export type SendAiAssistedDirectChatMessageResult =
         | "message_insert_failed";
     };
 
+type DirectChatForUserFailureCode =
+  | "sender_inactive"
+  | "recipient_inactive"
+  | "recipient_self"
+  | "recipient_lookup_failed"
+  | "chat_lookup_failed"
+  | "chat_create_failed"
+  | "membership_sync_failed";
+
+export type EnsureDirectChatForUserResult =
+  | { ok: true; chatGroupId: string; reused: boolean }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      code: DirectChatForUserFailureCode;
+    };
+
 function normalizeMatchValue(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function formatMemberDisplayName(member: MemberRow): string {
+function formatMemberDisplayName(
+  member: Pick<MemberRow, "first_name" | "last_name" | "email">,
+): string {
   const name = [member.first_name, member.last_name]
     .map((value) => value?.trim() ?? "")
     .filter((value) => value.length > 0)
@@ -99,7 +131,7 @@ function dedupeCandidates(values: string[]): string[] {
 async function loadActiveLinkedMembers(
   supabase: DirectChatSupabase,
   organizationId: string,
-): Promise<{ data: MemberRow[] | null; error: unknown }> {
+): Promise<{ data: ChatPersonRow[] | null; error: unknown }> {
   const { data, error } = await supabase
     .from("members")
     .select("id, user_id, first_name, last_name, email, status, deleted_at")
@@ -108,13 +140,123 @@ async function loadActiveLinkedMembers(
     .is("deleted_at", null)
     .order("last_name", { ascending: true });
 
-  return { data: (data as MemberRow[] | null) ?? null, error };
+  if (error) {
+    return { data: null, error };
+  }
+
+  const linkedMembers = ((data as MemberRow[] | null) ?? []).filter(
+    (row): row is MemberRow & { user_id: string } => Boolean(row.user_id)
+  );
+  if (linkedMembers.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const { data: memberships, error: membershipsError } = await supabase
+    .from("user_organization_roles")
+    .select("user_id, status")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+    .in("role", CHAT_ELIGIBLE_ORG_ROLES)
+    .in("user_id", linkedMembers.map((row) => row.user_id));
+
+  if (membershipsError) {
+    return { data: null, error: membershipsError };
+  }
+
+  const activeUserIds = new Set(
+    ((memberships as Array<{ user_id?: string | null }> | null) ?? [])
+      .map((row) => row.user_id)
+      .filter((value): value is string => Boolean(value))
+  );
+
+  return {
+    data: linkedMembers
+      .filter((row) => activeUserIds.has(row.user_id))
+      .map((row) => ({ ...row, profile_kind: "member" as const })),
+    error: null,
+  };
 }
 
-function isChatEligibleMember(
-  member: MemberRow,
+async function loadActiveLinkedAlumni(
+  supabase: DirectChatSupabase,
+  organizationId: string,
+): Promise<{ data: ChatPersonRow[] | null; error: unknown }> {
+  const { data: alumni, error } = await supabase
+    .from("alumni")
+    .select("id, user_id, first_name, last_name, email, deleted_at")
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
+    .order("last_name", { ascending: true });
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  const linkedAlumni = ((alumni as AlumniRow[] | null) ?? []).filter(
+    (row): row is AlumniRow & { user_id: string } => Boolean(row.user_id)
+  );
+  if (linkedAlumni.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const { data: memberships, error: membershipsError } = await supabase
+    .from("user_organization_roles")
+    .select("user_id, status")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+    .in("role", CHAT_ELIGIBLE_ORG_ROLES)
+    .in("user_id", linkedAlumni.map((row) => row.user_id));
+
+  if (membershipsError) {
+    return { data: null, error: membershipsError };
+  }
+
+  const activeUserIds = new Set(
+    ((memberships as Array<{ user_id?: string | null }> | null) ?? [])
+      .map((row) => row.user_id)
+      .filter((value): value is string => Boolean(value))
+  );
+
+  return {
+    data: linkedAlumni
+      .filter((row) => activeUserIds.has(row.user_id))
+      .map((row) => ({
+        ...row,
+        status: "active",
+        profile_kind: "alumni" as const,
+      })),
+    error: null,
+  };
+}
+
+async function loadActiveLinkedChatPeople(
+  supabase: DirectChatSupabase,
+  organizationId: string,
+): Promise<{ data: ChatPersonRow[] | null; error: unknown }> {
+  const [membersResult, alumniResult] = await Promise.all([
+    loadActiveLinkedMembers(supabase, organizationId),
+    loadActiveLinkedAlumni(supabase, organizationId),
+  ]);
+
+  if (membersResult.error) return membersResult;
+  if (alumniResult.error) return alumniResult;
+
+  const peopleByUserId = new Map<string, ChatPersonRow>();
+  for (const person of [...(membersResult.data ?? []), ...(alumniResult.data ?? [])]) {
+    if (!person.user_id) continue;
+    const existing = peopleByUserId.get(person.user_id);
+    if (!existing || existing.profile_kind === "alumni") {
+      peopleByUserId.set(person.user_id, person);
+    }
+  }
+
+  return { data: Array.from(peopleByUserId.values()), error: null };
+}
+
+function isChatEligibleMember<T extends MemberRow>(
+  member: T,
   senderUserId: string,
-): member is MemberRow & { user_id: string } {
+): member is T & { user_id: string } {
   return Boolean(member.user_id && member.user_id !== senderUserId);
 }
 
@@ -122,7 +264,7 @@ async function loadMemberById(
   supabase: DirectChatSupabase,
   organizationId: string,
   memberId: string,
-): Promise<{ data: MemberRow | null; error: unknown }> {
+): Promise<{ data: ChatPersonRow | null; error: unknown }> {
   const { data, error } = await supabase
     .from("members")
     .select("id, user_id, first_name, last_name, email, status, deleted_at")
@@ -130,7 +272,107 @@ async function loadMemberById(
     .eq("id", memberId)
     .maybeSingle();
 
-  return { data: (data as MemberRow | null) ?? null, error };
+  if (error) {
+    return { data: null, error };
+  }
+
+  const member = (data as MemberRow | null) ?? null;
+  if (member) {
+    if (!member.user_id || member.deleted_at != null || member.status !== "active") {
+      return { data: { ...member, profile_kind: "member" }, error: null };
+    }
+
+    const membership = await hasActiveOrgMembership(supabase, {
+      organizationId,
+      userId: member.user_id,
+    });
+    if (!membership.ok) {
+      return { data: null, error: membership };
+    }
+
+    return {
+      data: {
+        ...member,
+        status: membership.active ? "active" : "inactive",
+        profile_kind: "member",
+      },
+      error: null,
+    };
+  }
+
+  const { data: alumni, error: alumniError } = await supabase
+    .from("alumni")
+    .select("id, user_id, first_name, last_name, email, deleted_at")
+    .eq("organization_id", organizationId)
+    .eq("id", memberId)
+    .maybeSingle();
+
+  if (alumniError) {
+    return { data: null, error: alumniError };
+  }
+
+  const alumniRow = (alumni as AlumniRow | null) ?? null;
+  if (!alumniRow) {
+    return { data: null, error: null };
+  }
+
+  if (!alumniRow.user_id || alumniRow.deleted_at != null) {
+    return {
+      data: {
+        ...alumniRow,
+        status: alumniRow.deleted_at == null ? "active" : "inactive",
+        profile_kind: "alumni",
+      },
+      error: null,
+    };
+  }
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("user_organization_roles")
+    .select("status")
+    .eq("organization_id", organizationId)
+    .eq("user_id", alumniRow.user_id)
+    .eq("status", "active")
+    .in("role", CHAT_ELIGIBLE_ORG_ROLES)
+    .maybeSingle();
+
+  if (membershipError) {
+    return { data: null, error: membershipError };
+  }
+
+  return {
+    data: {
+      ...alumniRow,
+      status: membership ? "active" : "inactive",
+      profile_kind: "alumni",
+    },
+    error: null,
+  };
+}
+
+async function hasActiveOrgMembership(
+  supabase: DirectChatSupabase,
+  input: { organizationId: string; userId: string },
+): Promise<{ ok: true; active: boolean } | { ok: false }> {
+  const { data, error } = await supabase
+    .from("user_organization_roles")
+    .select("role, status")
+    .eq("organization_id", input.organizationId)
+    .eq("user_id", input.userId)
+    .eq("status", "active")
+    .in("role", CHAT_ELIGIBLE_ORG_ROLES)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[direct-chat] hasActiveOrgMembership lookup failed", {
+      organizationId: input.organizationId,
+      userId: input.userId,
+      error,
+    });
+    return { ok: false };
+  }
+
+  return { ok: true, active: Boolean(data) };
 }
 
 export async function findExactDirectChatGroup(
@@ -314,7 +556,7 @@ export async function resolveChatMessageRecipient(
     };
   }
 
-  const { data: members, error } = await loadActiveLinkedMembers(supabase, input.organizationId);
+  const { data: members, error } = await loadActiveLinkedChatPeople(supabase, input.organizationId);
   if (error) {
     return {
       kind: "unavailable",
@@ -325,7 +567,7 @@ export async function resolveChatMessageRecipient(
 
   const query = normalizeMatchValue(requestedRecipient);
   const rows = (members ?? []).filter((member) => member.user_id !== input.senderUserId);
-  const eligibleRows = rows.filter((member): member is MemberRow & { user_id: string } =>
+  const eligibleRows = rows.filter((member): member is ChatPersonRow & { user_id: string } =>
     isChatEligibleMember(member, input.senderUserId)
   );
   const exactMatches = eligibleRows.filter((member) => {
@@ -570,6 +812,78 @@ export async function ensureDirectChatGroup(
   if (!bMembership.ok) return { ok: false, code: bMembership.code };
 
   return { ok: true, chatGroupId, reused: false };
+}
+
+export async function ensureDirectChatForUser(
+  supabase: DirectChatSupabase,
+  input: { organizationId: string; senderUserId: string; recipientUserId: string },
+): Promise<EnsureDirectChatForUserResult> {
+  if (input.senderUserId === input.recipientUserId) {
+    return {
+      ok: false,
+      status: 409,
+      error: "You cannot message yourself.",
+      code: "recipient_self",
+    };
+  }
+
+  const [senderMembership, recipientMembership] = await Promise.all([
+    hasActiveOrgMembership(supabase, {
+      organizationId: input.organizationId,
+      userId: input.senderUserId,
+    }),
+    hasActiveOrgMembership(supabase, {
+      organizationId: input.organizationId,
+      userId: input.recipientUserId,
+    }),
+  ]);
+
+  if (!senderMembership.ok || !recipientMembership.ok) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to verify chat access.",
+      code: "recipient_lookup_failed",
+    };
+  }
+
+  if (!senderMembership.active) {
+    return {
+      ok: false,
+      status: 403,
+      error: "You do not have access to message people in this organization.",
+      code: "sender_inactive",
+    };
+  }
+
+  if (!recipientMembership.active) {
+    return {
+      ok: false,
+      status: 404,
+      error: "This person is not available for in-app chat.",
+      code: "recipient_inactive",
+    };
+  }
+
+  const result = await ensureDirectChatGroup(supabase, {
+    orgId: input.organizationId,
+    userAId: input.senderUserId,
+    userBId: input.recipientUserId,
+  });
+
+  if (!result.ok) {
+    // ensureDirectChatGroup only returns recipient_lookup_failed when the two
+    // user ids are equal, which the self-message guard above already rejects —
+    // so every code reachable here is a genuine 500 (lookup/create/sync failure).
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to open the chat.",
+      code: result.code,
+    };
+  }
+
+  return result;
 }
 
 export async function sendAiAssistedDirectChatMessage(

@@ -4,6 +4,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { baseSchemas, validateJson, ValidationError } from "@/lib/security/validation";
 import { addChatMembersSchema, removeChatMemberSchema } from "@/lib/schemas/chat";
 import { getChatGroupContext } from "@/lib/auth/chat-helpers";
+import { CHAT_ELIGIBLE_ORG_ROLES } from "@/lib/chat/recipient-eligibility";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -110,14 +111,24 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Forbidden" }, 403);
   }
 
-  // Validate all user_ids are active org members
-  const { data: activeMembers } = await supabase
-    .from("members")
+  // Validate all user_ids are active org users. This intentionally includes
+  // linked alumni, who may not have an active row in `members`.
+  const { data: activeMembers, error: activeMembersError } = await supabase
+    .from("user_organization_roles")
     .select("user_id")
     .eq("organization_id", ctx.group.organization_id)
     .eq("status", "active")
-    .is("deleted_at", null)
+    .in("role", CHAT_ELIGIBLE_ORG_ROLES)
     .in("user_id", user_ids);
+
+  if (activeMembersError) {
+    console.error("[chat/members POST] Failed to validate members", {
+      organizationId: ctx.group.organization_id,
+      groupId,
+      error: activeMembersError,
+    });
+    return respond({ error: "Failed to validate members" }, 500);
+  }
 
   const activeUserIds = new Set((activeMembers || []).map(m => m.user_id));
   const invalidIds = user_ids.filter(id => !activeUserIds.has(id));

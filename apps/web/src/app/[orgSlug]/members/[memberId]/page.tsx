@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
@@ -16,6 +17,7 @@ import {
   resolveMemberEducation,
   resolveMemberBio,
 } from "@/lib/profile/member-enrichment";
+import { CHAT_ELIGIBLE_ORG_ROLES } from "@/lib/chat/recipient-eligibility";
 
 interface MemberDetailPageProps {
   params: Promise<{ orgSlug: string; memberId: string }>;
@@ -109,11 +111,33 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   const enrichmentEducation = resolveMemberEducation(enrichment, m);
 
   const currentUserId = user?.id ?? null;
+  const chatEligibleUserIds = new Set<string>();
+  if (currentUserId && memberUserId && currentUserId !== memberUserId) {
+    const { data: chatEligibleRoles } = await dataClient
+      .from("user_organization_roles")
+      .select("user_id")
+      .eq("organization_id", org.id)
+      .eq("status", "active")
+      .in("role", CHAT_ELIGIBLE_ORG_ROLES)
+      .in("user_id", [currentUserId, memberUserId]);
+
+    for (const row of chatEligibleRoles || []) {
+      if (row.user_id) chatEligibleUserIds.add(row.user_id);
+    }
+  }
+
   const isAdmin = ctx.isAdmin;
   const canEdit = ctx.canEditPerson(memberUserId);
   const canModifyExisting = canEdit && !ctx.isReadOnly;
   const canDelete = ctx.isAdmin && !ctx.isReadOnly;
   const isOwnProfile = currentUserId !== null && currentUserId === memberUserId;
+  const canMessageProfile = Boolean(
+    currentUserId &&
+      memberUserId &&
+      !isOwnProfile &&
+      chatEligibleUserIds.has(currentUserId) &&
+      chatEligibleUserIds.has(memberUserId),
+  );
 
   // member.role is the job title field (confusingly named "role" in the members table)
   const jobTitle = m.role || null;
@@ -268,6 +292,20 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
 
             {/* Contact actions */}
             <div className="flex flex-wrap gap-2 pt-3 border-t border-border">
+              {canMessageProfile && (
+                <form action={`/api/organizations/${org.id}/direct-chat/profile`} method="post">
+                  <input type="hidden" name="profileType" value="member" />
+                  <input type="hidden" name="profileId" value={memberId} />
+                  <input type="hidden" name="orgSlug" value={orgSlug} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-[var(--muted)]/50 text-foreground hover:bg-[var(--muted)] transition-colors"
+                  >
+                    <MessageSquare className="h-4 w-4 opacity-70" aria-hidden="true" />
+                    Message
+                  </button>
+                </form>
+              )}
               {member.email && (
                 <a
                   href={`mailto:${member.email}`}
