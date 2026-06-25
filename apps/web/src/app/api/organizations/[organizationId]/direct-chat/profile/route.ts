@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import {
@@ -98,7 +99,13 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Unauthorized" }, 401);
   }
 
-  const result = await startProfileDirectChat(supabase as ProfileDirectChatSupabase, {
+  // startProfileDirectChat authorizes the viewer (active chat-eligible role)
+  // and the target in app code, then writes the chat group. chat_groups INSERT
+  // is admin-only under RLS, so the privileged write runs on the service-role
+  // client — matching mentorship auto-pairing and the AI direct-chat path.
+  const serviceSupabase = createServiceClient();
+
+  const result = await startProfileDirectChat(serviceSupabase as ProfileDirectChatSupabase, {
     organizationId,
     viewerUserId: user.id,
     profileType: body.profileType,
