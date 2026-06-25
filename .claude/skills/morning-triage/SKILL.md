@@ -41,6 +41,19 @@ For each candidate, decide — and write down the decision, not just the item:
 
 Keep only what is worth opening a worktree for **today**.
 
+### Known noise — skip or retry, never file (maintained list, raise the ceiling)
+
+This is the discovery ceiling made explicit. Anything here is noise by default; treat it as such
+unless it recurs across runs with a real signal. Add to this list when a new false-positive wastes a run.
+
+- **Flaky tests** — retry once before filing; only file if it fails on retry. (No confirmed flakes
+  catalogued yet — append `suite::test` here the first time one is confirmed flaky, not on first red.)
+- **Dependabot / lockfile churn** — `dependabot/*` branches, `bun.lock` / `package.json` version-bump-only
+  diffs: skip. Not triage work unless a bump breaks `build` or `test-*`.
+- **`.env*.bak` / generated files** — backup and generated artifacts are not findings.
+- **OKF / docs-only commits** — `validate-okf`-passing doc changes (`docs/agent/`, `docs/db/okf/`) are
+  not actionable triage unless `validate-okf` itself fails.
+
 ## Write (the PERSISTENCE output)
 
 Append/update `.claude/loops/state/triage.md`, one row per finding:

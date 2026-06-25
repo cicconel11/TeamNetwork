@@ -1,0 +1,59 @@
+# Loop Engineering — AI-eval loop (SCHEDULING move).
+#
+# Tunes the deterministic intent classifier (resolveSurfaceRouting) and gates every change against a
+# committed golden set, so routing only changes when the score goes UP with zero regressions.
+#
+# ENABLED (weekly schedule active). The preconditions the playbook requires are met:
+#   - the golden set is seeded with 20 real rows (`baseline: 20/20`), so it is not a "blind loop".
+#   - the evaluator floor was proven: a deliberately-bad keyword removal AND a plausible nav-override
+#     change were both REJECTED by the golden set in manual runs (see baseline-file history + inbox).
+# Two operator preconditions remain (outside this file):
+#   - the CLAUDE_CODE_OAUTH_TOKEN repo secret must exist (Settings → Secrets → Actions).
+#   - the run still opens DRAFT PRs only and never merges — a human is the merge gate.
+#
+# Respects the playbook disciplines: cap before you ship (timeout + max-turns below); keep one door
+# open (PRs draft, never merged). Also runnable on demand via workflow_dispatch from the Actions tab.
+name: Loop · AI eval
+
+on:
+  workflow_dispatch: {}
+  # Weekly is plenty for a deterministic classifier (cloud cron min interval is ~1h anyway).
+  schedule:
+    - cron: '0 7 * * 1'   # 07:00 UTC Mondays
+
+# Single-flight: never let two eval runs race on the baseline file.
+concurrency:
+  group: loop-ai-eval
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # commit the baseline bump back (inside a PR)
+  pull-requests: write  # open DRAFT PRs (never merge)
+  issues: read
+  id-token: write
+
+jobs:
+  ai-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # token/time circuit-breaker — a stuck loop cannot burn the night
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run ai-eval loop
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # DISCOVERY is a skill, not a wall of text pasted into a cron job.
+          prompt: |
+            Run the `ai-eval-loop` skill. Read the golden set + baseline in
+            .claude/loops/state/ai-eval-baseline.md FIRST. Find candidate improvements to
+            resolveSurfaceRouting (apps/web/src/lib/ai/intent-router.ts) that fix a currently-failing
+            golden row or a confirmed real miss from feedback-evals. For each candidate, apply it in an
+            isolated worktree, run the FULL golden set, and hand the diff + score to the `ai-eval-judge`
+            agent. Open a DRAFT PR (classifier diff + golden-set additions + baseline bump) ONLY if the
+            judge returns PASS — candidate beats baseline with zero regressions. Anything that ties,
+            regresses, or touches safety/access/spend goes to .claude/loops/inbox/ for a human. NEVER
+            merge, NEVER edit the golden set to manufacture a pass, NEVER force-push.
+          claude_args: '--max-turns 40'   # hard cap: bounds an idle loop's spend
