@@ -52,7 +52,8 @@ type TableName =
   | "ai_document_chunks"
   | "ai_indexing_exclusions"
   | "announcements"
-  | "organization_email_domains";
+  | "organization_email_domains"
+  | "data_access_log";
 
 type Row = Record<string, unknown>;
 
@@ -120,6 +121,7 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   ai_indexing_exclusions: [],
   announcements: [],
   organization_email_domains: ["organization_id", "domain"],
+  data_access_log: [],
 };
 
 function nowIso() {
@@ -180,6 +182,7 @@ export function createSupabaseStub() {
     ai_indexing_exclusions: [],
     announcements: [],
     organization_email_domains: [],
+    data_access_log: [],
   };
 
   // RPC handler registry

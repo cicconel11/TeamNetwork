@@ -194,10 +194,15 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
         description={`${total} ${pageLabel.toLowerCase()}${hasActiveFilters ? ` ${tActions("filtered")}` : ` ${tActions("inOurNetwork")}`}`}
         actions={
           canEdit && (
-            <AlumniActionsMenu
-              orgSlug={orgSlug}
-              actionLabel={actionLabel}
-            />
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/${orgSlug}/alumni/cohorts`}
+                className="inline-flex items-center rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Reachability
+              </Link>
+              <AlumniActionsMenu orgSlug={orgSlug} actionLabel={actionLabel} />
+            </div>
           )
         }
       />

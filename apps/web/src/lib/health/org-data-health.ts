@@ -4,6 +4,10 @@ import {
   checkEnrichmentHealth,
   type EnrichmentHealthReport,
 } from "@/lib/linkedin/enrichment-health";
+import {
+  checkReachabilityHealth,
+  type ReachabilityHealthReport,
+} from "@/lib/health/reachability-health";
 
 /**
  * Consolidated read-only data-health report for one org, spanning the two
@@ -14,6 +18,9 @@ import {
  * The people-graph is served directly from Postgres (`mentorship_pairs` +
  * member/alumni projections), so there is no separate store to drift against.
  *
+ *  - reachability: which alumni are linked + chat-eligible vs. unclaimed dead
+ *    nodes — diagnoses how much of the network is actually reachable.
+ *
  * Each section degrades independently — a section that cannot be computed
  * reports `degraded` rather than failing the whole report.
  */
@@ -21,6 +28,7 @@ export interface OrgDataHealthReport {
   orgId: string;
   rag: RagHealthReport;
   enrichment: EnrichmentHealthReport;
+  reachability: ReachabilityHealthReport;
 }
 
 interface GetOrgDataHealthOptions {
@@ -33,14 +41,16 @@ export async function getOrgDataHealth(
   orgId: string,
   options: GetOrgDataHealthOptions = {}
 ): Promise<OrgDataHealthReport> {
-  const [rag, enrichment] = await Promise.all([
+  const [rag, enrichment, reachability] = await Promise.all([
     checkRagHealth(serviceSupabase, orgId),
     checkEnrichmentHealth(serviceSupabase, orgId, { now: options.now }),
+    checkReachabilityHealth(serviceSupabase, orgId),
   ]);
 
   return {
     orgId,
     rag,
     enrichment,
+    reachability,
   };
 }
