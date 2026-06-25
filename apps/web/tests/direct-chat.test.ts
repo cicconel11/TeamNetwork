@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createSupabaseStub } from "./utils/supabaseStub.ts";
 import {
   type DirectChatSupabase,
+  ensureDirectChatForUser,
   findExactDirectChatGroup,
   resolveChatMessageRecipient,
   sendAiAssistedDirectChatMessage,
@@ -119,6 +120,14 @@ test("findExactDirectChatGroup refuses chats with extra active members or remove
 
 test("sendAiAssistedDirectChatMessage creates a new 1:1 chat and records ai_assisted metadata", async () => {
   const supabase = createSupabaseStub();
+  supabase.seed("user_organization_roles", [
+    {
+      organization_id: ORG_ID,
+      user_id: RECIPIENT_USER_ID,
+      role: "active_member",
+      status: "active",
+    },
+  ]);
   supabase.seed("members", [
     {
       id: RECIPIENT_MEMBER_ID,
@@ -160,6 +169,14 @@ test("sendAiAssistedDirectChatMessage creates a new 1:1 chat and records ai_assi
 
 test("resolveChatMessageRecipient ignores duplicate org rows that are not chat-eligible", async () => {
   const supabase = createSupabaseStub();
+  supabase.seed("user_organization_roles", [
+    {
+      organization_id: ORG_ID,
+      user_id: RECIPIENT_USER_ID,
+      role: "active_member",
+      status: "active",
+    },
+  ]);
   supabase.seed("members", [
     {
       id: "00000000-0000-4000-8000-000000000020",
@@ -196,4 +213,115 @@ test("resolveChatMessageRecipient ignores duplicate org rows that are not chat-e
     displayName: "Louis Ciccone",
     existingChatGroupId: null,
   });
+});
+
+test("resolveChatMessageRecipient rejects explicit recipients without active org membership", async () => {
+  const supabase = createSupabaseStub();
+  supabase.seed("user_organization_roles", [
+    {
+      organization_id: ORG_ID,
+      user_id: RECIPIENT_USER_ID,
+      role: "alumni",
+      status: "revoked",
+    },
+  ]);
+  supabase.seed("members", [
+    {
+      id: RECIPIENT_MEMBER_ID,
+      organization_id: ORG_ID,
+      user_id: RECIPIENT_USER_ID,
+      status: "active",
+      deleted_at: null,
+      first_name: "Jason",
+      last_name: "Leonard",
+      email: "jason@example.com",
+      role: "alumni",
+    },
+  ]);
+
+  const result = await resolveChatMessageRecipient(supabase as DirectChatSupabase, {
+    organizationId: ORG_ID,
+    senderUserId: SENDER_USER_ID,
+    recipientMemberId: RECIPIENT_MEMBER_ID,
+  });
+
+  assert.deepEqual(result, {
+    kind: "unavailable",
+    requestedRecipient: "Jason Leonard",
+    reason: "recipient_inactive",
+  });
+});
+
+test("resolveChatMessageRecipient can resolve linked active alumni by name", async () => {
+  const supabase = createSupabaseStub();
+  supabase.seed("alumni", [
+    {
+      id: "00000000-0000-4000-8000-000000000030",
+      organization_id: ORG_ID,
+      user_id: RECIPIENT_USER_ID,
+      deleted_at: null,
+      first_name: "Taylor",
+      last_name: "Alum",
+      email: "taylor@example.com",
+    },
+  ]);
+  supabase.seed("user_organization_roles", [
+    {
+      user_id: RECIPIENT_USER_ID,
+      organization_id: ORG_ID,
+      role: "alumni",
+      status: "active",
+    },
+  ]);
+
+  const result = await resolveChatMessageRecipient(supabase as DirectChatSupabase, {
+    organizationId: ORG_ID,
+    senderUserId: SENDER_USER_ID,
+    personQuery: "Taylor Alum",
+  });
+
+  assert.deepEqual(result, {
+    kind: "resolved",
+    memberId: "00000000-0000-4000-8000-000000000030",
+    userId: RECIPIENT_USER_ID,
+    displayName: "Taylor Alum",
+    existingChatGroupId: null,
+  });
+});
+
+test("ensureDirectChatForUser creates a 1:1 chat for active org users", async () => {
+  const supabase = createSupabaseStub();
+  supabase.seed("user_organization_roles", [
+    {
+      user_id: SENDER_USER_ID,
+      organization_id: ORG_ID,
+      role: "active_member",
+      status: "active",
+    },
+    {
+      user_id: RECIPIENT_USER_ID,
+      organization_id: ORG_ID,
+      role: "alumni",
+      status: "active",
+    },
+  ]);
+  supabase.seed("users", [
+    {
+      id: RECIPIENT_USER_ID,
+      name: "Taylor Alum",
+      email: "taylor@example.com",
+    },
+  ]);
+
+  const result = await ensureDirectChatForUser(supabase as DirectChatSupabase, {
+    organizationId: ORG_ID,
+    senderUserId: SENDER_USER_ID,
+    recipientUserId: RECIPIENT_USER_ID,
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.reused, false);
+  assert.equal(supabase.getRows("chat_groups").length, 1);
+  assert.equal(supabase.getRows("chat_group_members").length, 2);
 });

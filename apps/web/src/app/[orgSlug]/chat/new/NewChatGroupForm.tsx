@@ -7,6 +7,12 @@ import { Card, Button, Input, Textarea, Avatar, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { newChatGroupSchema } from "@/lib/schemas/chat";
 import { showFeedback } from "@/lib/feedback/show-feedback";
+import {
+  CHAT_ELIGIBLE_ORG_ROLES,
+  mergeChatProfileCandidates,
+  uniqueChatEligibleUserIds,
+  type ChatProfileCandidate,
+} from "@/lib/chat/recipient-eligibility";
 
 interface NewChatGroupFormProps {
   orgSlug: string;
@@ -14,15 +20,7 @@ interface NewChatGroupFormProps {
   currentUserId: string;
 }
 
-interface OrgMember {
-  id: string;
-  user_id: string;
-  first_name: string;
-  last_name: string;
-  email: string | null;
-  photo_url: string | null;
-  role: string | null;
-}
+type OrgMember = ChatProfileCandidate;
 
 export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: NewChatGroupFormProps) {
   const router = useRouter();
@@ -45,18 +43,44 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
   useEffect(() => {
     async function loadMembers() {
       setIsLoadingMembers(true);
-      const { data } = await supabase
-        .from("members")
-        .select("id, user_id, first_name, last_name, email, photo_url, role")
+      const { data: activeRoles } = await supabase
+        .from("user_organization_roles")
+        .select("user_id")
         .eq("organization_id", organizationId)
         .eq("status", "active")
-        .is("deleted_at", null)
-        .order("last_name");
+        .in("role", CHAT_ELIGIBLE_ORG_ROLES);
 
-      if (data) {
-        // Filter out members without user_id (not linked to auth)
-        setOrgMembers(data.filter(m => m.user_id) as OrgMember[]);
+      const activeUserIds = uniqueChatEligibleUserIds(activeRoles || []);
+
+      if (activeUserIds.length === 0) {
+        setOrgMembers([]);
+        setIsLoadingMembers(false);
+        return;
       }
+
+      const [membersResult, alumniResult] = await Promise.all([
+        supabase
+          .from("members")
+          .select("id, user_id, first_name, last_name, email, photo_url, role")
+          .eq("organization_id", organizationId)
+          .is("deleted_at", null)
+          .in("user_id", activeUserIds)
+          .order("last_name"),
+        supabase
+          .from("alumni")
+          .select("id, user_id, first_name, last_name, email, photo_url, job_title, position_title")
+          .eq("organization_id", organizationId)
+          .is("deleted_at", null)
+          .in("user_id", activeUserIds)
+          .order("last_name"),
+      ]);
+
+      setOrgMembers(
+        mergeChatProfileCandidates({
+          members: membersResult.data || [],
+          alumni: alumniResult.data || [],
+        }),
+      );
       setIsLoadingMembers(false);
     }
     loadMembers();
@@ -276,7 +300,9 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
                         {member.first_name} {member.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {member.role || member.email || "Member"}
+                        {member.profileType === "alumni"
+                          ? `Alumni${member.role ? ` • ${member.role}` : ""}`
+                          : member.role || member.email || "Member"}
                       </p>
                     </div>
                     <svg className="h-5 w-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
