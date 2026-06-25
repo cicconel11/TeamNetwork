@@ -11,6 +11,7 @@ import { LocalDate, LocalTime } from "@/components/ui";
 import { calendarEventEditPath, calendarEventsPath } from "@/lib/calendar/routes";
 import { resolveOrgTimezone } from "@/lib/utils/timezone";
 import { EventCountdownBadge } from "@/components/calendar/EventCountdownBadge";
+import { EVENT_TYPE_OPTIONS } from "@/lib/events/event-type-options";
 
 interface EventDetailPageProps {
   params: Promise<{ orgSlug: string; eventId: string }>;
@@ -135,7 +136,7 @@ export default async function CalendarEventDetailPage({ params, searchParams }: 
                 />
               </>
             )}
-            <Badge variant="muted" className="capitalize">{event.event_type}</Badge>
+            <Badge variant="muted" className="capitalize">{EVENT_TYPE_OPTIONS.find((o) => o.value === event.event_type)?.label ?? event.event_type}</Badge>
             {event.is_philanthropy && (
               <Badge variant="primary">Community</Badge>
             )}
