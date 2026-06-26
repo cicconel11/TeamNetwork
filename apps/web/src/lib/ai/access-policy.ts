@@ -15,7 +15,6 @@ export interface AiToolAccessInput extends AiAccessDecisionInput {
 
 export type AiAccessDenialReason =
   | "member_access_kill_switch"
-  | "parent_role_disabled"
   | "role_not_allowed_for_tool"
   | "enterprise_tool_requires_admin";
 
@@ -46,7 +45,14 @@ const ALUMNI_ALLOWED_TOOLS: readonly ToolName[] = Object.freeze([
   "search_org_content",
 ]);
 
-const PARENT_ALLOWED_TOOLS: readonly ToolName[] = Object.freeze([]);
+// Parents see the same read-only subset as alumni: org-wide announcements and
+// events, plus navigation/search helpers. No member-directory or finance tools.
+const PARENT_ALLOWED_TOOLS: readonly ToolName[] = Object.freeze([
+  "list_announcements",
+  "list_events",
+  "find_navigation_targets",
+  "search_org_content",
+]);
 
 const ENTERPRISE_TOOL_NAMES: ReadonlySet<ToolName> = new Set<ToolName>([
   "list_enterprise_alumni",
@@ -92,9 +98,6 @@ function gateNonAdmin(input: AiAccessDecisionInput): AiAccessDecision | null {
   if (input.role === "admin") return null;
   if (isMemberAccessKilled()) {
     return { allowed: false, reason: "member_access_kill_switch" };
-  }
-  if (input.role === "parent") {
-    return { allowed: false, reason: "parent_role_disabled" };
   }
   return null;
 }

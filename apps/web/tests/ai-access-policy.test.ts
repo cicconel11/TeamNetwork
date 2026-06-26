@@ -176,8 +176,37 @@ describe("ai access policy — alumni", () => {
 describe("ai access policy — parent", () => {
   afterEach(restoreKillSwitch);
 
-  it("is disabled even when kill switch is lifted", () => {
+  it("gets the alumni-equivalent read-only subset when kill switch is lifted", () => {
     liftKillSwitch();
+    const allowed = getAllowedTools({ role: "parent" });
+    assert.deepEqual(new Set(allowed), new Set([
+      "list_announcements",
+      "list_events",
+      "find_navigation_targets",
+      "search_org_content",
+    ]));
+
+    const decision = isToolAllowed({
+      role: "parent",
+      toolName: "list_announcements",
+    });
+    assert.equal(decision.allowed, true);
+  });
+
+  it("denies member-only tools such as list_job_postings", () => {
+    liftKillSwitch();
+    const decision = isToolAllowed({
+      role: "parent",
+      toolName: "list_job_postings",
+    });
+    assert.equal(decision.allowed, false);
+    if (!decision.allowed) {
+      assert.equal(decision.reason, "role_not_allowed_for_tool");
+    }
+  });
+
+  it("is blocked entirely while the kill switch is active", () => {
+    process.env.AI_MEMBER_ACCESS_KILL = "1";
     const allowed = getAllowedTools({ role: "parent" });
     assert.deepEqual(allowed, []);
 
@@ -187,7 +216,7 @@ describe("ai access policy — parent", () => {
     });
     assert.equal(decision.allowed, false);
     if (!decision.allowed) {
-      assert.equal(decision.reason, "parent_role_disabled");
+      assert.equal(decision.reason, "member_access_kill_switch");
     }
   });
 });
