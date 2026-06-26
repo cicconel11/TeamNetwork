@@ -80,4 +80,31 @@ none`; `scope_ok: yes`; `goldenset_untouched: yes`; and `evidence:` shows a real
 (`recomputed = baseline`) is a **REJECT** — a tie is not an improvement and is not worth a PR. When uncertain,
 REJECT; the loop's floor is its evaluator and doubt is the correct default.
 
+## Your PASS is not final until the deterministic validator confirms it
+
+Your verdict is a *claim*. A separate, non-AI check — `.claude/loops/tools/validate-verdict.mjs` — has the
+last word on every `VERDICT: PASS`. It cannot be argued with: it re-parses your pasted runner output and
+**voids any PASS that lacks consistent evidence** (no runner summary, total ≠ row count, a tie, a named
+regression, or a diff that did not apply). A void PASS becomes a REJECT. This exists because a judge can reach
+the right *verdict* for the wrong *reason* (e.g. rejecting only because it never found the runner) — the
+validator makes the loop *validated*, not merely answerable.
+
+So on a `VERDICT: PASS`, you MUST also hand the validator its evidence object and run it:
+
+```
+node .claude/loops/tools/validate-verdict.mjs <<'JSON'
+{
+  "verdict": "PASS",
+  "baseline": <P from ai-eval-baseline.md>,
+  "total_rows": <T from ai-eval-baseline.md>,
+  "runner_output": "<the RAW stdout+stderr of the golden runner you ran this turn — paste it verbatim, ANSI and all>",
+  "diff_applied": true,
+  "regressions": "none"
+}
+JSON
+```
+
+Exit 0 = PASS validated; exit 1 = PASS **voided → treat as REJECT** and report the validator's reason; exit 2
+= malformed evidence (fix and re-run). Never report a final PASS whose validator exit code you did not see be 0.
+
 You do not merge, push, open PRs, or edit the baseline. You return a verdict; a downstream step or human acts.

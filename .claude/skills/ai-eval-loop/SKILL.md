@@ -73,9 +73,15 @@ For each eligible candidate:
    The judge re-runs the set itself (never trusting a score it did not compute) and treats `claimed_score`
    as a **hypothesis to falsify**, not a fact. It returns PASS only if its recomputed `candidate > baseline`
    AND no previously-passing row regressed.
-4. On PASS-that-beats-baseline: open a DRAFT PR with the classifier diff AND the golden-set additions, and
-   bump `baseline:` to the new passing count + the candidate SHA in the same PR. On REJECT or tie: write
-   the attempt to `.claude/loops/inbox/` and change nothing.
+4. **A judge PASS is not enough to ship.** Before any PR opens, the judge's PASS must clear the deterministic
+   validator `.claude/loops/tools/validate-verdict.mjs` (exit 0). The validator is non-AI: it re-parses the
+   pasted runner output and voids any PASS lacking consistent evidence (no runner summary, total ≠ row count,
+   a tie, a named regression, a diff that did not apply). A voided PASS is a REJECT. This is what makes the
+   loop *validated* rather than merely answerable — a judge that reaches the right verdict for the wrong
+   reason cannot ship a change.
+5. On a **validator-confirmed** PASS-that-beats-baseline: open a DRAFT PR with the classifier diff AND the
+   golden-set additions, and bump `baseline:` to the new passing count + the candidate SHA in the same PR.
+   On REJECT, tie, or a voided PASS: write the attempt to `.claude/loops/inbox/` and change nothing.
 
 ## Stop (the boundary you keep — DO NOT REMOVE)
 
