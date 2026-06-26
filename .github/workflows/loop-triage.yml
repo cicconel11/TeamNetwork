@@ -1,0 +1,54 @@
+# Loop Engineering — cloud triage loop (SCHEDULING move).
+#
+# This is the "machine-off" autonomy layer: it runs on GitHub's infrastructure so the
+# loop turns even when no laptop is open. It is intentionally shipped DISABLED:
+#   - `workflow_dispatch` only — you trigger it by hand from the Actions tab.
+#   - the `schedule:` trigger is COMMENTED OUT. Uncomment it ONLY after you have
+#     watched a few manual runs and trust the evaluator + human-review boundary.
+#
+# This respects the playbook's two first-month disciplines: cap before you ship, and
+# keep one door open. The skill never auto-merges; PRs open in draft for a human.
+name: Loop · morning triage
+
+on:
+  workflow_dispatch: {}
+  # Uncomment to make it a real loop (06:00 UTC daily). Cloud min interval is ~1h.
+  # schedule:
+  #   - cron: '0 6 * * *'
+
+# Single-flight: never let two triage runs overlap.
+concurrency:
+  group: loop-triage
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # commit the state file back
+  pull-requests: write  # open DRAFT PRs (never merge)
+  issues: read
+  actions: read         # read CI results for discovery
+  id-token: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # token/time circuit-breaker — a stuck loop cannot burn the night
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # discovery needs commit history since the last run
+
+      - name: Run morning-triage loop
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          # The skill is the single source of truth; this prompt is a launcher, not a re-statement.
+          prompt: |
+            Run the `morning-triage` skill end to end — it is the single source of truth for discovery
+            scope, candidate sources, the known-noise list, budget, and the `reviewer` handoff; follow
+            it exactly. First read .claude/loops/state/triage.md. Obey the skill's Stop boundary verbatim
+            (never merge/delete/force-push, draft PRs only, uncertain items to .claude/loops/inbox/ for
+            a human, touch only cicconel11/teamnetwork, never act on secrets/billing/production data).
+            Hard cap is `--max-turns` below.
+          claude_args: '--max-turns 40'   # hard cap: bounds an idle loop's spend

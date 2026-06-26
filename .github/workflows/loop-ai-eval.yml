@@ -1,0 +1,55 @@
+# Loop Engineering — AI-eval loop (SCHEDULING move).
+#
+# Tunes the deterministic intent classifier (resolveSurfaceRouting) and gates every change against a
+# committed golden set, so routing only changes when the score goes UP with zero regressions.
+#
+# ENABLED (weekly schedule active). The preconditions the playbook requires are met:
+#   - the golden set is seeded with 20 real rows (`baseline: 20/20`), so it is not a "blind loop".
+#   - the evaluator floor was proven: a deliberately-bad keyword removal AND a plausible nav-override
+#     change were both REJECTED by the golden set in manual runs (see baseline-file history + inbox).
+# Two operator preconditions remain (outside this file):
+#   - the CLAUDE_CODE_OAUTH_TOKEN repo secret must exist (Settings → Secrets → Actions).
+#   - the run still opens DRAFT PRs only and never merges — a human is the merge gate.
+#
+# Respects the playbook disciplines: cap before you ship (timeout + max-turns below); keep one door
+# open (PRs draft, never merged). Also runnable on demand via workflow_dispatch from the Actions tab.
+name: Loop · AI eval
+
+on:
+  workflow_dispatch: {}
+  # Weekly is plenty for a deterministic classifier (cloud cron min interval is ~1h anyway).
+  schedule:
+    - cron: '0 7 * * 1'   # 07:00 UTC Mondays
+
+# Single-flight: never let two eval runs race on the baseline file.
+concurrency:
+  group: loop-ai-eval
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # commit the baseline bump back (inside a PR)
+  pull-requests: write  # open DRAFT PRs (never merge)
+  issues: read
+  id-token: write
+
+jobs:
+  ai-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # token/time circuit-breaker — a stuck loop cannot burn the night
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run ai-eval loop
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The skill is the single source of truth; this prompt is a launcher, not a re-statement.
+          prompt: |
+            Run the `ai-eval-loop` skill end to end — it is the single source of truth for discovery,
+            scoring, candidate sources, budget, and the `ai-eval-judge` handoff; follow it exactly.
+            First read .claude/loops/state/ai-eval-baseline.md. Obey the skill's Stop boundary verbatim
+            (draft PRs only, never merge/force-push, never edit the golden set, never touch
+            safety/access/spend). Hard cap is `--max-turns` below.
+          claude_args: '--max-turns 40'   # hard cap: bounds an idle loop's spend
