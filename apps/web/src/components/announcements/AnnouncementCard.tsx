@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { UserContent } from "@/components/i18n/UserContent";
 import { Card, Badge, Button, SoftDeleteButton } from "@/components/ui";
-import { MegaphoneIcon } from "./icons";
+import { MegaphoneIcon } from "@/components/icons/nav-icons";
 import type { Database } from "@/types/database";
 
 type Announcement = Database["public"]["Tables"]["announcements"]["Row"];

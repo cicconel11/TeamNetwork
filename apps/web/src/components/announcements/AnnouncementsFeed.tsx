@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { AnnouncementCard } from "./AnnouncementCard";
-import { MegaphoneIcon } from "./icons";
+import { MegaphoneIcon } from "@/components/icons/nav-icons";
 import type { Database } from "@/types/database";
 
 type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
