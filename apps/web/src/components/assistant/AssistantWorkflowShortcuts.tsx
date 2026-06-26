@@ -39,7 +39,8 @@ export const ASSISTANT_WORKFLOW_SHORTCUTS: AssistantWorkflowShortcut[] = [
   {
     id: "analyze-engagement",
     label: "Analyze engagement",
-    prompt: "Analyze this organization's engagement over the past month.",
+    prompt:
+      "Give me an engagement overview: pull the org stats, then summarize recent events and announcements.",
     icon: BarChart3,
   },
 ];

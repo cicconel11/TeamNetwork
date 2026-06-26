@@ -53,6 +53,7 @@ import {
   deriveSearchOrgContentQuery,
   deriveNavigationQuery,
   deriveForcedPass1ToolArgs,
+  PASS1_TOOL_NAMES,
 } from "../src/app/api/ai/[orgId]/chat/handler/pass1-tools";
 import type { CacheSurface } from "../src/lib/ai/semantic-cache-utils";
 import type { TurnExecutionPolicy } from "../src/lib/ai/turn-execution-policy";
@@ -784,6 +785,7 @@ describe("getPass1Tools — surface defaults", () => {
     );
     assert.deepEqual(namesOf(tools), [
       "list_events",
+      "list_announcements",
       "find_free_members",
       "search_org_content",
       "find_navigation_targets",
@@ -1390,5 +1392,23 @@ describe("search and navigation derivation helpers", () => {
       deriveNavigationQuery("where is navigation settings?"),
       "navigation settings",
     );
+  });
+});
+
+
+describe("PASS1_TOOL_NAMES surface coverage", () => {
+  // Regression: the "Summarize upcoming events and recent announcements"
+  // workflow routes to the `events` surface (because "announcements" is not its
+  // own surface keyword). list_announcements must be attached there or the model
+  // cannot fetch announcements and the answer collapses to the empty fallback.
+  it("events surface includes list_announcements", () => {
+    assert.ok(
+      PASS1_TOOL_NAMES.events.includes("list_announcements"),
+      "events surface must expose list_announcements for the summarize-activity workflow",
+    );
+  });
+
+  it("events surface still includes list_events", () => {
+    assert.ok(PASS1_TOOL_NAMES.events.includes("list_events"));
   });
 });
