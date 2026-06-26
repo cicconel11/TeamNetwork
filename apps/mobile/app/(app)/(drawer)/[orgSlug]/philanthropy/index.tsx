@@ -44,8 +44,10 @@ const ACCENT = "#059669"; // emerald-600
 export default function PhilanthropyScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { orgId, orgSlug, orgName, orgLogoUrl, donationEligibleIos } = useOrg();
-  const showDonateCta = !(Platform.OS === "ios" && !donationEligibleIos);
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
+  // Apple Guideline 3.2.2(iv): never initiate an in-app contribution on iOS;
+  // the action links out to the web flow instead.
+  const showDonateCta = Platform.OS !== "ios";
   const { isAdmin, isActiveMember } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
   const isMountedRef = useRef(true);

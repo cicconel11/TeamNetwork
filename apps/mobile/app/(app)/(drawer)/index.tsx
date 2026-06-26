@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  Platform,
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -199,18 +200,20 @@ export default function OrganizationsScreen() {
                 >
                   <Text style={styles.emptyActionButtonPrimaryText}>Join Another Team</Text>
                 </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.emptyActionButton,
-                    styles.emptyActionButtonSecondary,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
-                  accessibilityLabel="Create a Team"
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
-                </Pressable>
+                {Platform.OS !== "ios" && (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.emptyActionButton,
+                      styles.emptyActionButtonSecondary,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
+                    accessibilityLabel="Create a Team"
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
+                  </Pressable>
+                )}
               </View>
             </View>
           ) : (
@@ -236,18 +239,20 @@ export default function OrganizationsScreen() {
                 >
                   <Text style={styles.emptyActionButtonPrimaryText}>Join a Team</Text>
                 </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.emptyActionButton,
-                    styles.emptyActionButtonSecondary,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
-                  accessibilityLabel="Create a Team"
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
-                </Pressable>
+                {Platform.OS !== "ios" && (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.emptyActionButton,
+                      styles.emptyActionButtonSecondary,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
+                    accessibilityLabel="Create a Team"
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
+                  </Pressable>
+                )}
               </View>
             </View>
           )}

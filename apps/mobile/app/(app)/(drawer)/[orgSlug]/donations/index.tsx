@@ -32,8 +32,11 @@ import { formatMonthDay } from "@/lib/date-format";
 import type { OrganizationDonation } from "@teammeet/types";
 
 export default function DonationsScreen() {
-  const { orgSlug, orgName, orgLogoUrl, donationEligibleIos } = useOrg();
-  const showDonateCta = !(Platform.OS === "ios" && !donationEligibleIos);
+  const { orgSlug, orgName, orgLogoUrl } = useOrg();
+  // Apple Guideline 3.2.2(iv): never initiate an in-app contribution on iOS.
+  // iOS shows the read-only history plus a neutral "open on web" link; only
+  // Android/web surface the in-app CTA.
+  const showDonateCta = Platform.OS !== "ios";
   const router = useRouter();
   const navigation = useNavigation();
   const { isAdmin, permissions } = useOrgRole();
@@ -411,17 +414,10 @@ export default function DonationsScreen() {
           in-app contributions enabled (donation_eligible_ios); otherwise a
           web-managed notice is surfaced so the screen never dead-ends. */}
       {showDonateCta ? (
-        <>
-          <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>
-            <Plus size={20} color="#ffffff" />
-            <Text style={styles.donateButtonText}>Support This Team</Text>
-          </Pressable>
-          {Platform.OS === "ios" && donationEligibleIos && (
-            <Text style={styles.verifiedNonprofitCaption}>
-              Contributions go directly to this team.
-            </Text>
-          )}
-        </>
+        <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>
+          <Plus size={20} color="#ffffff" />
+          <Text style={styles.donateButtonText}>Support This Team</Text>
+        </Pressable>
       ) : (
         <View style={styles.webNotice}>
           <Text style={styles.webNoticeTitle}>Contributions are managed on the web</Text>

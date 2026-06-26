@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { createOrgSchema } from "@teammeet/validation";
 import type { CreateOrgForm } from "@teammeet/validation";
 import { mapAlumniSeatsToBucket } from "@teammeet/core/pricing/per-user";
@@ -66,26 +66,6 @@ function buildPricingMailto(input: {
     ]
       .filter(Boolean)
       .join("\n"),
-  );
-
-  return `mailto:${SALES_EMAIL}?subject=${subject}&body=${body}`;
-}
-
-function buildSalesMailto() {
-  const subject = encodeURIComponent("TeamNetwork: new organization inquiry");
-  const body = encodeURIComponent(
-    [
-      "Hi TeamNetwork,",
-      "",
-      "I'd like to set up a new organization. Here are a few details:",
-      "",
-      "Organization name:",
-      "Approx. active members:",
-      "Approx. alumni:",
-      "What you're hoping to use TeamNetwork for:",
-      "",
-      "Thanks!",
-    ].join("\n"),
   );
 
   return `mailto:${SALES_EMAIL}?subject=${subject}&body=${body}`;
@@ -328,25 +308,6 @@ export default function CreateOrgScreen() {
     router.back();
   }, [router]);
 
-  const handleContactSales = useCallback(async () => {
-    setError(null);
-    const url = buildSalesMailto();
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        setError(`Couldn't open your email app. Please contact ${SALES_EMAIL}.`);
-        return;
-      }
-      await Linking.openURL(url);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : `Couldn't open your email app. Please contact ${SALES_EMAIL}.`,
-      );
-    }
-  }, []);
-
   const handleSubmit = useCallback(async () => {
     setError(null);
 
@@ -397,55 +358,12 @@ export default function CreateOrgScreen() {
     alumniSeats,
   ]);
 
-  // Apple Guideline 3.1.1 (anti-steering): iOS clients cannot initiate a
-  // paid subscription, and we don't steer to an external web checkout. New
-  // organizations are set up by our team, so iOS shows a Contact Sales action
-  // that opens the mail composer in-app (no browser, no checkout).
+  // Apple Guideline 3.1.1 (Business): the org-registration feature is treated
+  // as access to an external purchase mechanism, so it is removed entirely on
+  // iOS. The route is unreachable (no entry points) and self-redirects to the
+  // org list as a defensive guard against deep links. Android keeps the flow.
   if (Platform.OS === "ios") {
-    return (
-      <View style={styles.container}>
-        <View style={styles.sheetHeader}>
-          <Pressable
-            onPress={handleCancel}
-            style={styles.headerSideButton}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
-            <Text style={styles.headerSideButtonText}>Cancel</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>Create Organization</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.contentSheet}>
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text style={styles.stepHeading}>Contact our sales team</Text>
-            <Text style={styles.stepSubhead}>
-              New organizations are set up by the TeamNetwork team. Reach out
-              and we&apos;ll get you started with the right plan for your group.
-            </Text>
-            {error != null && (
-              <View style={styles.errorCard}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
-            <Pressable
-              onPress={handleContactSales}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.primaryButtonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Contact sales"
-            >
-              <Text style={styles.primaryButtonText}>Contact Sales</Text>
-            </Pressable>
-          </ScrollView>
-        </View>
-      </View>
-    );
+    return <Redirect href="/(app)/(drawer)" />;
   }
 
   return (

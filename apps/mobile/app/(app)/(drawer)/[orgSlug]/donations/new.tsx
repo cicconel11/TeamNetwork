@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -10,12 +10,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRouter } from "expo-router";
+import { Redirect, useNavigation, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { isAppReviewEmail, APP_REVIEW_CAPTCHA_TOKEN } from "@/lib/app-review";
 import { getWebAppUrl } from "@/lib/web-api";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
 import { APP_CHROME } from "@/lib/chrome";
@@ -25,8 +23,6 @@ import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { openHttpsUrl } from "@/lib/url-safety";
 import { track } from "@/lib/analytics";
-import { useDonationPaymentSheet } from "@/hooks/useDonationPaymentSheet";
-import { AddToWalletButton } from "@/components/wallet/AddToWalletButton";
 
 function donationAmountBucket(amount: number) {
   if (amount < 10) return "<10";
@@ -42,7 +38,7 @@ export default function NewDonationScreen() {
   const router = useRouter();
   const { orgId, orgSlug } = useOrg();
   const captchaRef = useRef<TurnstileRef>(null);
-  const { neutral, semantic } = useAppColorScheme();
+  const { neutral } = useAppColorScheme();
   const styles = useThemedStyles((n, s) => ({
     container: {
       flex: 1,
@@ -68,23 +64,6 @@ export default function NewDonationScreen() {
       overflow: "hidden" as const,
       alignItems: "center" as const,
       justifyContent: "center" as const,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 8,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 8,
-      backgroundColor: "rgba(255,255,255,0.2)",
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-    },
-    orgAvatarText: {
-      ...TYPOGRAPHY.titleMedium,
-      color: APP_CHROME.headerTitle,
     },
     headerTitle: {
       ...TYPOGRAPHY.titleLarge,
@@ -170,69 +149,6 @@ export default function NewDonationScreen() {
   const [purpose, setPurpose] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [succeededAttemptId, setSucceededAttemptId] = useState<string | null>(null);
-  const [receiptState, setReceiptState] = useState<
-    | { kind: "idle" }
-    | { kind: "polling" }
-    | { kind: "ready" }
-    | { kind: "timeout" }
-  >({ kind: "idle" });
-  const { start: startPaymentSheet, isProcessing: paymentSheetBusy } =
-    useDonationPaymentSheet();
-  const { user } = useAuth();
-  const isIOS = Platform.OS === "ios";
-  // Apple Guideline 2.1: the App Review account skips the captcha on iOS so the
-  // reviewer can reach the Apple Pay Payment Sheet. Server-side bypass is gated
-  // to the same allowlisted identity, so the sentinel token is safe to send.
-  const isReviewer = isAppReviewEmail(user?.email);
-
-  // Webhook lag: organization_donations is created by the Stripe Connect
-  // webhook asynchronously after Payment Sheet completes. Poll the receipt
-  // route until it returns 200, with bounded retry. The Wallet button shows
-  // once ready; the Done button is always available so the user can leave.
-  // pollEpoch advances on manual retry to re-trigger the effect.
-  const [pollEpoch, setPollEpoch] = useState(0);
-  useEffect(() => {
-    if (!succeededAttemptId) return;
-    let cancelled = false;
-    setReceiptState({ kind: "polling" });
-    (async () => {
-      const maxAttempts = 10;
-      const intervalMs = 3000;
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        if (cancelled) return;
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const accessToken = sessionData.session?.access_token;
-          const res = await fetch(
-            `${getWebAppUrl()}/api/wallet/receipt/by-payment-attempt/${succeededAttemptId}`,
-            {
-              method: "GET",
-              headers: accessToken
-                ? { Authorization: `Bearer ${accessToken}` }
-                : undefined,
-            },
-          );
-          if (cancelled) return;
-          if (res.ok) {
-            setReceiptState({ kind: "ready" });
-            return;
-          }
-          if (res.status !== 409) {
-            setReceiptState({ kind: "timeout" });
-            return;
-          }
-        } catch {
-          // Network blip — keep polling.
-        }
-        await new Promise((resolve) => setTimeout(resolve, intervalMs));
-      }
-      if (!cancelled) setReceiptState({ kind: "timeout" });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [succeededAttemptId, pollEpoch]);
 
   const handleBack = useCallback(() => {
     if ((navigation as any).canGoBack && (navigation as any).canGoBack()) {
@@ -241,6 +157,14 @@ export default function NewDonationScreen() {
       router.replace(`/(app)/${orgSlug}/donations`);
     }
   }, [navigation, router, orgSlug]);
+
+  // Apple Guideline 3.2.2(iv): contributions are never collected inside the iOS
+  // app. iOS routes to the read-only contributions screen (which links out to
+  // the web flow in Safari). Only Android uses the in-app Stripe Checkout flow
+  // below. This redirect is also a defensive guard against deep links.
+  if (Platform.OS === "ios") {
+    return <Redirect href={`/(app)/${orgSlug}/donations`} />;
+  }
 
   const handleSubmit = () => {
     setError(null);
@@ -256,12 +180,6 @@ export default function NewDonationScreen() {
       return;
     }
 
-    // App Review (iOS): bypass the captcha so the reviewer reaches Apple Pay.
-    if (isIOS && isReviewer) {
-      void handleCaptchaVerify(APP_REVIEW_CAPTCHA_TOKEN);
-      return;
-    }
-
     captchaRef.current?.show();
   };
 
@@ -274,68 +192,6 @@ export default function NewDonationScreen() {
     const amountValue = Number(amount.trim());
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       setError("Enter a contribution amount greater than zero.");
-      return;
-    }
-
-    if (isIOS) {
-      const amountBucket = donationAmountBucket(amountValue);
-      track("support_checkout_start", {
-        org_slug: orgSlug,
-        amount_bucket: amountBucket,
-        has_purpose: !!purpose.trim(),
-        channel: "payment_sheet",
-      });
-
-      const result = await startPaymentSheet({
-        organizationId: orgId,
-        organizationSlug: orgSlug,
-        amount: amountValue,
-        donorName: donorName.trim() || undefined,
-        donorEmail: donorEmail.trim() || undefined,
-        purpose: purpose.trim() || undefined,
-        captchaToken: token,
-      });
-
-      if (result.status === "completed") {
-        track("support_checkout_result", {
-          org_slug: orgSlug,
-          amount_bucket: amountBucket,
-          channel: "payment_sheet",
-          result: "success",
-        });
-        setSucceededAttemptId(result.paymentAttemptId);
-        return;
-      }
-      if (result.status === "canceled") {
-        track("support_checkout_result", {
-          org_slug: orgSlug,
-          amount_bucket: amountBucket,
-          channel: "payment_sheet",
-          result: "cancel",
-        });
-        return;
-      }
-      if (result.status === "ineligible_ios") {
-        track("support_checkout_result", {
-          org_slug: orgSlug,
-          amount_bucket: amountBucket,
-          channel: "payment_sheet",
-          result: "fail",
-          error_code: "org_not_eligible_ios",
-        });
-        setError(
-          "Contributions for this organization are only available on the web. Please open the web app to contribute.",
-        );
-        return;
-      }
-      track("support_checkout_result", {
-        org_slug: orgSlug,
-        amount_bucket: amountBucket,
-        channel: "payment_sheet",
-        result: "fail",
-        error_code: "payment_sheet_error",
-      });
-      setError(result.message);
       return;
     }
 
@@ -423,13 +279,9 @@ export default function NewDonationScreen() {
           />
 
           <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>
-              {succeededAttemptId ? "Thank you!" : "Support This Team"}
-            </Text>
+            <Text style={styles.formTitle}>Support This Team</Text>
             <Text style={styles.formSubtitle}>
-              {succeededAttemptId
-                ? "Your contribution was received. Save a receipt to Apple Wallet for your records."
-                : "Support the team with a contribution"}
+              Support the team with a contribution
             </Text>
           </View>
 
@@ -439,55 +291,6 @@ export default function NewDonationScreen() {
             </View>
           )}
 
-          {succeededAttemptId && (
-            <>
-              {receiptState.kind === "polling" && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: SPACING.sm,
-                    padding: SPACING.md,
-                  }}
-                >
-                  <ActivityIndicator color={semantic.success} />
-                  <Text style={styles.formSubtitle}>
-                    We&apos;re finalizing your receipt…
-                  </Text>
-                </View>
-              )}
-              {receiptState.kind === "ready" && (
-                <AddToWalletButton
-                  apiPath={`/api/wallet/receipt/by-payment-attempt/${succeededAttemptId}`}
-                  fileBaseName={`donation-${succeededAttemptId}`}
-                  label="Save receipt to Apple Wallet"
-                />
-              )}
-              {receiptState.kind === "timeout" && (
-                <Pressable
-                  onPress={() => setPollEpoch((n) => n + 1)}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && styles.primaryButtonPressed,
-                  ]}
-                >
-                  <Text style={styles.primaryButtonText}>Try again</Text>
-                </Pressable>
-              )}
-              <Pressable
-                onPress={() => router.replace(`/(app)/${orgSlug}/donations`)}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.primaryButtonPressed,
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>Done</Text>
-              </Pressable>
-            </>
-          )}
-
-          {!succeededAttemptId && (
-          <>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Amount (USD)</Text>
             <TextInput
@@ -537,31 +340,21 @@ export default function NewDonationScreen() {
             />
           </View>
 
-          {isIOS && (
-            <Text style={styles.formSubtitle}>
-              You&apos;ll complete your contribution securely with Apple Pay.
-            </Text>
-          )}
-
           <Pressable
             onPress={handleSubmit}
-            disabled={isSaving || paymentSheetBusy}
+            disabled={isSaving}
             style={({ pressed }) => [
               styles.primaryButton,
               pressed && styles.primaryButtonPressed,
-              (isSaving || paymentSheetBusy) && styles.buttonDisabled,
+              isSaving && styles.buttonDisabled,
             ]}
           >
-            {isSaving || paymentSheetBusy ? (
+            {isSaving ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.primaryButtonText}>
-                {isIOS ? "Contribute with Apple Pay" : "Continue to Stripe"}
-              </Text>
+              <Text style={styles.primaryButtonText}>Continue to Stripe</Text>
             )}
           </Pressable>
-          </>
-          )}
         </ScrollView>
       </View>
     </View>

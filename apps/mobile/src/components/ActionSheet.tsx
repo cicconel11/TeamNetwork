@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, forwardRef } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Platform } from "react-native";
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -143,14 +143,19 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
           onClose();
         },
       },
-      {
-        icon: <HandCoins size={24} color={ICON_COLOR} />,
-        label: "Record Contribution",
-        onPress: () => {
-          onRecordDonation?.();
-          onClose();
-        },
-      },
+      // Apple Guideline 3.2.2(iv): no in-app contribution entry point on iOS.
+      ...(Platform.OS !== "ios"
+        ? [
+            {
+              icon: <HandCoins size={24} color={ICON_COLOR} />,
+              label: "Record Contribution",
+              onPress: () => {
+                onRecordDonation?.();
+                onClose();
+              },
+            },
+          ]
+        : []),
     ];
 
     const memberActions: ActionItem[] = [
