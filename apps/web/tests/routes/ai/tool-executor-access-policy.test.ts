@@ -136,14 +136,34 @@ test("executor rejects enterprise tools for active_member even with enterprise r
   assert.equal(result.kind, "forbidden");
 });
 
-test("executor rejects everything for parent role", async () => {
+test("executor allows parent read-only tools when policy is green", async () => {
   const result = await executeToolCall(
-    makeCtx({
-      kind: "preverified_role",
-      source: "ai_org_context",
-      role: "parent",
-    }),
+    makeCtx(
+      {
+        kind: "preverified_role",
+        source: "ai_org_context",
+        role: "parent",
+      },
+      { supabase: createSupabaseStub() as any },
+    ),
     { name: "list_announcements", args: {} },
+  );
+
+  assert.notEqual(result.kind, "forbidden");
+  assert.notEqual(result.kind, "auth_error");
+});
+
+test("executor rejects member-only tools for parent role", async () => {
+  const result = await executeToolCall(
+    makeCtx(
+      {
+        kind: "preverified_role",
+        source: "ai_org_context",
+        role: "parent",
+      },
+      { supabase: createSupabaseStub() as any },
+    ),
+    { name: "list_job_postings", args: {} },
   );
 
   assert.equal(result.kind, "forbidden");
