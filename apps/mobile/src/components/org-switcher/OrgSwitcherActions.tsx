@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { LogOut } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { signOut } from "@/lib/supabase";
@@ -27,6 +27,7 @@ export function OrgSwitcherActions() {
             style={({ pressed }) => [
               styles.row,
               styles.rowFirst,
+              Platform.OS === "ios" && styles.rowLast,
               pressed && styles.rowPressed,
             ]}
             accessibilityRole="button"
@@ -35,20 +36,24 @@ export function OrgSwitcherActions() {
             <Text style={styles.rowText}>Join another organization</Text>
           </Pressable>
 
-          <View style={styles.divider} />
+          {Platform.OS !== "ios" && (
+            <>
+              <View style={styles.divider} />
 
-          <Pressable
-            onPress={handleCreate}
-            style={({ pressed }) => [
-              styles.row,
-              styles.rowLast,
-              pressed && styles.rowPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Create a new organization"
-          >
-            <Text style={styles.rowText}>Create a new organization</Text>
-          </Pressable>
+              <Pressable
+                onPress={handleCreate}
+                style={({ pressed }) => [
+                  styles.row,
+                  styles.rowLast,
+                  pressed && styles.rowPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Create a new organization"
+              >
+                <Text style={styles.rowText}>Create a new organization</Text>
+              </Pressable>
+            </>
+          )}
         </View>
       </View>
 
