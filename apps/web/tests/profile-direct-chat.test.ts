@@ -210,3 +210,99 @@ test("startProfileDirectChat lets an active org member open a linked alumni prof
     [TARGET_USER_ID, VIEWER_USER_ID].sort(),
   );
 });
+
+// ── Parent consent gate (Phase 3) ─────────────────────────────────────────────
+
+const TARGET_PARENT_ID = "00000000-0000-4000-8000-000000000106";
+
+function seedViewer(supabase: ReturnType<typeof createSupabaseStub>) {
+  supabase.seed("user_organization_roles", [
+    { organization_id: ORG_ID, user_id: VIEWER_USER_ID, role: "active_member", status: "active" },
+    { organization_id: ORG_ID, user_id: TARGET_USER_ID, role: "parent", status: "active" },
+  ]);
+  supabase.seed("users", [{ id: TARGET_USER_ID, name: "Pat Parent", email: "pat@example.com" }]);
+}
+
+test("messaging an opted-in claimed parent opens a chat", async () => {
+  const supabase = createSupabaseStub();
+  seedViewer(supabase);
+  supabase.seed("parents", [
+    {
+      id: TARGET_PARENT_ID,
+      organization_id: ORG_ID,
+      user_id: TARGET_USER_ID,
+      deleted_at: null,
+      first_name: "Pat",
+      last_name: "Parent",
+      email: "pat@example.com",
+      open_to_networking: true,
+    },
+  ]);
+
+  const result = await startProfileDirectChat(supabase as ProfileDirectChatSupabase, {
+    organizationId: ORG_ID,
+    viewerUserId: VIEWER_USER_ID,
+    profileType: "parent",
+    profileId: TARGET_PARENT_ID,
+  });
+
+  assert.equal(result.ok, true);
+});
+
+test("messaging a parent who has NOT opted in is rejected (profile_inactive)", async () => {
+  const supabase = createSupabaseStub();
+  seedViewer(supabase);
+  supabase.seed("parents", [
+    {
+      id: TARGET_PARENT_ID,
+      organization_id: ORG_ID,
+      user_id: TARGET_USER_ID,
+      deleted_at: null,
+      first_name: "Pat",
+      last_name: "Parent",
+      email: "pat@example.com",
+      open_to_networking: false,
+    },
+  ]);
+
+  const result = await startProfileDirectChat(supabase as ProfileDirectChatSupabase, {
+    organizationId: ORG_ID,
+    viewerUserId: VIEWER_USER_ID,
+    profileType: "parent",
+    profileId: TARGET_PARENT_ID,
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.code, "profile_inactive");
+});
+
+test("messaging an unclaimed parent is rejected even if open_to_networking is set", async () => {
+  // Unclaimed parents can't actually set the flag in production (RLS blocks it),
+  // but defense in depth: a null user_id parent is never messageable.
+  const supabase = createSupabaseStub();
+  seedViewer(supabase);
+  supabase.seed("parents", [
+    {
+      id: TARGET_PARENT_ID,
+      organization_id: ORG_ID,
+      user_id: null,
+      deleted_at: null,
+      first_name: "Una",
+      last_name: "Claimed",
+      email: "una@example.com",
+      open_to_networking: true,
+    },
+  ]);
+
+  const result = await startProfileDirectChat(supabase as ProfileDirectChatSupabase, {
+    organizationId: ORG_ID,
+    viewerUserId: VIEWER_USER_ID,
+    profileType: "parent",
+    profileId: TARGET_PARENT_ID,
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.code, "profile_unlinked");
+});

@@ -107,6 +107,29 @@ test("searchNavigationTargets returns only the dominant match when score gap is 
   assert.equal(result.matches[0]?.href, "/acme/members");
 });
 
+test("searchNavigationTargets routes a connections query to the Connections page", () => {
+  const result = searchNavigationTargets({
+    query: "open connections",
+    orgSlug: "acme",
+    role: "active_member",
+  });
+
+  assert.equal(result.state, "resolved");
+  assert.equal(result.matches[0]?.label, "Connections");
+  assert.equal(result.matches[0]?.href, "/acme/connections");
+});
+
+test("searchNavigationTargets routes a networking query to Connections, not Mentorship", () => {
+  const result = searchNavigationTargets({
+    query: "people I should meet for networking",
+    orgSlug: "acme",
+    role: "active_member",
+  });
+
+  assert.equal(result.state, "resolved");
+  assert.equal(result.matches[0]?.href, "/acme/connections");
+});
+
 test("searchNavigationTargets excludes nav items hidden by nav config", () => {
   const result = searchNavigationTargets({
     query: "open announcements",

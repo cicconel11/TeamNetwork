@@ -24,10 +24,18 @@ export interface SuggestedConnectionDebugInfo {
   exposurePenalty: number;
 }
 
+// The role a suggested person carries. Mirrors ProjectedPerson.personType and
+// maps directly onto the direct-chat profile type for the Message action.
+export type ConnectionPersonType = "member" | "alumni" | "parent";
+
 export interface SuggestedConnection {
-  person_type: "member" | "alumni";
+  person_type: ConnectionPersonType;
   person_id: string;
   name: string;
+  // True only when the person is linked to an in-app user (user_id present), i.e.
+  // they can actually be messaged. Unclaimed rows (user_id NULL) surface as
+  // suggestions but show no Message button — clicking it would 409 profile_unlinked.
+  messageable: boolean;
   score: number;
   preview: {
     role?: string;
@@ -42,18 +50,36 @@ export interface SuggestedConnection {
 }
 
 export interface DisplayReadyConnectionReason extends ConnectionReason {
+  /** Short caption, e.g. "Shared industry" — never includes the value. */
   label: string;
+  /** The concrete shared value, e.g. "Finance" or "2026". null when there isn't one. */
+  detail: string | null;
+  /**
+   * Professional-strength signals (industry / company / role family) — the chips
+   * the card accents. City / graduation proximity are softer "context" reasons.
+   */
+  strong: boolean;
 }
 
+// Match strength is a presentation bucket derived from the engine score, so the
+// card can show "Strong match" / "Good match" / "Suggested" without re-deriving
+// scoring rules in the view. Thresholds are intentionally coarse.
+export type ConnectionMatchStrength = "strong" | "good" | "suggested";
+
+export const STRONG_MATCH_MIN_SCORE = 28;
+export const GOOD_MATCH_MIN_SCORE = 12;
+
 export interface DisplayReadyConnectionPerson {
-  person_type: "member" | "alumni";
+  person_type: ConnectionPersonType;
   person_id: string;
   name: string;
   subtitle: string | null;
+  messageable: boolean;
 }
 
 export interface DisplayReadySuggestedConnection extends DisplayReadyConnectionPerson {
   score: number;
+  strength: ConnectionMatchStrength;
   preview: SuggestedConnection["preview"];
   reasons: DisplayReadyConnectionReason[];
 }
@@ -199,16 +225,69 @@ function buildPreview(person: ProjectedPerson): SuggestedConnection["preview"] {
 export function formatConnectionReasonLabel(code: ConnectionReasonCode): string {
   switch (code) {
     case "shared_company":
-      return "shared company";
+      return "Shared company";
     case "shared_industry":
-      return "shared industry";
+      return "Shared industry";
     case "shared_role_family":
-      return "shared role family";
+      return "Shared role";
     case "shared_city":
-      return "shared city";
+      return "Same city";
     case "graduation_proximity":
-      return "graduation proximity";
+      return "Same grad year";
   }
+}
+
+// Industry / company / role-family are the signals that justify a real intro;
+// city and graduation proximity are softer context. The card accents the strong ones.
+const STRONG_REASON_CODES: ReadonlySet<ConnectionReasonCode> = new Set([
+  "shared_industry",
+  "shared_company",
+  "shared_role_family",
+]);
+
+export function isStrongReason(code: ConnectionReasonCode): boolean {
+  return STRONG_REASON_CODES.has(code);
+}
+
+// The concrete shared value shown beside the label, e.g. "Finance" or "2026".
+// graduation_proximity carries the candidate's grad year as a number.
+function formatConnectionReasonDetail(reason: ConnectionReason): string | null {
+  if (reason.value === undefined || reason.value === null) {
+    return null;
+  }
+  if (typeof reason.value === "number") {
+    return String(reason.value);
+  }
+  const trimmed = reason.value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+// Role/visibility enums that must never leak into a human-facing subtitle. The
+// `role` field can carry a team role ("Captain") OR, for some seeded rows, a raw
+// membership enum — we drop the latter so cards never read "active_member".
+const ROLE_ENUM_VALUES: ReadonlySet<string> = new Set([
+  "admin",
+  "active_member",
+  "member",
+  "alumni",
+  "viewer",
+  "parent",
+  "pending",
+  "revoked",
+]);
+
+function humanRoleLabel(role: string | null | undefined): string | null {
+  const trimmed = role?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return ROLE_ENUM_VALUES.has(trimmed.toLowerCase()) ? null : trimmed;
+}
+
+export function deriveMatchStrength(score: number): ConnectionMatchStrength {
+  if (score >= STRONG_MATCH_MIN_SCORE) return "strong";
+  if (score >= GOOD_MATCH_MIN_SCORE) return "good";
+  return "suggested";
 }
 
 export function buildConnectionSubtitle(input: {
@@ -218,9 +297,8 @@ export function buildConnectionSubtitle(input: {
   major?: string | null;
   currentCity?: string | null;
 }): string | null {
-  const normalizedRole = input.role?.trim().toLowerCase() ?? null;
   const parts = [
-    normalizedRole === "admin" ? null : input.role?.trim(),
+    humanRoleLabel(input.role),
     input.currentCompany?.trim(),
     input.industry?.trim(),
     input.major?.trim(),
@@ -242,6 +320,7 @@ export function buildDisplayReadyConnectionPerson(person: ProjectedPerson): Disp
       major: person.major,
       currentCity: person.currentCity,
     }),
+    messageable: Boolean(person.userId),
   };
 }
 
@@ -254,6 +333,7 @@ export function buildDisplayReadySuggestedConnection(
     person_type: suggestion.person_type,
     person_id: suggestion.person_id,
     name: suggestion.name,
+    messageable: suggestion.messageable,
     subtitle: buildConnectionSubtitle({
       role: suggestion.preview.role,
       currentCompany: suggestion.preview.current_company,
@@ -262,10 +342,13 @@ export function buildDisplayReadySuggestedConnection(
       currentCity: suggestion.preview.current_city,
     }),
     score: suggestion.score,
+    strength: deriveMatchStrength(suggestion.score),
     preview: suggestion.preview,
     reasons: suggestion.reasons.map((reason) => ({
       ...reason,
       label: formatConnectionReasonLabel(reason.code),
+      detail: formatConnectionReasonDetail(reason),
+      strong: isStrongReason(reason.code),
     })),
   };
 }
@@ -490,6 +573,7 @@ export function buildSuggestionForCandidate(input: {
     person_type: candidate.personType,
     person_id: candidate.personId,
     name: candidate.name,
+    messageable: Boolean(candidate.userId),
     score: Math.max(0, rawScore),
     preview: buildPreview(candidate),
     reasons,

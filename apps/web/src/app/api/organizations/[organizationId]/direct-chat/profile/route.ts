@@ -23,7 +23,7 @@ type RequestBody = {
 };
 
 function isProfileType(value: unknown): value is ProfileDirectChatType {
-  return value === "member" || value === "alumni";
+  return value === "member" || value === "alumni" || value === "parent";
 }
 
 async function parseRequestBody(req: Request): Promise<RequestBody | null> {

@@ -2147,6 +2147,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
             graduation_year: 2018,
             position_title: "Engineer",
             job_title: null,
+            open_to_networking: true,
             created_at: "2026-03-01T00:00:00.000Z",
           },
           {
@@ -2185,6 +2186,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
           graduation_year: 2018,
           position_title: "Engineer",
           job_title: null,
+          open_to_networking: true,
           created_at: "2026-03-01T00:00:00.000Z",
         },
         error: null,
@@ -2218,7 +2220,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   );
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.label),
-    ["shared company", "graduation proximity"]
+    ["Shared company", "Same grad year"]
   );
 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);

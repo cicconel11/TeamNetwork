@@ -1,6 +1,7 @@
 import { UpcomingEventsWidget } from "./UpcomingEventsWidget";
 import { RecentAnnouncementsWidget } from "./RecentAnnouncementsWidget";
 import { MemberHighlightsWidget } from "./MemberHighlightsWidget";
+import { PeopleYouShouldMeetWidget } from "@/components/connections/PeopleYouShouldMeetWidget";
 import type { FeedSidebarData } from "@/lib/feed/load-feed-sidebar-data";
 
 interface FeedSidebarWidgetsProps {
@@ -14,6 +15,7 @@ export function FeedSidebarWidgets({ orgSlug, data }: FeedSidebarWidgetsProps) {
     <div className="space-y-4">
       <UpcomingEventsWidget events={data.upcomingEvents} orgSlug={orgSlug} />
       <RecentAnnouncementsWidget announcements={data.visibleAnnouncements} orgSlug={orgSlug} />
+      <PeopleYouShouldMeetWidget orgSlug={orgSlug} />
       <MemberHighlightsWidget members={data.newMembers} orgSlug={orgSlug} />
     </div>
   );

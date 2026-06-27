@@ -6,7 +6,7 @@ import { CHAT_ELIGIBLE_ORG_ROLES } from "./recipient-eligibility";
 
 export type ProfileDirectChatSupabase = DirectChatSupabase;
 
-export type ProfileDirectChatType = "member" | "alumni";
+export type ProfileDirectChatType = "member" | "alumni" | "parent";
 
 export type StartProfileDirectChatResult =
   | {
@@ -33,6 +33,7 @@ type ProfileRow = {
   user_id: string | null;
   status?: string | null;
   deleted_at?: string | null;
+  open_to_networking?: boolean | null;
 };
 
 type LoadProfileUserResult =
@@ -58,6 +59,28 @@ async function loadProfileUser(
 
     if (error) {
       console.error("[profile-direct-chat] member profile lookup failed", {
+        organizationId: input.organizationId,
+        profileId: input.profileId,
+        error,
+      });
+      return { profile: null, error: "profile_lookup_failed" };
+    }
+    return { profile: (data as ProfileRow | null) ?? null, error: null };
+  }
+
+  if (input.profileType === "parent") {
+    // Parent messageability is parent-consent-gated: pull open_to_networking so
+    // startProfileDirectChat can reject a parent who hasn't opted in.
+    const { data, error } = await supabase
+      .from("parents")
+      .select("id, user_id, deleted_at, open_to_networking")
+      .eq("id", input.profileId)
+      .eq("organization_id", input.organizationId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[profile-direct-chat] parent profile lookup failed", {
         organizationId: input.organizationId,
         profileId: input.profileId,
         error,
@@ -153,6 +176,18 @@ export async function startProfileDirectChat(
       status: 409,
       code: "profile_inactive",
       error: "This member profile is not available for in-app chat.",
+    };
+  }
+
+  // A parent is only messageable if they consented via open_to_networking. This
+  // re-checks server-side (the candidate query already filters it, but the
+  // Message action must not trust the client-supplied profileId).
+  if (input.profileType === "parent" && profile.open_to_networking !== true) {
+    return {
+      ok: false,
+      status: 409,
+      code: "profile_inactive",
+      error: "This parent is not available for networking.",
     };
   }
 
