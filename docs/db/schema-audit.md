@@ -8,6 +8,11 @@
 
 This document is a current-state schema snapshot. The generated types in `src/types/database.ts` are the best day-to-day source of truth when this doc drifts. For per-policy RLS detail, grep the corresponding migration rather than duplicating SQL here.
 
+> **Deep-dive companions.** Two subsystems have grown large enough to warrant dedicated docs; the rows below are summaries that defer to them:
+>
+> - [`ai-schema.md`](./ai-schema.md) — AI assistant: conversation, audit/spend, RAG/embedding pipeline, semantic cache, mutation layer.
+> - [`mobile-schema.md`](./mobile-schema.md) — mobile/push: Expo push, iOS Live Activities, Apple Wallet passes, web→mobile auth handoff.
+
 ---
 
 ## Current Schema Surface
@@ -209,6 +214,8 @@ The live schema covers:
 
 ### AI Assistant
 
+> Full deep-dive (data flow, column detail, intentional divergences) in [`ai-schema.md`](./ai-schema.md).
+
 | Table                    | Purpose                                           | Notes                                                                                                                                                                                                                                    |
 | ------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ai_threads`             | AI conversation threads                           | Scoped to user + org + surface. Soft-delete via `deleted_at`. Surfaces: `general`, `members`, `analytics`, `events`                                                                                                                      |
@@ -240,6 +247,8 @@ The live schema covers:
 | `organization_email_domains`    | Per-org verified email sending domain (Resend)             | `domain`, `resend_domain_id`, `status`, `dns_records`, sender fields. Service-role RLS. _(Migration `20261219000000`; not yet in `database.ts`/OKF.)_ |
 
 ### Mobile, Push & Notifications
+
+> Full deep-dive (flows, columns, what the mobile client queries) in [`mobile-schema.md`](./mobile-schema.md).
 
 | Table                       | Purpose                                                                              | Notes                                                                                                                                                                                                                                                                          |
 | --------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
