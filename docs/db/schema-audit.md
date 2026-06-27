@@ -1,10 +1,10 @@
 # Supabase Schema Audit
 
-**Last Updated:** April 16, 2026
-**Scope:** Body reflects migrations through `20261017000000_graduation_rpc_admin_guard.sql` (the last full audit).
-**Migration Count:** 266 at last audit — **now 351** (latest `20261215000000_fk_covering_indexes.sql`). The body has NOT been re-audited for the ~85 migrations since; treat `src/types/database.ts` as source of truth for anything added after Oct 2026 until this snapshot is refreshed.
+**Last Updated:** June 27, 2026 (Complete Table Reference reconciled against `database.ts`; prose body still reflects the April 2026 full audit).
+**Scope:** Prose subsystem notes reflect migrations through `20261017000000_graduation_rpc_admin_guard.sql` (the last full prose audit). The **Complete Table Reference** below was reconciled to the live table list on June 27, 2026.
+**Migration Count:** 266 at last full prose audit — **now 364** (latest `20261226000000_alumni_reinvite_tracking.sql`).
 
-> **Freshness rule.** Header is hand-maintained. To recheck: `ls supabase/migrations/*.sql | wc -l` and `ls supabase/migrations/ | sort | tail -1`. If either drifts more than ~20 migrations, refresh this doc (re-audit the body, not just the header — drift is currently ~85, past due).
+> **Freshness rule.** Header is hand-maintained. To recheck: `ls supabase/migrations/*.sql | wc -l` and `ls supabase/migrations/ | sort | tail -1`. If either drifts more than ~20 migrations, refresh this doc (re-audit the body, not just the header).
 
 This document is a current-state schema snapshot. The generated types in `src/types/database.ts` are the best day-to-day source of truth when this doc drifts. For per-policy RLS detail, grep the corresponding migration rather than duplicating SQL here.
 
@@ -394,8 +394,10 @@ Two-tier verification:
 | Aug 2026 | Audit log retention, RAG hardening follow-ups, security definer search-path hardening |
 | Sep 2026 | Enterprise invite hardening, invite pagination indexes, enterprise member count RPC, enterprise invite role cast fix |
 | Oct 2026 | Duplicate OAuth account merge, user agreements, `data_access_log`, IP hash backfill, `breach_incidents`, mentorship tasks + meetings + pair cascade deletion, parent role added to remaining RLS policies, parent discussion posting, alumni birth year (+ enterprise stats, bulk-import column), announcement visibility reconciliation, member restore on re-approval, RPC-based `global_search`, org `hide_donor_names`, org `base_color`, AI feedback, graduation RPC admin guard |
+| Nov 2026 | Notification dispatch queue + push prefs (`notification_jobs`, lease RPC, `user_push_tokens` cleanup), iOS `live_activity_tokens`, `claim_alumni_profiles` RPCs |
+| Dec 2026 | `event_reminder_sends` + event check-in mode + "track on lock screen", `wallet_pass_registrations`, donation-eligible-iOS flag, `org_member_role_audit` + role-change RPC, AI spend cap + ledger, AI draft mutation sessions, init-skip-user-message, RAG audience scoping + chunk-source sync, `knowledge_documents` (8th RAG source), `enterprise_deletion_requests`, GDPR FK delete actions, security-definer view fix, FK covering indexes, `mentee_derived_signals` (columns + RPC), mentor bio requeue triggers, alumni enrichment provenance, `organization_email_domains`, graph_sync_queue teardown (retired → dropped), analytics event-name allowlist extension, `alumni_reinvite_tracking` |
 
-> For per-migration detail, use `git log supabase/migrations/` — this table is intentionally coarse and will no longer be extended month-by-month once the next schema refresh lands.
+> For per-migration detail, use `git log supabase/migrations/` — this table is intentionally coarse.
 
 ---
 
