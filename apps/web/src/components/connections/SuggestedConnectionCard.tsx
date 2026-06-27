@@ -31,13 +31,29 @@ interface SuggestedConnectionCardProps {
 const STRENGTH_DOT: Record<ConnectionMatchStrength, string> = {
   strong: "bg-emerald-500",
   good: "bg-sky-500",
-  suggested: "bg-muted-foreground/40",
+  suggested: "bg-violet-400",
 };
 
 const STRENGTH_TEXT: Record<ConnectionMatchStrength, string> = {
   strong: "text-emerald-600",
   good: "text-sky-600",
-  suggested: "text-muted-foreground",
+  suggested: "text-violet-500",
+};
+
+// Per-tier card identity so even a weak (grad-year-only) match reads as designed
+// rather than flat grey. Strong/good get a clear tint + ring; suggested gets a
+// quiet violet wash that still feels intentional.
+const STRENGTH_CARD: Record<ConnectionMatchStrength, string> = {
+  strong: "border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-card",
+  good: "border-sky-200 bg-gradient-to-br from-sky-50/70 to-card",
+  suggested: "border-violet-100 bg-gradient-to-br from-violet-50/40 to-card",
+};
+
+// Colored avatar ring per tier — the cheapest way to add life to every card.
+const STRENGTH_RING: Record<ConnectionMatchStrength, string> = {
+  strong: "ring-2 ring-emerald-300/70 ring-offset-2 ring-offset-card",
+  good: "ring-2 ring-sky-300/70 ring-offset-2 ring-offset-card",
+  suggested: "ring-2 ring-violet-200 ring-offset-2 ring-offset-card",
 };
 
 /**
@@ -108,7 +124,7 @@ export function SuggestedConnectionCard({
   return (
     <Card
       padding="sm"
-      className="group relative flex flex-col gap-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-lg"
+      className={`group relative flex flex-col gap-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${STRENGTH_CARD[suggestion.strength]}`}
     >
       <span
         className={`absolute right-4 top-4 inline-flex items-center gap-1.5 text-[11px] font-semibold ${STRENGTH_TEXT[suggestion.strength]}`}
@@ -118,7 +134,12 @@ export function SuggestedConnectionCard({
       </span>
 
       <div className="flex items-start gap-3 pr-24">
-        <Avatar src={null} name={suggestion.name} size="md" />
+        <Avatar
+          src={null}
+          name={suggestion.name}
+          size="md"
+          className={STRENGTH_RING[suggestion.strength]}
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">{suggestion.name}</p>
           {suggestion.subtitle && (
