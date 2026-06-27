@@ -213,10 +213,7 @@ The live schema covers:
 
 ### Search (Oct 2026)
 
-| Table | Purpose | Notes |
-|-------|---------|-------|
-| `global_search_entries` | Cross-entity search index | Materialized search surface covering members, alumni, events, announcements, jobs, discussions, feed. Refreshed by triggers / scheduled job. See migration `20261015110000_global_search.sql` |
-| `search_behavioral_analytics` | Search query telemetry | Query text (hashed/truncated), result counts, click-through events. PII-minimized |
+> **Correction (June 2026):** Earlier revisions of this doc listed `global_search_entries` and `search_behavioral_analytics` as tables. **Neither exists.** Global search was shipped as **RPC functions** (`search_org_content`, `is_member_directory_visible`, `is_alumni_directory_visible`) plus pg_trgm indexes (migration `20261015110000_global_search.sql`); search telemetry is recorded through the existing analytics pipeline via the `search_used` / `search_result_click` analytics events (`20261015120000`), not a dedicated table. There is no materialized search table.
 
 ### Compliance & Security (Oct 2026)
 
@@ -396,7 +393,7 @@ Two-tier verification:
 | Jul 2026 | Parent invite redemption fixes, analytics hardening (allowlisted props, enum validation, behavioral tracking policy), AI context enrichment columns (`context_surface`, `context_token_estimate` on `ai_audit_log`), AI stage timing telemetry (`stage_timings` on `ai_audit_log`) |
 | Aug 2026 | Audit log retention, RAG hardening follow-ups, security definer search-path hardening |
 | Sep 2026 | Enterprise invite hardening, invite pagination indexes, enterprise member count RPC, enterprise invite role cast fix |
-| Oct 2026 | Duplicate OAuth account merge, user agreements, `data_access_log`, IP hash backfill, `breach_incidents`, mentorship tasks + meetings + pair cascade deletion, parent role added to remaining RLS policies, parent discussion posting, alumni birth year (+ enterprise stats, bulk-import column), announcement visibility reconciliation, member restore on re-approval, `global_search` surface, org `hide_donor_names`, org `base_color`, search behavioral analytics, AI feedback, graduation RPC admin guard |
+| Oct 2026 | Duplicate OAuth account merge, user agreements, `data_access_log`, IP hash backfill, `breach_incidents`, mentorship tasks + meetings + pair cascade deletion, parent role added to remaining RLS policies, parent discussion posting, alumni birth year (+ enterprise stats, bulk-import column), announcement visibility reconciliation, member restore on re-approval, RPC-based `global_search`, org `hide_donor_names`, org `base_color`, AI feedback, graduation RPC admin guard |
 
 > For per-migration detail, use `git log supabase/migrations/` — this table is intentionally coarse and will no longer be extended month-by-month once the next schema refresh lands.
 
