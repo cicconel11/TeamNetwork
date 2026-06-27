@@ -43,6 +43,10 @@ export interface SuggestConnectionsArgs {
   person_id?: string;
   person_query?: string;
   limit?: number;
+  // How many scored suggestions to surface to the caller. The chat tool keeps the
+  // conservative default (3); page-style surfaces pass a larger value. Always
+  // clamped to the scored `limit` so we never display more than we computed.
+  display_limit?: number;
 }
 
 const CHAT_CONNECTION_SUGGESTION_LIMIT = 3;
@@ -477,7 +481,10 @@ export async function suggestConnections(input: {
   args: SuggestConnectionsArgs;
 }): Promise<SuggestConnectionsResult> {
   const limit = clampSuggestionsLimit(input.args.limit);
-  const displayLimit = Math.min(limit, CHAT_CONNECTION_SUGGESTION_LIMIT);
+  // Default to the chat cap when the caller doesn't ask for more; a caller-supplied
+  // display_limit lets page surfaces show more. Never exceed the scored `limit`.
+  const requestedDisplayLimit = input.args.display_limit ?? CHAT_CONNECTION_SUGGESTION_LIMIT;
+  const displayLimit = Math.min(limit, Math.max(requestedDisplayLimit, 1));
   const { orgId, serviceSupabase } = input;
   let resolvedSource: ProjectedPerson | null = null;
   let projectedPeopleForLookup: Map<string, ProjectedPerson> | null = null;

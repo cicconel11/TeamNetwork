@@ -1336,7 +1336,10 @@
       "announcementsSeeAll": "See all announcements",
       "membersTitle": "New Members",
       "membersEmpty": "No new members yet",
-      "membersSeeAll": "See all members"
+      "membersSeeAll": "See all members",
+      "connectionsTitle": "People to meet",
+      "connectionsBody": "Discover members and alumni you share a company, industry, or city with.",
+      "connectionsCta": "See suggestions"
     },
     "members": {
       "description": "{count} {status} {label}",
@@ -1368,6 +1371,15 @@
       "new": "New",
       "filtered": "filtered",
       "inOurNetwork": "in our network"
+    },
+    "connections": {
+      "title": "People You Should Meet",
+      "description": "Members and alumni you share a company, industry, role, or city with — reach out and grow your network.",
+      "message": "Message",
+      "emptyTitle": "No suggestions yet",
+      "emptyDescription": "We don't have anyone to suggest right now. Check back as more people join and complete their profiles.",
+      "noSourceTitle": "Complete your profile",
+      "noSourceDescription": "Add your company, industry, or city to your profile so we can suggest people you should meet."
     }
   },
   "connectedAccounts": {
