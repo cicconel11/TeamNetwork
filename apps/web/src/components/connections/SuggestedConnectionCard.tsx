@@ -28,32 +28,44 @@ interface SuggestedConnectionCardProps {
   labels: SuggestedConnectionCardLabels;
 }
 
-const STRENGTH_DOT: Record<ConnectionMatchStrength, string> = {
-  strong: "bg-emerald-500",
-  good: "bg-sky-500",
-  suggested: "bg-violet-400",
-};
+// Each tier gets a full visual identity, not just a tint — a left accent bar, a
+// pill badge, a colored avatar ring, and a card wash — so the common grad-year-only
+// "suggested" card looks deliberately designed rather than a faded placeholder.
+interface StrengthStyle {
+  /** Left edge accent bar (the strongest cheap signal of "this is styled"). */
+  bar: string;
+  /** Card background wash + border. */
+  card: string;
+  /** Avatar ring. */
+  ring: string;
+  /** Strength badge pill (bg + text). */
+  badge: string;
+  /** Badge dot. */
+  dot: string;
+}
 
-const STRENGTH_TEXT: Record<ConnectionMatchStrength, string> = {
-  strong: "text-emerald-600",
-  good: "text-sky-600",
-  suggested: "text-violet-500",
-};
-
-// Per-tier card identity so even a weak (grad-year-only) match reads as designed
-// rather than flat grey. Strong/good get a clear tint + ring; suggested gets a
-// quiet violet wash that still feels intentional.
-const STRENGTH_CARD: Record<ConnectionMatchStrength, string> = {
-  strong: "border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-card",
-  good: "border-sky-200 bg-gradient-to-br from-sky-50/70 to-card",
-  suggested: "border-violet-100 bg-gradient-to-br from-violet-50/40 to-card",
-};
-
-// Colored avatar ring per tier — the cheapest way to add life to every card.
-const STRENGTH_RING: Record<ConnectionMatchStrength, string> = {
-  strong: "ring-2 ring-emerald-300/70 ring-offset-2 ring-offset-card",
-  good: "ring-2 ring-sky-300/70 ring-offset-2 ring-offset-card",
-  suggested: "ring-2 ring-violet-200 ring-offset-2 ring-offset-card",
+const STRENGTH_STYLE: Record<ConnectionMatchStrength, StrengthStyle> = {
+  strong: {
+    bar: "bg-emerald-400",
+    card: "border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-card",
+    ring: "ring-2 ring-emerald-300 ring-offset-2 ring-offset-card",
+    badge: "bg-emerald-100 text-emerald-700",
+    dot: "bg-emerald-500",
+  },
+  good: {
+    bar: "bg-sky-400",
+    card: "border-sky-200/80 bg-gradient-to-br from-sky-50 to-card",
+    ring: "ring-2 ring-sky-300 ring-offset-2 ring-offset-card",
+    badge: "bg-sky-100 text-sky-700",
+    dot: "bg-sky-500",
+  },
+  suggested: {
+    bar: "bg-violet-300",
+    card: "border-violet-200/70 bg-gradient-to-br from-violet-50 to-card",
+    ring: "ring-2 ring-violet-300 ring-offset-2 ring-offset-card",
+    badge: "bg-violet-100 text-violet-700",
+    dot: "bg-violet-500",
+  },
 };
 
 /**
@@ -121,24 +133,29 @@ export function SuggestedConnectionCard({
     });
   };
 
+  const style = STRENGTH_STYLE[suggestion.strength];
+
   return (
     <Card
       padding="sm"
-      className={`group relative flex flex-col gap-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${STRENGTH_CARD[suggestion.strength]}`}
+      className={`group relative flex flex-col gap-3.5 overflow-hidden pl-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${style.card}`}
     >
+      {/* Left accent bar — the clearest per-tier signal at a glance. */}
+      <span className={`absolute inset-y-0 left-0 w-1.5 ${style.bar}`} aria-hidden="true" />
+
       <span
-        className={`absolute right-4 top-4 inline-flex items-center gap-1.5 text-[11px] font-semibold ${STRENGTH_TEXT[suggestion.strength]}`}
+        className={`absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${style.badge}`}
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${STRENGTH_DOT[suggestion.strength]}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
         {strengthLabel[suggestion.strength]}
       </span>
 
-      <div className="flex items-start gap-3 pr-24">
+      <div className="flex items-start gap-3 pr-28">
         <Avatar
           src={null}
           name={suggestion.name}
           size="md"
-          className={STRENGTH_RING[suggestion.strength]}
+          className={style.ring}
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">{suggestion.name}</p>
