@@ -39,6 +39,9 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
       graduation_year: 2018,
       position_title: "Engineer",
       job_title: null,
+      // Source is opted in so alumni→alumni candidates surface (this fixture
+      // tests ranking, not the consent gate).
+      open_to_networking: true,
       deleted_at: null,
     },
     {
@@ -118,6 +121,7 @@ function makeProjectedPerson(
     personId: overrides.personId,
     memberId: overrides.memberId ?? null,
     alumniId: overrides.alumniId ?? overrides.personId,
+    parentId: overrides.parentId ?? null,
     userId: overrides.userId ?? null,
     name: overrides.name,
     email: overrides.email ?? null,
@@ -128,6 +132,10 @@ function makeProjectedPerson(
     roleFamily: overrides.roleFamily ?? null,
     graduationYear: overrides.graduationYear ?? null,
     currentCity: overrides.currentCity ?? null,
+    // These fixtures exercise SCORING, not the networking-consent gate. Default
+    // to opted-in so alumni→alumni scoring scenarios aren't suppressed by the
+    // gate (the gate itself is covered in people-graph-open-to-networking.test).
+    openToNetworking: overrides.openToNetworking ?? true,
   };
 }
 
@@ -209,6 +217,7 @@ test("buildProjectedPeople dedupes by user_id and preserves null-user rows", () 
     personId: "member-1",
     memberId: "member-1",
     alumniId: "alumni-1",
+    parentId: null,
     userId: "shared-user",
     name: "Mia Member",
     email: "mia@example.com",
@@ -219,6 +228,7 @@ test("buildProjectedPeople dedupes by user_id and preserves null-user rows", () 
     roleFamily: "Engineering",
     graduationYear: 2023,
     currentCity: "Austin",
+    openToNetworking: false,
   });
   assert.ok(projected.has(`${ORG_ID}:member:member-2`));
   assert.ok(projected.has(`${ORG_ID}:alumni:alumni-2`));
@@ -341,6 +351,7 @@ test("buildProjectedPeople parses member company-role strings into canonical car
     personId: "member-parse",
     memberId: "member-parse",
     alumniId: null,
+    parentId: null,
     userId: null,
     name: "Tyler Morrison",
     email: "tyler@example.com",
@@ -351,6 +362,7 @@ test("buildProjectedPeople parses member company-role strings into canonical car
     roleFamily: "Engineering",
     graduationYear: 2028,
     currentCity: null,
+    openToNetworking: false,
   });
 });
 
@@ -400,6 +412,7 @@ test("buildProjectedPeople prefers richer alumni company and industry over parse
     personId: "member-linked",
     memberId: "member-linked",
     alumniId: "alumni-linked",
+    parentId: null,
     userId: "shared-user",
     name: "Zara Hassan",
     email: "zara@example.com",
@@ -410,6 +423,7 @@ test("buildProjectedPeople prefers richer alumni company and industry over parse
     roleFamily: "Finance",
     graduationYear: 2025,
     currentCity: "New York",
+    openToNetworking: false,
   });
 });
 

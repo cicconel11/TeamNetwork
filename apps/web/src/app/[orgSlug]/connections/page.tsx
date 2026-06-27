@@ -10,6 +10,7 @@ import {
 import { PageHeader } from "@/components/layout";
 import { EmptyState } from "@/components/ui";
 import { SuggestedConnectionCard } from "@/components/connections/SuggestedConnectionCard";
+import { NetworkingConsentToggle } from "@/components/connections/NetworkingConsentToggle";
 
 interface PageProps {
   params: Promise<{ orgSlug: string }>;
@@ -51,6 +52,16 @@ export default async function ConnectionsPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} description={t("description")} />
+
+      <NetworkingConsentToggle
+        orgId={org.id}
+        labelOn={t("consentLabelOn")}
+        labelOff={t("consentLabelOff")}
+        helperOn={t("consentHelperOn")}
+        helperOff={t("consentHelperOff")}
+        noProfileMessage={t("consentNoProfile")}
+        errorMessage={t("consentError")}
+      />
 
       {state === "no_source" ? (
         <EmptyState title={t("noSourceTitle")} description={t("noSourceDescription")} />

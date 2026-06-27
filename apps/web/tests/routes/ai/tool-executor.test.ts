@@ -2147,6 +2147,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
             graduation_year: 2018,
             position_title: "Engineer",
             job_title: null,
+            open_to_networking: true,
             created_at: "2026-03-01T00:00:00.000Z",
           },
           {
@@ -2185,6 +2186,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
           graduation_year: 2018,
           position_title: "Engineer",
           job_title: null,
+          open_to_networking: true,
           created_at: "2026-03-01T00:00:00.000Z",
         },
         error: null,

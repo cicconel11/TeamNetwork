@@ -24,8 +24,12 @@ export interface SuggestedConnectionDebugInfo {
   exposurePenalty: number;
 }
 
+// The role a suggested person carries. Mirrors ProjectedPerson.personType and
+// maps directly onto the direct-chat profile type for the Message action.
+export type ConnectionPersonType = "member" | "alumni" | "parent";
+
 export interface SuggestedConnection {
-  person_type: "member" | "alumni";
+  person_type: ConnectionPersonType;
   person_id: string;
   name: string;
   score: number;
@@ -46,7 +50,7 @@ export interface DisplayReadyConnectionReason extends ConnectionReason {
 }
 
 export interface DisplayReadyConnectionPerson {
-  person_type: "member" | "alumni";
+  person_type: ConnectionPersonType;
   person_id: string;
   name: string;
   subtitle: string | null;

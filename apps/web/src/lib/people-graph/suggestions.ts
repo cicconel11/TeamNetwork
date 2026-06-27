@@ -4,8 +4,10 @@ import {
   buildProjectedPeople,
   buildSourcePerson,
   MEMBER_PERSON_SELECT,
+  PARENT_PERSON_SELECT,
   type AlumniPersonRow,
   type MemberPersonRow,
+  type ParentPersonRow,
   type ProjectedPerson,
 } from "@/lib/people-graph/people";
 import {
@@ -39,7 +41,7 @@ import {
 } from "@/lib/people-graph/name-matching";
 
 export interface SuggestConnectionsArgs {
-  person_type?: "member" | "alumni";
+  person_type?: "member" | "alumni" | "parent";
   person_id?: string;
   person_query?: string;
   limit?: number;
@@ -69,7 +71,7 @@ async function loadProjectedPeople(
   serviceSupabase: SupabaseClient,
   orgId: string
 ): Promise<Map<string, ProjectedPerson>> {
-  const [membersResponse, alumniResponse] = await Promise.all([
+  const [membersResponse, alumniResponse, parentsResponse] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (serviceSupabase as any)
       .from("members")
@@ -83,6 +85,16 @@ async function loadProjectedPeople(
       .select(ALUMNI_PERSON_SELECT)
       .eq("organization_id", orgId)
       .is("deleted_at", null),
+    // Parents are consent-gated: only those who set open_to_networking enter the
+    // candidate pool. Unclaimed parents (user_id NULL) cannot have opted in, so
+    // they're inherently excluded.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (serviceSupabase as any)
+      .from("parents")
+      .select(PARENT_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("open_to_networking", true)
+      .is("deleted_at", null),
   ]);
 
   if (membersResponse.error) {
@@ -93,9 +105,14 @@ async function loadProjectedPeople(
     throw new Error("Failed to load alumni for suggestions");
   }
 
+  if (parentsResponse.error) {
+    throw new Error("Failed to load parents for suggestions");
+  }
+
   return buildProjectedPeople({
     members: (membersResponse.data ?? []) as MemberPersonRow[],
     alumni: (alumniResponse.data ?? []) as AlumniPersonRow[],
+    parents: (parentsResponse.data ?? []) as ParentPersonRow[],
   });
 }
 
@@ -126,6 +143,25 @@ async function fetchSourceRow(
     return data as MemberPersonRow | null;
   }
 
+  if (args.person_type === "parent") {
+    // A parent is only a valid source if they themselves opted in (consent gate).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (serviceSupabase as any)
+      .from("parents")
+      .select(PARENT_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("id", args.person_id)
+      .eq("open_to_networking", true)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error("Failed to load source parent");
+    }
+
+    return data as ParentPersonRow | null;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("alumni")
@@ -142,60 +178,120 @@ async function fetchSourceRow(
   return data as AlumniPersonRow | null;
 }
 
+interface SourceComplement {
+  memberRows: MemberPersonRow[];
+  alumniRows: AlumniPersonRow[];
+  parentRows: ParentPersonRow[];
+}
+
+// Load every active row sharing this user_id across the people tables, so a
+// linked person projects to a single node regardless of which table the source
+// came from. Parent complements are NOT consent-filtered here: if the user is a
+// member/alumni, their member/alumni identity is the source and the parent row
+// just enriches it; the consent gate only governs parent-as-candidate/parent-as-
+// primary-source, both already enforced upstream.
+async function loadRowsByUser(
+  serviceSupabase: SupabaseClient,
+  orgId: string,
+  userId: string,
+  tables: { members?: boolean; alumni?: boolean; parents?: boolean }
+): Promise<Partial<SourceComplement>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = serviceSupabase as any;
+  const result: Partial<SourceComplement> = {};
+
+  if (tables.members) {
+    const { data, error } = await client
+      .from("members")
+      .select(MEMBER_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .is("deleted_at", null);
+    if (error) throw new Error("Failed to load source member complement");
+    result.memberRows = (data as MemberPersonRow[] | null) ?? [];
+  }
+
+  if (tables.alumni) {
+    const { data, error } = await client
+      .from("alumni")
+      .select(ALUMNI_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("user_id", userId)
+      .is("deleted_at", null);
+    if (error) throw new Error("Failed to load source alumni complement");
+    result.alumniRows = (data as AlumniPersonRow[] | null) ?? [];
+  }
+
+  if (tables.parents) {
+    const { data, error } = await client
+      .from("parents")
+      .select(PARENT_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("user_id", userId)
+      .is("deleted_at", null);
+    if (error) throw new Error("Failed to load source parent complement");
+    result.parentRows = (data as ParentPersonRow[] | null) ?? [];
+  }
+
+  return result;
+}
+
 async function fetchSourceWithComplement(
   serviceSupabase: SupabaseClient,
   orgId: string,
   args: SuggestConnectionsArgs
-): Promise<{ memberRows: MemberPersonRow[]; alumniRows: AlumniPersonRow[] }> {
+): Promise<SourceComplement> {
   const sourceRow = await fetchSourceRow(serviceSupabase, orgId, args);
 
   if (!sourceRow) {
-    return { memberRows: [], alumniRows: [] };
+    return { memberRows: [], alumniRows: [], parentRows: [] };
   }
 
   if (args.person_type === "member") {
     const memberRow = sourceRow as MemberPersonRow;
     if (!memberRow.user_id) {
-      return { memberRows: [memberRow], alumniRows: [] };
+      return { memberRows: [memberRow], alumniRows: [], parentRows: [] };
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (serviceSupabase as any)
-      .from("alumni")
-      .select(ALUMNI_PERSON_SELECT)
-      .eq("organization_id", orgId)
-      .eq("user_id", memberRow.user_id)
-      .is("deleted_at", null);
-
-    if (error) {
-      throw new Error("Failed to load source alumni complement");
-    }
-
+    const complement = await loadRowsByUser(serviceSupabase, orgId, memberRow.user_id, {
+      alumni: true,
+      parents: true,
+    });
     return {
       memberRows: [memberRow],
-      alumniRows: (data as AlumniPersonRow[] | null) ?? [],
+      alumniRows: complement.alumniRows ?? [],
+      parentRows: complement.parentRows ?? [],
+    };
+  }
+
+  if (args.person_type === "parent") {
+    const parentRow = sourceRow as ParentPersonRow;
+    if (!parentRow.user_id) {
+      return { memberRows: [], alumniRows: [], parentRows: [parentRow] };
+    }
+    const complement = await loadRowsByUser(serviceSupabase, orgId, parentRow.user_id, {
+      members: true,
+      alumni: true,
+    });
+    return {
+      memberRows: complement.memberRows ?? [],
+      alumniRows: complement.alumniRows ?? [],
+      parentRows: [parentRow],
     };
   }
 
   const alumniRow = sourceRow as AlumniPersonRow;
   if (!alumniRow.user_id) {
-    return { memberRows: [], alumniRows: [alumniRow] };
+    return { memberRows: [], alumniRows: [alumniRow], parentRows: [] };
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (serviceSupabase as any)
-    .from("members")
-    .select(MEMBER_PERSON_SELECT)
-    .eq("organization_id", orgId)
-    .eq("user_id", alumniRow.user_id)
-    .eq("status", "active")
-    .is("deleted_at", null);
-
-  if (error) {
-    throw new Error("Failed to load source member complement");
-  }
-
+  const complement = await loadRowsByUser(serviceSupabase, orgId, alumniRow.user_id, {
+    members: true,
+    parents: true,
+  });
   return {
-    memberRows: (data as MemberPersonRow[] | null) ?? [],
+    memberRows: complement.memberRows ?? [],
     alumniRows: [alumniRow],
+    parentRows: complement.parentRows ?? [],
   };
 }
 
@@ -322,6 +418,37 @@ export interface CandidatePoolEntry {
   qualificationCodes: CandidateQualificationCode[];
 }
 
+/**
+ * Relationship-aware consent gate. Only the NEW edges introduced by the
+ * open_to_networking flag are gated — the already-shipped members↔alumni edges
+ * are unaffected (no consent required):
+ *   - alumni → alumni: surfaces only when the SOURCE alumnus opted in.
+ *   - parent (as candidate OR source): surfaces only when the parent opted in.
+ * Parent candidates are already filtered to open_to_networking=true at the query
+ * level; this is the same rule expressed in-engine as defense in depth.
+ */
+export function isConnectionEdgeAllowed(
+  source: ProjectedPerson,
+  candidate: ProjectedPerson
+): boolean {
+  // A parent on either end must have opted in.
+  if (candidate.personType === "parent" && !candidate.openToNetworking) {
+    return false;
+  }
+  if (source.personType === "parent" && !source.openToNetworking) {
+    return false;
+  }
+  // alumni → alumni requires the source alumnus to be open to networking.
+  if (
+    source.personType === "alumni" &&
+    candidate.personType === "alumni" &&
+    !source.openToNetworking
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function buildCandidatePool(input: {
   source: ProjectedPerson;
   candidates: Iterable<ProjectedPerson>;
@@ -333,6 +460,10 @@ export function buildCandidatePool(input: {
 
   for (const candidate of input.candidates) {
     if (candidate.personKey === input.source.personKey) {
+      continue;
+    }
+
+    if (!isConnectionEdgeAllowed(input.source, candidate)) {
       continue;
     }
 
@@ -510,13 +641,13 @@ export async function suggestConnections(input: {
 
     resolvedSource = resolution.source;
   } else {
-    const { memberRows, alumniRows } = await fetchSourceWithComplement(
+    const { memberRows, alumniRows, parentRows } = await fetchSourceWithComplement(
       serviceSupabase,
       orgId,
       input.args
     );
 
-    const source = buildSourcePerson({ memberRows, alumniRows });
+    const source = buildSourcePerson({ memberRows, alumniRows, parentRows });
     if (!source) {
       throw new SuggestConnectionsLookupError("Person not found");
     }
