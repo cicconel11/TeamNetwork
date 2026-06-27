@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
-import { JobForm } from "@/components/jobs/JobForm";
+import { JobForm } from "@/domains/jobs";
 import type { CreateJobForm } from "@/lib/schemas/jobs";
 
 interface PageProps {

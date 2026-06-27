@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
-import { updateJobPosting } from "@/lib/jobs/update-job";
-import { deleteJobPosting } from "@/lib/jobs/delete-job";
+import { updateJobPosting, deleteJobPosting } from "@/domains/jobs";
 
 export async function GET(
   request: NextRequest,

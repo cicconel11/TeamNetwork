@@ -32,22 +32,16 @@ import {
   supportsDraftSessionsStore,
   type DraftSessionSupabase,
 } from "@/lib/ai/draft-sessions";
-import { createEvent } from "@/lib/events/create-event";
-import { updateEvent } from "@/lib/events/update-event";
-import { deleteEvent } from "@/lib/events/delete-event";
-import { createJobPosting } from "@/lib/jobs/create-job";
-import { updateJobPosting } from "@/lib/jobs/update-job";
-import { deleteJobPosting } from "@/lib/jobs/delete-job";
+import { createEvent, updateEvent, deleteEvent } from "@/domains/events";
+import { createJobPosting, updateJobPosting, deleteJobPosting } from "@/domains/jobs";
 import { createDiscussionThread } from "@/lib/discussions/create-thread";
 import { createDiscussionReply } from "@/lib/discussions/create-reply";
 import {
   createAnnouncement,
   sendAnnouncementNotification,
-} from "@/lib/announcements/create-announcement";
-import {
   deleteAnnouncement,
   updateAnnouncement,
-} from "@/lib/announcements/update-announcement";
+} from "@/domains/announcements";
 import {
   sendAiAssistedDirectChatMessage,
   type DirectChatSupabase,

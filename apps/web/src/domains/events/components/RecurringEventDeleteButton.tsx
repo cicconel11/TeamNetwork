@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui";
-import { deleteEventsInSeries, type DeleteEventScope } from "@/lib/events/recurring-operations";
+import { deleteEventsInSeries, type DeleteEventScope } from "../server/recurring-operations";
 
 interface RecurringEventDeleteButtonProps {
   eventId: string;

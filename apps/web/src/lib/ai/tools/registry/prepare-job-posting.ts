@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { assistantJobDraftSchema, assistantPreparedJobSchema } from "@/lib/schemas/jobs";
-import { fetchJobSourceDraft, JobSourceIntakeError } from "@/lib/jobs/source-intake";
+import { fetchJobSourceDraft, JobSourceIntakeError } from "@/domains/jobs";
 import { createOrRevisePendingAction, type CreateJobPostingPendingPayload } from "@/lib/ai/pending-actions";
 import { aiLog } from "@/lib/ai/logger";
 import { getSafeErrorMessage } from "@/lib/ai/tools/shared";
