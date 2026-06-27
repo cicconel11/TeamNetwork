@@ -49,6 +49,16 @@ export default async function ConnectionsPage({ params }: PageProps) {
     displayLimit: CONNECTIONS_PAGE_DISPLAY_LIMIT,
   });
 
+  const cardLabels = {
+    message: t("message"),
+    opening: t("opening"),
+    strengthStrong: t("strengthStrong"),
+    strengthGood: t("strengthGood"),
+    strengthSuggested: t("strengthSuggested"),
+    errorGeneric: t("messageError"),
+    notOnApp: t("notOnApp"),
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} description={t("description")} />
@@ -68,17 +78,22 @@ export default async function ConnectionsPage({ params }: PageProps) {
       ) : suggestions.length === 0 ? (
         <EmptyState title={t("emptyTitle")} description={t("emptyDescription")} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {suggestions.map((suggestion) => (
-            <SuggestedConnectionCard
-              key={`${suggestion.person_type}:${suggestion.person_id}`}
-              suggestion={suggestion}
-              orgId={org.id}
-              orgSlug={orgSlug}
-              messageLabel={t("message")}
-            />
-          ))}
-        </div>
+        <>
+          <p className="text-sm text-muted-foreground">
+            {t("count", { count: suggestions.length })}
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {suggestions.map((suggestion) => (
+              <SuggestedConnectionCard
+                key={`${suggestion.person_type}:${suggestion.person_id}`}
+                suggestion={suggestion}
+                orgId={org.id}
+                orgSlug={orgSlug}
+                labels={cardLabels}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

@@ -42,23 +42,40 @@ test("connections page renders a card per suggestion keyed by person identity", 
 
 // ── Suggestion card (Message action) ─────────────────────────────────────────
 
-test("card Message action posts to the existing direct-chat/profile route", () => {
-  assert.match(cardSource, /action=\{`\/api\/organizations\/\$\{orgId\}\/direct-chat\/profile`\}/);
-  assert.match(cardSource, /method="post"/);
+test("card Message action posts to the direct-chat/profile route via fetch (no full reload)", () => {
+  // Client fetch + soft nav replaced the old form POST → 303 (which cold-rendered
+  // the chat page, costing 5-6s). The route is hit with fetch; navigation is router.push.
+  assert.match(cardSource, /fetch\(`\/api\/organizations\/\$\{orgId\}\/direct-chat\/profile`/);
+  assert.match(cardSource, /method: "POST"/);
+  assert.match(cardSource, /router\.push\(`\$\{messagesBase\}\/chat\/\$\{data\.chatGroupId\}`\)/);
+  // orgSlug is intentionally omitted from the body so the route returns JSON.
+  assert.doesNotMatch(cardSource, /name="orgSlug"/);
 });
 
 test("card sends the engine's person_type/person_id straight through as profile fields", () => {
   // person_type maps onto profileType, person_id onto profileId — the bridge the
   // direct-chat route already understands; we do not re-resolve user_id here.
-  assert.match(cardSource, /name="profileType" value=\{suggestion\.person_type\}/);
-  assert.match(cardSource, /name="profileId" value=\{suggestion\.person_id\}/);
-  assert.match(cardSource, /name="orgSlug" value=\{orgSlug\}/);
+  assert.match(cardSource, /profileType: suggestion\.person_type/);
+  assert.match(cardSource, /profileId: suggestion\.person_id/);
 });
 
-test("card renders a chip per reason label and a subtitle when present", () => {
+test("card renders a chip per reason (label + value) and a human subtitle", () => {
   assert.match(cardSource, /suggestion\.reasons\.map/);
   assert.match(cardSource, /reason\.label/);
+  assert.match(cardSource, /reason\.detail/);
   assert.match(cardSource, /suggestion\.subtitle/);
+});
+
+test("card shows a match-strength signal derived from the engine score", () => {
+  assert.match(cardSource, /suggestion\.strength/);
+  assert.match(cardSource, /strengthLabel/);
+});
+
+test("card hides the Message button for unmessageable (unclaimed) people", () => {
+  // A person with no in-app account (messageable === false) would 409
+  // profile_unlinked — show a quiet status instead of a dead button.
+  assert.match(cardSource, /suggestion\.messageable \?/);
+  assert.match(cardSource, /labels\.notOnApp/);
 });
 
 // ── Sidebar entry-point widget ───────────────────────────────────────────────

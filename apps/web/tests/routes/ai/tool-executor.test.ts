@@ -2220,7 +2220,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   );
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.label),
-    ["shared company", "graduation proximity"]
+    ["Shared company", "Same grad year"]
   );
 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);

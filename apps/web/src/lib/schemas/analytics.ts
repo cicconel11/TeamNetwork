@@ -12,6 +12,7 @@ export const VALID_FEATURES = [
   "alumni",
   "parents",
   "mentorship",
+  "connections",
   "workouts",
   "competition",
   "events",
