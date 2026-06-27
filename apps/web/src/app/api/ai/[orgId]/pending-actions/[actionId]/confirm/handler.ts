@@ -33,9 +33,7 @@ import {
   type DraftSessionSupabase,
 } from "@/lib/ai/draft-sessions";
 import { createEvent, updateEvent, deleteEvent } from "@/domains/events";
-import { createJobPosting } from "@/lib/jobs/create-job";
-import { updateJobPosting } from "@/lib/jobs/update-job";
-import { deleteJobPosting } from "@/lib/jobs/delete-job";
+import { createJobPosting, updateJobPosting, deleteJobPosting } from "@/domains/jobs";
 import { createDiscussionThread } from "@/lib/discussions/create-thread";
 import { createDiscussionReply } from "@/lib/discussions/create-reply";
 import {

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
-import { JobDetail } from "@/components/jobs/JobDetail";
+import { JobDetail } from "@/domains/jobs";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; jobId: string }>;

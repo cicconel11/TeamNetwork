@@ -42,4 +42,5 @@ This is an incremental migration. Domains are moved in their own branches,
 | --------------- | ----------- |
 | announcements   | ✅ migrated |
 | events          | ✅ migrated |
+| jobs            | ✅ migrated |
 | _all others_    | ⏳ pending — directory, linkedin, mentorship, fundraising, forms, ai-assistant, members, profiles, organizations, auth, admin, billing |
