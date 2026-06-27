@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getOrgContext } from "@/lib/auth/roles";
-import { filterAnnouncementsForUserViaRpc } from "@/lib/announcements";
+import { filterAnnouncementsForUserViaRpc, AnnouncementsFeed } from "@/domains/announcements";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
-import { AnnouncementsFeed } from "@/components/announcements/AnnouncementsFeed";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface AnnouncementsPageProps {

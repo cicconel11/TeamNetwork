@@ -43,11 +43,9 @@ import { createDiscussionReply } from "@/lib/discussions/create-reply";
 import {
   createAnnouncement,
   sendAnnouncementNotification,
-} from "@/lib/announcements/create-announcement";
-import {
   deleteAnnouncement,
   updateAnnouncement,
-} from "@/lib/announcements/update-announcement";
+} from "@/domains/announcements";
 import {
   sendAiAssistedDirectChatMessage,
   type DirectChatSupabase,
