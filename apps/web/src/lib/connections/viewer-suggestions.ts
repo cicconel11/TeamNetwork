@@ -5,8 +5,11 @@ import {
 } from "@/lib/people-graph/suggestions";
 import type { DisplayReadySuggestedConnection } from "@/lib/people-graph/scoring";
 
-// Page surfaces show more than the chat tool's 3, but stay well under the engine's
-// MAX_SUGGESTIONS_LIMIT (25). One knob, threaded into the engine's display_limit.
+// Page surfaces show more than the chat tool's 3. This single knob is threaded
+// into BOTH the engine's scored `limit` and its `display_limit`: the engine caps
+// display at the scored pool size, so the scored limit must be >= the display cap
+// for it to be reachable. clampSuggestionsLimit further bounds it to
+// MAX_SUGGESTIONS_LIMIT (25), well above this value.
 export const CONNECTIONS_PAGE_DISPLAY_LIMIT = 12;
 
 export type ViewerSuggestionsState = "ok" | "no_source";
@@ -100,6 +103,8 @@ export async function getViewerConnectionSuggestions(input: {
     return { state: "no_source", suggestions: [] };
   }
 
+  const displayLimit = input.displayLimit ?? CONNECTIONS_PAGE_DISPLAY_LIMIT;
+
   try {
     const result = await suggestConnections({
       orgId,
@@ -107,7 +112,12 @@ export async function getViewerConnectionSuggestions(input: {
       args: {
         person_type: source.person_type,
         person_id: source.person_id,
-        display_limit: input.displayLimit ?? CONNECTIONS_PAGE_DISPLAY_LIMIT,
+        // The engine collapses display_limit down to the scored `limit`
+        // (Math.min), so we must size the scored pool to at least the display
+        // cap. clampSuggestionsLimit caps this at MAX_SUGGESTIONS_LIMIT (25);
+        // our display caps stay well under it, so no constant import is needed.
+        limit: displayLimit,
+        display_limit: displayLimit,
       },
     });
     return { state: "ok", suggestions: result.suggestions };
