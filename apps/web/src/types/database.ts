@@ -741,6 +741,7 @@ export type Database = {
           linkedin_url: string | null
           major: string | null
           notes: string | null
+          open_to_networking: boolean
           organization_id: string
           phone_number: string | null
           photo_url: string | null
@@ -780,6 +781,7 @@ export type Database = {
           linkedin_url?: string | null
           major?: string | null
           notes?: string | null
+          open_to_networking?: boolean
           organization_id: string
           phone_number?: string | null
           photo_url?: string | null
@@ -819,6 +821,7 @@ export type Database = {
           linkedin_url?: string | null
           major?: string | null
           notes?: string | null
+          open_to_networking?: boolean
           organization_id?: string
           phone_number?: string | null
           photo_url?: string | null
@@ -4204,6 +4207,7 @@ export type Database = {
           last_name: string
           linkedin_url: string | null
           major: string | null
+          open_to_networking: boolean
           organization_id: string
           photo_url: string | null
           role: string | null
@@ -4236,6 +4240,7 @@ export type Database = {
           last_name: string
           linkedin_url?: string | null
           major?: string | null
+          open_to_networking?: boolean
           organization_id: string
           photo_url?: string | null
           role?: string | null
@@ -4268,6 +4273,7 @@ export type Database = {
           last_name?: string
           linkedin_url?: string | null
           major?: string | null
+          open_to_networking?: boolean
           organization_id?: string
           photo_url?: string | null
           role?: string | null
@@ -5875,6 +5881,7 @@ export type Database = {
           linkedin_url: string | null
           major: string | null
           notes: string | null
+          open_to_networking: boolean
           organization_id: string
           phone_number: string | null
           photo_url: string | null
@@ -5906,6 +5913,7 @@ export type Database = {
           linkedin_url?: string | null
           major?: string | null
           notes?: string | null
+          open_to_networking?: boolean
           organization_id: string
           phone_number?: string | null
           photo_url?: string | null
@@ -5937,6 +5945,7 @@ export type Database = {
           linkedin_url?: string | null
           major?: string | null
           notes?: string | null
+          open_to_networking?: boolean
           organization_id?: string
           phone_number?: string | null
           photo_url?: string | null

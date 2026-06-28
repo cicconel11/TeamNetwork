@@ -1,0 +1,12 @@
+-- Drop the dead idx_alumni_open_to_networking partial index.
+--
+-- The prior migration (20261227000000_open_to_networking_flag.sql) created this
+-- index alongside idx_parents_open_to_networking and its header claimed "the
+-- engine filters candidates/parents by open_to_networking per org". That claim
+-- is accurate for parents but inaccurate for alumni: no SQL query filters alumni
+-- by open_to_networking.
+--
+-- idx_alumni_open_to_networking was never used: alumni source-consent is enforced in application code
+-- (isConnectionEdgeAllowed in suggestions.ts), no SQL query filters alumni by open_to_networking.
+-- Drop it to remove write-amplification on the alumni table. The parents index stays (it IS used).
+DROP INDEX IF EXISTS public.idx_alumni_open_to_networking;

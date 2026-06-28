@@ -16,6 +16,7 @@ export interface MemberPersonRow {
   role: string | null;
   current_company: string | null;
   graduation_year: number | null;
+  open_to_networking: boolean | null;
   created_at: string | null;
 }
 
@@ -34,6 +35,25 @@ export interface AlumniPersonRow {
   graduation_year: number | null;
   position_title: string | null;
   job_title: string | null;
+  open_to_networking: boolean | null;
+  created_at: string | null;
+}
+
+export interface ParentPersonRow {
+  id: string;
+  organization_id: string;
+  user_id: string | null;
+  deleted_at: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  major: string | null;
+  current_company: string | null;
+  industry: string | null;
+  current_city: string | null;
+  position_title: string | null;
+  job_title: string | null;
+  open_to_networking: boolean | null;
   created_at: string | null;
 }
 
@@ -49,10 +69,11 @@ export interface MentorshipPairSyncRow {
 export interface ProjectedPerson {
   orgId: string;
   personKey: string;
-  personType: "member" | "alumni";
+  personType: "member" | "alumni" | "parent";
   personId: string;
   memberId: string | null;
   alumniId: string | null;
+  parentId: string | null;
   userId: string | null;
   name: string;
   email: string | null;
@@ -63,13 +84,20 @@ export interface ProjectedPerson {
   roleFamily: string | null;
   graduationYear: number | null;
   currentCity: string | null;
+  // Self-set networking-consent flag (members/alumni/parents alike). The engine
+  // gates alumni→alumni edges on the SOURCE's value, and only surfaces parents
+  // who opted in. Defaults false when no contributing row has set it.
+  openToNetworking: boolean;
 }
 
 export const MEMBER_PERSON_SELECT =
-  "id, organization_id, user_id, deleted_at, status, first_name, last_name, email, role, current_company, graduation_year, created_at";
+  "id, organization_id, user_id, deleted_at, status, first_name, last_name, email, role, current_company, graduation_year, open_to_networking, created_at";
 
 export const ALUMNI_PERSON_SELECT =
-  "id, organization_id, user_id, deleted_at, first_name, last_name, email, major, current_company, industry, current_city, graduation_year, position_title, job_title, created_at";
+  "id, organization_id, user_id, deleted_at, first_name, last_name, email, major, current_company, industry, current_city, graduation_year, position_title, job_title, open_to_networking, created_at";
+
+export const PARENT_PERSON_SELECT =
+  "id, organization_id, user_id, deleted_at, first_name, last_name, email, major, current_company, industry, current_city, position_title, job_title, open_to_networking, created_at";
 
 export const MENTORSHIP_PAIR_SELECT =
   "id, organization_id, mentor_user_id, mentee_user_id, status, deleted_at";
@@ -136,7 +164,7 @@ function projectMemberCareer(member: MemberPersonRow) {
 }
 
 export function buildPersonKey(
-  sourceTable: "members" | "alumni",
+  sourceTable: "members" | "alumni" | "parents",
   sourceId: string,
   userId: string | null | undefined
 ): string {
@@ -144,7 +172,9 @@ export function buildPersonKey(
     return `user:${userId}`;
   }
 
-  return sourceTable === "members" ? `member:${sourceId}` : `alumni:${sourceId}`;
+  if (sourceTable === "members") return `member:${sourceId}`;
+  if (sourceTable === "alumni") return `alumni:${sourceId}`;
+  return `parent:${sourceId}`;
 }
 
 export function isActiveMemberRow(row: MemberPersonRow): boolean {
@@ -155,13 +185,24 @@ export function isActiveAlumniRow(row: AlumniPersonRow): boolean {
   return row.deleted_at === null;
 }
 
+export function isActiveParentRow(row: ParentPersonRow): boolean {
+  return row.deleted_at === null;
+}
+
 export function isActiveMentorshipPairRow(row: MentorshipPairSyncRow): boolean {
   return row.deleted_at === null && row.status === "active";
+}
+
+function anyOptedIn(
+  ...rowSets: Array<Array<{ open_to_networking: boolean | null }>>
+): boolean {
+  return rowSets.some((rows) => rows.some((row) => row.open_to_networking === true));
 }
 
 export function buildProjectedPeople(input: {
   members: MemberPersonRow[];
   alumni: AlumniPersonRow[];
+  parents?: ParentPersonRow[];
 }): Map<string, ProjectedPerson> {
   const groups = new Map<
     string,
@@ -171,35 +212,41 @@ export function buildProjectedPeople(input: {
       userId: string | null;
       members: MemberPersonRow[];
       alumni: AlumniPersonRow[];
+      parents: ParentPersonRow[];
     }
   >();
 
+  const ensureGroup = (orgId: string, personKey: string, userId: string | null) => {
+    const groupKey = `${orgId}:${personKey}`;
+    const existing = groups.get(groupKey);
+    if (existing) {
+      return existing;
+    }
+    const group = {
+      orgId,
+      personKey,
+      userId,
+      members: [] as MemberPersonRow[],
+      alumni: [] as AlumniPersonRow[],
+      parents: [] as ParentPersonRow[],
+    };
+    groups.set(groupKey, group);
+    return group;
+  };
+
   for (const member of input.members.filter(isActiveMemberRow).sort(stableRowSort)) {
     const personKey = buildPersonKey("members", member.id, member.user_id);
-    const groupKey = `${member.organization_id}:${personKey}`;
-    const group = groups.get(groupKey) ?? {
-      orgId: member.organization_id,
-      personKey,
-      userId: member.user_id,
-      members: [],
-      alumni: [],
-    };
-    group.members.push(member);
-    groups.set(groupKey, group);
+    ensureGroup(member.organization_id, personKey, member.user_id).members.push(member);
   }
 
   for (const alumni of input.alumni.filter(isActiveAlumniRow).sort(stableRowSort)) {
     const personKey = buildPersonKey("alumni", alumni.id, alumni.user_id);
-    const groupKey = `${alumni.organization_id}:${personKey}`;
-    const group = groups.get(groupKey) ?? {
-      orgId: alumni.organization_id,
-      personKey,
-      userId: alumni.user_id,
-      members: [],
-      alumni: [],
-    };
-    group.alumni.push(alumni);
-    groups.set(groupKey, group);
+    ensureGroup(alumni.organization_id, personKey, alumni.user_id).alumni.push(alumni);
+  }
+
+  for (const parent of (input.parents ?? []).filter(isActiveParentRow).sort(stableRowSort)) {
+    const personKey = buildPersonKey("parents", parent.id, parent.user_id);
+    ensureGroup(parent.organization_id, personKey, parent.user_id).parents.push(parent);
   }
 
   const projected = new Map<string, ProjectedPerson>();
@@ -207,9 +254,16 @@ export function buildProjectedPeople(input: {
   for (const [groupKey, group] of groups.entries()) {
     const primaryMember = group.members[0] ?? null;
     const primaryAlumni = group.alumni[0] ?? null;
+    const primaryParent = group.parents[0] ?? null;
     const projectedMemberCareers = group.members.map(projectMemberCareer);
-    const personType = primaryMember ? "member" : "alumni";
-    const personId = primaryMember?.id ?? primaryAlumni?.id;
+    // Personhood precedence: member > alumni > parent. A linked user who is both a
+    // member and a parent surfaces as a member (their primary in-org identity).
+    const personType: ProjectedPerson["personType"] = primaryMember
+      ? "member"
+      : primaryAlumni
+        ? "alumni"
+        : "parent";
+    const personId = primaryMember?.id ?? primaryAlumni?.id ?? primaryParent?.id;
 
     if (!personId) {
       continue;
@@ -234,6 +288,15 @@ export function buildProjectedPeople(input: {
           })
         )
       ) ??
+      pickFirstText(
+        group.parents.map((parent) =>
+          buildDisplayName({
+            firstName: parent.first_name,
+            lastName: parent.last_name,
+            email: parent.email,
+          })
+        )
+      ) ??
       `Person ${group.personKey}`;
 
     projected.set(groupKey, {
@@ -243,24 +306,33 @@ export function buildProjectedPeople(input: {
       personId,
       memberId: primaryMember?.id ?? null,
       alumniId: primaryAlumni?.id ?? null,
+      parentId: primaryParent?.id ?? null,
       userId: group.userId,
       name,
       email: pickFirstText([
         ...group.members.map((member) => member.email),
         ...group.alumni.map((alumni) => alumni.email),
+        ...group.parents.map((parent) => parent.email),
       ]),
       role: pickFirstText([
         primaryAlumni?.position_title,
         primaryAlumni?.job_title,
+        primaryParent?.position_title,
+        primaryParent?.job_title,
         primaryMember?.role,
       ]),
-      major: pickFirstText(group.alumni.map((alumni) => alumni.major)),
+      major: pickFirstText([
+        ...group.alumni.map((alumni) => alumni.major),
+        ...group.parents.map((parent) => parent.major),
+      ]),
       currentCompany: pickFirstText([
         ...group.alumni.map((alumni) => alumni.current_company),
+        ...group.parents.map((parent) => parent.current_company),
         ...projectedMemberCareers.map((career) => career.employer),
       ]),
       industry: pickFirstText([
         ...group.alumni.map((alumni) => canonicalizeIndustry(alumni.industry)),
+        ...group.parents.map((parent) => canonicalizeIndustry(parent.industry)),
         ...projectedMemberCareers.map((career) => career.canonicalIndustry),
       ]),
       roleFamily: pickFirstText([
@@ -271,13 +343,24 @@ export function buildProjectedPeople(input: {
             canonicalizeIndustry(alumni.industry)
           )
         ),
+        ...group.parents.map((parent) =>
+          canonicalizeRoleFamily(
+            pickFirstText([parent.position_title, parent.job_title]),
+            parent.current_company,
+            canonicalizeIndustry(parent.industry)
+          )
+        ),
         ...projectedMemberCareers.map((career) => career.roleFamily),
       ]),
       graduationYear: pickFirstNumber([
         ...group.alumni.map((alumni) => alumni.graduation_year),
         ...group.members.map((member) => member.graduation_year),
       ]),
-      currentCity: pickFirstText(group.alumni.map((alumni) => alumni.current_city)),
+      currentCity: pickFirstText([
+        ...group.alumni.map((alumni) => alumni.current_city),
+        ...group.parents.map((parent) => parent.current_city),
+      ]),
+      openToNetworking: anyOptedIn(group.members, group.alumni, group.parents),
     });
   }
 
@@ -287,14 +370,20 @@ export function buildProjectedPeople(input: {
 export function buildSourcePerson(input: {
   memberRows: MemberPersonRow[];
   alumniRows: AlumniPersonRow[];
+  parentRows?: ParentPersonRow[];
 }): ProjectedPerson | null {
-  if (input.memberRows.length === 0 && input.alumniRows.length === 0) {
+  if (
+    input.memberRows.length === 0 &&
+    input.alumniRows.length === 0 &&
+    (input.parentRows?.length ?? 0) === 0
+  ) {
     return null;
   }
 
   const projected = buildProjectedPeople({
     members: input.memberRows,
     alumni: input.alumniRows,
+    parents: input.parentRows ?? [],
   });
   const entry = projected.values().next();
   return entry.done ? null : entry.value;

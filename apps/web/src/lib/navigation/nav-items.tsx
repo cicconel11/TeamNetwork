@@ -26,6 +26,7 @@ import {
   ParentsIcon,
   ShieldCheckIcon,
   SparklesIcon,
+  ConnectionsIcon,
 } from "@/components/icons/nav-icons";
 
 export type NavGroupId = "people" | "community" | "activity" | "finance" | "admin";
@@ -77,6 +78,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "/alumni", label: "Alumni", i18nKey: "alumni", icon: GraduationCapIcon, roles: ["admin", "active_member", "alumni", "parent"], requiresAlumni: true, group: "people" },
   { href: "/parents", label: "Parents", i18nKey: "parents", icon: ParentsIcon, roles: ["admin", "active_member", "parent"], requiresParents: true, group: "people" },
   { href: "/mentorship", label: "Mentorship", i18nKey: "mentorship", icon: HandshakeIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "people" },
+  { href: "/connections", label: "Connections", i18nKey: "connections", icon: ConnectionsIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "people" },
   { href: "/workouts", label: "Workouts", i18nKey: "workouts", icon: DumbbellIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "activity" },
   { href: "/competition", label: "Competition", i18nKey: "competition", icon: AwardIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "activity" },
   { href: "/announcements", label: "Announcements", i18nKey: "announcements", icon: MegaphoneIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
