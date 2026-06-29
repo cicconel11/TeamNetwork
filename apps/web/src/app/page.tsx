@@ -21,7 +21,6 @@ import { BackgroundMesh } from "@/components/marketing/BackgroundMesh";
 import { NetworkConstellation } from "@/components/marketing/NetworkConstellation";
 import { LandingFooter } from "@/components/marketing/LandingFooter";
 import {
-  HERO_PROOF_POINTS,
   MARQUEE_ORG_TYPES,
   PLAYBOOK_STEPS,
   RULEBOOK_ITEMS,
@@ -87,7 +86,7 @@ export default async function LandingPage() {
       <LandingHeader />
 
       {/* Hero - "The Emergence" */}
-      <Hero proofPoints={HERO_PROOF_POINTS} />
+      <Hero />
 
       {/* Organization types ribbon — quiet small-caps marquee, no boxes */}
       <Section tone="tint" divider="both" padY="sm" className="overflow-hidden">
