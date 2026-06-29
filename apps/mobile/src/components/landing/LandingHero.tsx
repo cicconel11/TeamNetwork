@@ -13,6 +13,7 @@ import { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -117,22 +118,26 @@ export function LandingHero({
       </View>
 
       {/* Secondary CTA — Create Account.
-          Outline variant defaults to emerald — must override to white. */}
-      <View style={styles.ctaWrap}>
-        <Button
-          fullWidth
-          size="lg"
-          variant="outline"
-          primaryColor="#ffffff"
-          primaryForeground="#0f172a"
-          onPress={onCreateAccount}
-          disabled={googleLoading}
-          accessibilityLabel="Create account"
-          accessibilityHint="Navigates to the sign-up screen"
-        >
-          Create Account
-        </Button>
-      </View>
+          Outline variant defaults to emerald — must override to white.
+          Apple Guideline 3.1.1 (Business): in-app account registration is
+          removed on iOS. Hidden on iOS; Android keeps the Create Account flow. */}
+      {Platform.OS !== "ios" && (
+        <View style={styles.ctaWrap}>
+          <Button
+            fullWidth
+            size="lg"
+            variant="outline"
+            primaryColor="#ffffff"
+            primaryForeground="#0f172a"
+            onPress={onCreateAccount}
+            disabled={googleLoading}
+            accessibilityLabel="Create account"
+            accessibilityHint="Navigates to the sign-up screen"
+          >
+            Create Account
+          </Button>
+        </View>
+      )}
 
       {/* Tertiary — Continue with Google. Custom Pressable so we can show
           the colored G chip; Button has no sub-icon slot for it. */}

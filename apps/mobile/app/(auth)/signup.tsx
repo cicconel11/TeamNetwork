@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Link, useRouter, useNavigation } from "expo-router";
+import { Link, Redirect, useRouter, useNavigation } from "expo-router";
 import { ChevronLeft, Eye, EyeOff } from "lucide-react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
@@ -370,6 +370,14 @@ export default function SignupScreen() {
     ];
   };
 
+  // Apple Guideline 3.1.1 (Business): in-app account registration is treated as
+  // access to an external purchase mechanism, so it is removed entirely on iOS.
+  // The screen is unreachable (no entry points) and self-redirects to sign-in as
+  // a defensive guard against deep links. Android keeps the full flow.
+  if (Platform.OS === "ios") {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   return (
     <View style={styles.container}>
       {/* Gradient Header */}
@@ -395,8 +403,9 @@ export default function SignupScreen() {
       </LinearGradient>
 
       {/* White Content Area */}
+      {/* iOS returns above (Apple 3.1.1), so only Android/web reach this — use "height". */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior="height"
         style={styles.keyboardView}
       >
         <ScrollView
