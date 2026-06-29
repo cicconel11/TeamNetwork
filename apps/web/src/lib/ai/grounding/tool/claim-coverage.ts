@@ -452,10 +452,24 @@ export function verifyListDonations(
   return failures;
 }
 
+/**
+ * True when at least one row carries `key`. Read tools can now project fields
+ * away (the model requests a lean `fields` set), so a key being absent from
+ * EVERY row means the field was never returned — not that a claim is unsupported.
+ * In that case the verifier must skip checks against that field rather than
+ * false-flag a correct answer as ungrounded.
+ */
+function someRowHasKey(data: unknown[], key: string): boolean {
+  return data.some((row) => row != null && typeof row === "object" && key in row);
+}
+
 export function verifyListMembers(content: string, data: unknown): string[] {
   if (!Array.isArray(data)) {
     return ["list_members returned non-array data"];
   }
+
+  const hasName = someRowHasKey(data, "name");
+  const hasEmail = someRowHasKey(data, "email");
 
   const names = new Set(
     data
@@ -485,24 +499,30 @@ export function verifyListMembers(content: string, data: unknown): string[] {
     }
   }
 
-  for (const email of extractEmails(content)) {
-    if (!emails.has(normalizeIdentifier(email))) {
-      failures.push(`member email ${email} was not present in tool rows`);
+  // Only check email/name claims when the tool actually returned that field;
+  // if the model projected it away there is nothing to verify against.
+  if (hasEmail) {
+    for (const email of extractEmails(content)) {
+      if (!emails.has(normalizeIdentifier(email))) {
+        failures.push(`member email ${email} was not present in tool rows`);
+      }
     }
   }
 
-  for (const candidate of extractListEntryHeads(content)) {
-    const normalizedCandidate = normalizeMemberCandidate(candidate);
-    if (
-      isIgnoredMemberCandidate(candidate) ||
-      normalizedCandidate.includes("@") ||
-      normalizedCandidate.length < 3 ||
-      /^your organization/.test(normalizedCandidate)
-    ) {
-      continue;
-    }
-    if (!names.has(normalizedCandidate)) {
-      failures.push(`member name ${candidate} was not present in tool rows`);
+  if (hasName) {
+    for (const candidate of extractListEntryHeads(content)) {
+      const normalizedCandidate = normalizeMemberCandidate(candidate);
+      if (
+        isIgnoredMemberCandidate(candidate) ||
+        normalizedCandidate.includes("@") ||
+        normalizedCandidate.length < 3 ||
+        /^your organization/.test(normalizedCandidate)
+      ) {
+        continue;
+      }
+      if (!names.has(normalizedCandidate)) {
+        failures.push(`member name ${candidate} was not present in tool rows`);
+      }
     }
   }
 
@@ -513,6 +533,9 @@ export function verifyListEvents(content: string, data: unknown): string[] {
   if (!Array.isArray(data)) {
     return ["list_events returned non-array data"];
   }
+
+  const hasTitle = someRowHasKey(data, "title");
+  const hasStartDate = someRowHasKey(data, "start_date");
 
   const titles = new Set(
     data
@@ -532,15 +555,20 @@ export function verifyListEvents(content: string, data: unknown): string[] {
   );
 
   const failures: string[] = [];
-  for (const title of extractQuotedTitles(content)) {
-    if (!titles.has(normalizeIdentifier(title))) {
-      failures.push(`event title ${title} was not present in tool rows`);
+  // Skip title/date checks when the model projected those fields away.
+  if (hasTitle) {
+    for (const title of extractQuotedTitles(content)) {
+      if (!titles.has(normalizeIdentifier(title))) {
+        failures.push(`event title ${title} was not present in tool rows`);
+      }
     }
   }
 
-  for (const date of extractMentionedDates(content)) {
-    if (!dates.has(date)) {
-      failures.push(`event date ${date} was not present in tool rows`);
+  if (hasStartDate) {
+    for (const date of extractMentionedDates(content)) {
+      if (!dates.has(date)) {
+        failures.push(`event date ${date} was not present in tool rows`);
+      }
     }
   }
 

@@ -77,17 +77,27 @@ const FIXTURES: TableFixtures = {
 };
 
 describe("list_members — lean default", () => {
-  it("returns only id, name, role, email when fields omitted", async () => {
+  it("returns the lean default set (identity + consumer-required fields) when fields omitted", async () => {
     const result = await execute({}, FIXTURES);
     assert.equal(result.kind, "ok");
     if (result.kind !== "ok") return;
     const rows = result.data as Array<Record<string, unknown>>;
     assert.equal(rows.length, 1);
-    assert.deepEqual(Object.keys(rows[0]).sort(), ["email", "id", "name", "role"]);
-    // Heavy fields absent by default.
+    // Lean default: identity + the fields deterministic consumers depend on
+    // (created_at for date metadata, current_company for global-lookup matching).
+    assert.deepEqual(Object.keys(rows[0]).sort(), [
+      "created_at",
+      "current_company",
+      "email",
+      "id",
+      "name",
+      "role",
+    ]);
+    // Heavy LinkedIn fields stay absent by default.
     assert.equal("summary" in rows[0], false);
     assert.equal("skills" in rows[0], false);
-    assert.equal("current_company" in rows[0], false);
+    assert.equal("headline" in rows[0], false);
+    assert.equal("industry" in rows[0], false);
   });
 
   it("keeps name + email (grounding verifier depends on them)", async () => {

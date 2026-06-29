@@ -642,21 +642,15 @@ test("list_members returns org-scoped members", async () => {
 
   assert.ok(Array.isArray(result.data));
   assert.equal((result.data as any[]).length, 1);
+  // Lean default: identity + the fields deterministic consumers require
+  // (created_at, current_company). Heavy LinkedIn fields are opt-in via `fields`.
   assert.deepEqual((result.data as any[])[0], {
     id: "m1",
-    user_id: "u1",
-    status: "active",
     role: "admin",
     created_at: "2026-03-20T12:00:00Z",
     name: "Alice Jones",
     email: "a@b.com",
     current_company: null,
-    industry: null,
-    headline: null,
-    summary: null,
-    skills: null,
-    certifications: null,
-    languages: null,
   });
 
   const authQuery = stub.queries.find((q) => q.table === "user_organization_roles");
@@ -672,6 +666,21 @@ test("list_members returns org-scoped members", async () => {
   assert.ok(memberQuery.filters.some((f: any) => f.col === "status" && f.val === "active"));
   assert.deepEqual(memberQuery.orderBy, { column: "created_at", ascending: false });
   assert.equal(memberQuery.limitValue, 20);
+});
+
+test("list_members returns heavy fields when requested via `fields`", async () => {
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "list_members",
+      args: { fields: ["name", "email", "industry"] },
+    })
+  );
+  assert.ok(Array.isArray(result.data));
+  assert.deepEqual((result.data as any[])[0], {
+    name: "Alice Jones",
+    email: "a@b.com",
+    industry: null,
+  });
 });
 
 test("list_members trims whitespace when composing a normalized name", async () => {

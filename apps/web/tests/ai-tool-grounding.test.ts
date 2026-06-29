@@ -1105,3 +1105,61 @@ test("suggest_mentees flags an unsupported reason code", () => {
   assert.equal(result.grounded, false);
   assert.ok(result.failures.some((f) => /suggest_mentees.*unsupported reason shared_company/.test(f)));
 });
+
+/* ── projection tolerance: verifiers must not false-flag projected-away fields ─ */
+
+test("verifyListMembers does not flag an email when email was projected away", () => {
+  // Model called list_members with fields:['name','summary'] — no email key.
+  const result = verifyToolBackedResponse({
+    content: "Reach out to ada@example.com about the finance mentorship.",
+    toolResults: [
+      {
+        name: "list_members",
+        data: [{ name: "Ada Lovelace", summary: "Finance leader" }],
+      },
+    ],
+  });
+  assert.equal(result.grounded, true, result.failures.join("; "));
+});
+
+test("verifyListMembers still flags a bogus email when email field IS present", () => {
+  const result = verifyToolBackedResponse({
+    content: "Email ghost@example.com to connect.",
+    toolResults: [
+      {
+        name: "list_members",
+        data: [{ name: "Ada Lovelace", email: "ada@example.com" }],
+      },
+    ],
+  });
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /ghost@example\.com.*not present/i.test(f)));
+});
+
+test("verifyListEvents does not flag a title when title was projected away", () => {
+  // Model called list_events with fields:['start_date','location'] — no title.
+  const result = verifyToolBackedResponse({
+    content: 'The "Alumni Gala" is on the calendar.',
+    toolResults: [
+      {
+        name: "list_events",
+        data: [{ start_date: "2026-07-01T12:00:00.000Z", location: "Hall" }],
+      },
+    ],
+  });
+  assert.equal(result.grounded, true, result.failures.join("; "));
+});
+
+test("verifyListEvents still flags a bogus title when title field IS present", () => {
+  const result = verifyToolBackedResponse({
+    content: 'The "Phantom Event" is scheduled.',
+    toolResults: [
+      {
+        name: "list_events",
+        data: [{ title: "Alumni Gala", start_date: "2026-07-01T12:00:00.000Z" }],
+      },
+    ],
+  });
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /phantom event.*not present/i.test(f)));
+});

@@ -143,12 +143,24 @@ export const MEMBER_OUTPUT_FIELDS = [
 
 export type MemberOutputField = (typeof MEMBER_OUTPUT_FIELDS)[number];
 
-/** Lean default: identity + contact only. Heavy LinkedIn fields are opt-in. */
+/**
+ * Lean default for list_members. Drops the heavy LinkedIn fields (summary,
+ * headline, skills, certifications, languages, industry) — those are opt-in via
+ * `fields`. The keys below are the minimum the DETERMINISTIC consumers require
+ * and therefore cannot be trimmed by default:
+ *  - id, name, role, email — identity + grounding (verifyListMembers).
+ *  - created_at — "added {date}" in formatMembersResponse / formatLookupPersonRow.
+ *  - current_company — matched by the global-lookup rowMatchesLookup() ("who
+ *    works at Google?"), a server path the model does not control.
+ * Do not remove these to save tokens without first updating those consumers.
+ */
 export const MEMBER_LEAN_DEFAULT_FIELDS: readonly MemberOutputField[] = [
   "id",
   "name",
   "role",
   "email",
+  "created_at",
+  "current_company",
 ];
 
 export const EVENT_OUTPUT_FIELDS = [

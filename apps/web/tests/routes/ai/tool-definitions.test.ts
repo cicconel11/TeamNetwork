@@ -101,8 +101,13 @@ test("list_members has limit parameter but no status parameter", () => {
   assert.ok(props.limit);
   assert.equal(props.limit.type, "integer");
   assert.equal(props.limit.maximum, 50);
-  assert.match(tool.function.description, /best available human name/i);
+  // Lean-default behavior: the description advertises a lean default + opt-in
+  // `fields` for heavy LinkedIn fields (was: "best available human name").
+  assert.match(tool.function.description, /lean row per member/i);
   assert.match(tool.function.description, /email-only member or admin account/i);
+  // Field projection: `fields` param present and validated as an enum array.
+  assert.ok(props.fields);
+  assert.equal(props.fields.type, "array");
   // Amendment #2: No status filter — alumni/parents are separate tables
   assert.equal(props.status, undefined);
 });

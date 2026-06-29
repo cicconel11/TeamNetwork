@@ -1,4 +1,9 @@
 import type OpenAI from "openai";
+import {
+  EVENT_OUTPUT_FIELDS,
+  MEMBER_OUTPUT_FIELDS,
+  MEMBER_PREFERENCE_OUTPUT_FIELDS,
+} from "@/lib/ai/tools/shared";
 
 export interface ListMembersArgs {
   limit?: number;
@@ -281,25 +286,10 @@ const TOOL_BY_NAME = {
             type: "array" as const,
             items: {
               type: "string" as const,
-              enum: [
-                "id",
-                "user_id",
-                "status",
-                "role",
-                "created_at",
-                "name",
-                "email",
-                "current_company",
-                "industry",
-                "headline",
-                "summary",
-                "skills",
-                "certifications",
-                "languages",
-              ] as const,
+              enum: MEMBER_OUTPUT_FIELDS,
             },
             description:
-              "Optional. Which fields to return per member. Omit for the lean default (id, name, role, email). Add heavy fields like 'summary' or 'skills' only when the question needs LinkedIn bios — they cost many tokens.",
+              "Optional. Which fields to return per member. Omit for the lean default (id, name, role, email, created_at, current_company). Add heavy fields like 'summary' or 'skills' only when the question needs LinkedIn bios — they cost many tokens. When you filter by industry/skill/etc, include that field so the match is visible.",
           },
         },
         additionalProperties: false as const,
@@ -330,14 +320,7 @@ const TOOL_BY_NAME = {
             type: "array" as const,
             items: {
               type: "string" as const,
-              enum: [
-                "id",
-                "title",
-                "start_date",
-                "end_date",
-                "location",
-                "description_preview",
-              ] as const,
+              enum: EVENT_OUTPUT_FIELDS,
             },
             description:
               "Optional. Return only these fields to save tokens. Omit to return all event fields. e.g. ['title','start_date'] when you only need a schedule.",
@@ -1589,7 +1572,7 @@ const TOOL_BY_NAME = {
             type: "array" as const,
             items: {
               type: "string" as const,
-              enum: ["user_id", "name", "email", "as_mentor", "as_mentee"] as const,
+              enum: MEMBER_PREFERENCE_OUTPUT_FIELDS,
             },
             description:
               "Optional. Return only these per-member fields to save tokens. Omit to return the full shape. e.g. ['name','as_mentor'] when you only need mentor profiles.",

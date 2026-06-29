@@ -584,7 +584,11 @@ export function formatEventsResponse(data: unknown): string | null {
         formatIsoDate((row as { start_date?: unknown }).start_date),
         getNonEmptyString((row as { location?: unknown }).location),
       ].filter((value): value is string => Boolean(value));
-      const description = getNonEmptyString((row as { description?: unknown }).description);
+      // list_events now emits a truncated `description_preview`; fall back to a
+      // raw `description` for any caller still passing the full field.
+      const description =
+        getNonEmptyString((row as { description_preview?: unknown }).description_preview) ??
+        getNonEmptyString((row as { description?: unknown }).description);
 
       return { title, metadata, description };
     })
