@@ -6,10 +6,10 @@ import Image from "next/image";
 import { ButtonLink } from "@/components/ui";
 
 const NAV_LINKS = [
-  { href: "#features", label: "Features" },
-  { href: "#pricing", label: "Pricing" },
+  { href: "/#features", label: "Features", section: "features" },
+  { href: "/#pricing", label: "Pricing", section: "pricing" },
   { href: "/demos", label: "Demos" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/#faq", label: "FAQ", section: "faq" },
   { href: "/blog", label: "Blog" },
   { href: "/terms", label: "Terms" },
 ] as const;
@@ -38,8 +38,8 @@ function useActiveSection(): string | null {
 
   useEffect(() => {
     const sectionIds = NAV_LINKS
-      .filter((link) => link.href.startsWith("#"))
-      .map((link) => link.href.slice(1));
+      .map((link) => ("section" in link ? link.section : null))
+      .filter(Boolean) as string[];
 
     const sections = sectionIds
       .map((id) => document.getElementById(id))
@@ -54,7 +54,7 @@ function useActiveSection(): string | null {
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
 
         if (visible.length > 0) {
-          setActive(`#${visible[0].target.id}`);
+          setActive(visible[0].target.id);
         }
       },
       { rootMargin: "-20% 0px -60% 0px", threshold: 0 }
@@ -146,7 +146,7 @@ export function LandingHeader() {
               key={link.href}
               href={link.href}
               className={`transition-colors ${
-                activeSection === link.href
+                "section" in link && activeSection === link.section
                   ? "nav-link-active"
                   : "text-landing-cream/55 hover:text-landing-cream"
               }`}
