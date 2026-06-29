@@ -12,12 +12,13 @@ import { Container } from "@/components/marketing/Container";
 import { Section, SectionEyebrow } from "@/components/marketing/Section";
 import {
   BackToTop,
-  Confetti,
   FAQAccordion,
-  FeaturesGrid,
+  FeatureShowcase,
   LandingAnimations,
   LandingHeader,
 } from "@/components/marketing/LandingClientComponents";
+import { BackgroundMesh } from "@/components/marketing/BackgroundMesh";
+import { NetworkConstellation } from "@/components/marketing/NetworkConstellation";
 import {
   HERO_PROOF_POINTS,
   MARQUEE_ORG_TYPES,
@@ -66,14 +67,20 @@ export default async function LandingPage() {
   }
 
   return (
-    <div id="top" className="landing-page relative min-h-screen overflow-x-clip bg-landing-navy text-landing-cream noise-overlay">
+    <div id="top" className="landing-page relative min-h-screen overflow-x-clip bg-landing-navy text-landing-cream">
       <LandingAnimations />
 
-      {/* Diagonal stripe background */}
-      <div className="fixed inset-0 stripe-pattern pointer-events-none" />
+      {/* Pronounced animated gradient mesh — sits behind everything (-z-20) */}
+      <BackgroundMesh />
 
-      {/* Subtle depth gradient */}
-      <div className="fixed inset-0 bg-gradient-to-b from-landing-navy via-landing-navy to-landing-navy/95 pointer-events-none" />
+      {/* Network constellation — drifting nodes + proximity edges, parallax (-z-10) */}
+      <NetworkConstellation />
+
+      {/* Soft ambient glow at the top, layered over the mesh */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[640px] bg-[radial-gradient(60%_100%_at_50%_0%,rgba(34,197,94,0.10),transparent_70%)]"
+      />
 
       {/* Header */}
       <LandingHeader />
@@ -81,30 +88,26 @@ export default async function LandingPage() {
       {/* Hero - "The Emergence" */}
       <Hero proofPoints={HERO_PROOF_POINTS} />
 
-      {/* Organization types ribbon — infinite scrolling marquee */}
+      {/* Organization types ribbon — quiet small-caps marquee, no boxes */}
       <Section tone="tint" divider="both" padY="sm" className="overflow-hidden">
-        <div
-          className="marquee-container overflow-hidden [-webkit-mask-image:linear-gradient(90deg,transparent,black_8%,black_92%,transparent)] [mask-image:linear-gradient(90deg,transparent,black_8%,black_92%,transparent)]"
-        >
+        <p className="mb-8 text-center text-xs uppercase tracking-[0.24em] text-landing-cream/35">
+          One platform for every kind of community
+        </p>
+        <div className="marquee-container overflow-hidden [-webkit-mask-image:linear-gradient(90deg,transparent,black_8%,black_92%,transparent)] [mask-image:linear-gradient(90deg,transparent,black_8%,black_92%,transparent)]">
           <div className="marquee-track" aria-label="Organization types we serve">
             {[...Array(2)].map((_, setIndex) => (
               <div
                 key={setIndex}
-                className="flex items-stretch gap-6 md:gap-8 px-2 md:px-3"
+                className="flex items-center gap-10 px-5 md:gap-14"
                 aria-hidden={setIndex > 0}
               >
                 {MARQUEE_ORG_TYPES.map((type) => (
-                  <div
+                  <span
                     key={`${setIndex}-${type}`}
-                    className="banner px-6 py-4 text-center min-w-[140px] flex-shrink-0"
+                    className="flex-shrink-0 whitespace-nowrap text-lg font-medium text-landing-cream/45 sm:text-xl"
                   >
-                    <span
-                      className="text-landing-cream/70 text-sm font-medium whitespace-nowrap"
-                      style={{ letterSpacing: "0.12em", fontVariantCaps: "all-small-caps" }}
-                    >
-                      {type}
-                    </span>
-                  </div>
+                    {type}
+                  </span>
                 ))}
               </div>
             ))}
@@ -112,169 +115,161 @@ export default async function LandingPage() {
         </div>
       </Section>
 
-      {/* How It Works - "The Playbook" */}
-      <Section padY="md">
+      {/* How it works — open, numbered, no box */}
+      <Section padY="lg">
         <Container size="lg">
-          <div className="chalkboard rounded-2xl p-6 sm:p-10 md:p-12">
-            <div className="text-center mb-16">
-              <SectionEyebrow>How it works</SectionEyebrow>
-              <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold">
-                The <span className="text-landing-cream">Playbook</span>
-              </h2>
-              <p className="scroll-reveal text-landing-cream/50 mt-4">Your game plan to get started</p>
-            </div>
-
-            <div className="hidden md:grid md:grid-cols-3 gap-8 relative">
-              <div className="absolute top-[1.75rem] inset-x-[calc((100%/3)/2)]">
-                <div className="play-route w-full" />
-              </div>
-
-              {PLAYBOOK_STEPS.map((item) => (
-                <div key={item.step} className="scroll-reveal text-center relative">
-                  <div className="play-marker mx-auto mb-6 relative z-10">
-                    <span className="font-display font-bold text-xl text-landing-cream">{item.step}</span>
-                  </div>
-                  <h3 className="font-display font-semibold text-xl text-landing-cream mb-3">{item.title}</h3>
-                  <p className="text-landing-cream/50 text-sm leading-relaxed max-w-[26ch] mx-auto">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="md:hidden mobile-timeline space-y-10">
-              {PLAYBOOK_STEPS.map((item) => (
-                <div key={item.step} className="scroll-reveal relative">
-                  <div className="play-marker mb-4">
-                    <span className="font-display font-bold text-xl text-landing-cream">{item.step}</span>
-                  </div>
-                  <h3 className="font-display font-semibold text-xl text-landing-cream mb-2">{item.title}</h3>
-                  <p className="text-landing-cream/50 text-sm leading-relaxed">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Container>
-      </Section>
-
-      {/* Features - "Trophy Case" */}
-      <Section id="features" tone="tint" divider="top" padY="md">
-        <Container size="xl">
-          <div className="text-center mb-16">
-            <SectionEyebrow>Features</SectionEyebrow>
-            <h2 className="scroll-reveal font-display text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">
-              Build Your
-              <br />
-              <span className="text-landing-cream">Community Network</span>
+          <div className="mb-16 max-w-2xl">
+            <SectionEyebrow>How it works</SectionEyebrow>
+            <h2 className="scroll-reveal display-section text-landing-cream">
+              From kickoff to <span className="accent-italic">connected.</span>
             </h2>
-            <p className="scroll-reveal text-landing-cream/60 max-w-prose mx-auto text-lg">
-              Expand your network, coordinate team events, and keep every member, alumni, and supporter connected.
+            <p className="scroll-reveal mt-5 text-lg leading-relaxed text-landing-cream/55">
+              Your game plan to get started — three steps, no playbook required.
             </p>
           </div>
 
-          <FeaturesGrid />
+          <div className="grid gap-x-16 gap-y-12 md:grid-cols-3">
+            {PLAYBOOK_STEPS.map((item) => (
+              <div key={item.step} className="scroll-reveal">
+                <div className="hairline-flat mb-6" />
+                <span className="block font-display text-5xl font-bold leading-none text-landing-green/80">
+                  {String(item.step).padStart(2, "0")}
+                </span>
+                <h3 className="mt-6 font-display text-xl font-semibold text-landing-cream">
+                  {item.title}
+                </h3>
+                <p className="mt-3 max-w-[34ch] text-base leading-relaxed text-landing-cream/55">
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
         </Container>
       </Section>
 
-      <div className="h-px bg-gradient-to-r from-transparent via-landing-cream/10 to-transparent" />
+      {/* Features — big centered hero windows, one per chapter */}
+      <Section id="features" tone="tint" divider="top" padY="lg">
+        <Container size="xl">
+          <div className="mb-16 max-w-2xl">
+            <SectionEyebrow>Features</SectionEyebrow>
+            <h2 className="scroll-reveal display-section text-landing-cream">
+              Everything your roster <span className="accent-italic">needs.</span>
+            </h2>
+            <p className="scroll-reveal mt-5 text-lg leading-relaxed text-landing-cream/55">
+              Expand your network, coordinate team events, and keep every member, alumni, and
+              supporter connected — in one place.
+            </p>
+          </div>
+        </Container>
+
+        {/* Breaks out wider than the text column — the media is the main event */}
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+          <FeatureShowcase />
+        </div>
+      </Section>
+
+      <div className="hairline" />
 
       {/* Pricing */}
       <PricingSection />
 
-      {/* Our Commitment — "The Rulebook" */}
-      <Section id="terms-summary" divider="top" padY="md">
+      {/* Terms — open commitments, no box */}
+      <Section id="terms-summary" divider="top" padY="lg">
         <Container size="md">
-          <div className="chalkboard rounded-2xl p-8 sm:p-12">
-            <div className="text-center mb-12">
-              <SectionEyebrow>Terms</SectionEyebrow>
-              <h2 className="scroll-reveal font-display text-3xl sm:text-4xl font-bold mb-4">
-                The <span className="text-landing-cream">Rulebook</span>
-              </h2>
-              <p className="scroll-reveal text-landing-cream/50">
-                Transparency matters. Here are the key points.
-              </p>
-            </div>
+          <div className="mb-14 max-w-2xl">
+            <SectionEyebrow>Terms</SectionEyebrow>
+            <h2 className="scroll-reveal display-section text-landing-cream">
+              Transparency, <span className="accent-italic">by default.</span>
+            </h2>
+            <p className="scroll-reveal mt-5 text-lg leading-relaxed text-landing-cream/55">
+              No fine-print games. Here are the key points up front.
+            </p>
+          </div>
 
-            <ul className="scroll-reveal grid sm:grid-cols-2 gap-x-10 gap-y-3 mb-10 sm:[&>li:nth-child(odd):not(:nth-last-child(-n+2))]:border-b sm:[&>li:nth-child(even):not(:nth-last-child(-n+2))]:border-b [&>li:not(:last-child)]:border-b [&>li]:border-landing-cream/10">
-              {RULEBOOK_ITEMS.map((item, i) => (
-                <li key={item.title} className="flex items-start gap-4 py-3">
-                  <span className="font-display text-xl text-landing-green/80 leading-none mt-0.5 flex-shrink-0 w-6 text-right">
-                    {i + 1}
+          <ul className="scroll-reveal border-t border-white/10">
+            {RULEBOOK_ITEMS.map((item, i) => (
+              <li key={item.title} className="flex items-start gap-6 border-b border-white/10 py-5">
+                <span className="w-8 flex-shrink-0 font-display text-2xl font-bold leading-none text-landing-green/70">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div className="min-w-0">
+                  <span className="font-display text-base font-semibold text-landing-cream">
+                    {item.title}
                   </span>
-                  <div className="min-w-0">
-                    <span className="font-display font-semibold text-landing-cream text-sm">{item.title}</span>
-                    <span className="text-landing-cream/65 text-sm"> — {item.text}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  <span className="text-base text-landing-cream/55"> — {item.text}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
 
-            <div className="text-center">
-              <Link
-                href="/terms"
-                className="inline-flex items-center gap-2 text-landing-cream/60 hover:text-landing-cream transition-colors group"
+          <div className="mt-10">
+            <Link
+              href="/terms"
+              className="group inline-flex items-center gap-2 text-base text-landing-cream/60 transition-colors hover:text-landing-cream"
+            >
+              <span>Read full terms</span>
+              <svg
+                className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
               >
-                <span>Read Full Terms</span>
-                <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-            </div>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
         </Container>
       </Section>
 
-      {/* FAQ - "Press Conference" */}
-      <Section id="faq" tone="tint" divider="top" padY="md">
+      {/* FAQ — clean hairline accordion */}
+      <Section id="faq" tone="tint" divider="top" padY="lg">
         <Container size="sm">
-          <div className="text-center mb-12">
+          <div className="mb-14 max-w-2xl">
             <SectionEyebrow>FAQ</SectionEyebrow>
-            <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold">
-              Press <span className="text-landing-cream">Conference</span>
+            <h2 className="scroll-reveal display-section text-landing-cream">
+              Questions, <span className="accent-italic">answered.</span>
             </h2>
-            <p className="scroll-reveal text-landing-cream/50 mt-4">Your questions, answered</p>
           </div>
 
           <FAQAccordion items={FAQ_ITEMS} />
         </Container>
       </Section>
 
-      {/* Final CTA - "Championship Moment" */}
-      <Section divider="top" padY="md" className="overflow-hidden">
-        <Confetti />
-
-        <div className="absolute top-0 left-0 w-full h-full pointer-events-none -z-10">
-          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-landing-green/10 blur-[120px]" />
+      {/* Final CTA — calm, type-led */}
+      <Section divider="top" padY="lg" className="overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-landing-green/10 blur-[140px]" />
         </div>
 
         <Container size="md" className="text-center">
-          <div className="scroll-reveal inline-block mb-8">
+          <div className="scroll-reveal mb-10 inline-block">
             <Image
               src="/TeamNetwork.png"
               alt=""
               aria-hidden="true"
               width={400}
               height={224}
-              sizes="(min-width: 1024px) 192px, (min-width: 640px) 160px, 128px"
-              className="h-32 sm:h-40 lg:h-48 w-auto object-contain mx-auto drop-shadow-[0_0_60px_rgba(34,197,94,0.2)]"
+              sizes="(min-width: 1024px) 176px, (min-width: 640px) 144px, 120px"
+              className="mx-auto h-28 w-auto object-contain sm:h-36 lg:h-44"
               priority={false}
             />
           </div>
 
-          <h2 className="scroll-reveal font-display text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 jersey-text">
-            Your Community,
-            <br />
-            <span className="text-landing-green">Connected For Good</span>
+          <h2 className="scroll-reveal display-hero mx-auto mb-7 max-w-[16ch] text-landing-cream">
+            Your community, <span className="accent-italic">connected for good.</span>
           </h2>
 
-          <p className="scroll-reveal text-xl text-landing-cream/60 mb-3 max-w-2xl mx-auto">
+          <p className="scroll-reveal mx-auto mb-3 max-w-2xl text-xl leading-relaxed text-landing-cream/60">
             Join today to create new opportunities for your organization and members.
           </p>
 
-          <p className="scroll-reveal text-sm text-landing-cream/40 mb-8">
+          <p className="scroll-reveal mb-9 text-sm text-landing-cream/40">
             Contact us for contract pricing tailored to your organization.
           </p>
 
-          <div className="scroll-reveal flex flex-col sm:flex-row gap-4 justify-center">
-            <ButtonLink href="/contact" variant="landingPrimary" size="xl" className="cta-glow">
+          <div className="scroll-reveal flex justify-center">
+            <ButtonLink href="/contact" variant="landingPrimary" size="xl">
               Request Pricing
             </ButtonLink>
           </div>

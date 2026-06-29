@@ -9,7 +9,7 @@ export { FAQAccordion } from "@/components/marketing/FAQAccordion";
 export { HeroOrgCard } from "@/components/marketing/HeroOrgCard";
 export { LandingHeader } from "@/components/marketing/LandingHeader";
 export { BackToTop } from "@/components/marketing/BackToTop";
-export { FeaturesGrid } from "@/components/marketing/FeaturesGrid";
+export { FeatureShowcase } from "@/components/marketing/FeatureShowcase";
 
 // Animation-only chunks stay client-only — they pull framer-motion / anime.js
 // and SSR'ing them would inflate the critical RSC payload without LCP benefit.

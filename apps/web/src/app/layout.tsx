@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Bitter } from "next/font/google";
+import { Bitter, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundaryProvider } from "@/components/errors/ErrorBoundaryProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
@@ -28,6 +28,16 @@ const bitter = Bitter({
   subsets: ["latin"],
   weight: ["600", "700"],
   variable: "--font-display",
+  display: "swap",
+});
+
+// Hanken Grotesk — warm humanist grotesk with true italics. Scoped to the
+// landing page only (applied via `.landing-page` in landing-styles.css); the
+// rest of the product keeps Geist (--font-sans).
+const hankenGrotesk = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-landing",
   display: "swap",
 });
 
@@ -60,7 +70,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} ${bitter.variable} antialiased`} translate="no">
+      <body className={`${geistSans.variable} ${geistMono.variable} ${bitter.variable} ${hankenGrotesk.variable} antialiased`} translate="no">
         <NextIntlClientProvider messages={messages}>
           <ThemeProvider>
             <ErrorBoundaryProvider>

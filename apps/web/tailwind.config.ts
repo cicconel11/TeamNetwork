@@ -45,6 +45,8 @@ const config: Config = {
         sans: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
         display: ["Bitter", "Georgia", "serif"],
         mono: ["Space Mono", "monospace"],
+        // Marketing shell (landing + contact/terms/etc.) — warm humanist grotesk.
+        landing: ["var(--font-landing)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         "2xl": "1rem",

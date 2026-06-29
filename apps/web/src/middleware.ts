@@ -535,6 +535,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|webmanifest)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|webmanifest|mp4|webm|mov|m4v|ogg)$).*)",
   ],
 };
