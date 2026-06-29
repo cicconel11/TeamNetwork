@@ -6,13 +6,13 @@ type PadY = "sm" | "md" | "lg";
 
 const TONE_MAP: Record<Tone, string> = {
   default: "",
-  tint: "bg-landing-navy-light/20",
+  tint: "bg-white/[0.015]",
 };
 
 const PAD_MAP: Record<PadY, string> = {
-  sm: "py-14 sm:py-16",
-  md: "py-20 sm:py-24",
-  lg: "py-24 sm:py-28",
+  sm: "py-16 sm:py-20",
+  md: "py-24 sm:py-32",
+  lg: "py-28 sm:py-40",
 };
 
 interface SectionProps {
@@ -31,9 +31,15 @@ function Divider() {
   );
 }
 
-export function SectionEyebrow({ children }: { children: ReactNode }) {
+export function SectionEyebrow({
+  children,
+  centered = false,
+}: {
+  children: ReactNode;
+  centered?: boolean;
+}) {
   return (
-    <div className="scroll-reveal inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/60 text-xs uppercase tracking-[0.2em] mb-6">
+    <div className={`scroll-reveal eyebrow-label mb-6${centered ? " is-centered" : ""}`}>
       {children}
     </div>
   );

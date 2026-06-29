@@ -41,7 +41,7 @@ export const FEATURES = [
   { title: "LinkedIn Integration", description: "Enrich profiles with LinkedIn details so members can discover career paths and expand their professional network." },
   { title: "Shared History", description: "Preserve your organization's milestones, records, media, awards, and institutional knowledge." },
   { title: "Communication", description: "Send updates to members, families, volunteers, and alumni so your community stays connected." },
-  { title: "Digital Forms", description: "Collect waivers, registrations, applications, and other documents securely online." },
+  { title: "Jobs", description: "Surface career opportunities shared across your community — alumni and members posting roles, internships, and referrals where your network can see them." },
 ];
 
 export const FAQ_ITEMS = [

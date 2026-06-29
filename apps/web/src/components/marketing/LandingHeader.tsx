@@ -116,29 +116,31 @@ export function LandingHeader() {
   return (
     <>
     <header
-      className={`relative z-20 sticky top-0 backdrop-blur-md border-b border-landing-cream/10 transition-colors duration-200 ${
-        scrolled ? "bg-landing-navy/95" : "bg-landing-navy/60"
+      className={`relative z-20 sticky top-0 transition-colors duration-300 ${
+        scrolled
+          ? "border-b border-white/10 bg-landing-navy/70 backdrop-blur-md"
+          : "border-b border-white/[0.06] bg-transparent"
       }`}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3.5 sm:px-6 sm:py-4">
         <Link href="#top" className="group flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2.5">
           <Image
-            src="/TeamNetwork.png"
+            src="/tn-mark.png"
             alt=""
-            width={541}
-            height={303}
-            sizes="28px"
-            className="h-7 w-auto shrink-0 object-contain sm:h-7"
+            width={359}
+            height={216}
+            sizes="64px"
+            className="h-8 w-auto shrink-0 object-contain sm:h-9"
             aria-hidden="true"
           />
-          <span className="font-display truncate text-sm font-bold tracking-tight text-landing-cream min-[380px]:text-base sm:text-xl">
+          <span className="font-display truncate text-base font-bold tracking-tight text-landing-cream min-[380px]:text-lg sm:text-2xl">
             <span className="text-landing-green">Team</span>
             <span className="text-landing-cream">Network</span>
           </span>
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-8 text-sm">
+        <nav className="hidden md:flex items-center gap-7 text-[0.8125rem] font-medium tracking-tight">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
@@ -146,7 +148,7 @@ export function LandingHeader() {
               className={`transition-colors ${
                 activeSection === link.href
                   ? "nav-link-active"
-                  : "text-landing-cream/70 hover:text-landing-cream"
+                  : "text-landing-cream/55 hover:text-landing-cream"
               }`}
             >
               {link.label}
@@ -155,18 +157,16 @@ export function LandingHeader() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-          <ButtonLink
+          <Link
             href="/auth/login"
-            variant="landingGhost"
-            size="sm"
-            className="hidden whitespace-nowrap px-2 py-2 text-sm sm:inline-flex sm:px-4 sm:py-2.5"
+            className="hidden whitespace-nowrap text-[0.8125rem] font-medium tracking-tight text-landing-cream/65 transition-colors hover:text-landing-cream sm:inline-flex sm:items-center"
           >
             Sign In
-          </ButtonLink>
+          </Link>
           <ButtonLink
             href="/contact"
             variant="landingPrimary"
-            className="whitespace-nowrap px-2 py-2 text-xs min-[380px]:px-2.5 min-[380px]:text-sm sm:px-5 sm:text-base"
+            className="whitespace-nowrap px-3 py-2 text-[0.8125rem] font-semibold shadow-none min-[380px]:px-3.5 sm:px-5 sm:text-sm [box-shadow:0_8px_24px_-14px_rgba(34,197,94,0.55),inset_0_1px_0_rgba(255,255,255,0.16)]"
           >
             Contact Sales
           </ButtonLink>
@@ -214,15 +214,15 @@ export function LandingHeader() {
               aria-label="TeamNetwork home"
             >
               <Image
-                src="/TeamNetwork.png"
+                src="/tn-mark.png"
                 alt=""
-                width={541}
-                height={303}
-                sizes="28px"
-                className="h-7 w-auto object-contain"
+                width={359}
+                height={216}
+                sizes="40px"
+                className="h-8 w-auto object-contain"
                 aria-hidden="true"
               />
-              <span className="font-display text-base font-bold tracking-tight">
+              <span className="font-display text-lg font-bold tracking-tight">
                 <span className="text-landing-green">Team</span>
                 <span className="text-landing-cream">Network</span>
               </span>

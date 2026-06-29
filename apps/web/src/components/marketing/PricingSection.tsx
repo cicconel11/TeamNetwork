@@ -22,70 +22,54 @@ const CONTRACT_POINTS = [
 
 export function PricingSection({ showCta = true }: { showCta?: boolean }) {
   return (
-    <section id="pricing" className="relative z-10 py-24 px-6" suppressHydrationWarning>
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-12">
-          <div
-            suppressHydrationWarning
-            className="scroll-reveal inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/60 text-xs uppercase tracking-[0.2em] mb-6"
-          >
+    <section id="pricing" className="relative z-10 px-6 py-24 sm:py-32" suppressHydrationWarning>
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-16 text-center">
+          <div suppressHydrationWarning className="scroll-reveal eyebrow-label is-centered mb-6">
             Pricing
           </div>
-          <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold text-landing-cream mb-6">
-            Contract pricing for your <span className="text-landing-green">network</span>
+          <h2 className="scroll-reveal display-section mb-6 text-landing-cream">
+            Contract pricing for your <span className="accent-italic">network.</span>
           </h2>
-          <p className="scroll-reveal text-landing-cream/60 max-w-2xl mx-auto text-lg">
+          <p className="scroll-reveal mx-auto max-w-2xl text-lg leading-relaxed text-landing-cream/60">
             TeamNetwork pricing is tailored to each organization. Tell us about
             your program and we&apos;ll put together a plan that fits your size,
             rollout, and support needs.
           </p>
         </div>
 
-        <div
-          suppressHydrationWarning
-          className="scroll-reveal rounded-2xl border border-landing-cream/10 bg-landing-navy-light/50 p-6 sm:p-8"
-        >
-          <div className="grid md:grid-cols-3 gap-5 mb-8">
-            {CONTRACT_POINTS.map((point) => (
-              <div key={point.title} className="pricing-card rounded-2xl p-6">
-                <h3 className="font-display text-lg font-bold text-landing-cream mb-2">
-                  {point.title}
-                </h3>
-                <p className="text-sm leading-relaxed text-landing-cream/55">
-                  {point.description}
-                </p>
-              </div>
-            ))}
-          </div>
+        <div className="scroll-reveal grid gap-10 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-white/10">
+          {CONTRACT_POINTS.map((point) => (
+            <div key={point.title} className="sm:px-8 sm:first:pl-0 sm:last:pr-0">
+              <h3 className="mb-2 font-display text-lg font-bold text-landing-cream">
+                {point.title}
+              </h3>
+              <p className="text-sm leading-relaxed text-landing-cream/55">
+                {point.description}
+              </p>
+            </div>
+          ))}
+        </div>
 
-          <div className="rounded-xl bg-landing-navy/60 p-6 text-center">
-            <p className="text-landing-cream/50 text-xs uppercase tracking-[0.18em] mb-3">
-              Next step
-            </p>
-            <h3 className="font-display text-2xl sm:text-3xl font-bold text-landing-cream mb-3">
-              Contact us for pricing
-            </h3>
-            <p className="text-landing-cream/60 max-w-2xl mx-auto">
-              We&apos;ll review your organization size, use cases, and timeline,
-              then send a contract-based quote instead of asking you to choose a
-              public self-serve plan.
-            </p>
-          </div>
+        <div className="hairline my-16" />
+
+        <div className="text-center">
+          <p className="scroll-reveal eyebrow-label is-centered mb-5">Next step</p>
+          <h3 className="scroll-reveal display-section mb-5 text-3xl text-landing-cream sm:text-4xl">
+            Contact us for pricing
+          </h3>
+          <p className="scroll-reveal mx-auto mb-9 max-w-2xl text-lg leading-relaxed text-landing-cream/60">
+            We&apos;ll review your organization size, use cases, and timeline,
+            then send a contract-based quote instead of asking you to choose a
+            public self-serve plan.
+          </p>
 
           {showCta && (
-            <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
-              <ButtonLink
-                href="/contact"
-                variant="landingPrimary"
-                className="px-6 py-3"
-              >
+            <div className="scroll-reveal flex flex-wrap items-center justify-center gap-3">
+              <ButtonLink href="/contact" variant="landingPrimary" size="xl">
                 Contact us for pricing
               </ButtonLink>
-              <ButtonLink
-                href="/demos"
-                variant="landingSecondary"
-                className="px-6 py-3 font-semibold"
-              >
+              <ButtonLink href="/demos" variant="landingSecondary" size="xl">
                 View demos
               </ButtonLink>
             </div>
