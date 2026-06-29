@@ -12,6 +12,12 @@ import { debugLog, maskPII } from "@/lib/debug";
 import { createServiceClient } from "@/lib/supabase/service";
 import { runLinkedInOidcSyncSafe } from "@/lib/linkedin/oidc-sync";
 import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import {
+  buildMobileCallbackDeepLink,
+  buildMobileErrorDeepLink,
+  buildMobileHandoffInsert,
+  mobileErrorFromCallbackRedirect,
+} from "@/lib/auth/mobile-oauth";
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -24,6 +30,10 @@ export async function GET(request: NextRequest) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
+  // Mobile OAuth flows (initiated via /auth/mobile/[provider]) carry mobile=1.
+  // Instead of web redirects they must deep-link back to the native app via
+  // teammeet://callback — successes carry a one-time handoff_code, failures an error.
+  const isMobile = requestUrl.searchParams.get("mobile") === "1";
 
   debugLog("auth-callback", "Starting", {
     hasCode: !!code,
@@ -37,6 +47,9 @@ export async function GET(request: NextRequest) {
   // Handle OAuth errors — preserve redirect + mode so the error page can route back
   if (errorParam) {
     console.error("[auth/callback] OAuth error:", errorParam, errorDescription);
+    if (isMobile) {
+      return NextResponse.redirect(buildMobileErrorDeepLink(errorParam, errorDescription));
+    }
     return NextResponse.redirect(
       buildErrorRedirect(siteUrl, errorDescription || errorParam, redirect, requestUrl.searchParams.get("mode"))
     );
@@ -75,6 +88,9 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("[auth/callback] Exchange error:", error.message);
+      if (isMobile) {
+        return NextResponse.redirect(buildMobileErrorDeepLink("auth_callback_failed", error.message));
+      }
       const mode = requestUrl.searchParams.get("mode");
       const lower = error.message.toLowerCase();
       const isExpiredOrInvalid =
@@ -216,6 +232,9 @@ export async function GET(request: NextRequest) {
 
       if (ageGateResult.kind === "redirect") {
         debugLog("auth-callback", "Age validation redirect:", ageGateResult.location);
+        if (isMobile) {
+          return NextResponse.redirect(mobileErrorFromCallbackRedirect(ageGateResult.location));
+        }
         return NextResponse.redirect(ageGateResult.location);
       }
 
@@ -232,6 +251,17 @@ export async function GET(request: NextRequest) {
       // are missing. This covers new OAuth signups, email confirmation, and
       // future policy version bumps without trusting client-side signup state.
       if (!hasAcceptedCurrentAgreementVersions(agreements ?? [])) {
+        if (isMobile) {
+          // The accept-terms page is a web flow that can't deep-link back. Surface
+          // a typed error so the app can route the user to complete terms on web.
+          debugLog("auth-callback", "Mobile: missing agreement acceptance — deep-linking error");
+          return NextResponse.redirect(
+            buildMobileErrorDeepLink(
+              "terms_acceptance_required",
+              "Please finish creating your account on the web before signing in."
+            )
+          );
+        }
         const acceptTermsUrl = new URL("/auth/accept-terms", siteUrl);
         if (redirect !== "/app") {
           acceptTermsUrl.searchParams.set("redirect", redirect);
@@ -256,6 +286,35 @@ export async function GET(request: NextRequest) {
         queueMicrotask(() => {
           void runLinkedInOidcSyncSafe(createServiceClient, data.session.user);
         });
+      }
+
+      // Mobile OAuth: mint a one-time handoff code and deep-link back to the app
+      // instead of setting web cookies. The app exchanges the code for tokens via
+      // /api/auth/mobile-handoff/consume.
+      if (isMobile) {
+        const { code, row } = buildMobileHandoffInsert(data.session);
+        // Cast: mobile_auth_handoffs is in the DB but not yet in the generated
+        // Database types. Regenerate via `bun run gen:types` to drop. Mirrors the
+        // consume route's cast.
+        const { error: handoffError } = await (
+          createServiceClient() as unknown as {
+            from: (table: string) => {
+              insert: (values: unknown) => Promise<{ error: { message: string } | null }>;
+            };
+          }
+        )
+          .from("mobile_auth_handoffs")
+          .insert(row);
+
+        if (handoffError) {
+          console.error("[auth/callback] Mobile handoff insert failed:", handoffError.message);
+          return NextResponse.redirect(
+            buildMobileErrorDeepLink("handoff_failed", "Could not complete sign-in. Please try again.")
+          );
+        }
+
+        debugLog("auth-callback", "Mobile: created handoff, deep-linking to app");
+        return NextResponse.redirect(buildMobileCallbackDeepLink({ handoff_code: code }));
       }
 
       debugLog("auth-callback", "Cookies set:", response.cookies.getAll().map((c) => ({

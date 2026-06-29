@@ -2,14 +2,40 @@ import type { Session } from "@supabase/supabase-js";
 import { createHash, randomBytes } from "crypto";
 import { encryptToken, decryptToken } from "@/lib/crypto/token-encryption";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
+import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import { MICROSOFT_SSO_PROVIDER } from "@/lib/microsoft/sso-config";
 
 export type MobileAuthMode = "login" | "signup";
+
+/** Provider slugs the mobile app sends in the `/auth/mobile/[provider]` path. */
+export type MobileOAuthProvider = "google" | "linkedin" | "microsoft";
+
+/** Supabase provider ids these map to (`linkedin`→`linkedin_oidc`, `microsoft`→`azure`). */
+export type SupabaseOAuthProvider = "google" | typeof LINKEDIN_OIDC_PROVIDER | typeof MICROSOFT_SSO_PROVIDER;
 
 export const MOBILE_AUTH_CALLBACK = "teammeet://callback";
 const HANDOFF_TTL_MS = 5 * 60 * 1000;
 
 export function isMobileAuthMode(value: string | null): value is MobileAuthMode {
   return value === "login" || value === "signup";
+}
+
+/**
+ * Maps a mobile provider slug to its Supabase provider id, or null if unsupported.
+ * The mobile app uses friendly slugs (`linkedin`, `microsoft`) that differ from
+ * Supabase's provider ids (`linkedin_oidc`, `azure`).
+ */
+export function mapMobileOAuthProvider(provider: string): SupabaseOAuthProvider | null {
+  switch (provider) {
+    case "google":
+      return "google";
+    case "linkedin":
+      return LINKEDIN_OIDC_PROVIDER;
+    case "microsoft":
+      return MICROSOFT_SSO_PROVIDER;
+    default:
+      return null;
+  }
 }
 
 function normalizeOrigin(siteUrl: string): string {
