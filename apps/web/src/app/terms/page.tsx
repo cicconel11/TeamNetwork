@@ -1,6 +1,6 @@
-import Image from "next/image";
-import Link from "next/link";
-import { ButtonLink } from "@/components/ui";
+import { Container } from "@/components/marketing/Container";
+import { Section, SectionEyebrow } from "@/components/marketing/Section";
+import { MarketingShell } from "@/components/marketing/MarketingShell";
 import "../landing-styles.css";
 
 // Static content — ISR revalidates every hour
@@ -185,146 +185,97 @@ const termsSections: TermsSection[] = [
 
 export default function TermsPage() {
   return (
-    <div className="landing-page min-h-screen text-landing-cream relative noise-overlay bg-landing-navy">
-      {/* Background */}
-      <div className="fixed inset-0 stripe-pattern pointer-events-none" />
-      <div className="fixed inset-0 bg-gradient-to-b from-landing-navy via-transparent to-landing-navy/90 pointer-events-none" />
-
-      {/* Header */}
-      <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="group flex items-center gap-2">
-            <Image
-              src="/TeamNetwor.png"
-              alt=""
-              width={541}
-              height={303}
-              sizes="28px"
-              className="h-8 w-auto shrink-0 object-contain sm:h-7"
-              aria-hidden="true"
-            />
-            <span className="font-display hidden text-base font-bold tracking-tight text-landing-cream sm:inline sm:text-xl">
-              <span className="text-landing-green">Team</span>
-              <span className="text-landing-cream">Network</span>
-            </span>
-            <span className="sr-only">TeamNetwork</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-sm text-landing-cream/60 hover:text-landing-cream transition-colors">
-              ← Back to Home
-            </Link>
-            <ButtonLink href="/contact" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold">
-              Contact Sales
-            </ButtonLink>
-          </div>
-        </div>
-      </header>
-
-      <main className="relative z-10 max-w-6xl mx-auto px-6 py-16">
-        {/* Hero */}
-        <div className="mb-16 max-w-3xl">
-          <div className="inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/60 text-xs uppercase tracking-[0.2em] mb-6">
-            Legal
-          </div>
-          <h1 className="font-display text-4xl sm:text-5xl font-bold mb-4">Terms of Service</h1>
-          <p className="text-landing-cream/50">Last Updated: May 16, 2026</p>
-        </div>
-
-        <div className="grid lg:grid-cols-[280px_1fr] gap-12">
-          {/* TOC Sidebar */}
-          <nav className="hidden lg:block">
-            <div className="sticky top-28">
-              <p className="text-xs uppercase tracking-[0.15em] text-landing-green mb-4 font-semibold">Table of Contents</p>
-              <ul className="space-y-1">
-                {termsSections.map((s) => (
-                  <li key={s.id}>
-                    <a
-                      href={`#${s.id}`}
-                      className="text-sm text-landing-cream/50 hover:text-landing-cream transition-colors block py-2 border-l-2 border-landing-cream/10 pl-4 hover:border-landing-green hover:bg-landing-cream/5"
-                    >
-                      <span className="text-landing-cream/30 mr-2">{s.number}.</span>
-                      {s.title}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </nav>
-
-          {/* Content */}
-          <div className="space-y-6">
-            {termsSections.map((section) => (
-              <section
-                key={section.id}
-                id={section.id}
-                className="scroll-mt-28 bg-landing-navy-light/50 backdrop-blur-sm rounded-2xl p-6 lg:p-8 border border-landing-cream/10"
-              >
-                <div className="flex items-start gap-5">
-                  <div className="w-12 h-12 rounded-xl bg-landing-green/10 text-landing-green flex items-center justify-center flex-shrink-0">
-                    <span className="font-display font-bold text-lg">{section.number}</span>
-                  </div>
-                  <div className="space-y-4 min-w-0 flex-1">
-                    <h2 className="font-display text-xl font-bold text-landing-cream">{section.title}</h2>
-                    {section.paragraphs.map((paragraph, index) => (
-                      <p key={index} className="text-landing-cream/60 leading-relaxed">
-                        {paragraph}
-                      </p>
-                    ))}
-                    {section.bullets && (
-                      <ul className="space-y-2 text-landing-cream/60 pl-1">
-                        {section.bullets.map((bullet, index) => (
-                          <li key={index} className="flex items-start gap-3">
-                            <span className="text-landing-green mt-1.5">•</span>
-                            <span className="leading-relaxed">{bullet}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              </section>
-            ))}
-
-            {/* Back to top */}
-            <div className="pt-8 text-center">
-              <a 
-                href="#"
-                className="inline-flex items-center gap-2 text-sm text-landing-cream/40 hover:text-landing-cream transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                </svg>
-                Back to top
-              </a>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-landing-cream/10 py-12 bg-landing-navy mt-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded bg-landing-green-dark flex items-center justify-center">
-                <span className="font-display font-bold text-white text-sm">TN</span>
-              </div>
-              <span className="font-display font-bold">TeamNetwork</span>
-            </div>
-            
-            <div className="flex items-center gap-8 text-sm text-landing-cream/50">
-              <Link href="/" className="hover:text-landing-cream transition-colors">Home</Link>
-              <Link href="/#pricing" className="hover:text-landing-cream transition-colors">Pricing</Link>
-              <Link href="/privacy" className="hover:text-landing-cream transition-colors">Privacy</Link>
-              <a href="mailto:mleonard@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
-            </div>
-            
-            <p className="text-sm text-landing-cream/30">
-              © {new Date().getFullYear()} TeamNetwork
+    <MarketingShell>
+      <Section padY="lg">
+        <Container size="xl">
+          {/* Hero */}
+          <div className="mb-16 max-w-3xl">
+            <SectionEyebrow>Legal</SectionEyebrow>
+            <h1 className="scroll-reveal display-section text-landing-cream">Terms of Service</h1>
+            <p className="scroll-reveal mt-5 text-base text-landing-cream/45">
+              Last updated: May 16, 2026
             </p>
           </div>
-        </div>
-      </footer>
-    </div>
+
+          <div className="grid gap-12 lg:grid-cols-[260px_1fr]">
+            {/* TOC Sidebar */}
+            <nav className="hidden lg:block">
+              <div className="sticky top-28">
+                <p className="eyebrow-label mb-5">Contents</p>
+                <ul className="space-y-1">
+                  {termsSections.map((s) => (
+                    <li key={s.id}>
+                      <a
+                        href={`#${s.id}`}
+                        className="block border-l border-white/10 py-2 pl-4 text-sm text-landing-cream/50 transition-colors hover:border-landing-green hover:text-landing-cream"
+                      >
+                        <span className="mr-2 text-landing-cream/30">{s.number}.</span>
+                        {s.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </nav>
+
+            {/* Content — de-boxed, hairline-divided */}
+            <div className="border-t border-white/10">
+              {termsSections.map((section) => (
+                <section
+                  key={section.id}
+                  id={section.id}
+                  className="scroll-mt-28 border-b border-white/10 py-10"
+                >
+                  <div className="flex items-baseline gap-5">
+                    <span className="w-10 flex-shrink-0 font-display text-3xl font-bold leading-none text-landing-green/70">
+                      {section.number}
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-4">
+                      <h2 className="font-display text-xl font-semibold text-landing-cream">
+                        {section.title}
+                      </h2>
+                      {section.paragraphs.map((paragraph, index) => (
+                        <p key={index} className="leading-relaxed text-landing-cream/60">
+                          {paragraph}
+                        </p>
+                      ))}
+                      {section.bullets && (
+                        <ul className="space-y-2 text-landing-cream/60">
+                          {section.bullets.map((bullet, index) => (
+                            <li key={index} className="flex items-start gap-3">
+                              <span className="mt-1.5 text-landing-green">•</span>
+                              <span className="leading-relaxed">{bullet}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              ))}
+
+              {/* Back to top */}
+              <div className="pt-8">
+                <a
+                  href="#top"
+                  className="group inline-flex items-center gap-2 text-sm text-landing-cream/45 transition-colors hover:text-landing-cream"
+                >
+                  <svg
+                    className="h-4 w-4 transition-transform group-hover:-translate-y-0.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                  Back to top
+                </a>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </Section>
+    </MarketingShell>
   );
 }

@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui";
+import { Container } from "@/components/marketing/Container";
+import { Section, SectionEyebrow } from "@/components/marketing/Section";
+import { MarketingShell } from "@/components/marketing/MarketingShell";
 import "../landing-styles.css";
 
 export const metadata: Metadata = {
@@ -11,50 +15,48 @@ const SUPPORT_EMAIL = "mleonard@myteamnetwork.com";
 
 export default function SupportPage() {
   return (
-    <div className="landing-page min-h-screen flex items-center justify-center p-6">
-      <div className="max-w-md w-full text-center">
-        <div className="pricing-card rounded-2xl p-10">
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/15 flex items-center justify-center mx-auto mb-6">
-            <svg
-              className="w-6 h-6 text-emerald-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"
-              />
-            </svg>
-          </div>
+    <MarketingShell>
+      <Section padY="lg">
+        <Container size="sm" className="text-center">
+          <SectionEyebrow centered>Support</SectionEyebrow>
 
-          <h1 className="font-display text-3xl font-bold text-landing-cream mb-3">
-            Support
+          <h1 className="scroll-reveal display-section text-landing-cream">
+            Here when you <span className="accent-italic">need us.</span>
           </h1>
-          <p className="text-landing-cream/60 mb-8 text-sm leading-relaxed">
-            Need help with TeamNetwork? Email our support team and we&apos;ll get
-            back to you within one business day.
+
+          <p className="scroll-reveal mx-auto mt-5 max-w-xl text-lg leading-relaxed text-landing-cream/55">
+            Need help with TeamNetwork? Email our support team and we&apos;ll get back to you within
+            one business day.
           </p>
 
-          <a
-            href={`mailto:${SUPPORT_EMAIL}?subject=TeamNetwork%20Support%20Request`}
-            className="inline-block w-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-semibold py-3 px-8 rounded-xl transition-all text-sm mb-2"
-          >
-            Email Support &rarr;
-          </a>
-          <p className="text-landing-cream/40 text-xs mb-6">{SUPPORT_EMAIL}</p>
+          <div className="scroll-reveal mt-10 flex flex-col items-center gap-4">
+            <ButtonLink
+              href={`mailto:${SUPPORT_EMAIL}?subject=TeamNetwork%20Support%20Request`}
+              variant="landingPrimary"
+              size="xl"
+            >
+              Email Support
+            </ButtonLink>
+            <p className="text-sm text-landing-cream/40">{SUPPORT_EMAIL}</p>
 
-          <Link
-            href="/"
-            className="block text-landing-cream/40 hover:text-landing-cream/70 transition-colors text-sm"
-          >
-            &larr; Back to home
-          </Link>
-        </div>
-      </div>
-    </div>
+            <Link
+              href="/"
+              className="group mt-2 inline-flex items-center gap-2 text-base text-landing-cream/55 transition-colors hover:text-landing-cream"
+            >
+              <svg
+                className="h-4 w-4 transition-transform group-hover:-translate-x-0.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              <span>Back to home</span>
+            </Link>
+          </div>
+        </Container>
+      </Section>
+    </MarketingShell>
   );
 }

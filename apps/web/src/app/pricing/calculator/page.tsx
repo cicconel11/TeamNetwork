@@ -1,34 +1,33 @@
 import { ButtonLink } from "@/components/ui";
-import { LandingHeader } from "@/components/marketing/LandingHeader";
+import { Container } from "@/components/marketing/Container";
+import { Section, SectionEyebrow } from "@/components/marketing/Section";
+import { MarketingShell } from "@/components/marketing/MarketingShell";
+import "../../landing-styles.css";
 
 export default function PricingCalculatorPage() {
   return (
-    <div className="landing-page relative min-h-screen overflow-x-clip bg-landing-navy text-landing-cream noise-overlay">
-      <div className="fixed inset-0 bg-gradient-to-b from-landing-navy via-landing-navy to-landing-navy/95 pointer-events-none" />
-      <div className="relative z-10">
-        <LandingHeader />
-        <main className="mx-auto max-w-3xl px-4 sm:px-6 py-16 sm:py-24 text-center">
-          <span className="inline-block px-3 py-1 rounded-full bg-landing-green/10 border border-landing-green/30 text-landing-green text-xs font-semibold uppercase tracking-[0.2em]">
-            Pricing
-          </span>
-          <h1 className="font-display text-4xl sm:text-5xl font-bold text-landing-cream mt-5">
-            Contact us for pricing
+    <MarketingShell>
+      <Section padY="lg">
+        <Container size="sm" className="text-center">
+          <SectionEyebrow centered>Pricing</SectionEyebrow>
+          <h1 className="scroll-reveal display-section text-landing-cream">
+            Contact us for <span className="accent-italic">pricing.</span>
           </h1>
-          <p className="text-landing-cream/60 mt-4 text-lg leading-relaxed">
-            We no longer publish a self-serve pricing calculator. TeamNetwork
-            pricing is contract-based and tailored to your organization&apos;s
-            size, modules, support needs, and rollout plan.
+          <p className="scroll-reveal mx-auto mt-5 max-w-xl text-lg leading-relaxed text-landing-cream/55">
+            We no longer publish a self-serve pricing calculator. TeamNetwork pricing is
+            contract-based and tailored to your organization&apos;s size, modules, support needs, and
+            rollout plan.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
-            <ButtonLink href="/contact" variant="landingPrimary" className="px-6 py-3">
+          <div className="scroll-reveal mt-9 flex flex-wrap items-center justify-center gap-3">
+            <ButtonLink href="/contact" variant="landingPrimary" size="xl">
               Contact sales
             </ButtonLink>
-            <ButtonLink href="/#pricing" variant="landingSecondary" className="px-6 py-3">
+            <ButtonLink href="/#pricing" variant="landingSecondary" size="xl">
               Back to pricing
             </ButtonLink>
           </div>
-        </main>
-      </div>
-    </div>
+        </Container>
+      </Section>
+    </MarketingShell>
   );
 }
