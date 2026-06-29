@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
+import { captureMessage } from "@/lib/analytics";
 
 type MobileHandoffResponse = {
   access_token?: string;
@@ -7,19 +8,32 @@ type MobileHandoffResponse = {
   error?: string;
 };
 
+// Network errors immediately after the OAuth browser dismisses are often
+// transient (the app is still returning to the foreground). Retry the request a
+// couple of times before surfacing a failure.
+const HANDOFF_RETRY_DELAYS_MS = [300, 800];
+
 export async function consumeMobileAuthHandoff(code: string) {
-  let response: Response;
-  try {
-    response = await fetch(`${getWebAppUrl()}/api/auth/mobile-handoff/consume`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    });
-  } catch {
-    throw new Error("Couldn't reach the server. Check your connection and try again.");
+  let response: Response | null = null;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      response = await fetch(`${getWebAppUrl()}/api/auth/mobile-handoff/consume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      break;
+    } catch {
+      if (attempt >= HANDOFF_RETRY_DELAYS_MS.length) {
+        captureMessage("[mobile-handoff] consume fetch failed after retries", "error");
+        throw new Error("Couldn't reach the server. Check your connection and try again.");
+      }
+      await new Promise((resolve) => setTimeout(resolve, HANDOFF_RETRY_DELAYS_MS[attempt]));
+    }
   }
 
   const payload = (await response.json().catch(() => ({}))) as MobileHandoffResponse;
+  captureMessage(`[mobile-handoff] consume status=${response.status}`, "info");
   if (!response.ok) {
     if (response.status === 400) {
       throw new Error("This sign-in link has expired. Please try signing in again.");

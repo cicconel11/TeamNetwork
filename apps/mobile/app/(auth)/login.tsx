@@ -24,18 +24,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Link, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { CheckCircle, ChevronLeft, Eye, EyeOff, Lock, Mail } from "lucide-react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
-import * as WebBrowser from "expo-web-browser";
-import { makeRedirectUri } from "expo-auth-session";
 import { Image } from "expo-image";
 import { baseSchemas } from "@teammeet/validation";
 import { supabase } from "@/lib/supabase";
-import {
-  buildMobileOAuthUrl,
-  parseMobileAuthCallbackUrl,
-  type MobileOAuthProvider,
-} from "@/lib/auth-redirects";
-import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
-import { getWebAppUrl } from "@/lib/web-api";
+import { type MobileOAuthProvider } from "@/lib/auth-redirects";
+import { runMobileOAuth } from "@/lib/mobile-oauth-flow";
 import { isAppleAuthCanceled, signInWithApple } from "@/lib/apple-auth";
 import { captureException, track } from "@/lib/analytics";
 import { showToast } from "@/components/ui/Toast";
@@ -263,37 +256,18 @@ export default function LoginScreen() {
   };
 
   // Web-based OAuth sign in. All providers go through the web handoff route —
-  // native social SDKs have nonce/PKCE conflicts with Supabase.
+  // native social SDKs have nonce/PKCE conflicts with Supabase. The shared flow
+  // handles the handoff, session exchange, instrumentation, and error reporting.
   const signInWithProvider = async (provider: MobileOAuthProvider) => {
     setApiError("");
     setSocialLoading(provider);
 
     try {
-      const redirectUri = makeRedirectUri({
-        scheme: "teammeet",
-        path: "callback",
-      });
-
-      const authUrl = buildMobileOAuthUrl(provider, getWebAppUrl(), { mode: "login" });
-
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-
-      if (result.type === "success" && result.url) {
-        const callback = parseMobileAuthCallbackUrl(result.url);
-        if (callback.type === "handoff") {
-          await consumeMobileAuthHandoff(callback.code);
-          track("user_logged_in", { method: provider });
-        } else if (callback.type === "error") {
-          throw new Error(callback.message);
-        }
+      const result = await runMobileOAuth(provider, "login", { mode: "login" });
+      if (!result.ok && !result.canceled && result.error) {
+        setApiError(result.error);
+        showToast(result.error, "error");
       }
-      // result.type === "cancel" — silent no-op
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      captureException(error as Error, { screen: "Login", provider });
-      const message = err.message || "An unexpected error occurred";
-      setApiError(message);
-      showToast(message, "error");
     } finally {
       setSocialLoading(null);
     }

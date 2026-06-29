@@ -16,8 +16,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Link, Redirect, useRouter, useNavigation } from "expo-router";
 import { ChevronLeft, Eye, EyeOff } from "lucide-react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
-import * as WebBrowser from "expo-web-browser";
-import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { isAppleAuthCanceled, signUpWithApple } from "@/lib/apple-auth";
 import { captureException, track } from "@/lib/analytics";
@@ -25,11 +23,10 @@ import { borderRadius, spacing, fontSize } from "@/lib/theme";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
 import {
   buildMobileEmailSignupCallbackUrl,
-  buildMobileOAuthUrl,
-  parseMobileAuthCallbackUrl,
   type MobileOAuthProvider,
 } from "@/lib/auth-redirects";
-import { consumeMobileAuthHandoff, validateSignupAge } from "@/lib/mobile-auth";
+import { runMobileOAuth } from "@/lib/mobile-oauth-flow";
+import { validateSignupAge } from "@/lib/mobile-auth";
 import { getWebAppUrl } from "@/lib/web-api";
 
 // Check if running in web browser (Expo web mode)
@@ -305,29 +302,17 @@ export default function SignupScreen() {
 
     setSocialLoading(provider);
     try {
-      const redirectUri = makeRedirectUri({
-        scheme: "teammeet",
-        path: "callback",
-      });
-      const authUrl = buildMobileOAuthUrl(provider, getWebAppUrl(), {
+      const result = await runMobileOAuth(provider, "signup", {
         mode: "signup",
-        ageBracket: ageGate.ageBracket,
-        isMinor: ageGate.isMinor,
-        ageToken: ageGate.token,
+        signup: {
+          ageBracket: ageGate.ageBracket,
+          isMinor: ageGate.isMinor,
+          ageToken: ageGate.token,
+        },
       });
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-
-      if (result.type === "success" && result.url) {
-        const callback = parseMobileAuthCallbackUrl(result.url);
-        if (callback.type === "handoff") {
-          await consumeMobileAuthHandoff(callback.code);
-          track("user_signed_up", { method: provider });
-        } else if (callback.type === "error") {
-          throw new Error(callback.message);
-        }
+      if (!result.ok && !result.canceled && result.error) {
+        setApiError(result.error);
       }
-    } catch (error) {
-      setApiError((error as Error).message || "Could not complete signup.");
     } finally {
       setSocialLoading(null);
     }
