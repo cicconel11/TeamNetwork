@@ -596,20 +596,24 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
 
-            {/* Sign up footer */}
-            <View style={styles.signupRow}>
-              <Text style={styles.signupText}>Don&apos;t have an account? </Text>
-              <Link href="/(auth)/signup" asChild>
-                <Pressable
-                  hitSlop={8}
-                  disabled={isLoading}
-                  accessibilityRole="link"
-                  style={({ pressed }) => [pressed && styles.linkPressed]}
-                >
-                  <Text style={styles.signupLink}>Sign Up</Text>
-                </Pressable>
-              </Link>
-            </View>
+            {/* Sign up footer.
+                Apple Guideline 3.1.1 (Business): in-app account registration is
+                removed on iOS — hidden here; Android keeps the Sign Up link. */}
+            {Platform.OS !== "ios" && (
+              <View style={styles.signupRow}>
+                <Text style={styles.signupText}>Don&apos;t have an account? </Text>
+                <Link href="/(auth)/signup" asChild>
+                  <Pressable
+                    hitSlop={8}
+                    disabled={isLoading}
+                    accessibilityRole="link"
+                    style={({ pressed }) => [pressed && styles.linkPressed]}
+                  >
+                    <Text style={styles.signupLink}>Sign Up</Text>
+                  </Pressable>
+                </Link>
+              </View>
+            )}
           </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
