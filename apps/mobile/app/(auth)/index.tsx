@@ -11,6 +11,7 @@ import { getWebAppUrl } from "@/lib/web-api";
 import { SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { startGoogleSignIn } from "@/lib/google-sign-in";
+import { showToast } from "@/components/ui/Toast";
 
 export default function LandingScreen() {
   const router = useRouter();
@@ -27,7 +28,10 @@ export default function LandingScreen() {
   const handleGooglePress = async () => {
     setGoogleLoading(true);
     try {
-      await startGoogleSignIn("landing");
+      const result = await startGoogleSignIn("landing");
+      if (!result.ok && !result.canceled && result.error) {
+        showToast(result.error, "error");
+      }
     } finally {
       setGoogleLoading(false);
     }
