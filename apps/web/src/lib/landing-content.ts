@@ -1,10 +1,3 @@
-export const HERO_PROOF_POINTS = [
-  { value: "10 min", label: "to launch an organization" },
-  { value: "1 code", label: "for member onboarding" },
-  { value: "24/7", label: "community history online" },
-] as const;
-export type HeroProofPoint = (typeof HERO_PROOF_POINTS)[number];
-
 export const MARQUEE_ORG_TYPES = [
   "Sports Teams",
   "Greek Life",

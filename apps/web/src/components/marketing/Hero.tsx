@@ -1,14 +1,9 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui";
-import type { HeroProofPoint } from "@/lib/landing-content";
 import { Container } from "./Container";
 import { HeroOrgCard } from "./LandingClientComponents";
 
-interface HeroProps {
-  proofPoints: ReadonlyArray<HeroProofPoint>;
-}
-
-export function Hero({ proofPoints }: HeroProps) {
+export function Hero() {
   return (
     <section className="landing-hero-stage relative z-10 overflow-hidden pt-16 pb-24 sm:pt-20 sm:pb-32 lg:pt-20 lg:pb-40">
       <Container size="xl" className="relative z-10">
@@ -61,19 +56,6 @@ export function Hero({ proofPoints }: HeroProps) {
                 Already a member? <span className="underline underline-offset-4">Sign in</span>
               </Link>
             </div>
-
-            <dl className="hero-animate mt-14 flex flex-col items-center gap-8 sm:flex-row sm:items-start sm:justify-center sm:gap-0 sm:divide-x sm:divide-white/10 lg:justify-start">
-              {proofPoints.map((point) => (
-                <div key={point.value} className="text-center sm:px-7 sm:text-left sm:first:pl-0">
-                  <dt className="display-section text-3xl font-bold leading-none text-landing-cream sm:text-4xl">
-                    {point.value}
-                  </dt>
-                  <dd className="mt-2 max-w-[22ch] text-sm leading-relaxed text-landing-cream/55">
-                    {point.label}
-                  </dd>
-                </div>
-              ))}
-            </dl>
           </div>
 
           <HeroOrgCard />
