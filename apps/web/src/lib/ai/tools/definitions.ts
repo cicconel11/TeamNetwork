@@ -2,11 +2,35 @@ import type OpenAI from "openai";
 
 export interface ListMembersArgs {
   limit?: number;
+  company?: string;
+  industry?: string;
+  skill?: string;
+  certification?: string;
+  language?: string;
+  fields?: Array<
+    | "id"
+    | "user_id"
+    | "status"
+    | "role"
+    | "created_at"
+    | "name"
+    | "email"
+    | "current_company"
+    | "industry"
+    | "headline"
+    | "summary"
+    | "skills"
+    | "certifications"
+    | "languages"
+  >;
 }
 
 export interface ListEventsArgs {
   limit?: number;
   upcoming?: boolean;
+  fields?: Array<
+    "id" | "title" | "start_date" | "end_date" | "location" | "description_preview"
+  >;
 }
 
 export interface ListAnnouncementsArgs {
@@ -238,7 +262,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_members" as const,
       description:
-        "List active organization members. Returns the best available human name, email, role, added date, and (when available from LinkedIn enrichment) current company, industry, headline, summary, skills, certifications, and languages. Prefer real names over raw emails. If a record has no trustworthy human name, treat it as an email-only member or admin account instead of using placeholder labels. Only returns active members — alumni and parents are tracked separately. Use the skill/certification/language/company/industry filters to answer questions like 'which members know Python' or 'who works in finance'.",
+        "List active organization members. By default returns a lean row per member: id, name, role, and email. The richer LinkedIn-enrichment fields (current_company, industry, headline, summary, skills, certifications, languages) are NOT returned unless you request them via `fields` — do that only when the question needs them, e.g. fields:['name','summary','skills'] for 'find me a mentor in finance'. Prefer real names over raw emails. If a record has no trustworthy human name, treat it as an email-only member or admin account instead of using placeholder labels. Only returns active members — alumni and parents are tracked separately. Use the skill/certification/language/company/industry filters to answer questions like 'which members know Python' or 'who works in finance'.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -253,6 +277,30 @@ const TOOL_BY_NAME = {
           skill: { type: "string" as const, description: "Filter to members listing this skill, e.g. 'Python' (substring match)." },
           certification: { type: "string" as const, description: "Filter to members holding this certification, e.g. 'AWS' (substring match)." },
           language: { type: "string" as const, description: "Filter to members who speak this language, e.g. 'Spanish' (substring match)." },
+          fields: {
+            type: "array" as const,
+            items: {
+              type: "string" as const,
+              enum: [
+                "id",
+                "user_id",
+                "status",
+                "role",
+                "created_at",
+                "name",
+                "email",
+                "current_company",
+                "industry",
+                "headline",
+                "summary",
+                "skills",
+                "certifications",
+                "languages",
+              ] as const,
+            },
+            description:
+              "Optional. Which fields to return per member. Omit for the lean default (id, name, role, email). Add heavy fields like 'summary' or 'skills' only when the question needs LinkedIn bios — they cost many tokens.",
+          },
         },
         additionalProperties: false as const,
       },
@@ -263,7 +311,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "list_events" as const,
       description:
-        "List organization events chronologically (no keyword filter). Returns title, date, location, and description. Use for inventory questions like 'what events are coming up', 'show recent events', 'any events this week'. For keyword/topic search ('search events about networking', 'find the picnic event'), use search_org_content instead.",
+        "List organization events chronologically (no keyword filter). Returns title, date, location, and a description preview (first 500 chars). Use for inventory questions like 'what events are coming up', 'show recent events', 'any events this week'. For keyword/topic search ('search events about networking', 'find the picnic event'), use search_org_content instead.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -277,6 +325,22 @@ const TOOL_BY_NAME = {
             type: "boolean" as const,
             description:
               "If true, only future events. If false, only past events. Default true.",
+          },
+          fields: {
+            type: "array" as const,
+            items: {
+              type: "string" as const,
+              enum: [
+                "id",
+                "title",
+                "start_date",
+                "end_date",
+                "location",
+                "description_preview",
+              ] as const,
+            },
+            description:
+              "Optional. Return only these fields to save tokens. Omit to return all event fields. e.g. ['title','start_date'] when you only need a schedule.",
           },
         },
         additionalProperties: false as const,
@@ -1520,6 +1584,15 @@ const TOOL_BY_NAME = {
             type: "string" as const,
             description:
               "Optional case-insensitive substring filter applied against mentor topics and mentee preferred_topics (e.g. 'fundraising').",
+          },
+          fields: {
+            type: "array" as const,
+            items: {
+              type: "string" as const,
+              enum: ["user_id", "name", "email", "as_mentor", "as_mentee"] as const,
+            },
+            description:
+              "Optional. Return only these per-member fields to save tokens. Omit to return the full shape. e.g. ['name','as_mentor'] when you only need mentor profiles.",
           },
         },
         additionalProperties: false as const,

@@ -55,7 +55,7 @@ const ctx = {
 const logContext = { requestId: "req-1", route: "test" } as never;
 
 async function execute(
-  args: { limit?: number; sport?: string; topic?: string },
+  args: { limit?: number; sport?: string; topic?: string; fields?: string[] },
   fixtures: TableFixtures,
   actorRole: "admin" | "active_member" | "alumni" | "parent" = "admin",
 ) {
@@ -315,5 +315,84 @@ describe("list_member_preferences email redaction (U9)", () => {
     assert.match(src, /dispatchToolModule\([\s\S]*?actorRole:\s*policyActor\.role/);
     // Null RLS client fails closed (auth_error) rather than falling back to service role.
     assert.match(src, /auth-bound client unavailable for non-admin tool/);
+  });
+});
+
+/* ── field projection (narrows only; must not undo redaction) ───────────────── */
+
+describe("list_member_preferences field projection", () => {
+  const fixtures: TableFixtures = {
+    mentor_profiles: [
+      {
+        user_id: "u1",
+        organization_id: ORG_ID,
+        sports: ["basketball"],
+        topics: ["finance"],
+        positions: [],
+        industries: [],
+        time_commitment: null,
+        accepting_new: true,
+        is_active: true,
+      },
+    ],
+    mentee_preferences: [],
+    users: [{ id: "u1", name: "Alice", email: "alice@example.com" }],
+  };
+
+  it("SECURITY: non-admin requesting fields:['email'] still gets email: null", async () => {
+    // The whole point of redact-then-project: a non-admin cannot use projection
+    // to recover an email that redaction nulled. The key is present (requested)
+    // but its value stays null.
+    const result = await execute({ fields: ["name", "email"] }, fixtures, "active_member");
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    const data = result.data as { members: Array<{ name: string; email: string | null }> };
+    assert.equal(data.members.length, 1);
+    assert.equal(data.members[0].email, null);
+    assert.equal("name" in data.members[0], true);
+  });
+
+  it("admin requesting fields:['email'] sees the real email (redaction not triggered)", async () => {
+    const result = await execute({ fields: ["name", "email"] }, fixtures, "admin");
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    const data = result.data as { members: Array<{ email: string | null }> };
+    assert.equal(data.members[0].email, "alice@example.com");
+  });
+
+  it("returns only the requested top-level keys", async () => {
+    const result = await execute({ fields: ["name", "as_mentor"] }, fixtures, "admin");
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    const data = result.data as { members: Array<Record<string, unknown>> };
+    assert.deepEqual(Object.keys(data.members[0]).sort(), ["as_mentor", "name"]);
+    assert.equal("email" in data.members[0], false);
+    assert.equal("as_mentee" in data.members[0], false);
+  });
+
+  it("returns the full member shape when fields omitted (backward compatible)", async () => {
+    const result = await execute({}, fixtures, "admin");
+    assert.equal(result.kind, "ok");
+    if (result.kind !== "ok") return;
+    const data = result.data as { members: Array<Record<string, unknown>> };
+    assert.deepEqual(Object.keys(data.members[0]).sort(), [
+      "as_mentee",
+      "as_mentor",
+      "email",
+      "name",
+      "user_id",
+    ]);
+  });
+
+  it("rejects an invalid field name at the schema boundary", () => {
+    assert.throws(() =>
+      listMemberPreferencesModule.argsSchema.parse({ fields: ["ssn"] })
+    );
+  });
+
+  it("rejects an empty fields array at the schema boundary", () => {
+    assert.throws(() =>
+      listMemberPreferencesModule.argsSchema.parse({ fields: [] })
+    );
   });
 });

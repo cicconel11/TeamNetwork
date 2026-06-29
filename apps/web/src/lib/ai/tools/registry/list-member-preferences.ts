@@ -2,7 +2,13 @@
 import { z } from "zod";
 import { isStageTimeoutError } from "@/lib/ai/timeout";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
-import { getSafeErrorMessage, matchesFilter } from "@/lib/ai/tools/shared";
+import {
+  getSafeErrorMessage,
+  MEMBER_PREFERENCE_OUTPUT_FIELDS,
+  matchesFilter,
+  projectFields,
+  type MemberPreferenceOutputField,
+} from "@/lib/ai/tools/shared";
 import { toolError, type ToolExecutionResult } from "@/lib/ai/tools/result";
 import type { ToolModule } from "./types";
 
@@ -11,6 +17,8 @@ const listMemberPreferencesSchema = z
     limit: z.number().int().min(1).max(50).optional(),
     sport: z.string().trim().min(1).max(60).optional(),
     topic: z.string().trim().min(1).max(60).optional(),
+    // Defaults to the full mentor/mentee shape. Narrow only when needed.
+    fields: z.array(z.enum(MEMBER_PREFERENCE_OUTPUT_FIELDS)).min(1).optional(),
   })
   .strict();
 
@@ -66,6 +74,7 @@ export const listMemberPreferencesModule: ToolModule<Args> = {
     // the executor handing them an RLS-bound client.
     return runListMemberPreferences(sb, ctx.orgId, args, logContext, {
       redactEmails: actorRole !== "admin",
+      fields: args.fields,
     });
   },
 };
@@ -80,7 +89,7 @@ async function runListMemberPreferences(
   orgId: string,
   args: Args,
   logContext: AiLogContext,
-  options: { redactEmails: boolean },
+  options: { redactEmails: boolean; fields?: MemberPreferenceOutputField[] },
 ): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 20, 50);
 
@@ -216,7 +225,13 @@ async function runListMemberPreferences(
     }
 
     aggregated.sort((left, right) => left.name.localeCompare(right.name));
-    const members = aggregated.slice(0, limit);
+    const limited = aggregated.slice(0, limit);
+    // Projection runs LAST — on rows whose emails have already been redacted for
+    // non-admins. It can only drop keys, so requesting `email` can never undo
+    // redaction: a row redacted to `email: null` stays null.
+    const members = options.fields
+      ? limited.map((member) => projectFields(member, options.fields as string[]))
+      : limited;
 
     aiLog("info", "ai-tools", "list_member_preferences completed", logContext, {
       total: aggregated.length,

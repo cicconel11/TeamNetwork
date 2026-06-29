@@ -4,7 +4,11 @@ import {
   buildMemberName,
   isPlaceholderMemberName,
   isTrustworthyHumanName,
+  MEMBER_LEAN_DEFAULT_FIELDS,
+  MEMBER_OUTPUT_FIELDS,
+  projectFields,
   safeToolQuery,
+  truncateBody,
   type MemberToolRow,
   type UserNameRow,
 } from "@/lib/ai/tools/shared";
@@ -19,6 +23,9 @@ const listMembersSchema = z
     skill: z.string().trim().min(1).optional(),
     certification: z.string().trim().min(1).optional(),
     language: z.string().trim().min(1).optional(),
+    // Defaults to id/name/role/email. Request heavy LinkedIn fields
+    // (summary/headline/skills/certifications/languages) explicitly.
+    fields: z.array(z.enum(MEMBER_OUTPUT_FIELDS)).min(1).optional(),
   })
   .strict();
 
@@ -29,6 +36,7 @@ export const listMembersModule: ToolModule<Args> = {
   argsSchema: listMembersSchema,
   async execute(args, { ctx, sb, logContext }) {
     const limit = Math.min(args.limit ?? 20, 50);
+    const selectedFields = args.fields ?? MEMBER_LEAN_DEFAULT_FIELDS;
     return safeToolQuery(logContext, async () => {
       let query = sb
         .from("members")
@@ -103,7 +111,11 @@ export const listMembersModule: ToolModule<Args> = {
                 ? userNameById.get(member.user_id) ?? null
                 : null;
 
-          return {
+          // Build the full role-correct row first, then narrow to the
+          // requested fields. Projection only ever removes keys, so a field the
+          // model didn't ask for never reaches the context. Heavy free-text
+          // fields are truncated so an opt-in request stays bounded.
+          const fullRow = {
             id: member.id,
             user_id: member.user_id,
             status: member.status,
@@ -116,12 +128,13 @@ export const listMembersModule: ToolModule<Args> = {
             email: member.email,
             current_company: member.current_company ?? null,
             industry: member.industry ?? null,
-            headline: member.headline ?? null,
-            summary: member.summary ?? null,
+            headline: truncateBody(member.headline),
+            summary: truncateBody(member.summary),
             skills: member.skills ?? null,
             certifications: member.certifications ?? null,
             languages: member.languages ?? null,
           };
+          return projectFields(fullRow, selectedFields);
         }),
         error,
       };

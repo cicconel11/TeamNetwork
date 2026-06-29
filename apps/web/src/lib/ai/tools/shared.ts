@@ -89,6 +89,90 @@ export function truncateBody(body: string | null | undefined): string | null {
   return body.trim().slice(0, MAX_BODY_PREVIEW_CHARS);
 }
 
+// ---------------------------------------------------------------------------
+// Field projection
+// ---------------------------------------------------------------------------
+//
+// Lets the model request only the output keys it needs so heavy rows (LinkedIn
+// summaries, jsonb skill arrays) don't flood the LLM context. Projection only
+// ever NARROWS a row — it can drop keys but never add or repopulate one. This
+// is the load-bearing security property: callers apply per-role redaction
+// (e.g. nulling emails for non-admins) BEFORE projecting, so a requested field
+// the row never had — or that redaction already nulled — stays absent/null.
+
+/**
+ * Return a new object containing only the `requested` keys that are present on
+ * `row`. Pure: never mutates input, never adds a key the row lacks. A non-object
+ * `row` is returned unchanged (defensive against `unknown` tool payloads).
+ */
+export function projectFields<T>(row: T, requested: readonly string[]): T {
+  if (!row || typeof row !== "object" || Array.isArray(row)) {
+    return row;
+  }
+  const requestedKeys = new Set(requested);
+  const source = row as Record<string, unknown>;
+  const projected: Record<string, unknown> = {};
+  for (const key of Object.keys(source)) {
+    if (requestedKeys.has(key)) {
+      projected[key] = source[key];
+    }
+  }
+  return projected as T;
+}
+
+// Output-key allowlists per tool — the single source of truth shared by each
+// tool's Zod `fields` enum and its lean default. These are the keys each tool
+// EMITS (including derived keys like `name`/`title`), not raw DB columns.
+
+export const MEMBER_OUTPUT_FIELDS = [
+  "id",
+  "user_id",
+  "status",
+  "role",
+  "created_at",
+  "name",
+  "email",
+  "current_company",
+  "industry",
+  "headline",
+  "summary",
+  "skills",
+  "certifications",
+  "languages",
+] as const;
+
+export type MemberOutputField = (typeof MEMBER_OUTPUT_FIELDS)[number];
+
+/** Lean default: identity + contact only. Heavy LinkedIn fields are opt-in. */
+export const MEMBER_LEAN_DEFAULT_FIELDS: readonly MemberOutputField[] = [
+  "id",
+  "name",
+  "role",
+  "email",
+];
+
+export const EVENT_OUTPUT_FIELDS = [
+  "id",
+  "title",
+  "start_date",
+  "end_date",
+  "location",
+  "description_preview",
+] as const;
+
+export type EventOutputField = (typeof EVENT_OUTPUT_FIELDS)[number];
+
+export const MEMBER_PREFERENCE_OUTPUT_FIELDS = [
+  "user_id",
+  "name",
+  "email",
+  "as_mentor",
+  "as_mentee",
+] as const;
+
+export type MemberPreferenceOutputField =
+  (typeof MEMBER_PREFERENCE_OUTPUT_FIELDS)[number];
+
 export interface MemberToolRow {
   id: string;
   user_id: string | null;
