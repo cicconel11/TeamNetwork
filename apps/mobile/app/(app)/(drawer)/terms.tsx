@@ -27,7 +27,7 @@ const termsSections: TermsSection[] = [
     number: "2",
     title: "Eligibility",
     paragraphs: [
-      "You must be at least 16 years old to use the Service. By using the Service, you represent and warrant that you meet this age requirement.",
+      "You must be at least 13 years old to use the Service. If you are between 13 and 17 years old, you may use the Service only with parental or guardian consent. By using the Service, you represent and warrant that you meet these requirements.",
     ],
   },
   {

@@ -15,6 +15,7 @@ export const ORG_NAV_GROUPS: NavGroup[] = [
 
 export const NAV_GROUP_BY_CONFIG_KEY: Record<string, NavGroupId> = {
   "/members": "people",
+  "/connections": "people",
   "/parents": "people",
   "/alumni": "people",
   "/mentorship": "people",

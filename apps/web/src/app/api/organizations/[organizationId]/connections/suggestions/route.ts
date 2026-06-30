@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedApiClient } from "@/lib/supabase/api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { normalizeRole } from "@/lib/auth/role-utils";
@@ -33,10 +33,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user } = await createAuthenticatedApiClient(req);
 
   const rateLimit = checkRateLimit(req, {
     userId: user?.id ?? null,

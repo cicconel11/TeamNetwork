@@ -9,7 +9,7 @@
  * Markers chosen for unambiguity: a stray `@` in prose won't false-match.
  */
 
-const MARKER_RE = /\[@([0-9a-f-]{36})\|([^\]]+)\]/gi;
+const MARKER_RE = /\[@([0-9a-f-]{36})\|(.+?)\]/gi;
 
 export interface MentionMarker {
   userId: string;
@@ -44,6 +44,6 @@ export function renderMentionPlainText(body: string): string {
  * sanitized so the regex stays unambiguous.
  */
 export function buildMentionMarker(userId: string, displayName: string): string {
-  const safeName = displayName.replace(/[\[\]]/g, "");
+  const safeName = displayName.replace(/\[|\]/g, "");
   return `[@${userId}|${safeName}]`;
 }

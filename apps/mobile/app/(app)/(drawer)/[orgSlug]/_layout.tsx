@@ -162,6 +162,14 @@ function OrgLayoutInner() {
         }}
       />
       <Stack.Screen
+        name="connections"
+        options={{
+          headerShown: false,
+          title: "Connections",
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
         name="parents"
         options={{
           headerShown: false,

@@ -19,6 +19,13 @@ const routeSource = await readFile(
   ),
   "utf8"
 );
+const profileDirectChatRouteSource = await readFile(
+  new URL(
+    "../../../src/app/api/organizations/[organizationId]/direct-chat/profile/route.ts",
+    import.meta.url
+  ),
+  "utf8"
+);
 
 beforeEach(() => {
   resetSuggestionTelemetryForTests();
@@ -49,6 +56,24 @@ test("suggestions route returns 401 for unauthenticated and rate-limits", () => 
   assert.match(routeSource, /Unauthorized/);
   assert.match(routeSource, /checkRateLimit/);
   assert.match(routeSource, /buildRateLimitResponse/);
+});
+
+test("mobile connections routes authenticate with the Bearer-aware API client", () => {
+  for (const [name, source] of [
+    ["suggestions", routeSource],
+    ["profile direct-chat", profileDirectChatRouteSource],
+  ] as const) {
+    assert.match(
+      source,
+      /createAuthenticatedApiClient\(\s*req\s*\)/,
+      `${name} route must honor mobile Authorization: Bearer tokens`,
+    );
+    assert.doesNotMatch(
+      source,
+      /from "@\/lib\/supabase\/server"/,
+      `${name} route must not authenticate with the cookie-only server client`,
+    );
+  }
 });
 
 test("suggestions route sources suggestions from the viewer via the shared helper", () => {
