@@ -1,6 +1,5 @@
 import { Platform } from "react-native";
 import { Directory, File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import { supabase } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
 
@@ -16,6 +15,22 @@ export type AddToWalletResult =
   | { status: "unsupported_platform" }
   | { status: "unauthenticated" }
   | { status: "error"; message: string };
+
+type ExpoSharingModule = {
+  isAvailableAsync: () => Promise<boolean>;
+  shareAsync: (
+    url: string,
+    options?: { UTI?: string; mimeType?: string }
+  ) => Promise<void>;
+};
+
+async function loadSharing(): Promise<ExpoSharingModule | null> {
+  try {
+    return await import("expo-sharing");
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Shared helper: downloads a signed `.pkpass` from the platform API and presents
@@ -38,6 +53,14 @@ export async function addToWallet(input: AddToWalletInput): Promise<AddToWalletR
   }
 
   try {
+    const Sharing = await loadSharing();
+    if (!Sharing) {
+      return {
+        status: "error",
+        message: "This development build needs to be rebuilt before Wallet sharing is available.",
+      };
+    }
+
     const cacheDir = new Directory(Paths.cache, "wallet");
     cacheDir.create({ intermediates: true, idempotent: true });
     const destination = new File(cacheDir, `${input.fileBaseName}.pkpass`);
