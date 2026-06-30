@@ -513,7 +513,7 @@ export default function ConnectionsScreen() {
             </Pressable>
           ) : (
             <View style={styles.mutedStatus}>
-              <Text style={styles.mutedStatusText}>Not available in app yet</Text>
+              <Text style={styles.mutedStatusText}>No app account yet</Text>
             </View>
           )}
         </View>
