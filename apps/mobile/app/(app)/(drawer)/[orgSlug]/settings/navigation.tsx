@@ -27,6 +27,7 @@ import {
   Home,
   Users,
   MessageCircle,
+  Network,
   GraduationCap,
   Handshake,
   Dumbbell,
@@ -50,6 +51,7 @@ import {
 const NAV_ITEMS = [
   { href: "", label: "Dashboard", icon: Home, configurable: true },
   { href: "/members", label: "Members", icon: Users, configurable: true },
+  { href: "/connections", label: "Connections", icon: Network, configurable: true },
   { href: "/parents", label: "Parents", icon: Users, configurable: true },
   { href: "/chat", label: "Chat", icon: MessageCircle, configurable: true },
   { href: "/alumni", label: "Alumni", icon: GraduationCap, configurable: true },

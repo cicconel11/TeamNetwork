@@ -18,6 +18,7 @@ const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni", "parent"];
 const ALLOWED_NAV_KEYS = new Set([
   "dashboard",
   "/members",
+  "/connections",
   "/parents",
   "/chat",
   "/alumni",
