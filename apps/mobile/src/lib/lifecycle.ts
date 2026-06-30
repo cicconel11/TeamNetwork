@@ -20,7 +20,7 @@
 import { Platform } from "react-native";
 import * as Application from "expo-application";
 import { unregisterPushToken } from "@/lib/notifications";
-import { setBiometricEnabled } from "@/lib/biometric";
+import { clearBiometricSignIn } from "@/lib/biometric-signin";
 import { clearLastActiveOrg, clearQuickActions } from "@/lib/quick-actions";
 import { fetchWithAuth } from "@/lib/web-api";
 import * as sentry from "@/lib/analytics/sentry";
@@ -73,10 +73,10 @@ export async function signOutCleanup({ userId }: SignOutCleanupOptions): Promise
   }
 
   try {
-    await setBiometricEnabled(false);
+    await clearBiometricSignIn();
   } catch (err) {
     sentry.captureException(err as Error, {
-      context: "signOutCleanup.setBiometricEnabled",
+      context: "signOutCleanup.clearBiometricSignIn",
     });
   }
 

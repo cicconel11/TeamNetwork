@@ -151,7 +151,12 @@ const config: ExpoConfig = {
         origin: false,
       },
     ],
-    "expo-secure-store",
+    [
+      "expo-secure-store",
+      {
+        faceIDPermission: "Use Face ID to quickly and securely sign in to TeamNetwork.",
+      },
+    ],
     [
       "expo-notifications",
       {

@@ -1,12 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, Switch } from "react-native";
 import { ChevronDown, Lock } from "lucide-react-native";
-import {
-  authenticate,
-  getBiometricCapabilities,
-  isBiometricEnabled,
-  setBiometricEnabled,
-} from "@/lib/biometric";
+import { getBiometricCapabilities, isBiometricEnabled } from "@/lib/biometric";
+import { clearBiometricSignIn, enableBiometricSignIn } from "@/lib/biometric-signin";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { buildSettingsColors } from "./settingsColors";
 import { useBaseStyles, fontSize, fontWeight } from "./settingsShared";
@@ -17,6 +14,7 @@ import { useThemedStyles } from "@/hooks/useThemedStyles";
  * hardware (matches plan R5.1).
  */
 export function SettingsSecuritySection() {
+  const { session } = useAuth();
   const { neutral, semantic } = useAppColorScheme();
   const colors = useMemo(() => buildSettingsColors(neutral, semantic), [neutral, semantic]);
   const baseStyles = useBaseStyles();
@@ -82,12 +80,11 @@ export function SettingsSecuritySection() {
           setIsEnrolled(caps.isEnrolled);
           if (!caps.isEnrolled) return;
         }
-        const result = await authenticate("Enable biometric unlock");
+        const result = await enableBiometricSignIn(session);
         if (!result.success) return;
-        await setBiometricEnabled(true);
         setEnabled(true);
       } else {
-        await setBiometricEnabled(false);
+        await clearBiometricSignIn();
         setEnabled(false);
       }
     } finally {
@@ -119,7 +116,7 @@ export function SettingsSecuritySection() {
               <Text style={styles.rowLabel}>Unlock with biometrics</Text>
               <Text style={styles.hint}>
                 {isEnrolled
-                  ? "Use Face ID, Touch ID, or your device passcode when you open or return to TeamNetwork."
+                  ? "Use Face ID, Touch ID, or your device passcode when you sign in, open, or return to TeamNetwork."
                   : "Set up Face ID, Touch ID, or a fingerprint in your device settings to enable this."}
               </Text>
             </View>
