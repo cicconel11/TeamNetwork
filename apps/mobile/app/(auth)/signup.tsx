@@ -15,11 +15,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, Redirect, useRouter, useNavigation } from "expo-router";
 import { ChevronLeft, Eye, EyeOff } from "lucide-react-native";
-import * as AppleAuthentication from "expo-apple-authentication";
 import { supabase } from "@/lib/supabase";
 import { isAppleAuthCanceled, signUpWithApple } from "@/lib/apple-auth";
 import { captureException, track } from "@/lib/analytics";
 import { borderRadius, spacing, fontSize } from "@/lib/theme";
+import AuthProviderSection from "@/components/auth/AuthProviderSection";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
 import {
   buildMobileEmailSignupCallbackUrl,
@@ -595,79 +595,15 @@ export default function SignupScreen() {
               )}
             </Pressable>
 
-            {showAppleButton ? (
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
-                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                cornerRadius={borderRadius.lg}
-                onPress={handleAppleSignup}
-                pointerEvents={authBusy || isWeb ? "none" : "auto"}
-                style={[
-                  styles.appleButton,
-                  (authBusy || isWeb) && styles.socialButtonDisabled,
-                ]}
-              />
-            ) : null}
-
-            <Pressable
-              onPress={() => handleSocialSignup("google")}
+            <AuthProviderSection
+              mode="signup"
+              showAppleButton={showAppleButton}
               disabled={authBusy || isWeb}
-              style={({ pressed }) => [
-                styles.socialButton,
-                showAppleButton && styles.socialButtonStacked,
-                (authBusy || isWeb) && styles.socialButtonDisabled,
-                pressed && { opacity: 0.75 },
-              ]}
-              accessibilityLabel="Continue with Google"
-              accessibilityRole="button"
-            >
-              <View style={styles.socialChip}>
-                <Text style={[styles.socialChipText, styles.socialChipTextGoogle]}>G</Text>
-              </View>
-              <Text style={styles.socialText}>
-                {socialLoading === "google" ? "Connecting..." : "Continue with Google"}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => handleSocialSignup("linkedin")}
-              disabled={authBusy || isWeb}
-              style={({ pressed }) => [
-                styles.socialButton,
-                styles.socialButtonStacked,
-                (authBusy || isWeb) && styles.socialButtonDisabled,
-                pressed && { opacity: 0.75 },
-              ]}
-              accessibilityLabel="Continue with LinkedIn"
-              accessibilityRole="button"
-            >
-              <View style={[styles.socialChip, styles.socialChipLinkedIn]}>
-                <Text style={[styles.socialChipText, styles.socialChipTextOnDark]}>in</Text>
-              </View>
-              <Text style={styles.socialText}>
-                {socialLoading === "linkedin" ? "Connecting..." : "Continue with LinkedIn"}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => handleSocialSignup("microsoft")}
-              disabled={authBusy || isWeb}
-              style={({ pressed }) => [
-                styles.socialButton,
-                styles.socialButtonStacked,
-                (authBusy || isWeb) && styles.socialButtonDisabled,
-                pressed && { opacity: 0.75 },
-              ]}
-              accessibilityLabel="Continue with Microsoft"
-              accessibilityRole="button"
-            >
-              <View style={styles.socialChip}>
-                <Text style={[styles.socialChipText, styles.socialChipTextMicrosoft]}>M</Text>
-              </View>
-              <Text style={styles.socialText}>
-                {socialLoading === "microsoft" ? "Connecting..." : "Continue with Microsoft"}
-              </Text>
-            </Pressable>
+              appleLoading={appleLoading}
+              providerLoading={socialLoading}
+              onApplePress={handleAppleSignup}
+              onProviderPress={handleSocialSignup}
+            />
           </View>
           )}
 
@@ -899,63 +835,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     fontWeight: "600",
   },
-  appleButton: {
-    height: 52,
-    marginTop: spacing.md,
-    width: "100%",
-  },
-  socialButton: {
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderColor: colors.inputBorder,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: spacing.md,
-    minHeight: 52,
-    paddingHorizontal: spacing.md,
-  },
-  socialButtonStacked: {
-    marginTop: spacing.sm,
-  },
-  socialButtonDisabled: {
-    opacity: 0.6,
-  },
-  socialChip: {
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderColor: colors.inputBorder,
-    borderRadius: 12,
-    borderWidth: 1,
-    height: 24,
-    justifyContent: "center",
-    marginRight: spacing.sm,
-    width: 24,
-  },
-  socialChipLinkedIn: {
-    backgroundColor: "#0a66c2",
-    borderColor: "#0a66c2",
-  },
-  socialChipText: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  socialChipTextGoogle: {
-    color: "#4285F4",
-  },
-  socialChipTextOnDark: {
-    color: "#ffffff",
-  },
-  socialChipTextMicrosoft: {
-    color: "#f25022",
-  },
-  socialText: {
-    color: colors.title,
-    fontSize: fontSize.base,
-    fontWeight: "600",
-  },
-
   // Sign In Link
   signinContainer: {
     flexDirection: "row",

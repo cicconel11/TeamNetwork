@@ -16,14 +16,12 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSequence,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { CheckCircle, ChevronLeft, Eye, EyeOff, Lock, Mail } from "lucide-react-native";
-import * as AppleAuthentication from "expo-apple-authentication";
 import { Image } from "expo-image";
 import { baseSchemas } from "@teammeet/validation";
 import { supabase } from "@/lib/supabase";
@@ -33,6 +31,7 @@ import { isAppleAuthCanceled, signInWithApple } from "@/lib/apple-auth";
 import { captureException, track } from "@/lib/analytics";
 import { showToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
+import AuthProviderSection from "@/components/auth/AuthProviderSection";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
 import {
   ANIMATION,
@@ -485,90 +484,15 @@ export default function LoginScreen() {
               Sign In
             </Button>
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Apple */}
-            {showAppleButton ? (
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                cornerRadius={RADIUS.lg}
-                onPress={handleAppleSignIn}
-                pointerEvents={isLoading ? "none" : "auto"}
-                style={[
-                  styles.appleButton,
-                  isLoading && styles.socialButtonDisabled,
-                ]}
-              />
-            ) : null}
-
-            {/* Google */}
-            <Pressable
-              onPress={() => signInWithProvider("google")}
+            <AuthProviderSection
+              mode="login"
+              showAppleButton={showAppleButton}
               disabled={isLoading}
-              style={({ pressed }) => [
-                styles.socialButton,
-                showAppleButton && styles.socialButtonStacked,
-                isLoading && styles.socialButtonDisabled,
-                pressed && styles.socialButtonPressed,
-              ]}
-              accessibilityLabel="Continue with Google"
-              accessibilityRole="button"
-            >
-              <View style={styles.socialChip}>
-                <Text style={[styles.socialChipText, styles.socialChipTextGoogle]}>G</Text>
-              </View>
-              <Text style={styles.socialText}>
-                {socialLoading === "google" ? "Connecting…" : "Continue with Google"}
-              </Text>
-            </Pressable>
-
-            {/* LinkedIn */}
-            <Pressable
-              onPress={() => signInWithProvider("linkedin")}
-              disabled={isLoading}
-              style={({ pressed }) => [
-                styles.socialButton,
-                styles.socialButtonStacked,
-                isLoading && styles.socialButtonDisabled,
-                pressed && styles.socialButtonPressed,
-              ]}
-              accessibilityLabel="Continue with LinkedIn"
-              accessibilityRole="button"
-            >
-              <View style={[styles.socialChip, styles.socialChipLinkedIn]}>
-                <Text style={[styles.socialChipText, styles.socialChipTextOnDark]}>in</Text>
-              </View>
-              <Text style={styles.socialText}>
-                {socialLoading === "linkedin" ? "Connecting…" : "Continue with LinkedIn"}
-              </Text>
-            </Pressable>
-
-            {/* Microsoft */}
-            <Pressable
-              onPress={() => signInWithProvider("microsoft")}
-              disabled={isLoading}
-              style={({ pressed }) => [
-                styles.socialButton,
-                styles.socialButtonStacked,
-                isLoading && styles.socialButtonDisabled,
-                pressed && styles.socialButtonPressed,
-              ]}
-              accessibilityLabel="Continue with Microsoft"
-              accessibilityRole="button"
-            >
-              <View style={styles.socialChip}>
-                <Text style={[styles.socialChipText, styles.socialChipTextMicrosoft]}>M</Text>
-              </View>
-              <Text style={styles.socialText}>
-                {socialLoading === "microsoft" ? "Connecting…" : "Continue with Microsoft"}
-              </Text>
-            </Pressable>
+              appleLoading={appleLoading}
+              providerLoading={socialLoading}
+              onApplePress={handleAppleSignIn}
+              onProviderPress={signInWithProvider}
+            />
 
             {/* Sign up footer.
                 Apple Guideline 3.1.1 (Business): in-app account registration is
@@ -783,85 +707,6 @@ const styles = StyleSheet.create({
   apiErrorText: {
     ...TYPOGRAPHY.bodySmall,
     color: SEMANTIC.errorDark,
-  },
-
-  // Divider
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: SPACING.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: NEUTRAL.border,
-  },
-  dividerText: {
-    ...TYPOGRAPHY.caption,
-    marginHorizontal: SPACING.md,
-    color: NEUTRAL.muted,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-
-  // Social sign-in buttons
-  appleButton: {
-    width: "100%",
-    height: 56,
-  },
-  socialButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACING.sm + 2,
-    minHeight: 56,
-    paddingVertical: SPACING.md,
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    ...SHADOWS.sm,
-  },
-  socialButtonStacked: {
-    marginTop: SPACING.sm,
-  },
-  socialButtonDisabled: {
-    opacity: 0.6,
-  },
-  socialButtonPressed: {
-    opacity: 0.85,
-  },
-  socialChip: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  socialChipLinkedIn: {
-    backgroundColor: "#0a66c2",
-    borderColor: "#0a66c2",
-  },
-  socialChipText: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  socialChipTextGoogle: {
-    color: "#4285F4",
-  },
-  socialChipTextOnDark: {
-    color: "#ffffff",
-  },
-  socialChipTextMicrosoft: {
-    color: "#f25022",
-  },
-  socialText: {
-    ...TYPOGRAPHY.labelLarge,
-    fontSize: 16,
-    color: NEUTRAL.foreground,
   },
 
   // Sign up footer
