@@ -21,13 +21,14 @@ import Animated, {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { CheckCircle, ChevronLeft, Eye, EyeOff, Lock, Mail } from "lucide-react-native";
+import { CheckCircle, ChevronLeft, Eye, EyeOff, Lock, Mail, ScanFace } from "lucide-react-native";
 import { Image } from "expo-image";
 import { baseSchemas } from "@teammeet/validation";
 import { supabase } from "@/lib/supabase";
 import { type MobileOAuthProvider } from "@/lib/auth-redirects";
 import { runMobileOAuth } from "@/lib/mobile-oauth-flow";
 import { isAppleAuthCanceled, signInWithApple } from "@/lib/apple-auth";
+import { canShowBiometricSignIn, signInWithBiometrics } from "@/lib/biometric-signin";
 import { captureException, track } from "@/lib/analytics";
 import { showToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
@@ -79,8 +80,12 @@ export default function LoginScreen() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<MobileOAuthProvider | null>(null);
   const [appleLoading, setAppleLoading] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [biometricSignInAvailable, setBiometricSignInAvailable] = useState(false);
   const showAppleButton = Platform.OS === "ios";
-  const isLoading = emailLoading || socialLoading !== null || appleLoading;
+  const isLoading = emailLoading || socialLoading !== null || appleLoading || biometricLoading;
+  const biometricSignInLabel =
+    Platform.OS === "ios" ? "Sign in with Face ID" : "Sign in with biometrics";
 
   // Captcha
   const turnstileRef = useRef<TurnstileRef>(null);
@@ -108,6 +113,26 @@ export default function LoginScreen() {
       easing: Easing.out(Easing.quad),
     });
   }, [sheetOpacity, sheetTranslate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    canShowBiometricSignIn()
+      .then((available) => {
+        if (!cancelled) {
+          setBiometricSignInAvailable(available);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBiometricSignInAvailable(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetTranslate.value }],
@@ -298,6 +323,39 @@ export default function LoginScreen() {
     }
   };
 
+  const handleBiometricSignIn = async () => {
+    if (isLoading) {
+      return;
+    }
+
+    setApiError("");
+    setBiometricLoading(true);
+
+    try {
+      const result = await signInWithBiometrics();
+      if (!result.success) {
+        if (result.expired) {
+          setBiometricSignInAvailable(false);
+        }
+        if (!result.cancelled) {
+          setApiError(result.error);
+          showToast(result.error, "error");
+        }
+        return;
+      }
+
+      track("user_logged_in", { method: "biometric" });
+    } catch (error: unknown) {
+      captureException(error as Error, { screen: "Login", method: "biometric" });
+      const message =
+        (error as { message?: string }).message || "Could not complete biometric sign in.";
+      setApiError(message);
+      showToast(message, "error");
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
   const heroHeight = isCompact ? 170 : 220;
   const logoSize = isCompact
     ? { width: 150, height: 100 }
@@ -358,6 +416,22 @@ export default function LoginScreen() {
                 <Text style={styles.successText}>{params.message}</Text>
               </View>
             )}
+
+            {biometricSignInAvailable ? (
+              <Button
+                fullWidth
+                size="lg"
+                variant="outline"
+                loading={biometricLoading}
+                disabled={emailLoading || socialLoading !== null || appleLoading}
+                onPress={handleBiometricSignIn}
+                icon={<ScanFace size={20} color={SEMANTIC.success} />}
+                style={styles.biometricButton}
+                accessibilityLabel={biometricSignInLabel}
+              >
+                {biometricSignInLabel}
+              </Button>
+            ) : null}
 
             {/* Email */}
             <View style={styles.fieldGroup}>
@@ -606,6 +680,9 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: SEMANTIC.successDark,
     flex: 1,
+  },
+  biometricButton: {
+    marginBottom: SPACING.lg,
   },
 
   // Form fields
