@@ -139,25 +139,30 @@ export function LandingHero({
         </View>
       )}
 
-      {/* Tertiary — Continue with Google. Custom Pressable so we can show
-          the colored G chip; Button has no sub-icon slot for it. */}
-      <Pressable
-        onPress={onContinueWithGoogle}
-        disabled={googleLoading}
-        style={({ pressed }) => [
-          styles.googleRow,
-          googleLoading && styles.googleRowDisabled,
-          pressed && !googleLoading && styles.googleRowPressed,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Continue with Google"
-        accessibilityState={{ disabled: googleLoading, busy: googleLoading }}
-      >
-        <View style={styles.googleChip}>
-          <Text style={styles.googleChipText}>G</Text>
+      <View style={styles.providerWrap}>
+        <View style={styles.providerHeadingRow}>
+          <View style={styles.providerHeadingLine} />
+          <Text style={styles.providerHeadingText}>Continue with</Text>
+          <View style={styles.providerHeadingLine} />
         </View>
-        <Text style={styles.googleText}>{googleLoading ? "Connecting…" : "Continue with Google"}</Text>
-      </Pressable>
+        <Pressable
+          onPress={onContinueWithGoogle}
+          disabled={googleLoading}
+          style={({ pressed }) => [
+            styles.googleRow,
+            googleLoading && styles.googleRowDisabled,
+            pressed && !googleLoading && styles.googleRowPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Continue with Google"
+          accessibilityState={{ disabled: googleLoading, busy: googleLoading }}
+        >
+          <View style={styles.googleChip}>
+            <Text style={styles.googleChipText}>G</Text>
+          </View>
+          <Text style={styles.googleText}>{googleLoading ? "Connecting…" : "Google"}</Text>
+        </Pressable>
+      </View>
 
       {/* Scroll hint */}
       <View
@@ -232,7 +237,26 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm + 4,
   },
 
-  // Google
+  // Provider auth
+  providerWrap: {
+    width: "100%",
+  },
+  providerHeadingRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  providerHeadingLine: {
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    flex: 1,
+    height: 1,
+  },
+  providerHeadingText: {
+    ...TYPOGRAPHY.labelSmall,
+    color: "rgba(255, 255, 255, 0.58)",
+    letterSpacing: 0,
+  },
   googleRow: {
     flexDirection: "row",
     alignItems: "center",
