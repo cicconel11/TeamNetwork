@@ -147,21 +147,78 @@ describe("mobile auth API helpers", () => {
     });
   });
 
-  it("validates signup age through the web API", async () => {
-    mockFetchResponse({
-      ok: true,
-      status: 200,
-      body: {
+  describe("validateSignupAge", () => {
+    it("returns the validated age metadata on a 200 with a token", async () => {
+      mockFetchResponse({
+        ok: true,
+        status: 200,
+        body: {
+          token: "age-token",
+          ageBracket: "18_plus",
+          isMinor: false,
+        },
+      });
+
+      await expect(validateSignupAge("18_plus")).resolves.toEqual({
         token: "age-token",
         ageBracket: "18_plus",
         isMinor: false,
-      },
+      });
     });
 
-    await expect(validateSignupAge("18_plus")).resolves.toEqual({
-      token: "age-token",
-      ageBracket: "18_plus",
-      isMinor: false,
+    it("propagates the minor flag for the 13_17 bracket", async () => {
+      mockFetchResponse({
+        ok: true,
+        status: 200,
+        body: { token: "teen-token", ageBracket: "13_17", isMinor: true },
+      });
+
+      await expect(validateSignupAge("13_17")).resolves.toEqual({
+        token: "teen-token",
+        ageBracket: "13_17",
+        isMinor: true,
+      });
+    });
+
+    it("throws for under-13 when the API returns a parental-consent redirect (COPPA)", async () => {
+      // COMPLIANCE: the web /api/auth/validate-age route responds with a
+      // { redirect } (no token) for under-13. The helper MUST reject so the
+      // caller (claim.tsx / signup) never advances to mint an account, and no
+      // age metadata is produced.
+      mockFetchResponse({
+        ok: true,
+        status: 200,
+        body: { redirect: "/auth/parental-consent" },
+      });
+
+      await expect(validateSignupAge("under_13")).rejects.toThrow(
+        /parental consent/i,
+      );
+    });
+
+    it("rejects a non-OK response with the server-supplied error message", async () => {
+      mockFetchResponse({
+        ok: false,
+        status: 400,
+        body: { error: "Invalid age bracket." },
+      });
+
+      await expect(validateSignupAge("18_plus")).rejects.toThrow(
+        "Invalid age bracket.",
+      );
+    });
+
+    it("rejects a 200 that omits the token as an invalid response", async () => {
+      // No token + no redirect: neither a valid pass nor a consent redirect.
+      mockFetchResponse({
+        ok: true,
+        status: 200,
+        body: { ageBracket: "18_plus", isMinor: false },
+      });
+
+      await expect(validateSignupAge("18_plus")).rejects.toThrow(
+        /did not return a valid token/i,
+      );
     });
   });
 });

@@ -1,4 +1,4 @@
-import { buildAuthorizedHeaders, fetchWithAuth, getWebRoute } from "@/lib/web-api";
+import { buildAuthorizedHeaders, fetchWithAuth } from "@/lib/web-api";
 import { supabase } from "@/lib/supabase";
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
@@ -49,12 +49,6 @@ describe("web api helpers", () => {
 
     expect(headers.get("Accept")).toBe("application/json");
     expect(headers.get("Authorization")).toBe("Bearer token-123");
-  });
-
-  it("builds absolute web routes from app-relative paths", () => {
-    expect(getWebRoute("/app/join")).toBe("https://www.myteamnetwork.com/app/join");
-    expect(getWebRoute("app/create-org/")).toBe("https://www.myteamnetwork.com/app/create-org");
-    expect(getWebRoute()).toBe("https://www.myteamnetwork.com");
   });
 
   it("adds the auth token to outgoing requests", async () => {

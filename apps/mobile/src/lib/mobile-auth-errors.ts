@@ -3,10 +3,19 @@
  *
  * Classification lives in `consumeMobileAuthHandoff` (the only place that sees
  * the HTTP status). Surfacing — Sentry capture + user-visible toast + optional
- * retry affordance — lives here so BOTH consume paths (the WebBrowser promise in
- * `mobile-oauth-flow.ts` and the OS-listener fallback in `deep-link.ts`) behave
- * identically. Before this helper the OS-listener path only captured to Sentry
- * and failed silently for the user.
+ * retry affordance — is centralized here.
+ *
+ * The two consume paths surface differently by necessity:
+ * - The OS-listener fallback in `deep-link.ts` (iOS delivers the callback to the
+ *   app as a deep link instead of resolving the WebBrowser promise) has no screen
+ *   in scope, so it calls this helper directly. Before it existed, that path only
+ *   captured to Sentry and failed silently for the user.
+ * - The WebBrowser promise path in `mobile-oauth-flow.ts` runs inside a screen
+ *   (`login.tsx`), which owns its own inline error UI (`apiError` box + toast).
+ *   It RETURNS a structured result rather than calling this helper, so it does
+ *   not double-surface. The trade-off: that path currently collapses a
+ *   `MobileAuthError` to its `.message` and drops `.status`, so it cannot offer
+ *   the retry affordance this helper provides on the OS-listener path.
  */
 
 import { captureException } from "@/lib/analytics";
@@ -39,7 +48,7 @@ const LOGIN_ROUTE = "/(auth)/login";
  */
 export function surfaceMobileAuthError(
   error: unknown,
-  context: string | Record<string, unknown>,
+  context: string | ({ context: string } & Record<string, unknown>),
   navigate?: (route: string) => void
 ): void {
   const err = error instanceof Error ? error : new Error(String(error));

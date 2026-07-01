@@ -14,8 +14,15 @@ import { Check, X, AlertCircle, Info } from "lucide-react-native";
 import { RADIUS, SPACING, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import {
+  showToast,
+  setGlobalShowToast,
+  type ToastVariant,
+} from "@/components/ui/toast-queue";
 
-export type ToastVariant = "success" | "error" | "warning" | "info";
+// Re-exported so existing `@/components/ui/Toast` import sites keep working; the
+// dispatch + pre-mount queue now live in the pure `toast-queue` module.
+export { showToast, setGlobalShowToast, type ToastVariant };
 
 interface ToastProps {
   visible: boolean;
@@ -204,42 +211,6 @@ export function Toast({
       </Pressable>
     </Animated.View>
   );
-}
-
-// Standalone toast functions for quick use (connected via context by ToastBridge).
-type GlobalShowToast = (
-  message: string,
-  variant?: ToastVariant,
-  action?: ToastState["action"]
-) => void;
-
-let globalShowToast: GlobalShowToast | null = null;
-
-// If a toast is requested before ToastBridge mounts (e.g. an early-boot deep
-// link processed by Linking.getInitialURL() at launch), globalShowToast is null
-// and the call would be a silent no-op. Queue the most recent request and flush
-// it once a real handler is wired, so the very-first-launch failure isn't lost.
-let pendingToast: Parameters<GlobalShowToast> | null = null;
-
-export function setGlobalShowToast(fn: GlobalShowToast | null) {
-  globalShowToast = fn;
-  if (fn && pendingToast) {
-    const queued = pendingToast;
-    pendingToast = null;
-    fn(...queued);
-  }
-}
-
-export function showToast(
-  message: string,
-  variant: ToastVariant = "success",
-  action?: ToastState["action"]
-) {
-  if (globalShowToast) {
-    globalShowToast(message, variant, action);
-    return;
-  }
-  pendingToast = [message, variant, action];
 }
 
 const styles = StyleSheet.create({

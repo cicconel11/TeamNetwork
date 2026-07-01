@@ -14,6 +14,19 @@ export type AgeGateResult = {
   token: string;
 };
 
+/**
+ * COMPLIANCE gate for the claim request step: the alumni-claim OTP mints an
+ * `auth.users` row (`shouldCreateUser: true`) with no DB age backstop, so the
+ * account must NEVER be requested without a validated age result. Returns `true`
+ * only when age metadata is present. Pure so the invariant is unit-tested
+ * independently of the screen's captcha/Supabase wiring.
+ */
+export function canSubmitClaim(
+  ageGate: AgeGateResult | null,
+): ageGate is AgeGateResult {
+  return ageGate !== null;
+}
+
 export type ClaimSignInOptions = {
   captchaToken: string;
   shouldCreateUser: true;

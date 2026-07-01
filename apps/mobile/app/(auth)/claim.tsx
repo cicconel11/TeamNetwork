@@ -29,6 +29,7 @@ import { supabase } from "@/lib/supabase";
 import { validateSignupAge } from "@/lib/mobile-auth";
 import {
   buildClaimSignInOptions,
+  canSubmitClaim,
   type AgeGateResult,
 } from "@/lib/claim-request";
 import { captureException, track } from "@/lib/analytics";
@@ -170,7 +171,7 @@ export default function ClaimAccountScreen() {
       return;
     }
     // Compliance guard: never mint an account without validated age metadata.
-    if (!ageGate) {
+    if (!canSubmitClaim(ageGate)) {
       setLoading(false);
       setApiError("Please confirm your age before claiming your account.");
       setStep("age_gate");
