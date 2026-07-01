@@ -8,11 +8,6 @@ export function getWebAppUrl() {
   return WEB_API_URL;
 }
 
-export function getWebRoute(path?: string): string {
-  const normalizedPath = path?.trim().replace(/^\/+|\/+$/g, "");
-  return normalizedPath ? `${WEB_API_URL}/${normalizedPath}` : WEB_API_URL;
-}
-
 export function getWebPath(orgSlug: string, path?: string): string {
   const normalizedOrgSlug = orgSlug.trim().replace(/^\/+|\/+$/g, "");
   const normalizedPath = path?.trim().replace(/^\/+|\/+$/g, "");

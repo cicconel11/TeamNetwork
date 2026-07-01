@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
 import { requestLoginCode, verifyLoginCode } from "@/lib/otp-signin";
-import { buildClaimSignInOptions } from "@/lib/claim-request";
+import { buildClaimSignInOptions, canSubmitClaim } from "@/lib/claim-request";
 
 jest.mock("@/lib/analytics", () => ({
   captureException: jest.fn(),
@@ -137,5 +137,35 @@ describe("buildClaimSignInOptions (age-gate metadata for alumni claim)", () => {
       age_validation_token: "age-token-teen",
     });
     expect(options.shouldCreateUser).toBe(true);
+  });
+});
+
+describe("canSubmitClaim (COPPA account-minting gate)", () => {
+  it("blocks the claim request when no age has been validated", () => {
+    // The claim OTP mints an auth.users row; a null age result means the age
+    // gate was skipped, so the request MUST be blocked before signInWithOtp.
+    expect(canSubmitClaim(null)).toBe(false);
+  });
+
+  it("allows the claim request once a validated age result is present", () => {
+    expect(
+      canSubmitClaim({
+        ageBracket: "18_plus",
+        isMinor: false,
+        token: "age-token-xyz",
+      }),
+    ).toBe(true);
+  });
+
+  it("allows a validated minor (13_17) — only under-13 is blocked upstream", () => {
+    // Under-13 never produces an AgeGateResult (validateSignupAge throws), so a
+    // present result here is already 13+ and may proceed.
+    expect(
+      canSubmitClaim({
+        ageBracket: "13_17",
+        isMinor: true,
+        token: "age-token-teen",
+      }),
+    ).toBe(true);
   });
 });
