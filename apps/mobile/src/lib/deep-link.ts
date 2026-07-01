@@ -16,7 +16,10 @@
 
 import type { Router } from "expo-router";
 import { supabase } from "@/lib/supabase";
-import { parseMobileAuthCallbackUrl } from "@/lib/auth-redirects";
+import {
+  parseMobileAuthCallbackUrl,
+  getMobileAuthCallbackErrorMessage,
+} from "@/lib/auth-redirects";
 import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
 import { surfaceMobileAuthError } from "@/lib/mobile-auth-errors";
 import { showToast } from "@/components/ui/Toast";
@@ -34,7 +37,10 @@ export type Intent =
   // Auth — native scheme (teammeet://callback). Only handoff codes and errors;
   // raw tokens on the native scheme are rejected as a session-fixation defense.
   | { kind: "auth-handoff"; code: string }
-  | { kind: "auth-error"; message: string }
+  // `errorCode` is the app/provider error CODE (a fixed enum, safe to map to
+  // copy). `rawMessage` is the untrusted `error_description` — Sentry-only,
+  // never rendered (see the routeIntent auth-error case).
+  | { kind: "auth-error"; errorCode: string; rawMessage: string }
   // Auth — trusted web host. PKCE code OR legacy implicit-flow tokens.
   | { kind: "auth-pkce"; code: string }
   | { kind: "auth-implicit"; accessToken: string; refreshToken: string }
@@ -101,7 +107,11 @@ export function parseTeammeetUrl(url: string): Intent {
     return { kind: "auth-handoff", code: mobileAuth.code };
   }
   if (mobileAuth.type === "error") {
-    return { kind: "auth-error", message: mobileAuth.message };
+    return {
+      kind: "auth-error",
+      errorCode: mobileAuth.error,
+      rawMessage: mobileAuth.message,
+    };
   }
 
   // 2. Native scheme but not auth — reject raw tokens on `callback`, route
@@ -315,17 +325,17 @@ export async function routeIntent(
       // an attacker-chosen `error_description`. We MUST NOT render that raw text
       // (it would be a phishing surface inside our own trusted UI — e.g. "Session
       // expired, reverify at evil.com"). Capture the raw value to Sentry for
-      // diagnostics, but show the user only app-owned generic copy. (Contrast:
-      // the `auth-oauth-error` case below is gated to HTTPS trusted hosts, so it
-      // can surface its richer server-authored text.)
-      captureException(new Error(intent.message), {
+      // diagnostics, but show the user only app-owned copy derived from the fixed
+      // error CODE via getMobileAuthCallbackErrorMessage — the SAME mapping the
+      // WebBrowser path (mobile-oauth-flow.ts) uses, so both consume paths speak
+      // one vocabulary. (Contrast: the `auth-oauth-error` case below is gated to
+      // HTTPS trusted hosts, so it can surface its richer server-authored text.)
+      captureException(new Error(intent.rawMessage), {
         context: "routeIntent.auth-error",
+        errorCode: intent.errorCode,
         ...sanitizeUrlForTelemetry(originalUrl),
       });
-      showToast(
-        "We couldn't finish signing you in. Please finish setting up your account on the web, then try again.",
-        "error"
-      );
+      showToast(getMobileAuthCallbackErrorMessage(intent.errorCode), "error");
       return;
 
     case "auth-oauth-error":

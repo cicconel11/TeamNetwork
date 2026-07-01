@@ -92,10 +92,24 @@ export function parseMobileAuthCallbackUrl(url: string): MobileAuthCallbackResul
   return { type: "ignored" };
 }
 
+/**
+ * Map a mobile-auth callback error CODE to app-owned, user-safe copy.
+ *
+ * SECURITY: the only input that reaches the UI is the error *code*, which is a
+ * fixed enum minted by our web callback (`buildMobileErrorDeepLink`) or passed
+ * through from an OAuth provider. Every arm returns a hardcoded string and the
+ * `default` swallows unknown/attacker-supplied codes into generic copy, so the
+ * untrusted `error_description` on the native `teammeet://` scheme is never
+ * rendered. This is the single source of truth for BOTH consume paths (the
+ * WebBrowser promise in mobile-oauth-flow.ts and the OS-listener in deep-link.ts).
+ */
 export function getMobileAuthCallbackErrorMessage(errorCode: string): string {
   switch (errorCode) {
+    // Provider-supplied (passed through by the web callback): the user (or the
+    // provider's policy) denied the OAuth consent. Not necessarily an in-app
+    // cancel, so avoid claiming "cancelled".
     case "access_denied":
-      return "Sign-in was cancelled.";
+      return "Sign-in was not completed. Please try again and allow access.";
     case "unsupported_provider":
       return "This sign-in provider is not supported in the app.";
     case "oauth_init_failed":
