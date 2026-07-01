@@ -47,6 +47,7 @@ import { TYPOGRAPHY } from "@/lib/typography";
 
 const GRADIENT_START = "#134e4a";
 const GRADIENT_END = "#0f172a";
+const CAPTCHA_LOAD_TIMEOUT_MS = 15_000;
 
 const isEmailValid = (email: string) => baseSchemas.email.safeParse(email).success;
 
@@ -99,6 +100,14 @@ export default function LoginScreen() {
   // this email instead of attempting a sign-in. Lets resend reuse the single
   // shared Turnstile instance in case the project requires a captcha on resend.
   const pendingResendEmailRef = useRef<string | null>(null);
+  const captchaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCaptchaTimeout = () => {
+    if (captchaTimeoutRef.current) {
+      clearTimeout(captchaTimeoutRef.current);
+      captchaTimeoutRef.current = null;
+    }
+  };
 
   // Reanimated — sheet entrance
   const sheetTranslate = useSharedValue(16);
@@ -122,6 +131,12 @@ export default function LoginScreen() {
       easing: Easing.out(Easing.quad),
     });
   }, [sheetOpacity, sheetTranslate]);
+
+  useEffect(() => {
+    return () => {
+      clearCaptchaTimeout();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,10 +247,16 @@ export default function LoginScreen() {
     pendingCredsRef.current = { email: trimmedEmail.toLowerCase(), password };
     setEmailLoading(true);
     turnstileRef.current?.show();
+    clearCaptchaTimeout();
+    captchaTimeoutRef.current = setTimeout(() => {
+      captchaTimeoutRef.current = null;
+      handleCaptchaError("captcha load timeout");
+    }, CAPTCHA_LOAD_TIMEOUT_MS);
   };
 
   // Captcha verified — either resend a confirmation email or sign in.
   const handleCaptchaVerify = async (captchaToken: string) => {
+    clearCaptchaTimeout();
     const resendEmail = pendingResendEmailRef.current;
     pendingResendEmailRef.current = null;
     if (resendEmail) {
@@ -296,6 +317,11 @@ export default function LoginScreen() {
     pendingResendEmailRef.current = trimmedEmail.toLowerCase();
     setResendLoading(true);
     turnstileRef.current?.show();
+    clearCaptchaTimeout();
+    captchaTimeoutRef.current = setTimeout(() => {
+      captchaTimeoutRef.current = null;
+      handleCaptchaError("captcha load timeout");
+    }, CAPTCHA_LOAD_TIMEOUT_MS);
   };
 
   // Resend confirmation — step 2: captcha verified, ask Supabase to resend.
@@ -316,6 +342,7 @@ export default function LoginScreen() {
   };
 
   const handleCaptchaCancel = () => {
+    clearCaptchaTimeout();
     pendingCredsRef.current = null;
     pendingResendEmailRef.current = null;
     setEmailLoading(false);
@@ -323,6 +350,7 @@ export default function LoginScreen() {
   };
 
   const handleCaptchaError = (message: string) => {
+    clearCaptchaTimeout();
     pendingCredsRef.current = null;
     pendingResendEmailRef.current = null;
     setEmailLoading(false);
