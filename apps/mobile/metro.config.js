@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { getDefaultConfig } = require("expo/metro-config");
+const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, "../..");
@@ -29,7 +29,9 @@ function resolvePackageRealDir(pkgName) {
   }
 }
 
-const config = getDefaultConfig(projectRoot);
+// getSentryExpoConfig wraps Expo's getDefaultConfig and adds the Sentry
+// serializer so bundles embed debug IDs for source-map symbolication.
+const config = getSentryExpoConfig(projectRoot);
 
 // Monorepo support
 config.watchFolders = [workspaceRoot];
