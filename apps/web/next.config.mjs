@@ -218,6 +218,24 @@ function validateBuildEnv() {
     logOptionalEnvWarning("⚠️  CRON_SECRET not set — cron job authentication will not work", shouldEmitOptionalEnvLogs);
   }
 
+  // AUTH_HANDOFF_ENCRYPTION_KEY encrypts the mobile sign-in handoff payload and
+  // is load-bearing on every deployed env (the handoff mint throws without it).
+  // Hard-require on Vercel production; warn off-Vercel when unset (not every local
+  // dev exercises mobile handoff). Always validate the 64-hex format when present so
+  // a malformed key is caught even in preview/dev. Format mirrors getEncryptionKeyBuffer
+  // (src/lib/crypto/token-encryption.ts).
+  const authHandoffKey = process.env.AUTH_HANDOFF_ENCRYPTION_KEY;
+  if (isVercelProduction && (!authHandoffKey || authHandoffKey.trim() === "")) {
+    throw new Error("Missing required environment variable: AUTH_HANDOFF_ENCRYPTION_KEY (required on Vercel production)");
+  }
+  if (!authHandoffKey || authHandoffKey.trim() === "") {
+    if (!isDev) {
+      logOptionalEnvWarning("⚠️  AUTH_HANDOFF_ENCRYPTION_KEY not set — mobile sign-in handoff will fail", shouldEmitOptionalEnvLogs);
+    }
+  } else if (authHandoffKey.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(authHandoffKey)) {
+    throw new Error("AUTH_HANDOFF_ENCRYPTION_KEY must be 64 hex characters (32 bytes)");
+  }
+
   // Turnstile: fail fast on Vercel production when keys are missing.
   // Keep this in sync with src/lib/env.ts validateCaptchaEnv().
   if (isVercelProduction) {
