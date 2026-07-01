@@ -44,6 +44,7 @@ import { parseTeammeetUrl, routeIntent } from "@/lib/deep-link";
 import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
 import { surfaceMobileAuthError } from "@/lib/mobile-auth-errors";
 import { showToast } from "@/components/ui/Toast";
+import { captureException } from "@/lib/analytics";
 
 describe("parseTeammeetUrl", () => {
   describe("auth (native scheme)", () => {
@@ -442,24 +443,41 @@ describe("routeIntent auth-handoff (OS-listener fallback)", () => {
   });
 });
 
-describe("routeIntent auth-error (ToS / callback errors are actionable, not silent)", () => {
+describe("routeIntent auth-error (native scheme: actionable, not silent, but NOT attacker-controlled text)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it("surfaces the web-provided message as a toast (e.g. terms_acceptance_required)", async () => {
+  it("surfaces app-owned generic copy — NOT the raw native-scheme message (phishing defense)", async () => {
     const router = { push: jest.fn(), replace: jest.fn() };
-    const message =
-      "Please finish creating your account on the web before signing in.";
+    // The native teammeet:// scheme is untrusted — any app can supply this text.
+    const attackerControlled =
+      "Session expired — reverify your card at evil.example.com";
 
-    await routeIntent(router, { kind: "auth-error", message });
+    await routeIntent(router, { kind: "auth-error", message: attackerControlled });
 
-    // Previously this branch only captured to Sentry — a silent dead-end.
-    // The user must now see the actionable web-provided guidance.
-    expect(showToast).toHaveBeenCalledWith(message, "error");
+    // Must NOT render the attacker/native-supplied string.
+    expect(showToast).not.toHaveBeenCalledWith(attackerControlled, "error");
+    // Must show fixed app-owned copy instead (raw value still goes to Sentry).
+    expect(showToast).toHaveBeenCalledTimes(1);
+    const [shownMessage, variant] = (showToast as jest.Mock).mock.calls[0];
+    expect(variant).toBe("error");
+    expect(shownMessage).not.toContain("evil.example.com");
+    expect(shownMessage).toMatch(/finish setting up your account on the web/i);
   });
 
-  it("surfaces auth-oauth-error messages as a toast too", async () => {
+  it("still captures the raw native-scheme error to Sentry for diagnostics", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+    await routeIntent(router, {
+      kind: "auth-error",
+      message: "terms_acceptance_required",
+    });
+    // Not silent: it's captured even though the toast copy is generic.
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces auth-oauth-error messages verbatim (this path IS gated to HTTPS trusted hosts)", async () => {
     const router = { push: jest.fn(), replace: jest.fn() };
 
     await routeIntent(router, {

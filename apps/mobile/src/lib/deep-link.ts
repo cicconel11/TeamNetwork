@@ -310,16 +310,22 @@ export async function routeIntent(
       return;
 
     case "auth-error":
-      // The web callback crafts a user-facing description for these (e.g. the
-      // `terms_acceptance_required` "finish creating your account on the web"
-      // message). Previously we only captured to Sentry, leaving the user with
-      // a silent dead-end. Surface the carried message so it's actionable. The
-      // message is a web-provided description string, never a token/code.
+      // This intent comes from the NATIVE `teammeet://callback?error=...` scheme,
+      // which is untrusted: any app or web page on the device can invoke it with
+      // an attacker-chosen `error_description`. We MUST NOT render that raw text
+      // (it would be a phishing surface inside our own trusted UI — e.g. "Session
+      // expired, reverify at evil.com"). Capture the raw value to Sentry for
+      // diagnostics, but show the user only app-owned generic copy. (Contrast:
+      // the `auth-oauth-error` case below is gated to HTTPS trusted hosts, so it
+      // can surface its richer server-authored text.)
       captureException(new Error(intent.message), {
         context: "routeIntent.auth-error",
         ...sanitizeUrlForTelemetry(originalUrl),
       });
-      showToast(intent.message, "error");
+      showToast(
+        "We couldn't finish signing you in. Please finish setting up your account on the web, then try again.",
+        "error"
+      );
       return;
 
     case "auth-oauth-error":
