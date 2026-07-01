@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout";
-import { JobForm } from "@/components/jobs/JobForm";
+import { JobForm } from "@/domains/jobs";
 import { getTranslations } from "next-intl/server";
 
 interface PageProps {

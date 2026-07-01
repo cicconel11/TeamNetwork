@@ -6,7 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
 import { CACHE_HEADERS } from "@/lib/api/response";
-import { createJobPosting } from "@/lib/jobs/create-job";
+import { createJobPosting } from "@/domains/jobs";
 
 export async function GET(request: NextRequest) {
   try {

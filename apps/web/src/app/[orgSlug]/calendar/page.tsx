@@ -12,7 +12,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { buildUnifiedCalendarDateRange, fetchUnifiedEvents } from "@/lib/calendar/unified-events";
 import { calendarMySettingsPath, calendarNewEventPath, calendarNewSchedulePath, calendarSourcesPath, calendarListPath } from "@/lib/calendar/routes";
 import { parseCalendarView } from "@/lib/calendar/view-state";
-import { resolveEventActionLabel } from "@/lib/events/labels";
+import { resolveEventActionLabel } from "@/domains/events";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { resolveOrgTimezone } from "@/lib/utils/timezone";
 import type { AcademicSchedule, User } from "@/types/database";

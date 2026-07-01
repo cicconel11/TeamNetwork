@@ -4,14 +4,19 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
-import { EventRsvp, AttendanceList, EventDeleteButton, RecurringEventDeleteButton } from "@/components/events";
+import {
+  EventRsvp,
+  AttendanceList,
+  EventDeleteButton,
+  RecurringEventDeleteButton,
+  EVENT_TYPE_OPTIONS,
+} from "@/domains/events";
 import type { RsvpStatus } from "@/types/database";
 import { EventOpenTracker } from "@/components/analytics/EventsViewTracker";
 import { LocalDate, LocalTime } from "@/components/ui";
 import { calendarEventEditPath, calendarEventsPath } from "@/lib/calendar/routes";
 import { resolveOrgTimezone } from "@/lib/utils/timezone";
 import { EventCountdownBadge } from "@/components/calendar/EventCountdownBadge";
-import { EVENT_TYPE_OPTIONS } from "@/lib/events/event-type-options";
 
 interface EventDetailPageProps {
   params: Promise<{ orgSlug: string; eventId: string }>;

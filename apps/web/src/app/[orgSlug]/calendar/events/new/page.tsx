@@ -9,10 +9,13 @@ import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { useLocale, useTranslations } from "next-intl";
 import { newEventSchema, type NewEventForm } from "@/lib/schemas/content";
-import { expandRecurrence, type RecurrenceRule } from "@/lib/events/recurrence";
-import { createRecurringEvents } from "@/lib/events/recurring-operations";
-import { resolveEventActionLabel } from "@/lib/events/labels";
-import { EVENT_TYPE_OPTIONS } from "@/lib/events/event-type-options";
+import {
+  expandRecurrence,
+  type RecurrenceRule,
+  createRecurringEvents,
+  resolveEventActionLabel,
+  EVENT_TYPE_OPTIONS,
+} from "@/domains/events";
 import { calendarEventsPath } from "@/lib/calendar/routes";
 import { localToUtcIso, resolveOrgTimezone, getLocalWeekday, getLocalDayOfMonth } from "@/lib/utils/timezone";
 import type { NavConfig } from "@/lib/navigation/nav-items";

@@ -13,7 +13,7 @@ import { newAnnouncementSchema, type NewAnnouncementForm } from "@/lib/schemas/c
 import {
   createAnnouncement,
   sendAnnouncementNotification,
-} from "@/lib/announcements/create-announcement";
+} from "@/domains/announcements";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 type TargetUser = {
