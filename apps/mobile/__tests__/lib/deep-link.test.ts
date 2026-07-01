@@ -30,6 +30,10 @@ jest.mock("@/lib/mobile-auth-errors", () => ({
   surfaceMobileAuthError: jest.fn(),
 }));
 
+jest.mock("@/components/ui/Toast", () => ({
+  showToast: jest.fn(),
+}));
+
 jest.mock("@teammeet/validation", () => ({
   baseSchemas: {
     email: { safeParse: () => ({ success: true }) },
@@ -39,6 +43,7 @@ jest.mock("@teammeet/validation", () => ({
 import { parseTeammeetUrl, routeIntent } from "@/lib/deep-link";
 import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
 import { surfaceMobileAuthError } from "@/lib/mobile-auth-errors";
+import { showToast } from "@/components/ui/Toast";
 
 describe("parseTeammeetUrl", () => {
   describe("auth (native scheme)", () => {
@@ -434,5 +439,34 @@ describe("routeIntent auth-handoff (OS-listener fallback)", () => {
     await routeIntent(router, { kind: "auth-handoff", code: "ok" });
 
     expect(surfaceMobileAuthError).not.toHaveBeenCalled();
+  });
+});
+
+describe("routeIntent auth-error (ToS / callback errors are actionable, not silent)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("surfaces the web-provided message as a toast (e.g. terms_acceptance_required)", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+    const message =
+      "Please finish creating your account on the web before signing in.";
+
+    await routeIntent(router, { kind: "auth-error", message });
+
+    // Previously this branch only captured to Sentry — a silent dead-end.
+    // The user must now see the actionable web-provided guidance.
+    expect(showToast).toHaveBeenCalledWith(message, "error");
+  });
+
+  it("surfaces auth-oauth-error messages as a toast too", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+
+    await routeIntent(router, {
+      kind: "auth-oauth-error",
+      message: "Sign-in was declined.",
+    });
+
+    expect(showToast).toHaveBeenCalledWith("Sign-in was declined.", "error");
   });
 });
