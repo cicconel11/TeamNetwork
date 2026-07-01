@@ -64,9 +64,16 @@ if (!r.ok || !d.access_token || !d.refresh_token) {
 const accessToken = d.access_token;
 const refreshToken = d.refresh_token;
 
-// 3) Encrypt tokens. Format matches apps/web/src/lib/crypto/token-encryption.ts:
+// 3) Encrypt tokens. Inner blob matches apps/web/src/lib/crypto/token-encryption.ts:
 //   key: 64 hex chars (32 bytes), AES-256-GCM, 12-byte IV
-//   output: "<iv-base64>:<authTag-base64>:<ciphertext-base64>"
+//   inner output: "<iv-base64>:<authTag-base64>:<ciphertext-base64>"
+// The handoff wrapper (apps/web/src/lib/auth/mobile-oauth.ts) prefixes a key id
+// so blobs survive key rotation. We mint the SAME "<keyId>:<inner>" 4-part shape
+// here, deriving keyId the same way: first 8 hex chars of sha256(key).
+function deriveHandoffKeyId(hexKey) {
+  return crypto.createHash("sha256").update(hexKey, "utf8").digest("hex").slice(0, 8);
+}
+
 function encryptToken(plain, hexKey) {
   if (!/^[0-9a-fA-F]{64}$/.test(hexKey)) {
     throw new Error("AUTH_HANDOFF_ENCRYPTION_KEY must be 64 hex chars (32 bytes)");
@@ -80,8 +87,9 @@ function encryptToken(plain, hexKey) {
   return `${iv.toString("base64")}:${tag.toString("base64")}:${ct}`;
 }
 
-const encryptedAccess = encryptToken(accessToken, handoffKey);
-const encryptedRefresh = encryptToken(refreshToken, handoffKey);
+const handoffKeyId = deriveHandoffKeyId(handoffKey);
+const encryptedAccess = `${handoffKeyId}:${encryptToken(accessToken, handoffKey)}`;
+const encryptedRefresh = `${handoffKeyId}:${encryptToken(refreshToken, handoffKey)}`;
 
 // 4) Insert handoff row
 const handoffCode = crypto.randomBytes(32).toString("base64url");

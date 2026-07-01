@@ -66,6 +66,11 @@ export async function POST(request: Request) {
       );
     case "rpc_error":
     case "decrypt_error":
+    case "unknown_key_id":
+      // All three are unrecoverable server-side failures (500). The core
+      // (consumeMobileHandoff) has already emitted the category-specific,
+      // no-PII log line — including the distinct rotation hint for
+      // unknown_key_id — so the route only maps to a status here.
       return NextResponse.json({ error: "Unable to consume handoff" }, { status: 500 });
   }
 }
