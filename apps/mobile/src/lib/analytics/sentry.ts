@@ -3,6 +3,7 @@
  */
 
 import * as Sentry from "@sentry/react-native";
+import * as Application from "expo-application";
 
 let initialized = false;
 let telemetryEnabled = false;
@@ -55,8 +56,20 @@ function scrubPii(data: Record<string, unknown>): Record<string, unknown> {
 
 export function init(dsn: string): void {
   if (initialized) return;
+  // Tag events with the app version + build so errors are attributable to a
+  // release and Release Health (crash-free sessions/users) works. Native build
+  // number doubles as the Sentry `dist`, matching the source maps uploaded by
+  // the @sentry/react-native/expo build plugin. Values are read synchronously
+  // from the native app metadata (null in Expo Go / bare JS contexts).
+  const version = Application.nativeApplicationVersion;
+  const build = Application.nativeBuildVersion;
   Sentry.init({
     dsn,
+    release:
+      version && Application.applicationId
+        ? `${Application.applicationId}@${version}+${build ?? "0"}`
+        : undefined,
+    dist: build ?? undefined,
     enableAutoSessionTracking: true,
     attachStacktrace: true,
     environment: __DEV__ ? "development" : "production",

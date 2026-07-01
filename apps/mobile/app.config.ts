@@ -245,6 +245,19 @@ const config: ExpoConfig = {
         },
       },
     ],
+    // Uploads source maps to Sentry during the native build so production
+    // stack traces symbolicate to real file:line. org/project/auth token are
+    // read from env (SENTRY_ORG, SENTRY_PROJECT, SENTRY_AUTH_TOKEN) — set them
+    // as EAS secrets; without the auth token the plugin skips upload with a
+    // warning rather than failing the build.
+    [
+      "@sentry/react-native/expo",
+      {
+        url: "https://sentry.io/",
+        organization: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+      },
+    ],
   ],
   extra: {
     router: {
