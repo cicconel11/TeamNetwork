@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   shouldBypassAuth,
   isPublicApiPattern,
@@ -9,6 +11,26 @@ import {
   getRedirectForMembershipStatus,
   shouldRedirectToCanonicalHost,
 } from "../src/lib/middleware/routing-decisions.ts";
+
+/**
+ * Mirrors the auth-outcome branches in src/middleware.ts for a request that is
+ * NOT authenticated (no Supabase session — the state the native app is in when
+ * it POSTs the one-time handoff code). The middleware runs `shouldBypassAuth`
+ * FIRST (returns NextResponse.next() → the route runs), and only if that is
+ * false does an unauthenticated /api/* request fall through to the 401 branch.
+ *
+ * Keeping this model here (rather than importing the real middleware, which
+ * validates env + instantiates a Supabase client at module load and would need
+ * mock.module — not enabled in this runner) lets the test exercise the REAL
+ * `shouldBypassAuth` decision and prove the observable contract: the consume
+ * POST must reach the route, not get 401'd. A companion source assertion below
+ * pins this model to the middleware's actual control flow.
+ */
+function unauthenticatedApiOutcome(pathname: string): "allow" | "401" {
+  if (shouldBypassAuth(pathname)) return "allow";
+  if (pathname.startsWith("/api/")) return "401";
+  return "allow";
+}
 
 describe("middleware routing decisions", () => {
   describe("shouldBypassAuth", () => {
@@ -22,6 +44,36 @@ describe("middleware routing decisions", () => {
     it("bypasses feedback screenshot", () => assert.strictEqual(shouldBypassAuth("/api/feedback/screenshot"), true));
     it("does not bypass alumni route", () => assert.strictEqual(shouldBypassAuth("/api/organizations/123/alumni"), false));
     it("does not bypass blackbaud callback (handled after canonical-host redirect)", () => assert.strictEqual(shouldBypassAuth("/api/blackbaud/callback"), false));
+  });
+
+  // Regression guard for #323: the middleware whitelist bypass for the
+  // unauthenticated mobile handoff consume POST. If the PUBLIC_API_ROUTES entry
+  // for "/api/auth/mobile-handoff/consume" is removed, `shouldBypassAuth`
+  // returns false and an unauthenticated POST falls into the /api/* 401 branch —
+  // exactly the incident. These assertions flip and FAIL in that case.
+  describe("unauthenticated mobile handoff consume bypasses middleware auth (#323)", () => {
+    const CONSUME_PATH = "/api/auth/mobile-handoff/consume";
+
+    it("shouldBypassAuth is the real gate the middleware checks first", () => {
+      // Exact-string match: the middleware calls this at its very first branch.
+      assert.strictEqual(shouldBypassAuth(CONSUME_PATH), true);
+    });
+
+    it("an unauthenticated consume request reaches the route (not 401'd)", () => {
+      assert.strictEqual(unauthenticatedApiOutcome(CONSUME_PATH), "allow");
+    });
+
+    it("a sibling non-whitelisted auth API path IS 401'd when unauthenticated", () => {
+      // Proves the bypass is scoped to the exact whitelisted path, not all
+      // /api/auth/* — so the consume allowance is a deliberate, narrow hole.
+      assert.strictEqual(unauthenticatedApiOutcome("/api/auth/mobile-handoff/issue"), "401");
+      assert.strictEqual(unauthenticatedApiOutcome("/api/organizations/123/members"), "401");
+    });
+
+    it("bypass is exact-match: a path that merely starts with the consume prefix is NOT bypassed", () => {
+      assert.strictEqual(shouldBypassAuth(`${CONSUME_PATH}/extra`), false);
+      assert.strictEqual(unauthenticatedApiOutcome(`${CONSUME_PATH}/extra`), "401");
+    });
   });
 
   describe("isPublicApiPattern", () => {
@@ -127,5 +179,35 @@ describe("middleware routing decisions", () => {
     it("www domain → false", () => assert.strictEqual(shouldRedirectToCanonicalHost("www.myteamnetwork.com"), false));
     it("localhost → false", () => assert.strictEqual(shouldRedirectToCanonicalHost("localhost:3000"), false));
     it("null → false", () => assert.strictEqual(shouldRedirectToCanonicalHost(null), false));
+  });
+
+  // Pins the `unauthenticatedApiOutcome` model above to the middleware's real
+  // control flow: `shouldBypassAuth(pathname)` must be consulted before the
+  // unauthenticated /api/* 401 branch. If someone reorders the middleware so the
+  // 401 branch runs first, this fails even though shouldBypassAuth still returns
+  // true — catching a bypass that is dead code in practice.
+  describe("middleware wires shouldBypassAuth before its unauthenticated 401 branch", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/middleware.ts"),
+      "utf8",
+    );
+
+    it("calls shouldBypassAuth and returns NextResponse.next() on match", () => {
+      assert.match(
+        source,
+        /if \(shouldBypassAuth\(pathname\)\) \{\s*return NextResponse\.next\(\);/,
+      );
+    });
+
+    it("the shouldBypassAuth gate precedes the unauthenticated /api 401 branch", () => {
+      const bypassIdx = source.indexOf("if (shouldBypassAuth(pathname))");
+      const unauthorized401Idx = source.indexOf('{ error: "Unauthorized", message: "Authentication required" }');
+      assert.ok(bypassIdx >= 0, "expected middleware to call shouldBypassAuth");
+      assert.ok(unauthorized401Idx >= 0, "expected middleware to have a 401 branch");
+      assert.ok(
+        bypassIdx < unauthorized401Idx,
+        "shouldBypassAuth must run before the unauthenticated 401 branch",
+      );
+    });
   });
 });
