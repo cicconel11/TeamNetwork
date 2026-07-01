@@ -659,6 +659,22 @@ export default function LoginScreen() {
                 </Link>
               </View>
             )}
+
+            {/* Email-code (OTP) sign-in for passwordless / magic-link accounts.
+                This is a sign-in path, not registration, so it is shown on iOS
+                too (unlike the Apple-3.1.1-gated Sign Up link above). */}
+            <View style={styles.otpRow}>
+              <Link href="/(auth)/otp" asChild>
+                <Pressable
+                  hitSlop={8}
+                  disabled={isLoading}
+                  accessibilityRole="link"
+                  style={({ pressed }) => [pressed && styles.linkPressed]}
+                >
+                  <Text style={styles.otpLink}>Sign in with an email code</Text>
+                </Pressable>
+              </Link>
+            </View>
           </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -894,5 +910,15 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: SEMANTIC.success,
     fontWeight: "700",
+  },
+  otpRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: SPACING.md,
+  },
+  otpLink: {
+    ...TYPOGRAPHY.bodySmall,
+    color: SEMANTIC.success,
+    fontWeight: "600",
   },
 });

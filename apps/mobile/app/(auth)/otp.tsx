@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,29 +12,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Link, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Link, useNavigation, useRouter } from "expo-router";
 import { ChevronLeft, Mail } from "lucide-react-native";
 import { Image } from "expo-image";
-import {
-  claimEmailSchema,
-  claimOtpSchema,
-  claimedOrgRowSchema,
-} from "@teammeet/validation";
-import {
-  assertEmailConfirmed,
-  consumeClaimRate,
-} from "@/lib/auth/claim-guards";
-import { supabase } from "@/lib/supabase";
-import { validateSignupAge } from "@/lib/mobile-auth";
-import {
-  buildClaimSignInOptions,
-  type AgeGateResult,
-} from "@/lib/claim-request";
+// The "claim"-named schemas are generic (email + 8-digit code); reused here for
+// login OTP without forking. The 8-digit length is the hosted Supabase setting.
+import { claimEmailSchema, claimOtpSchema } from "@teammeet/validation";
 import { captureException, track } from "@/lib/analytics";
-import { showToast } from "@/components/ui/Toast";
+import { requestLoginCode, verifyLoginCode } from "@/lib/otp-signin";
 import { Button } from "@/components/ui/Button";
 import Turnstile, { type TurnstileRef } from "@/components/Turnstile";
-import { useOrganizations } from "@/hooks/useOrganizations";
 import {
   NEUTRAL,
   RADIUS,
@@ -48,31 +34,15 @@ import { TYPOGRAPHY } from "@/lib/typography";
 const GRADIENT_START = "#134e4a";
 const GRADIENT_END = "#0f172a";
 
-// COMPLIANCE (COPPA / minor consent): claim.tsx's request step calls
-// signInWithOtp({ shouldCreateUser: true }), which mints the auth.users row
-// for a previously unregistered alumnus. There is no DB age backstop and
-// signInWithOtp never touches the web /auth/callback age gate, so the age
-// bracket must be collected and validated here before the account is minted.
-type Step = "age_gate" | "request" | "verify";
+type Step = "request" | "verify";
 
 const CAPTCHA_LOAD_TIMEOUT_MS = 15_000;
 
-export default function ClaimAccountScreen() {
+export default function OtpSignInScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ code?: string; redirect?: string }>();
-  const codeParam = typeof params.code === "string" ? params.code : undefined;
-  const redirectParam =
-    typeof params.redirect === "string" &&
-    params.redirect.startsWith("/") &&
-    !params.redirect.startsWith("//")
-      ? params.redirect
-      : undefined;
 
-  const { refetch: refetchOrganizations } = useOrganizations();
-
-  const [step, setStep] = useState<Step>("age_gate");
-  const [ageGate, setAgeGate] = useState<AgeGateResult | null>(null);
+  const [step, setStep] = useState<Step>("request");
   const [pendingEmail, setPendingEmail] = useState("");
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
@@ -107,37 +77,6 @@ export default function ClaimAccountScreen() {
     }
   };
 
-  const buildJoinFallbackPath = (): string => {
-    const search = new URLSearchParams();
-    if (codeParam) search.set("code", codeParam);
-    if (redirectParam) search.set("redirect", redirectParam);
-    const qs = search.toString();
-    return qs
-      ? `/(app)/(drawer)/join-organization?${qs}`
-      : `/(app)/(drawer)/join-organization`;
-  };
-
-  // Mirror signup.tsx: collect + validate age before any account can be
-  // minted. Under-13 is rejected here (validateSignupAge throws) — an
-  // under-13 cannot self-claim, which is the correct COPPA outcome.
-  const handleAgeGateSelect = async (
-    ageBracket: "under_13" | "13_17" | "18_plus",
-  ) => {
-    setApiError("");
-    setLoading(true);
-    try {
-      const result = await validateSignupAge(ageBracket);
-      setAgeGate(result);
-      setStep("request");
-    } catch (error) {
-      setApiError(
-        (error as Error).message || "Unable to verify age. Please try again.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRequestSubmit = () => {
     setEmailError("");
     setApiError("");
@@ -169,53 +108,22 @@ export default function ClaimAccountScreen() {
       setLoading(false);
       return;
     }
-    // Compliance guard: never mint an account without validated age metadata.
-    if (!ageGate) {
-      setLoading(false);
-      setApiError("Please confirm your age before claiming your account.");
-      setStep("age_gate");
-      return;
-    }
 
     try {
-      // Code-flow OTP avoids email-link prefetch issues (Apple Mail / link
-      // scanners consuming the magic-link token before the user clicks).
-      // shouldCreateUser:true mints the auth.users row, so the validated age
-      // metadata is attached here (no DB/callback backstop catches it later).
-      const { error } = await supabase.auth.signInWithOtp({
-        email: targetEmail,
-        options: buildClaimSignInOptions(captchaToken, ageGate),
-      });
+      // Login-only: requestLoginCode wraps signInWithOtp with
+      // shouldCreateUser:false — it never provisions an account.
+      const result = await requestLoginCode(targetEmail, captchaToken);
 
-      if (error) {
-        const status = (error as { status?: number }).status;
-        const code = (error as { code?: string }).code ?? "";
-        if (
-          status === 429 ||
-          /rate.?limit/i.test(code) ||
-          /rate.?limit/i.test(error.message)
-        ) {
-          setApiError("Too many attempts. Please wait a moment and try again.");
-        } else {
-          setApiError("We couldn't send a code. Please try again.");
-        }
-        captureException(new Error(error.message), {
-          screen: "Claim",
-          step: "request",
-        });
+      if (result.kind === "rate-limited" || result.kind === "error") {
+        setApiError(result.message);
         return;
       }
 
-      // Generic copy regardless of whether the email is on file — closes
-      // enumeration via differential responses.
+      // Enumeration-safe: "sent" is returned for both real accounts and
+      // unknown emails, so the UI is identical either way.
       setPendingEmail(targetEmail);
       setStep("verify");
-      setMessage(
-        "If your email is on file, we sent an 8-digit code. Check your inbox.",
-      );
-    } catch (e) {
-      captureException(e as Error, { screen: "Claim", step: "request" });
-      setApiError("Something went wrong. Please try again.");
+      setMessage(result.message);
     } finally {
       setLoading(false);
     }
@@ -233,30 +141,9 @@ export default function ClaimAccountScreen() {
     setLoading(false);
     setApiError("Verification failed. Please try again.");
     captureException(new Error(`Turnstile: ${errMessage}`), {
-      screen: "Claim",
+      screen: "OtpSignIn",
       step: "request",
     });
-  };
-
-  const navigatePostClaim = async (orgs: { slug: string }[]) => {
-    await refetchOrganizations();
-
-    // redirectParam was sanitized at parse time (parseClaimPayload + the
-    // useLocalSearchParams guard above) to relative `/...` paths only, so it
-    // is safe to honor on every branch when present.
-    if (orgs.length === 0) {
-      router.replace(buildJoinFallbackPath() as never);
-      return;
-    }
-    if (redirectParam) {
-      router.replace(redirectParam as never);
-      return;
-    }
-    if (orgs.length === 1) {
-      router.replace(`/(app)/(drawer)/${orgs[0].slug}` as never);
-      return;
-    }
-    router.replace("/(app)/(drawer)" as never);
   };
 
   const handleVerifySubmit = async () => {
@@ -267,96 +154,24 @@ export default function ClaimAccountScreen() {
     const parsed = claimOtpSchema.safeParse({ token });
     if (!parsed.success) {
       setTokenError(
-        parsed.error.issues[0]?.message ?? "Enter the 8-digit code from your email",
+        parsed.error.issues[0]?.message ??
+          "Enter the 8-digit code from your email",
       );
       return;
     }
 
     setLoading(true);
     try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: pendingEmail,
-        token: parsed.data.token,
-        type: "email",
-      });
+      const result = await verifyLoginCode(pendingEmail, parsed.data.token);
 
-      if (verifyError) {
-        setApiError("That code didn't work. Please try again or resend.");
-        captureException(new Error(verifyError.message), {
-          screen: "Claim",
-          step: "verify",
-        });
+      if (result.kind !== "success") {
+        setApiError(result.message);
         return;
       }
 
-      // Mirror web guards (apps/web/src/lib/auth/claim-flow.ts): require an
-      // email_confirmed_at session and per-user rate limit before invoking
-      // the RPC. Web is the source of truth; this is defense-in-depth on the
-      // mobile surface.
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        captureException(
-          new Error(userError?.message ?? "Missing user after verifyOtp"),
-          { screen: "Claim", step: "verify" },
-        );
-        setApiError("Could not finish claiming. Please try again.");
-        return;
-      }
-      const sessionUser = userData.user;
-      try {
-        assertEmailConfirmed(sessionUser);
-      } catch (err) {
-        captureException(err as Error, {
-          screen: "Claim",
-          step: "verify",
-          userId: sessionUser.id,
-        });
-        setApiError("Email not verified. Please try again.");
-        return;
-      }
-      if (!consumeClaimRate(sessionUser.id)) {
-        setApiError("Too many claim attempts. Please retry shortly.");
-        return;
-      }
-
-      // Defense-in-depth: verifyOtp sets email_confirmed_at on success. RPC
-      // claim_alumni_profiles derives identity + email from auth.uid()
-      // server-side; no caller-supplied identity here.
-      const { data: rpcData, error: rpcError } = await supabase.rpc(
-        "claim_alumni_profiles",
-      );
-
-      if (rpcError) {
-        captureException(new Error(rpcError.message), {
-          screen: "Claim",
-          step: "rpc",
-          userId: sessionUser.id,
-        });
-        setApiError("Failed to claim alumni profile");
-        return;
-      }
-
-      const rowParse = claimedOrgRowSchema.safeParse(rpcData ?? []);
-      if (!rowParse.success) {
-        captureException(
-          new Error(`claim_alumni_profiles shape: ${rowParse.error.message}`),
-          { screen: "Claim", step: "rpc", userId: sessionUser.id },
-        );
-        setApiError("Failed to claim alumni profile");
-        return;
-      }
-      const orgs = rowParse.data.map((r) => ({ slug: r.out_slug }));
-      track("alumni_account_claimed", { org_count: orgs.length });
-      showToast(
-        orgs.length > 0
-          ? `Welcome back! Claimed ${orgs.length} organization${orgs.length === 1 ? "" : "s"}.`
-          : "Account verified.",
-        "success",
-      );
-      await navigatePostClaim(orgs);
-    } catch (e) {
-      captureException(e as Error, { screen: "Claim", step: "verify" });
-      setApiError("Something went wrong. Please try again.");
+      // On success the Supabase client sets the session; the root layout
+      // (session → /(app)) redirects automatically. Nothing further to do.
+      track("user_logged_in", { method: "otp" });
     } finally {
       setLoading(false);
     }
@@ -406,10 +221,9 @@ export default function ClaimAccountScreen() {
             />
             <View style={styles.backButtonSpacer} />
           </View>
-          <Text style={styles.gradientHeadline}>Claim your account</Text>
+          <Text style={styles.gradientHeadline}>Sign in with an email code</Text>
           <Text style={styles.gradientSubhead}>
-            Verify your email to unlock memberships your organization already
-            imported for you.
+            We&apos;ll email you an 8-digit code to sign in — no password needed.
           </Text>
         </SafeAreaView>
       </LinearGradient>
@@ -437,56 +251,7 @@ export default function ClaimAccountScreen() {
               </View>
             ) : null}
 
-            {step === "age_gate" ? (
-              <View style={styles.ageGateBox}>
-                <Text style={styles.ageGateTitle}>Confirm your age</Text>
-                <Text style={styles.ageGateText}>
-                  Choose the option that applies before we verify your email.
-                </Text>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.ageButton,
-                    pressed && styles.linkPressed,
-                  ]}
-                  onPress={() => handleAgeGateSelect("18_plus")}
-                  disabled={loading}
-                  accessibilityRole="button"
-                  accessibilityLabel="I am 18 or older"
-                >
-                  <Text style={styles.ageButtonText}>18 or older</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.ageButton,
-                    pressed && styles.linkPressed,
-                  ]}
-                  onPress={() => handleAgeGateSelect("13_17")}
-                  disabled={loading}
-                  accessibilityRole="button"
-                  accessibilityLabel="I am 13 to 17"
-                >
-                  <Text style={styles.ageButtonText}>13 to 17</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.ageButtonSecondary,
-                    pressed && styles.linkPressed,
-                  ]}
-                  onPress={() => handleAgeGateSelect("under_13")}
-                  disabled={loading}
-                  accessibilityRole="button"
-                  accessibilityLabel="I am under 13"
-                >
-                  <Text style={styles.ageButtonSecondaryText}>Under 13</Text>
-                </Pressable>
-                {loading ? (
-                  <ActivityIndicator
-                    color={SEMANTIC.success}
-                    style={styles.ageLoading}
-                  />
-                ) : null}
-              </View>
-            ) : step === "request" ? (
+            {step === "request" ? (
               <>
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>Email</Text>
@@ -589,7 +354,7 @@ export default function ClaimAccountScreen() {
             )}
 
             <View style={styles.footerRow}>
-              <Text style={styles.footerText}>Already have an account? </Text>
+              <Text style={styles.footerText}>Prefer a password? </Text>
               <Link href="/(auth)/login" asChild>
                 <Pressable
                   hitSlop={8}
@@ -704,54 +469,6 @@ const styles = StyleSheet.create({
   apiErrorText: {
     ...TYPOGRAPHY.bodySmall,
     color: SEMANTIC.errorDark,
-  },
-  ageGateBox: {
-    backgroundColor: NEUTRAL.background,
-    borderColor: NEUTRAL.border,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  ageGateTitle: {
-    ...TYPOGRAPHY.titleMedium,
-    color: NEUTRAL.foreground,
-    marginBottom: SPACING.xs,
-  },
-  ageGateText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-    marginBottom: SPACING.md,
-  },
-  ageButton: {
-    backgroundColor: SEMANTIC.success,
-    borderRadius: RADIUS.md,
-    paddingVertical: 14,
-    paddingHorizontal: SPACING.md,
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-  },
-  ageButtonText: {
-    ...TYPOGRAPHY.labelLarge,
-    color: "#ffffff",
-    fontWeight: "600",
-  },
-  ageButtonSecondary: {
-    backgroundColor: NEUTRAL.surface,
-    borderColor: NEUTRAL.border,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: SPACING.md,
-    alignItems: "center",
-  },
-  ageButtonSecondaryText: {
-    ...TYPOGRAPHY.labelLarge,
-    color: NEUTRAL.foreground,
-    fontWeight: "600",
-  },
-  ageLoading: {
-    marginTop: SPACING.md,
   },
   fieldGroup: {
     marginBottom: SPACING.md,
