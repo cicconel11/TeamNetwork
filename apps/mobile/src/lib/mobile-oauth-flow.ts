@@ -2,6 +2,7 @@ import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import {
   buildMobileOAuthUrl,
+  getMobileAuthCallbackErrorMessage,
   parseMobileAuthCallbackUrl,
   type MobileAgeBracket,
   type MobileAuthMode,
@@ -88,7 +89,7 @@ export async function runMobileOAuth(
       provider,
       source,
     });
-    return { ok: false, error: callback.message };
+    return { ok: false, error: getMobileAuthCallbackErrorMessage(callback.error) };
   }
   if (callback.type !== "handoff") {
     captureException(new Error(`Mobile OAuth unrecognized callback (${diag})`), {

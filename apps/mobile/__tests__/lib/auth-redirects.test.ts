@@ -3,6 +3,7 @@ import {
   buildMobileGoogleAuthUrl,
   buildMobileOAuthUrl,
   buildMobileRecoveryRedirectTo,
+  getMobileAuthCallbackErrorMessage,
   parseMobileAuthCallbackUrl,
 } from "../../src/lib/auth-redirects";
 
@@ -72,6 +73,7 @@ describe("mobile Google auth redirects", () => {
       )
     ).toEqual({
       type: "error",
+      error: "oauth_start_failed",
       message: "Could not start sign in",
     });
   });
@@ -79,8 +81,18 @@ describe("mobile Google auth redirects", () => {
   it("falls back to error code when description is missing", () => {
     expect(parseMobileAuthCallbackUrl("teammeet://callback?error=access_denied")).toEqual({
       type: "error",
+      error: "access_denied",
       message: "access_denied",
     });
+  });
+
+  it("maps callback error codes to app-owned copy instead of raw callback descriptions", () => {
+    expect(getMobileAuthCallbackErrorMessage("terms_acceptance_required")).toBe(
+      "Please finish creating your account on the web before signing in."
+    );
+    expect(getMobileAuthCallbackErrorMessage("oauth_start_failed")).toBe(
+      "Sign-in didn't complete. Please try again."
+    );
   });
 });
 
