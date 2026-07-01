@@ -1,5 +1,7 @@
 {
-  "regions": ["iad1"],
+  "regions": [
+    "iad1"
+  ],
   "crons": [
     {
       "path": "/api/cron/error-baselines",
@@ -92,6 +94,10 @@
     {
       "path": "/api/cron/mentor-bio-process",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/mobile-auth-handoff-health",
+      "schedule": "0 * * * *"
     }
   ]
 }
