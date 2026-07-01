@@ -81,6 +81,9 @@ opencode-auth/
 !.claude/agents/
 !.claude/workflows/
 !.claude/skills/
+# Loop state is the loop's cross-run memory — it MUST be versioned so the
+# cloud loop reads where the last run left off (persistence move).
+!.claude/loops/
 .beads/
 .logs/
 

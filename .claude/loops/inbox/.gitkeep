@@ -1,0 +1,3 @@
+# Human inbox — the "open door".
+# The loop drops anything it is less than confident about here instead of opening a PR.
+# This is the checkpoint that keeps a human capable of saying "no". Do not delete.
