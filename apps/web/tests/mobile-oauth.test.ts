@@ -8,6 +8,7 @@ import {
   isMobileAuthMode,
   mapMobileOAuthProvider,
 } from "@/lib/auth/mobile-oauth";
+import { getEncryptionKeyBuffer } from "@/lib/crypto/token-encryption";
 
 const SITE = "https://www.myteamnetwork.com";
 
@@ -90,5 +91,32 @@ describe("isMobileAuthMode", () => {
     assert.equal(isMobileAuthMode("signup"), true);
     assert.equal(isMobileAuthMode("admin"), false);
     assert.equal(isMobileAuthMode(null), false);
+  });
+});
+
+describe("AUTH_HANDOFF_ENCRYPTION_KEY format contract", () => {
+  // next.config.mjs build-validates AUTH_HANDOFF_ENCRYPTION_KEY as 64 hex chars,
+  // mirroring getEncryptionKeyBuffer's check. The config throw path runs at module
+  // import (exercised by `next build`), so it is not unit-tested here; this locks
+  // the 64-hex format contract the config relies on.
+  const VALID_KEY = "a".repeat(64);
+
+  it("accepts a 64 hex-character key", () => {
+    const buf = getEncryptionKeyBuffer(VALID_KEY);
+    assert.equal(buf.length, 32);
+  });
+
+  it("rejects a wrong-length key", () => {
+    assert.throws(
+      () => getEncryptionKeyBuffer("abc123"),
+      /64 hex characters/,
+    );
+  });
+
+  it("rejects a 64-char non-hex key", () => {
+    assert.throws(
+      () => getEncryptionKeyBuffer("z".repeat(64)),
+      /64 hex characters/,
+    );
   });
 });
