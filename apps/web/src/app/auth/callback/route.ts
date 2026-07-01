@@ -18,6 +18,10 @@ import {
   buildMobileHandoffInsert,
   mobileErrorFromCallbackRedirect,
 } from "@/lib/auth/mobile-oauth";
+import {
+  logMobileHandoffFailure,
+  resolveHandoffEnv,
+} from "@/lib/auth/mobile-handoff";
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -307,7 +311,11 @@ export async function GET(request: NextRequest) {
           .insert(row);
 
         if (handoffError) {
-          console.error("[auth/callback] Mobile handoff insert failed:", handoffError.message);
+          logMobileHandoffFailure("Mobile handoff insert failed", {
+            category: "handoff_insert_error",
+            env: resolveHandoffEnv(),
+            reason: handoffError.message,
+          });
           return NextResponse.redirect(
             buildMobileErrorDeepLink("handoff_failed", "Could not complete sign-in. Please try again.")
           );
