@@ -30,6 +30,7 @@ import { runMobileOAuth } from "@/lib/mobile-oauth-flow";
 import { isAppleAuthCanceled, signInWithApple } from "@/lib/apple-auth";
 import { canShowBiometricSignIn, signInWithBiometrics } from "@/lib/biometric-signin";
 import { captureException, track } from "@/lib/analytics";
+import { resendSignupConfirmation } from "@/lib/resend-confirmation";
 import { showToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
 import AuthProviderSection from "@/components/auth/AuthProviderSection";
@@ -82,14 +83,22 @@ export default function LoginScreen() {
   const [appleLoading, setAppleLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricSignInAvailable, setBiometricSignInAvailable] = useState(false);
+  // "Email not confirmed" resend affordance
+  const [showResendConfirmation, setShowResendConfirmation] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const showAppleButton = Platform.OS === "ios";
-  const isLoading = emailLoading || socialLoading !== null || appleLoading || biometricLoading;
+  const isLoading =
+    emailLoading || socialLoading !== null || appleLoading || biometricLoading || resendLoading;
   const biometricSignInLabel =
     Platform.OS === "ios" ? "Sign in with Face ID" : "Sign in with biometrics";
 
   // Captcha
   const turnstileRef = useRef<TurnstileRef>(null);
   const pendingCredsRef = useRef<{ email: string; password: string } | null>(null);
+  // When set, the next captcha verification resends a signup confirmation to
+  // this email instead of attempting a sign-in. Lets resend reuse the single
+  // shared Turnstile instance in case the project requires a captcha on resend.
+  const pendingResendEmailRef = useRef<string | null>(null);
 
   // Reanimated — sheet entrance
   const sheetTranslate = useSharedValue(16);
@@ -168,12 +177,14 @@ export default function LoginScreen() {
     setEmail(text);
     setEmailError("");
     setApiError("");
+    setShowResendConfirmation(false);
   };
 
   const handlePasswordChange = (text: string) => {
     setPassword(text);
     setPasswordError("");
     setApiError("");
+    setShowResendConfirmation(false);
   };
 
   const handleEmailFocus = () => {
@@ -199,6 +210,7 @@ export default function LoginScreen() {
     setEmailError("");
     setPasswordError("");
     setApiError("");
+    setShowResendConfirmation(false);
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
@@ -222,8 +234,15 @@ export default function LoginScreen() {
     turnstileRef.current?.show();
   };
 
-  // Email/Password sign in — step 2: captcha verified, send to Supabase
+  // Captcha verified — either resend a confirmation email or sign in.
   const handleCaptchaVerify = async (captchaToken: string) => {
+    const resendEmail = pendingResendEmailRef.current;
+    pendingResendEmailRef.current = null;
+    if (resendEmail) {
+      await performResend(resendEmail, captchaToken);
+      return;
+    }
+
     const creds = pendingCredsRef.current;
     pendingCredsRef.current = null;
     if (!creds) {
@@ -247,6 +266,7 @@ export default function LoginScreen() {
         } else if (error.message === "Email not confirmed") {
           helpfulMessage =
             "Please check your email and click the confirmation link before signing in.";
+          setShowResendConfirmation(true);
         }
         setApiError(helpfulMessage);
         showToast(helpfulMessage, "error");
@@ -265,14 +285,48 @@ export default function LoginScreen() {
     }
   };
 
+  // Resend confirmation — step 1: validate email, then trigger captcha.
+  const handleResendConfirmation = () => {
+    const trimmedEmail = email.trim();
+    if (!isEmailValid(trimmedEmail)) {
+      setEmailError("Please enter a valid email address");
+      runShake(emailShake);
+      return;
+    }
+    pendingResendEmailRef.current = trimmedEmail.toLowerCase();
+    setResendLoading(true);
+    turnstileRef.current?.show();
+  };
+
+  // Resend confirmation — step 2: captcha verified, ask Supabase to resend.
+  const performResend = async (targetEmail: string, captchaToken: string) => {
+    try {
+      const result = await resendSignupConfirmation(targetEmail, captchaToken);
+      if (result.status === "success") {
+        setApiError("");
+        setShowResendConfirmation(false);
+        showToast(result.message, "success");
+      } else {
+        setApiError(result.message);
+        showToast(result.message, "error");
+      }
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const handleCaptchaCancel = () => {
     pendingCredsRef.current = null;
+    pendingResendEmailRef.current = null;
     setEmailLoading(false);
+    setResendLoading(false);
   };
 
   const handleCaptchaError = (message: string) => {
     pendingCredsRef.current = null;
+    pendingResendEmailRef.current = null;
     setEmailLoading(false);
+    setResendLoading(false);
     const helpful = "Verification failed. Please try again.";
     setApiError(helpful);
     showToast(helpful, "error");
@@ -546,6 +600,25 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
+            {/* Resend confirmation — shown after an "Email not confirmed" error */}
+            {showResendConfirmation ? (
+              <View style={styles.resendRow}>
+                <Text style={styles.resendPrompt}>Didn&apos;t get the email?</Text>
+                <Pressable
+                  onPress={handleResendConfirmation}
+                  hitSlop={8}
+                  disabled={isLoading || resendLoading}
+                  style={({ pressed }) => [styles.resendPressable, pressed && styles.linkPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Resend confirmation email"
+                >
+                  <Text style={styles.resendLink}>
+                    {resendLoading ? "Sending..." : "Resend confirmation"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             {/* Primary CTA — always enabled, validates on press */}
             <Button
               fullWidth
@@ -784,6 +857,27 @@ const styles = StyleSheet.create({
   apiErrorText: {
     ...TYPOGRAPHY.bodySmall,
     color: SEMANTIC.errorDark,
+  },
+
+  // Resend confirmation
+  resendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  resendPrompt: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+  },
+  resendPressable: {
+    paddingVertical: SPACING.xs,
+  },
+  resendLink: {
+    ...TYPOGRAPHY.bodySmall,
+    color: SEMANTIC.success,
+    fontWeight: "700",
   },
 
   // Sign up footer

@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
-import * as WebBrowser from "expo-web-browser";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
@@ -21,7 +20,6 @@ import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SHADOWS, RADIUS, SPACING } from "@/lib/design-tokens";
 import { spacing, fontSize } from "@/lib/theme";
 import type { Organization } from "@teammeet/types";
-import { getWebRoute } from "@/lib/web-api";
 
 const WORDMARK = require("../../../assets/brand-logo.png");
 
@@ -57,16 +55,6 @@ export default function OrganizationsScreen() {
     },
     [router]
   );
-
-  const openWebOnboardingRoute = useCallback((path: string) => {
-    void WebBrowser.openBrowserAsync(getWebRoute(path), {
-      presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-      controlsColor: NEUTRAL.foreground,
-      dismissButtonStyle: "close",
-    }).catch(() => {
-      // No-op: keep the current screen stable if the browser can't open.
-    });
-  }, []);
 
   const GradientHeader = (
     <LinearGradient
@@ -194,7 +182,7 @@ export default function OrganizationsScreen() {
                     styles.emptyActionButtonPrimary,
                     pressed && { opacity: 0.8 },
                   ]}
-                  onPress={() => openWebOnboardingRoute("/app/join")}
+                  onPress={() => router.push("/(app)/(drawer)/join-organization" as never)}
                   accessibilityLabel="Join Another Team"
                   accessibilityRole="button"
                 >
@@ -233,7 +221,7 @@ export default function OrganizationsScreen() {
                     styles.emptyActionButtonPrimary,
                     pressed && { opacity: 0.8 },
                   ]}
-                  onPress={() => openWebOnboardingRoute("/app/join")}
+                  onPress={() => router.push("/(app)/(drawer)/join-organization" as never)}
                   accessibilityLabel="Join a Team"
                   accessibilityRole="button"
                 >
