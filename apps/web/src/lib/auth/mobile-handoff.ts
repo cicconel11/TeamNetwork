@@ -1,4 +1,5 @@
 import type { ServiceSupabase } from "@/lib/supabase/types";
+import { UnknownHandoffKeyIdError } from "@/lib/auth/mobile-oauth";
 
 /**
  * Server-side mobile-handoff failure taxonomy. These classify *which* server
@@ -8,6 +9,9 @@ import type { ServiceSupabase } from "@/lib/supabase/types";
  *
  * - `rpc_error`         — the `consume_mobile_auth_handoff` RPC returned an error.
  * - `decrypt_error`     — a consumed row could not be decrypted into tokens.
+ * - `unknown_key_id`    — the row was encrypted under a key id no longer in the
+ *   keyring (a key-rotation gap), distinct from a generic decrypt/tamper failure
+ *   so ops can tell a rotation config issue apart from a corrupted/tampered row.
  * - `handoff_insert_error` — minting a handoff row on the OAuth callback failed.
  *
  * Note: the not-found / expired case (RPC returns no row) is expected traffic
@@ -17,6 +21,7 @@ import type { ServiceSupabase } from "@/lib/supabase/types";
 export type MobileHandoffFailureCategory =
   | "rpc_error"
   | "decrypt_error"
+  | "unknown_key_id"
   | "handoff_insert_error";
 
 /** Safe, non-secret context attached to every mobile-handoff failure log. */
@@ -75,7 +80,8 @@ export type ConsumeMobileHandoffResult =
   | { status: "ok"; accessToken: string; refreshToken: string }
   | { status: "rpc_error" }
   | { status: "not_found" }
-  | { status: "decrypt_error" };
+  | { status: "decrypt_error" }
+  | { status: "unknown_key_id" };
 
 /** Dependencies for `consumeMobileHandoff`, injected so the core is testable. */
 export type ConsumeMobileHandoffDeps = {
@@ -138,10 +144,21 @@ export async function consumeMobileHandoff(
       accessToken: decrypt(row.encrypted_access_token),
       refreshToken: decrypt(row.encrypted_refresh_token),
     };
-  } catch {
-    // Deliberately drop the caught error object: decrypt failures can carry
-    // fragments of ciphertext in their message. The category + env are enough
-    // to triage (key rotation / corrupted row) without leaking material.
+  } catch (decryptError) {
+    // Distinguish a key-rotation gap (blob tagged with a key id no longer in the
+    // keyring) from a generic decrypt/tamper failure so ops can tell a rotation
+    // config issue apart from a corrupted/tampered row. Both are unrecoverable
+    // 500s to the client. We inspect ONLY the error TYPE (instanceof) — never its
+    // message: a decrypt failure's message can carry ciphertext fragments, so the
+    // error object is deliberately not logged. Category + env are enough to triage.
+    if (decryptError instanceof UnknownHandoffKeyIdError) {
+      logMobileHandoffFailure(
+        "Consumed handoff was encrypted with an unknown key id" +
+          " (check AUTH_HANDOFF_ENCRYPTION_KEY rotation / _PREVIOUS window)",
+        { category: "unknown_key_id", env: logContext.env, ip: logContext.ip }
+      );
+      return { status: "unknown_key_id" };
+    }
     logMobileHandoffFailure("Failed to decrypt consumed handoff", {
       category: "decrypt_error",
       env: logContext.env,
