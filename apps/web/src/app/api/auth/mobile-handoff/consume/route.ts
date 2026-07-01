@@ -5,16 +5,19 @@ import {
   decryptMobileHandoffToken,
   hashMobileHandoffCode,
 } from "@/lib/auth/mobile-oauth";
-import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import {
+  consumeMobileHandoff,
+  resolveHandoffEnv,
+} from "@/lib/auth/mobile-handoff";
+import {
+  checkRateLimit,
+  buildRateLimitResponse,
+  deriveClientIp,
+} from "@/lib/security/rate-limit";
 
 const requestSchema = z.object({
   code: z.string().min(32).max(256),
 });
-
-type ConsumeMobileAuthHandoffRow = {
-  encrypted_access_token: string;
-  encrypted_refresh_token: string;
-};
 
 export async function POST(request: Request) {
   // Unauthenticated endpoint (the native app has no session yet), so guard it
@@ -42,37 +45,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid handoff code" }, { status: 400 });
   }
 
-  const serviceClient = createServiceClient();
-  // Cast: consume_mobile_auth_handoff RPC is in the database but not yet in
-  // the generated Database types. Regenerate via `bun run gen:types` to drop.
-  const { data, error } = await (
-    serviceClient as unknown as {
-      rpc: (
-        fn: string,
-        args: { p_code_hash: string }
-      ) => Promise<{ data: ConsumeMobileAuthHandoffRow[] | null; error: { message: string } | null }>;
-    }
-  ).rpc("consume_mobile_auth_handoff", {
-    p_code_hash: hashMobileHandoffCode(parsed.data.code),
+  const result = await consumeMobileHandoff({
+    serviceClient: createServiceClient(),
+    codeHash: hashMobileHandoffCode(parsed.data.code),
+    decrypt: decryptMobileHandoffToken,
+    // Safe, non-secret context for any failure log the core emits.
+    logContext: { env: resolveHandoffEnv(), ip: deriveClientIp(request) },
   });
 
-  if (error) {
-    console.error("[mobile-handoff] Consume RPC failed:", error.message);
-    return NextResponse.json({ error: "Unable to consume handoff" }, { status: 500 });
-  }
-
-  const row = Array.isArray(data) ? data[0] as ConsumeMobileAuthHandoffRow | undefined : null;
-  if (!row) {
-    return NextResponse.json({ error: "Invalid or expired handoff code" }, { status: 400 });
-  }
-
-  try {
-    return NextResponse.json({
-      access_token: decryptMobileHandoffToken(row.encrypted_access_token),
-      refresh_token: decryptMobileHandoffToken(row.encrypted_refresh_token),
-    });
-  } catch (decryptError) {
-    console.error("[mobile-handoff] Failed to decrypt consumed handoff:", decryptError);
-    return NextResponse.json({ error: "Unable to consume handoff" }, { status: 500 });
+  switch (result.status) {
+    case "ok":
+      return NextResponse.json({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+      });
+    case "not_found":
+      return NextResponse.json(
+        { error: "Invalid or expired handoff code" },
+        { status: 400 }
+      );
+    case "rpc_error":
+    case "decrypt_error":
+      return NextResponse.json({ error: "Unable to consume handoff" }, { status: 500 });
   }
 }

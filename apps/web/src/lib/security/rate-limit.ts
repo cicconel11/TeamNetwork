@@ -91,7 +91,12 @@ function enforceStoreLimit() {
   }
 }
 
-function deriveClientIp(request: RequestLike): string | null {
+/**
+ * Best-effort client IP from the standard proxy headers, in the same
+ * precedence the rate limiter uses. Exported so unauthenticated endpoints can
+ * attach the caller IP to structured failure logs without re-deriving it.
+ */
+export function deriveClientIp(request: RequestLike): string | null {
   const headers = request.headers;
 
   // Cloudflare (most reliable when using CF)
