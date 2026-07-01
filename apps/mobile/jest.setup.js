@@ -84,6 +84,7 @@ jest.mock("expo-router", () => ({
 
 jest.mock("expo-linking", () => ({
   createURL: jest.fn((path) => `exp://mock/${path}`),
+  canOpenURL: jest.fn().mockResolvedValue(true),
   openURL: jest.fn().mockResolvedValue(undefined),
 }));
 

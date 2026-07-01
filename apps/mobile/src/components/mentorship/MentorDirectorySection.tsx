@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from "react";
-import { View, Text, Pressable, TextInput, Linking, StyleSheet } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { Alert, View, Text, Pressable, TextInput, StyleSheet } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { openEmailAddress, openHttpsUrl, openPhoneNumber } from "@/lib/url-safety";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import type { NeutralColors, SemanticColors } from "@/lib/design-tokens";
 import { SelectField, SelectModal } from "@/components/ui/SelectField";
@@ -65,6 +67,21 @@ export function MentorDirectorySection({
 
   const hasActiveFilters =
     filters.nameSearch !== "" || filters.industry !== "" || filters.year !== "";
+
+  const handleEmailMentor = useCallback(async (email: string) => {
+    if (await openEmailAddress(email)) {
+      return;
+    }
+    // iOS with no Mail app configured rejects the mailto: link — fall back to
+    // surfacing the address so the user can still reach the mentor.
+    Alert.alert("Email mentor", email, [
+      {
+        text: "Copy email",
+        onPress: () => void Clipboard.setStringAsync(email),
+      },
+      { text: "Close", style: "cancel" },
+    ]);
+  }, []);
 
   const industryOptions: SelectOption[] = [
     { value: "", label: "All industries" },
@@ -313,7 +330,7 @@ export function MentorDirectorySection({
                   ) : null}
                   {mentor.contact_email ? (
                     <Pressable
-                      onPress={() => void Linking.openURL(`mailto:${mentor.contact_email}`)}
+                      onPress={() => void handleEmailMentor(mentor.contact_email!)}
                       style={({ pressed }) => [
                         styles.contactButton,
                         pressed && styles.contactButtonPressed,
@@ -325,7 +342,7 @@ export function MentorDirectorySection({
                   {mentor.contact_linkedin ? (
                     <Pressable
                       onPress={() =>
-                        void Linking.openURL(
+                        void openHttpsUrl(
                           mentor.contact_linkedin?.startsWith("http")
                             ? mentor.contact_linkedin
                             : `https://${mentor.contact_linkedin}`
@@ -341,7 +358,7 @@ export function MentorDirectorySection({
                   ) : null}
                   {mentor.contact_phone ? (
                     <Pressable
-                      onPress={() => void Linking.openURL(`tel:${mentor.contact_phone}`)}
+                      onPress={() => void openPhoneNumber(mentor.contact_phone!)}
                       style={({ pressed }) => [
                         styles.contactButton,
                         pressed && styles.contactButtonPressed,
