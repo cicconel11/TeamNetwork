@@ -5,6 +5,7 @@ import {
   decryptMobileHandoffToken,
   hashMobileHandoffCode,
 } from "@/lib/auth/mobile-oauth";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 const requestSchema = z.object({
   code: z.string().min(32).max(256),
@@ -16,6 +17,19 @@ type ConsumeMobileAuthHandoffRow = {
 };
 
 export async function POST(request: Request) {
+  // Unauthenticated endpoint (the native app has no session yet), so guard it
+  // by IP. The one-time code is a 256-bit secret so brute force is infeasible;
+  // this limit only caps the decrypt/DB work an abusive caller can trigger.
+  // Generous enough for a legitimate retry burst or a shared IP at a team signup.
+  const rateLimit = checkRateLimit(request, {
+    limitPerIp: 30,
+    windowMs: 60_000,
+    feature: "mobile sign-in",
+  });
+  if (!rateLimit.ok) {
+    return buildRateLimitResponse(rateLimit);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
