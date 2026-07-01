@@ -18,6 +18,7 @@ import type { Router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { parseMobileAuthCallbackUrl } from "@/lib/auth-redirects";
 import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
+import { surfaceMobileAuthError } from "@/lib/mobile-auth-errors";
 import { getNativeAppLinkRoute, sanitizeUrlForTelemetry } from "@/lib/url-safety";
 import { captureException } from "@/lib/analytics";
 
@@ -292,10 +293,18 @@ export async function routeIntent(
       try {
         await consumeMobileAuthHandoff(intent.code);
       } catch (err) {
-        captureException(err as Error, {
-          context: "routeIntent.auth-handoff",
-          ...sanitizeUrlForTelemetry(originalUrl),
-        });
+        // surfaceMobileAuthError captures to Sentry AND surfaces a toast, so the
+        // OS-listener fallback (iOS delivers the deep link to the app instead of
+        // resolving the WebBrowser promise) no longer fails silently. Retry
+        // navigates back to login rather than re-POSTing the single-use code.
+        surfaceMobileAuthError(
+          err,
+          {
+            context: "routeIntent.auth-handoff",
+            ...sanitizeUrlForTelemetry(originalUrl),
+          },
+          (route) => router.replace(route as never)
+        );
       }
       return;
 

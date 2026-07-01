@@ -26,6 +26,10 @@ jest.mock("@/lib/analytics", () => ({
   captureException: jest.fn(),
 }));
 
+jest.mock("@/lib/mobile-auth-errors", () => ({
+  surfaceMobileAuthError: jest.fn(),
+}));
+
 jest.mock("@teammeet/validation", () => ({
   baseSchemas: {
     email: { safeParse: () => ({ success: true }) },
@@ -33,6 +37,8 @@ jest.mock("@teammeet/validation", () => ({
 }));
 
 import { parseTeammeetUrl, routeIntent } from "@/lib/deep-link";
+import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
+import { surfaceMobileAuthError } from "@/lib/mobile-auth-errors";
 
 describe("parseTeammeetUrl", () => {
   describe("auth (native scheme)", () => {
@@ -388,5 +394,45 @@ describe("routeIntent", () => {
       pathname: "/(auth)/claim",
       params: {},
     });
+  });
+});
+
+describe("routeIntent auth-handoff (OS-listener fallback)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("surfaces the error (toast + Sentry) when the consume fails", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+    const consumeError = new Error("consume boom");
+    (consumeMobileAuthHandoff as jest.Mock).mockRejectedValue(consumeError);
+
+    await routeIntent(
+      router,
+      { kind: "auth-handoff", code: "abc123" },
+      "teammeet://callback?handoff_code=abc123"
+    );
+
+    // The previously-silent path now routes through the shared surfacing helper,
+    // which captures to Sentry AND shows a toast.
+    expect(surfaceMobileAuthError).toHaveBeenCalledTimes(1);
+    const [errArg, contextArg, navigateArg] = (surfaceMobileAuthError as jest.Mock)
+      .mock.calls[0];
+    expect(errArg).toBe(consumeError);
+    expect(contextArg).toMatchObject({ context: "routeIntent.auth-handoff" });
+    expect(typeof navigateArg).toBe("function");
+
+    // Retry action must navigate back to login (never re-POST the single-use code).
+    navigateArg("/(auth)/login");
+    expect(router.replace).toHaveBeenCalledWith("/(auth)/login");
+  });
+
+  it("does not surface an error when the consume succeeds", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+    (consumeMobileAuthHandoff as jest.Mock).mockResolvedValue(undefined);
+
+    await routeIntent(router, { kind: "auth-handoff", code: "ok" });
+
+    expect(surfaceMobileAuthError).not.toHaveBeenCalled();
   });
 });

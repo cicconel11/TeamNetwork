@@ -206,18 +206,40 @@ export function Toast({
   );
 }
 
-// Standalone toast functions for quick use (can be connected via context)
-let globalShowToast: ((message: string, variant?: ToastVariant) => void) | null = null;
+// Standalone toast functions for quick use (connected via context by ToastBridge).
+type GlobalShowToast = (
+  message: string,
+  variant?: ToastVariant,
+  action?: ToastState["action"]
+) => void;
 
-export function setGlobalShowToast(fn: typeof globalShowToast) {
+let globalShowToast: GlobalShowToast | null = null;
+
+// If a toast is requested before ToastBridge mounts (e.g. an early-boot deep
+// link processed by Linking.getInitialURL() at launch), globalShowToast is null
+// and the call would be a silent no-op. Queue the most recent request and flush
+// it once a real handler is wired, so the very-first-launch failure isn't lost.
+let pendingToast: Parameters<GlobalShowToast> | null = null;
+
+export function setGlobalShowToast(fn: GlobalShowToast | null) {
   globalShowToast = fn;
+  if (fn && pendingToast) {
+    const queued = pendingToast;
+    pendingToast = null;
+    fn(...queued);
+  }
 }
 
 export function showToast(
   message: string,
-  variant: ToastVariant = "success"
+  variant: ToastVariant = "success",
+  action?: ToastState["action"]
 ) {
-  globalShowToast?.(message, variant);
+  if (globalShowToast) {
+    globalShowToast(message, variant, action);
+    return;
+  }
+  pendingToast = [message, variant, action];
 }
 
 const styles = StyleSheet.create({
