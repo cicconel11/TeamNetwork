@@ -248,6 +248,13 @@ interface AcceptInviteResult {
   userOrgRoleCreated?: boolean;
   /** The membership row that was created, if any. */
   orgRoleRow?: OrgRoleRow;
+  /**
+   * Whether the auth user was created with email already confirmed
+   * (mirrors auth.admin.createUser({ email_confirm: true })). This is the
+   * invariant that makes the account immediately signInWithPassword-able —
+   * i.e. reachable from the mobile app without an email-confirmation step.
+   */
+  emailConfirmed?: boolean;
   error?: string;
   /**
    * Set when partial rollback failed and the response surfaces a correlation
@@ -431,6 +438,9 @@ function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
     inviteAfter: opts.store.findByCode(opts.code),
     userOrgRoleCreated,
     orgRoleRow,
+    // Route calls auth.admin.createUser({ email_confirm: true }); the account is
+    // confirmed on creation, so it can sign in with password immediately (mobile-reachable).
+    emailConfirmed: true,
   };
 }
 
@@ -873,6 +883,37 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     assert.equal(result.orgRoleRow?.status, "active");
     assert.equal(result.orgRoleRow?.organization_id, "org-1");
     assert.ok(result.orgRoleRow?.user_id, "user_id must be set on org role row");
+  });
+
+  it("accept produces a mobile-reachable account: email confirmed + synchronous active parent membership", () => {
+    // The mobile app signs in via signInWithPassword, which requires the account to be
+    // confirmed and the parent membership to exist synchronously in the same request.
+    // This locks the two invariants the web->mobile parity work depends on.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    const result = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "jane@example.com",
+      first_name: "Jane",
+      last_name: "Smith",
+      password: "securepass123",
+      store,
+    });
+
+    assert.equal(result.status, 200);
+    assert.equal(result.success, true);
+    assert.equal(
+      result.emailConfirmed,
+      true,
+      "account must be created with email_confirm:true so it can signInWithPassword on mobile without a confirmation step",
+    );
+    // Membership is granted in the same request (not deferred to a webhook/job),
+    // so the parent lands in the org immediately after signing in on mobile.
+    assert.equal(result.userOrgRoleCreated, true, "active parent membership must be created synchronously on accept");
+    assert.equal(result.orgRoleRow?.role, "parent");
+    assert.equal(result.orgRoleRow?.status, "active");
   });
 
   it("revoked parent with existing auth account gets 409 — must sign in to accept new invite", () => {
