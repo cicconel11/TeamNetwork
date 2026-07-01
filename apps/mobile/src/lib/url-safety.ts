@@ -32,14 +32,32 @@ export function isValidLinkedInUrl(value: string): boolean {
   return LINKEDIN_HOSTS.has(host) || host.endsWith(LINKEDIN_HOST_SUFFIX);
 }
 
+/**
+ * Opens a URL only after confirming the OS can handle it, swallowing any
+ * rejection. On iOS `Linking.openURL` rejects with "Unable to open URL" when no
+ * handler is installed (e.g. no Mail app / account for `mailto:`), which would
+ * otherwise surface as an unhandled promise rejection in Sentry. Callers use
+ * the boolean result to fall back gracefully.
+ */
+async function tryOpenUrl(url: string): Promise<boolean> {
+  try {
+    if (!(await Linking.canOpenURL(url))) {
+      return false;
+    }
+    await Linking.openURL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function openHttpsUrl(value: string): Promise<boolean> {
   const url = value.trim();
   if (!isValidHttpsUrl(url)) {
     return false;
   }
 
-  await Linking.openURL(url);
-  return true;
+  return tryOpenUrl(url);
 }
 
 export async function openEmailAddress(value: string): Promise<boolean> {
@@ -48,8 +66,16 @@ export async function openEmailAddress(value: string): Promise<boolean> {
     return false;
   }
 
-  await Linking.openURL(`mailto:${email}`);
-  return true;
+  return tryOpenUrl(`mailto:${encodeURIComponent(email)}`);
+}
+
+export async function openPhoneNumber(value: string): Promise<boolean> {
+  const phone = value.trim();
+  if (!phone) {
+    return false;
+  }
+
+  return tryOpenUrl(`tel:${encodeURIComponent(phone)}`);
 }
 
 export function getNativeAppLinkRoute(value: string): string | null {
