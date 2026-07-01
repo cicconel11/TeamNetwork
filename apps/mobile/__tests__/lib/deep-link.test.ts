@@ -53,16 +53,25 @@ describe("parseTeammeetUrl", () => {
       expect(intent).toEqual({ kind: "auth-handoff", code: "abc123" });
     });
 
-    it("parses error callbacks with description", () => {
+    it("parses error callbacks with description (code preserved separately from raw message)", () => {
       const intent = parseTeammeetUrl(
         "teammeet://callback?error=access_denied&error_description=User%20cancelled"
       );
-      expect(intent).toEqual({ kind: "auth-error", message: "User cancelled" });
+      // errorCode drives the app-owned copy; rawMessage is Sentry-only, never rendered.
+      expect(intent).toEqual({
+        kind: "auth-error",
+        errorCode: "access_denied",
+        rawMessage: "User cancelled",
+      });
     });
 
-    it("parses error callbacks without description", () => {
+    it("parses error callbacks without description (rawMessage falls back to the code)", () => {
       const intent = parseTeammeetUrl("teammeet://callback?error=access_denied");
-      expect(intent).toEqual({ kind: "auth-error", message: "access_denied" });
+      expect(intent).toEqual({
+        kind: "auth-error",
+        errorCode: "access_denied",
+        rawMessage: "access_denied",
+      });
     });
 
     it("rejects raw access tokens on the native scheme (session-fixation defense)", () => {
@@ -448,29 +457,47 @@ describe("routeIntent auth-error (native scheme: actionable, not silent, but NOT
     jest.clearAllMocks();
   });
 
-  it("surfaces app-owned generic copy — NOT the raw native-scheme message (phishing defense)", async () => {
+  it("surfaces app-owned copy — NOT the raw native-scheme message (phishing defense)", async () => {
     const router = { push: jest.fn(), replace: jest.fn() };
-    // The native teammeet:// scheme is untrusted — any app can supply this text.
+    // The native teammeet:// scheme is untrusted — any app can supply this text
+    // as the error_description (which arrives here as rawMessage).
     const attackerControlled =
       "Session expired — reverify your card at evil.example.com";
 
-    await routeIntent(router, { kind: "auth-error", message: attackerControlled });
+    await routeIntent(router, {
+      kind: "auth-error",
+      errorCode: "access_denied",
+      rawMessage: attackerControlled,
+    });
 
     // Must NOT render the attacker/native-supplied string.
     expect(showToast).not.toHaveBeenCalledWith(attackerControlled, "error");
-    // Must show fixed app-owned copy instead (raw value still goes to Sentry).
+    // Must show fixed app-owned copy (from the CODE) instead; raw value → Sentry.
     expect(showToast).toHaveBeenCalledTimes(1);
     const [shownMessage, variant] = (showToast as jest.Mock).mock.calls[0];
     expect(variant).toBe("error");
     expect(shownMessage).not.toContain("evil.example.com");
-    expect(shownMessage).toMatch(/finish setting up your account on the web/i);
+    // access_denied → the shared getMobileAuthCallbackErrorMessage copy.
+    expect(shownMessage).toMatch(/try again and allow access/i);
+  });
+
+  it("maps a known error code to its specific app-owned copy (shared mapping)", async () => {
+    const router = { push: jest.fn(), replace: jest.fn() };
+    await routeIntent(router, {
+      kind: "auth-error",
+      errorCode: "terms_acceptance_required",
+      rawMessage: "anything",
+    });
+    const [shownMessage] = (showToast as jest.Mock).mock.calls[0];
+    expect(shownMessage).toMatch(/finish creating your account on the web/i);
   });
 
   it("still captures the raw native-scheme error to Sentry for diagnostics", async () => {
     const router = { push: jest.fn(), replace: jest.fn() };
     await routeIntent(router, {
       kind: "auth-error",
-      message: "terms_acceptance_required",
+      errorCode: "terms_acceptance_required",
+      rawMessage: "raw server text",
     });
     // Not silent: it's captured even though the toast copy is generic.
     expect(captureException).toHaveBeenCalledTimes(1);

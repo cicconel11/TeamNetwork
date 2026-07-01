@@ -86,13 +86,38 @@ describe("mobile Google auth redirects", () => {
     });
   });
 
-  it("maps callback error codes to app-owned copy instead of raw callback descriptions", () => {
-    expect(getMobileAuthCallbackErrorMessage("terms_acceptance_required")).toBe(
-      "Please finish creating your account on the web before signing in."
-    );
-    expect(getMobileAuthCallbackErrorMessage("oauth_start_failed")).toBe(
-      "Sign-in didn't complete. Please try again."
-    );
+  describe("getMobileAuthCallbackErrorMessage — code → app-owned copy", () => {
+    // The codes below are the exact set the web callback can emit to
+    // teammeet://callback (apps/web `buildMobileErrorDeepLink` call sites +
+    // provider passthrough). Each maps to a fixed, hardcoded string; the raw
+    // error_description is NEVER surfaced.
+    const cases: Array<[string, RegExp]> = [
+      ["access_denied", /try again and allow access/i],
+      ["unsupported_provider", /not supported in the app/i],
+      ["oauth_init_failed", /could not start sign-in/i],
+      ["auth_callback_failed", /could not be completed/i],
+      ["handoff_failed", /could not complete sign-in/i],
+      ["terms_acceptance_required", /finish creating your account on the web/i],
+      ["parental_consent_required", /parental consent is required/i],
+      ["age_validation_failed", /finish age verification on the web/i],
+    ];
+
+    it.each(cases)("maps %s to specific app-owned copy", (code, pattern) => {
+      expect(getMobileAuthCallbackErrorMessage(code)).toMatch(pattern);
+    });
+
+    it("does not claim access_denied is an in-app cancel (provider may deny by policy)", () => {
+      expect(getMobileAuthCallbackErrorMessage("access_denied")).not.toMatch(
+        /cancell?ed/i
+      );
+    });
+
+    it("swallows an unknown / attacker-supplied code into generic copy", () => {
+      // A code not in the enum (e.g. spoofed) must never surface as-is.
+      expect(
+        getMobileAuthCallbackErrorMessage("reverify at evil.com")
+      ).toBe("Sign-in didn't complete. Please try again.");
+    });
   });
 });
 
