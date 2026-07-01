@@ -91,6 +91,9 @@ function ParentsJoinFormComponent() {
             <Link href="/auth/login">
               <Button className="w-full">Sign In</Button>
             </Link>
+            <p className="mt-4 text-sm text-muted-foreground">
+              You can also sign in on the TeamNetwork mobile app using this email and password.
+            </p>
           </Card>
         </main>
       </div>
