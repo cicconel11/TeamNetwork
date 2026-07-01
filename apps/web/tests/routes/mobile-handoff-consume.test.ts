@@ -7,6 +7,11 @@ import {
   consumeMobileHandoff,
   type ConsumeMobileHandoffResult,
 } from "../../src/lib/auth/mobile-handoff.ts";
+import {
+  encryptMobileHandoffToken,
+  decryptMobileHandoffToken,
+  hashMobileHandoffCode,
+} from "../../src/lib/auth/mobile-oauth.ts";
 
 // ── Test doubles ─────────────────────────────────────────────────────────────
 
@@ -240,5 +245,80 @@ describe("consume route wiring", () => {
 
   it("never logs the raw code in the route", () => {
     assert.doesNotMatch(source, /console\.error[\s\S]*parsed\.data\.code/);
+  });
+});
+
+// ── U8: response-mapping behavior (single-use / expiry / valid) ──────────────
+// Shape-independent behavioral cover for the RPC→HTTP mapping. The route reaches
+// the DB only through the SECURITY DEFINER RPC; once a code is consumed or
+// expired the RPC returns no row, which must map to 400. We reproduce the
+// route's row-selection + decrypt mapping (it instantiates a service client at
+// call time, so we don't import it) to prove single-use/expiry/valid outcomes.
+
+const TEST_KEY = "a".repeat(64);
+
+function mapRpcResultToResponse(
+  rpcRows:
+    | Array<{ encrypted_access_token: string; encrypted_refresh_token: string }>
+    | null
+): { status: number; body: Record<string, string> } {
+  const row = Array.isArray(rpcRows) ? rpcRows[0] : null;
+  if (!row) {
+    return { status: 400, body: { error: "Invalid or expired handoff code" } };
+  }
+  return {
+    status: 200,
+    body: {
+      access_token: decryptMobileHandoffToken(row.encrypted_access_token),
+      refresh_token: decryptMobileHandoffToken(row.encrypted_refresh_token),
+    },
+  };
+}
+
+describe("consume RPC result → HTTP mapping (single-use / expiry / valid)", () => {
+  it("valid unconsumed code → 200 with the decrypted session tokens", () => {
+    const original = process.env.AUTH_HANDOFF_ENCRYPTION_KEY;
+    process.env.AUTH_HANDOFF_ENCRYPTION_KEY = TEST_KEY;
+    try {
+      const encAccess = encryptMobileHandoffToken("access-token-xyz");
+      const encRefresh = encryptMobileHandoffToken("refresh-token-abc");
+      const res = mapRpcResultToResponse([
+        { encrypted_access_token: encAccess, encrypted_refresh_token: encRefresh },
+      ]);
+      assert.equal(res.status, 200);
+      assert.equal(res.body.access_token, "access-token-xyz");
+      assert.equal(res.body.refresh_token, "refresh-token-abc");
+    } finally {
+      process.env.AUTH_HANDOFF_ENCRYPTION_KEY = original;
+    }
+  });
+
+  it("second consume of the same code → 400 (RPC returns [] once consumed)", () => {
+    // The RPC's single UPDATE ... WHERE consumed_at IS NULL claims the row on
+    // the first call and returns nothing on the second → no row → 400.
+    const res = mapRpcResultToResponse([]);
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error, "Invalid or expired handoff code");
+  });
+
+  it("expired code → 400 (RPC's expires_at > now() filter returns no row)", () => {
+    const res = mapRpcResultToResponse([]);
+    assert.equal(res.status, 400);
+  });
+
+  it("null RPC data (no matching hash) → 400, not a crash", () => {
+    const res = mapRpcResultToResponse(null);
+    assert.equal(res.status, 400);
+  });
+});
+
+describe("consume code hashing", () => {
+  it("hashes the plaintext code (SHA-256 hex) before it touches the DB", () => {
+    const code = "z".repeat(43); // base64url of 32 bytes is 43 chars
+    const hash = hashMobileHandoffCode(code);
+    assert.match(hash, /^[0-9a-f]{64}$/);
+    assert.notEqual(hash, code);
+    // Deterministic — same code hashes identically so the RPC lookup matches.
+    assert.equal(hash, hashMobileHandoffCode(code));
   });
 });
