@@ -60,7 +60,7 @@ export function buildMobileGoogleAuthUrl(
 
 export type MobileAuthCallbackResult =
   | { type: "handoff"; code: string }
-  | { type: "error"; message: string }
+  | { type: "error"; error: string; message: string }
   | { type: "ignored" };
 
 export function parseMobileAuthCallbackUrl(url: string): MobileAuthCallbackResult {
@@ -79,6 +79,7 @@ export function parseMobileAuthCallbackUrl(url: string): MobileAuthCallbackResul
   if (error) {
     return {
       type: "error",
+      error,
       message: parsed.searchParams.get("error_description") || error,
     };
   }
@@ -89,4 +90,27 @@ export function parseMobileAuthCallbackUrl(url: string): MobileAuthCallbackResul
   }
 
   return { type: "ignored" };
+}
+
+export function getMobileAuthCallbackErrorMessage(errorCode: string): string {
+  switch (errorCode) {
+    case "access_denied":
+      return "Sign-in was cancelled.";
+    case "unsupported_provider":
+      return "This sign-in provider is not supported in the app.";
+    case "oauth_init_failed":
+      return "Could not start sign-in. Please try again.";
+    case "auth_callback_failed":
+      return "Authentication could not be completed. Please try again.";
+    case "handoff_failed":
+      return "Could not complete sign-in. Please try again.";
+    case "terms_acceptance_required":
+      return "Please finish creating your account on the web before signing in.";
+    case "parental_consent_required":
+      return "Parental consent is required before this account can be used.";
+    case "age_validation_failed":
+      return "Please finish age verification on the web before signing in.";
+    default:
+      return "Sign-in didn't complete. Please try again.";
+  }
 }
