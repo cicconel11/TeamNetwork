@@ -62,9 +62,16 @@ bun run android:doctor       # Verify Android SDK, Java, adb setup
 
 ### Release flow (TestFlight, no review)
 
+**Current marketing version: `1.0.1`** (set in `app.config.ts` → `version`). Build
+number auto-increments remotely via EAS (`eas.json`: `appVersionSource: remote` +
+`autoIncrement`), so do NOT hand-edit `ios.buildNumber` — only bump `version`.
+Bump this whenever the previous marketing version has an ASC-processed build (see
+the "closed train" gotcha below), and update this line when you do.
+
 ```bash
 cd apps/mobile
-# Bump version in app.config.ts if shipping new marketing version (buildNumber auto-increments)
+# Bump `version` in app.config.ts when shipping a new marketing version
+# (build number auto-increments; see the closed-train gotcha below).
 bun run eas:ios:production                      # npm script → eas production iOS build
 eas submit --platform ios --latest              # same as bun run eas:submit:ios
 ```
@@ -92,6 +99,7 @@ Then in ASC:
 - Push key (`.p8`) shared across all team apps; never revoke without rotating in Expo
 - Each `eas build --profile production` consumes paid build minutes; use `preview` profile for internal dogfood
 - Version in `app.config.ts` (`version`) = marketing version shown in store; `ios.buildNumber` auto-increments via EAS
+- **Closed pre-release train** — once ASC has processed a build under a marketing version, that version's "train" is closed: Apple rejects any further upload under it (`ITMS-90186` Invalid Pre-Release Train + `ITMS-90062` `CFBundleShortVersionString` must exceed the approved version). Bumping only the build number does NOT fix this — you must raise `version` in `app.config.ts` (e.g. `1.0.0 → 1.0.1`) and re-upload. This is why the current version is tracked above.
 
 ## Architecture
 
