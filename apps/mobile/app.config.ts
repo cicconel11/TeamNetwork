@@ -19,6 +19,23 @@ if (process.env.EAS_BUILD_PROFILE === "production") {
   }
 }
 
+// Sentry source-map upload runs sentry-cli during the native (Xcode) build. It
+// hard-fails the build when org/project/auth-token are absent (observed:
+// "An organization ID or slug is required (provide with --org)"), so DO NOT
+// rely on the plugin skipping on its own — it does not. When the upload creds
+// are not fully configured, explicitly disable auto-upload so the build still
+// succeeds with runtime error reporting intact (EXPO_PUBLIC_SENTRY_DSN); only
+// symbolication is deferred. Set SENTRY_ORG + SENTRY_PROJECT + SENTRY_AUTH_TOKEN
+// as EAS env vars (production) to re-enable upload.
+const sentryUploadConfigured = Boolean(
+  process.env.SENTRY_AUTH_TOKEN?.trim() &&
+    process.env.SENTRY_ORG?.trim() &&
+    process.env.SENTRY_PROJECT?.trim(),
+);
+if (!sentryUploadConfigured && !process.env.SENTRY_DISABLE_AUTO_UPLOAD) {
+  process.env.SENTRY_DISABLE_AUTO_UPLOAD = "true";
+}
+
 const config: ExpoConfig = {
   name: "TeamNetwork",
   slug: "teammeet",
@@ -248,8 +265,9 @@ const config: ExpoConfig = {
     // Uploads source maps to Sentry during the native build so production
     // stack traces symbolicate to real file:line. org/project/auth token are
     // read from env (SENTRY_ORG, SENTRY_PROJECT, SENTRY_AUTH_TOKEN) — set them
-    // as EAS secrets; without the auth token the plugin skips upload with a
-    // warning rather than failing the build.
+    // as EAS env vars (production). When they are NOT all set, the guard above
+    // sets SENTRY_DISABLE_AUTO_UPLOAD=true so sentry-cli skips the upload
+    // instead of hard-failing the Xcode build (it does not skip on its own).
     [
       "@sentry/react-native/expo",
       {
