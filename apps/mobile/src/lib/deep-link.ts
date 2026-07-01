@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { parseMobileAuthCallbackUrl } from "@/lib/auth-redirects";
 import { consumeMobileAuthHandoff } from "@/lib/mobile-auth";
 import { surfaceMobileAuthError } from "@/lib/mobile-auth-errors";
+import { showToast } from "@/components/ui/Toast";
 import { getNativeAppLinkRoute, sanitizeUrlForTelemetry } from "@/lib/url-safety";
 import { captureException } from "@/lib/analytics";
 
@@ -309,10 +310,16 @@ export async function routeIntent(
       return;
 
     case "auth-error":
+      // The web callback crafts a user-facing description for these (e.g. the
+      // `terms_acceptance_required` "finish creating your account on the web"
+      // message). Previously we only captured to Sentry, leaving the user with
+      // a silent dead-end. Surface the carried message so it's actionable. The
+      // message is a web-provided description string, never a token/code.
       captureException(new Error(intent.message), {
         context: "routeIntent.auth-error",
         ...sanitizeUrlForTelemetry(originalUrl),
       });
+      showToast(intent.message, "error");
       return;
 
     case "auth-oauth-error":
@@ -320,6 +327,7 @@ export async function routeIntent(
         context: "routeIntent.auth-oauth-error",
         ...sanitizeUrlForTelemetry(originalUrl),
       });
+      showToast(intent.message, "error");
       return;
 
     case "auth-pkce":
