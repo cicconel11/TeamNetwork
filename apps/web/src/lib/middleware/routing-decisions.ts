@@ -8,6 +8,7 @@ const PUBLIC_API_ROUTES = [
   "/api/stripe/webhook-connect",
   "/api/auth/validate-age", // Age gate validation during signup
   "/api/auth/resend-confirmation", // Resend signup confirmation before the user has a session
+  "/api/auth/mobile-handoff/consume", // Native app exchanges a one-time handoff code before it has a session; endpoint is self-protecting (single-use hashed code + expiry)
   "/api/telemetry/error", // Error tracking from unauthenticated contexts
   // Friction feedback: handlers enforce allowlisted context/trigger + rate limits (see anonymous-friction.ts)
   "/api/feedback/submit",
