@@ -8,6 +8,34 @@ type MobileHandoffResponse = {
   error?: string;
 };
 
+/**
+ * Failure classes for the mobile handoff consume. Each maps to a distinct
+ * user-facing message so 401 (unauthorized) and 500 (server) no longer collapse
+ * into one indistinguishable error. `server` and `network` are retryable.
+ */
+export type MobileAuthErrorStatus =
+  | "expired"
+  | "unauthorized"
+  | "server"
+  | "network"
+  | "malformed"
+  | "session-error";
+
+/**
+ * Discriminated error thrown by `consumeMobileAuthHandoff`. `message` is safe to
+ * show to the user (no tokens/codes); `status` drives message + retry affordance
+ * in `surfaceMobileAuthError`.
+ */
+export class MobileAuthError extends Error {
+  readonly status: MobileAuthErrorStatus;
+
+  constructor(status: MobileAuthErrorStatus, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "MobileAuthError";
+    this.status = status;
+  }
+}
+
 // Network errors immediately after the OAuth browser dismisses are often
 // transient (the app is still returning to the foreground). Retry the request a
 // couple of times before surfacing a failure.
@@ -23,10 +51,14 @@ export async function consumeMobileAuthHandoff(code: string) {
         body: JSON.stringify({ code }),
       });
       break;
-    } catch {
+    } catch (err) {
       if (attempt >= HANDOFF_RETRY_DELAYS_MS.length) {
         captureMessage("[mobile-handoff] consume fetch failed after retries", "error");
-        throw new Error("Couldn't reach the server. Check your connection and try again.");
+        throw new MobileAuthError(
+          "network",
+          "Couldn't reach the server. Check your connection and try again.",
+          { cause: err }
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, HANDOFF_RETRY_DELAYS_MS[attempt]));
     }
@@ -36,13 +68,28 @@ export async function consumeMobileAuthHandoff(code: string) {
   captureMessage(`[mobile-handoff] consume status=${response.status}`, "info");
   if (!response.ok) {
     if (response.status === 400) {
-      throw new Error("This sign-in link has expired. Please try signing in again.");
+      throw new MobileAuthError(
+        "expired",
+        "This sign-in link has expired. Please try signing in again."
+      );
     }
-    throw new Error(payload.error || "Could not complete sign in.");
+    if (response.status === 401) {
+      throw new MobileAuthError(
+        "unauthorized",
+        "We couldn't verify this sign-in. Please try signing in again."
+      );
+    }
+    if (response.status >= 500) {
+      throw new MobileAuthError(
+        "server",
+        "Something went wrong on our end. Please try again in a moment."
+      );
+    }
+    throw new MobileAuthError("server", "Could not complete sign in. Please try again.");
   }
 
   if (!payload.access_token || !payload.refresh_token) {
-    throw new Error("Mobile auth handoff did not return a session.");
+    throw new MobileAuthError("malformed", "Mobile auth handoff did not return a session.");
   }
 
   const { error } = await supabase.auth.setSession({
@@ -51,7 +98,11 @@ export async function consumeMobileAuthHandoff(code: string) {
   });
 
   if (error) {
-    throw error;
+    throw new MobileAuthError(
+      "session-error",
+      "We signed you in but couldn't start your session. Please try again.",
+      { cause: error }
+    );
   }
 }
 

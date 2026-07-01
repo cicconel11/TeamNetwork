@@ -115,7 +115,7 @@ if (Platform.OS === "web") {
 function ToastBridge() {
   const { show } = useToast();
   useEffect(() => {
-    setGlobalShowToast((msg, variant) => show(msg, variant));
+    setGlobalShowToast((msg, variant, action) => show(msg, variant, action));
     return () => setGlobalShowToast(null);
   }, [show]);
   return null;
