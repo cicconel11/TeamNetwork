@@ -7664,13 +7664,6 @@ export type Database = {
         Returns: Json
       }
       get_media_storage_stats: { Args: { p_org_id: string }; Returns: Json }
-      get_mentorship_distances: {
-        Args: { p_org_id: string; p_user_id: string }
-        Returns: {
-          distance: number
-          user_id: string
-        }[]
-      }
       get_org_context_by_slug: { Args: { p_slug: string }; Returns: Json }
       get_org_stats_snapshot: {
         Args: { p_org_id: string }
