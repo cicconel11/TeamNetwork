@@ -1,14 +1,6 @@
 import { useCallback, useState } from "react";
-import {
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { Redirect, useRouter } from "expo-router";
+import { Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useRouter } from "expo-router";
 import { createOrgSchema } from "@teammeet/validation";
 import type { CreateOrgForm } from "@teammeet/validation";
 import { mapAlumniSeatsToBucket } from "@teammeet/core/pricing/per-user";
@@ -16,6 +8,7 @@ import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { getWebAppUrl } from "@/lib/web-api";
 
 const slugify = (value: string): string =>
   value
@@ -25,14 +18,7 @@ const slugify = (value: string): string =>
     .replace(/-+/g, "-")
     .trim();
 
-const BRAND_PRESETS = [
-  "#1e3a5f",
-  "#0f766e",
-  "#7c3aed",
-  "#dc2626",
-  "#ea580c",
-  "#0284c7",
-];
+const BRAND_PRESETS = ["#1e3a5f", "#0f766e", "#7c3aed", "#dc2626", "#ea580c", "#0284c7"];
 
 const clampSeats = (raw: string): number => {
   const n = parseInt(raw.replace(/[^0-9]/g, ""), 10);
@@ -65,7 +51,7 @@ function buildPricingMailto(input: {
       "Please send pricing and next steps.",
     ]
       .filter(Boolean)
-      .join("\n"),
+      .join("\n")
   );
 
   return `mailto:${SALES_EMAIL}?subject=${subject}&body=${body}`;
@@ -308,6 +294,12 @@ export default function CreateOrgScreen() {
     router.back();
   }, [router]);
 
+  const handleOpenOnWeb = useCallback(() => {
+    Linking.openURL(`${getWebAppUrl()}/app/create-org`).catch((err) => {
+      setError(err instanceof Error ? err.message : "Couldn't open TeamNetwork on the web.");
+    });
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     setError(null);
 
@@ -342,28 +334,61 @@ export default function CreateOrgScreen() {
       }
       await Linking.openURL(url);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Couldn't open your email app."
-      );
+      setError(err instanceof Error ? err.message : "Couldn't open your email app.");
     } finally {
       setIsSubmitting(false);
     }
-  }, [
-    name,
-    slug,
-    description,
-    primaryColor,
-    alumniBucket,
-    activeSeats,
-    alumniSeats,
-  ]);
+  }, [name, slug, description, primaryColor, alumniBucket, activeSeats, alumniSeats]);
 
-  // Apple Guideline 3.1.1 (Business): the org-registration feature is treated
-  // as access to an external purchase mechanism, so it is removed entirely on
-  // iOS. The route is unreachable (no entry points) and self-redirects to the
-  // org list as a defensive guard against deep links. Android keeps the flow.
+  // Apple Guideline 3.1.1 (Business): iOS hands paid org creation to the web
+  // instead of hosting the external purchase flow inside the native app.
   if (Platform.OS === "ios") {
-    return <Redirect href="/(app)/(drawer)" />;
+    return (
+      <View style={styles.container}>
+        <View style={styles.sheetHeader}>
+          <Pressable
+            onPress={handleCancel}
+            style={styles.headerSideButton}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
+            <Text style={styles.headerSideButtonText}>Cancel</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>Create Organization</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <View style={styles.contentSheet}>
+          <View style={styles.scrollContent}>
+            <View>
+              <Text style={styles.stepHeading}>Create your organization on the web</Text>
+              <Text style={styles.stepSubhead}>
+                TeamNetwork opens the web org-creation flow for iOS so pricing and setup happen
+                outside the app.
+              </Text>
+            </View>
+
+            {error != null && (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            <Pressable
+              onPress={handleOpenOnWeb}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Open on web"
+            >
+              <Text style={styles.primaryButtonText}>Open on web</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -375,9 +400,7 @@ export default function CreateOrgScreen() {
           accessibilityRole="button"
           accessibilityLabel={step === 1 ? "Cancel" : "Back"}
         >
-          <Text style={styles.headerSideButtonText}>
-            {step === 1 ? "Cancel" : "Back"}
-          </Text>
+          <Text style={styles.headerSideButtonText}>{step === 1 ? "Cancel" : "Back"}</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Create Organization</Text>
         <View style={styles.headerSpacer} />
@@ -469,8 +492,7 @@ export default function CreateOrgScreen() {
                       style={[
                         styles.swatch,
                         { backgroundColor: color },
-                        primaryColor.toLowerCase() === color.toLowerCase() &&
-                          styles.swatchSelected,
+                        primaryColor.toLowerCase() === color.toLowerCase() && styles.swatchSelected,
                       ]}
                     />
                   ))}
@@ -545,9 +567,8 @@ export default function CreateOrgScreen() {
               <View style={styles.pricingCard}>
                 <Text style={styles.pricingTitle}>Contract pricing</Text>
                 <Text style={styles.pricingLabel}>
-                  We no longer show self-serve rates here. Send us your org
-                  details and we'll follow up with pricing based on your size,
-                  modules, support needs, and rollout timing.
+                  We no longer show self-serve rates here. Send us your org details and we'll follow
+                  up with pricing based on your size, modules, support needs, and rollout timing.
                 </Text>
               </View>
 

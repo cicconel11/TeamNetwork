@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
-  Platform,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -37,8 +36,7 @@ export default function OrganizationsScreen() {
     pendingFinalize?: string;
   }>();
   const currentSlug = params.currentSlug ?? params.orgSlug;
-  const pendingSalesSlug =
-    typeof params.pendingSales === "string" ? params.pendingSales : null;
+  const pendingSalesSlug = typeof params.pendingSales === "string" ? params.pendingSales : null;
   const pendingFinalizeSlug =
     typeof params.pendingFinalize === "string" ? params.pendingFinalize : null;
   const { organizations, pendingOrganizations, loading, error, refetch } = useOrganizations();
@@ -124,8 +122,8 @@ export default function OrganizationsScreen() {
               <Text style={styles.bannerTitle}>Custom plan request received</Text>
               <Text style={styles.bannerText}>
                 Thanks! We'll reach out to finalize pricing for{" "}
-                <Text style={styles.bannerSlug}>{pendingSalesSlug}</Text>. Your
-                organization will be visible once it's set up.
+                <Text style={styles.bannerSlug}>{pendingSalesSlug}</Text>. Your organization will be
+                visible once it's set up.
               </Text>
             </View>
           )}
@@ -133,8 +131,8 @@ export default function OrganizationsScreen() {
             <View style={styles.banner}>
               <Text style={styles.bannerTitle}>Finalizing your organization</Text>
               <Text style={styles.bannerText}>
-                Payment confirmed. Your new org should appear here in a few
-                seconds. Pull to refresh if it doesn't show up.
+                Payment confirmed. Your new org should appear here in a few seconds. Pull to refresh
+                if it doesn't show up.
               </Text>
             </View>
           )}
@@ -188,28 +186,24 @@ export default function OrganizationsScreen() {
                 >
                   <Text style={styles.emptyActionButtonPrimaryText}>Join Another Team</Text>
                 </Pressable>
-                {Platform.OS !== "ios" && (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.emptyActionButton,
-                      styles.emptyActionButtonSecondary,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
-                    accessibilityLabel="Create a Team"
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
-                  </Pressable>
-                )}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.emptyActionButton,
+                    styles.emptyActionButtonSecondary,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
+                  accessibilityLabel="Create a Team"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
+                </Pressable>
               </View>
             </View>
           ) : (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>Welcome to TeamNetwork</Text>
-              <Text style={styles.emptyText}>
-                Join an existing team or create a new one
-              </Text>
+              <Text style={styles.emptyText}>Join an existing team or create a new one</Text>
               <Text style={styles.emptyHint}>
                 Already requested access? Your team admin may still need to approve you before it
                 appears here.
@@ -227,20 +221,18 @@ export default function OrganizationsScreen() {
                 >
                   <Text style={styles.emptyActionButtonPrimaryText}>Join a Team</Text>
                 </Pressable>
-                {Platform.OS !== "ios" && (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.emptyActionButton,
-                      styles.emptyActionButtonSecondary,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
-                    accessibilityLabel="Create a Team"
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
-                  </Pressable>
-                )}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.emptyActionButton,
+                    styles.emptyActionButtonSecondary,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => router.push("/(app)/(drawer)/create-org" as never)}
+                  accessibilityLabel="Create a Team"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
+                </Pressable>
               </View>
             </View>
           )}
