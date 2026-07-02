@@ -15,7 +15,7 @@ The chat pipeline handles the full lifecycle of an AI chat request: rate limitin
 
 Enterprise-aware behavior is layered into this same pipeline. There is no separate enterprise chat route. Enterprise capability is activated only when `getAiOrgContext()` resolves both an enterprise-linked org and a matching enterprise role for the caller. Otherwise turns remain org-scoped. For enterprise-linked turns, question class and role policy are both considered: enterprise non-billing reads can proceed for enterprise roles, while billing-restricted asks should use deterministic deny behavior for non-billing roles.
 
-For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph.md`.
+For the connection-suggestions engine, see `docs/agent/people-graph-suggestions.md`.
 
 ## File Map
 
@@ -45,9 +45,8 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/tools/shared.ts` | Shared tool-query and formatting primitives used by executor and registry modules without importing across the registry boundary; schedule image MIME helper for upload validation paths | `safeToolQuery`, `truncateBody`, `buildMemberName`, `isScheduleImageAttachment` |
 | `src/lib/ai/schedule-upload-path.ts` | Shared path-ownership validator with traversal prevention for schedule uploads | `isOwnedScheduleUploadPath` |
 | `src/lib/ai/schedule-extraction.ts` | LLM-based schedule extraction from text/PDF/image with Zod validation and retry | `extractScheduleFromText`, `extractScheduleFromImage` |
-| `src/lib/falkordb/suggestions.ts` | `suggest_connections` implementation: unified person projection, server-side person-query resolution, chat-ready payload normalization, SQL fallback parity, graph freshness metadata | `suggestConnections` |
-| `src/lib/falkordb/client.ts` | Falkor client wrapper with env-gated availability and graph-scoped query helper | `falkorClient`, `FalkorUnavailableError`, `FalkorQueryError` |
-| `src/lib/falkordb/sync.ts` | Graph sync worker for members, alumni, and mentorship pairs | `processGraphSyncQueue` |
+| `src/lib/people-graph/suggestions.ts` | `suggest_connections` implementation: unified person projection, server-side person-query resolution, consent-gated candidate pool, chat-ready payload normalization | `suggestConnections` |
+| `src/lib/people-graph/scoring.ts` | Candidate signal inspection, reason weighting, rarity multipliers, response shape | `scoreProjectedCandidates`, `SuggestConnectionsResult` |
 | `src/lib/ai/thread-resolver.ts` | Thread ownership validation (normalizes all failures to 404) | `resolveOwnThread` (L11), `ThreadResolution` type (L7) |
 | `src/lib/schemas/ai-assistant.ts` | Zod schemas for request validation and cache eligibility | `sendMessageSchema` (L25), `listThreadsSchema` (L34), `cacheEligibilitySchema` (L54) |
 | `src/app/api/ai/[orgId]/chat/route.ts` | Thin Next.js entrypoint — exports runtime config and `POST` handler | `POST` |
@@ -214,7 +213,7 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ `needs_confirmation` emits a `pending_action` SSE payload instead of writing immediately
   │       ├─ the client stores that payload separately from streamed prose so review UI can render even when the assistant returns little or no text
   │       ├─ Successful connection payloads include display-ready `source_person`, ordered `suggestions`, normalized reason labels, `mode`, and `freshness`
-  │       ├─ If quick structured queries succeed but connection prompts fail, treat the execution-policy path as healthy first and inspect the Falkor/suggestions stack separately
+  │       ├─ If quick structured queries succeed but connection prompts fail, treat the execution-policy path as healthy first and inspect the people-graph/suggestions stack separately
   │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
   │       ├─ Tool `forbidden` / `auth_error` fail the turn closed, emit SSE error, and skip pass 2
   │       ├─ When tools are available, pass-1 text is buffered until the route knows whether the turn stayed text-only or switched into tool mode
@@ -444,7 +443,7 @@ type ToolExecutionResult =
 - **Inputs:** either `person_query` for chat-driven name/email lookups, or `person_type` plus `person_id`; optional `limit` (default 10, max 25)
 - **Outputs:** `{ state, source_person, suggestions, disambiguation_options?, mode, freshness, fallback_reason }`
 - `state`: `resolved`, `ambiguous`, `not_found`, or `no_suggestions`
-- `mode`: `"falkor"` when the graph path succeeds, `"sql_fallback"` when Falkor is disabled or query execution fails
+- `mode`: always `"sql_fallback"` — the people graph is Postgres-only, kept as a discriminator for API stability
 - `freshness`: `{ state: "fresh" | "stale" | "degraded" | "unknown", as_of, lag_seconds?, reason? }`
 - `source_person`: display-ready source identity used by pass 2
 - `suggestions[]`: ranked same-org member/alumni suggestions in final display order with deterministic `score`, compact `subtitle`, normalized `reasons[]`, and preview fields

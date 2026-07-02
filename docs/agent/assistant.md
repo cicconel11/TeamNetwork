@@ -23,7 +23,7 @@ The shipped tool surface includes org read tools, enterprise read tools, and con
 
 Schedule-import support remains integrated into the same panel flow. Uploaded schedule files are private transient attachments, with parser-first extraction paths, deterministic extraction error codes, and cleanup routes for abandoned uploads.
 
-For Falkor-backed connection suggestions, graph setup, and sync details, see `docs/agent/falkor-people-graph.md`.
+For the Postgres-only connection-suggestions engine, see `docs/agent/people-graph-suggestions.md`.
 
 ## Assistant Scope Policy
 
@@ -242,7 +242,7 @@ The following features are deferred from v1 tool calling. Each is mapped to the 
 
 ### People Connection Graph + Learned Ranking
 - **What:** Extend the shipped `suggest_connections` feature from deterministic graph-based ranking to post-launch learned ranking once admin interaction data exists.
-- **Design:** V1 already ships a single-org Falkor people graph for members + alumni, deterministic weighting, graph freshness metadata, and SQL fallback parity. Future work should instrument accept / dismiss / acted-on outcomes, evaluate `node2vec` as the first learned-ranking baseline, and then evaluate `GraphSAGE` for inductive embeddings once unseen-person cold start matters.
+- **Design:** V1 already ships a single-org Postgres people graph for members + alumni + parents, deterministic weighting, and consent-gated candidate selection. Future work should instrument accept / dismiss / acted-on outcomes, evaluate `node2vec` as the first learned-ranking baseline, and then evaluate `GraphSAGE` for inductive embeddings once unseen-person cold start matters.
 
 ### Write Actions + Safety Gates
 - **Paper:** ILION — Deterministic Pre-Execution Safety Gates (`2603.13247`)

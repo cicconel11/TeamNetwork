@@ -24,16 +24,12 @@ Each document's `resource` field points at the primary source file it describes,
 - [Semantic Cache](/docs/agent/semantic-cache-codemap.md) — exact-match cache eligibility, TTLs, invalidation, purge cron.
 - [Thread Management](/docs/agent/threads-codemap.md) — thread/message CRUD, pagination, soft-delete, RLS.
 - [UI Panel](/docs/agent/ui-panel-codemap.md) — slide-out assistant panel and SSE consumer.
-- [Falkor People Graph](/docs/agent/falkor-people-graph.md) — graph powering `suggest_connections`.
+- [People Graph Connection Suggestions](/docs/agent/people-graph-suggestions.md) — Postgres-only engine powering `suggest_connections`.
 
 ## Taxonomies and reference
 
 - [Intent Type Taxonomy](/docs/agent/intent-type-taxonomy.md) — the `intent_type` classification axis.
 - [AI Data Flow — Privacy and Compliance](/docs/agent/ai-data-flow.md) — PII in the pipeline, storage, and external-provider surface.
-
-## Flows
-
-- [Falkor Connection Suggestions Flow](/docs/agent/falkor-connection-suggestions.md) — chat → `suggest_connections` → Falkor/SQL → pass 2.
 
 ## Audits
 
