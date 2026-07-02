@@ -1,4 +1,3 @@
-export type GraphFallbackReason = "disabled" | "unavailable" | "query_failure";
 export type SuggestionResultStrength = "strong" | "weak_fallback" | "none";
 
 export interface SuggestionObservabilitySnapshot {
@@ -8,12 +7,10 @@ export interface SuggestionObservabilitySnapshot {
   strongResultCount: number;
   weakFallbackCount: number;
   emptyResultCount: number;
-  fallbackReasonCounts: Record<GraphFallbackReason, number>;
   staleReadCount: number;
   degradedReadCount: number;
   unknownReadCount: number;
   lastMode: "sql_fallback" | null;
-  lastFallbackReason: GraphFallbackReason | null;
   lastFreshnessState: "fresh" | "stale" | "degraded" | "unknown" | null;
   lastResultStrength: SuggestionResultStrength | null;
   lastRequestedAt: string | null;
@@ -36,16 +33,10 @@ function emptySuggestionSnapshot(orgId: string): SuggestionObservabilitySnapshot
     strongResultCount: 0,
     weakFallbackCount: 0,
     emptyResultCount: 0,
-    fallbackReasonCounts: {
-      disabled: 0,
-      unavailable: 0,
-      query_failure: 0,
-    },
     staleReadCount: 0,
     degradedReadCount: 0,
     unknownReadCount: 0,
     lastMode: null,
-    lastFallbackReason: null,
     lastFreshnessState: null,
     lastResultStrength: null,
     lastRequestedAt: null,
@@ -76,24 +67,15 @@ function buildRecentTopCandidateCounts(orgId: string) {
 export function recordSuggestionExecution(input: {
   orgId: string;
   mode: "sql_fallback";
-  fallbackReason: GraphFallbackReason | null;
   freshnessState: "fresh" | "stale" | "degraded" | "unknown";
   resultStrength: SuggestionResultStrength;
 }) {
   const prev = suggestionTelemetryByOrg.get(input.orgId) ?? emptySuggestionSnapshot(input.orgId);
 
-  const fallbackReasonCounts = input.fallbackReason
-    ? {
-        ...prev.fallbackReasonCounts,
-        [input.fallbackReason]: prev.fallbackReasonCounts[input.fallbackReason] + 1,
-      }
-    : { ...prev.fallbackReasonCounts };
-
   const next: SuggestionObservabilitySnapshot = {
     ...prev,
     totalRequests: prev.totalRequests + 1,
     lastMode: input.mode,
-    lastFallbackReason: input.fallbackReason,
     lastFreshnessState: input.freshnessState,
     lastResultStrength: input.resultStrength,
     lastRequestedAt: nowIso(),
@@ -101,7 +83,6 @@ export function recordSuggestionExecution(input: {
     strongResultCount: prev.strongResultCount + (input.resultStrength === "strong" ? 1 : 0),
     weakFallbackCount: prev.weakFallbackCount + (input.resultStrength === "weak_fallback" ? 1 : 0),
     emptyResultCount: prev.emptyResultCount + (input.resultStrength === "none" ? 1 : 0),
-    fallbackReasonCounts,
     staleReadCount: prev.staleReadCount + (input.freshnessState === "stale" ? 1 : 0),
     degradedReadCount: prev.degradedReadCount + (input.freshnessState === "degraded" ? 1 : 0),
     unknownReadCount: prev.unknownReadCount + (input.freshnessState === "unknown" ? 1 : 0),
@@ -141,7 +122,6 @@ export function getSuggestionObservabilitySnapshot(orgId: string): SuggestionObs
   return state
     ? {
         ...state,
-        fallbackReasonCounts: { ...state.fallbackReasonCounts },
         recentTopCandidateCounts: [...state.recentTopCandidateCounts],
       }
     : emptySuggestionSnapshot(orgId);

@@ -32,7 +32,6 @@ import {
   getSuggestionObservabilitySnapshot,
   recordSuggestedCandidates,
   recordSuggestionExecution,
-  type GraphFallbackReason,
   type SuggestionResultStrength,
 } from "@/lib/people-graph/telemetry";
 import {
@@ -587,8 +586,6 @@ function buildLookupOnlyResult(input: {
 }
 
 function buildResolvedResult(input: {
-  mode: "sql_fallback";
-  fallbackReason: GraphFallbackReason | null;
   freshness: SuggestConnectionsFreshness;
   source: ProjectedPerson;
   results: ReturnType<typeof sortSuggestedConnections>;
@@ -599,8 +596,8 @@ function buildResolvedResult(input: {
     .map((suggestion) => buildDisplayReadySuggestedConnection(suggestion));
 
   return {
-    mode: input.mode,
-    fallback_reason: input.fallbackReason,
+    mode: "sql_fallback",
+    fallback_reason: null,
     freshness: input.freshness,
     state: displaySuggestions.length > 0 ? "resolved" : "no_suggestions",
     source_person: buildDisplayReadyConnectionPerson(input.source),
@@ -668,7 +665,6 @@ export async function suggestConnections(input: {
     projectedPeople.get(`${orgId}:${resolvedSource.personKey}`) ?? resolvedSource;
 
   async function computeSqlResult(
-    fallbackReason: GraphFallbackReason | null,
     freshness: SuggestConnectionsFreshness
   ): Promise<SuggestConnectionsResult> {
     const results = scoreProjectedCandidates({
@@ -679,8 +675,6 @@ export async function suggestConnections(input: {
       scoringContext,
     });
     return buildResolvedResult({
-      mode: "sql_fallback",
-      fallbackReason,
       freshness,
       source: projectedSource,
       results,
@@ -698,7 +692,6 @@ export async function suggestConnections(input: {
     recordSuggestionExecution({
       orgId,
       mode: result.mode,
-      fallbackReason: result.fallback_reason,
       freshnessState: result.freshness.state,
       resultStrength: classifySuggestionResultStrength(result.suggestions),
     });
@@ -708,7 +701,7 @@ export async function suggestConnections(input: {
   // The people-graph is served from Postgres (mentorship_pairs + member/alumni
   // projections), not a separate graph store, so suggestions always read live
   // SQL — the result is therefore always current.
-  return finalizeResult(await computeSqlResult(null, buildFreshnessFromNow()));
+  return finalizeResult(await computeSqlResult(buildFreshnessFromNow()));
 }
 
 export function getSuggestionObservabilityByOrg(orgId: string) {

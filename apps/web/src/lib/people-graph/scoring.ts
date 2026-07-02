@@ -3,7 +3,6 @@ import {
   normalizeCareerText,
 } from "@/lib/people-graph/career-signals";
 import type { ProjectedPerson } from "@/lib/people-graph/people";
-import type { GraphFallbackReason } from "@/lib/people-graph/telemetry";
 
 export type ConnectionReasonCode =
   | "shared_company"
@@ -99,7 +98,10 @@ export interface SuggestConnectionsFreshness {
 
 export interface SuggestConnectionsResult {
   mode: "sql_fallback";
-  fallback_reason: GraphFallbackReason | null;
+  // The people-graph is served entirely from Postgres (mentorship_pairs + member/
+  // alumni projections); there is no external graph store to fall back away from,
+  // so this is always null. Kept on the response contract for API stability.
+  fallback_reason: null;
   freshness: SuggestConnectionsFreshness;
   state: SuggestConnectionsState;
   source_person: DisplayReadyConnectionPerson | null;
