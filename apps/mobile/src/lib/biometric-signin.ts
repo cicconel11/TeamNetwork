@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 
 const BIOMETRIC_SESSION_KEY = "teammeet.biometric_session.v1";
 const BIOMETRIC_SESSION_MARKER_KEY = "teammeet.biometric_session_available.v1";
+const BIOMETRIC_SESSION_EXPIRY_SKEW_SECONDS = 30;
 
 const BIOMETRIC_SESSION_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainService: "com.myteamnetwork.teammeet.biometric-signin",
@@ -76,6 +77,24 @@ function parseStoredSession(raw: string): StoredBiometricSession | null {
   } catch {
     return null;
   }
+}
+
+function isStoredSessionExpired(stored: StoredBiometricSession): boolean {
+  const expiresAt = stored.expires_at;
+  if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt)) {
+    return true;
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  return expiresAt - nowSeconds < BIOMETRIC_SESSION_EXPIRY_SKEW_SECONDS;
+}
+
+function expiredBiometricSignInResult(): BiometricSignInResult {
+  return {
+    success: false,
+    error: "Biometric sign-in expired. Sign in with your password.",
+    expired: true,
+  };
 }
 
 async function hasBiometricSessionMarker(): Promise<boolean> {
@@ -175,11 +194,7 @@ export async function signInWithBiometrics(): Promise<BiometricSignInResult> {
     const raw = await SecureStore.getItemAsync(BIOMETRIC_SESSION_KEY, BIOMETRIC_SESSION_OPTIONS);
     if (!raw) {
       await clearBiometricSignIn();
-      return {
-        success: false,
-        error: "Biometric sign-in expired. Sign in with your password.",
-        expired: true,
-      };
+      return expiredBiometricSignInResult();
     }
     stored = parseStoredSession(raw);
   } catch (error) {
@@ -192,11 +207,12 @@ export async function signInWithBiometrics(): Promise<BiometricSignInResult> {
 
   if (!stored) {
     await clearBiometricSignIn();
-    return {
-      success: false,
-      error: "Biometric sign-in expired. Sign in with your password.",
-      expired: true,
-    };
+    return expiredBiometricSignInResult();
+  }
+
+  if (isStoredSessionExpired(stored)) {
+    await clearBiometricSignIn();
+    return expiredBiometricSignInResult();
   }
 
   const { data, error } = await supabase.auth.setSession({
@@ -206,11 +222,7 @@ export async function signInWithBiometrics(): Promise<BiometricSignInResult> {
 
   if (error) {
     await clearBiometricSignIn();
-    return {
-      success: false,
-      error: "Biometric sign-in expired. Sign in with your password.",
-      expired: true,
-    };
+    return expiredBiometricSignInResult();
   }
 
   if (data.session) {

@@ -4,6 +4,20 @@ const ENABLED_KEY = "teammeet.biometric_enabled.v1";
 const SESSION_KEY = "teammeet.biometric_session.v1";
 const MARKER_KEY = "teammeet.biometric_session_available.v1";
 
+function futureExpiry(secondsFromNow = 3600): number {
+  return Math.floor(Date.now() / 1000) + secondsFromNow;
+}
+
+function storedBiometricSession(expiresAt?: number): string {
+  return JSON.stringify({
+    access_token: "stored-access",
+    refresh_token: "stored-refresh",
+    user_id: "user-1",
+    saved_at: "2026-06-29T00:00:00.000Z",
+    ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
+  });
+}
+
 function mockBiometricSignInModules({
   enabled = "1",
   marker = "1",
@@ -90,14 +104,8 @@ describe("biometric sign-in", () => {
   });
 
   it("restores a protected session through Supabase after biometric authentication", async () => {
-    const storedSession = JSON.stringify({
-      access_token: "stored-access",
-      refresh_token: "stored-refresh",
-      user_id: "user-1",
-      saved_at: "2026-06-29T00:00:00.000Z",
-    });
     const { module, secureStore, supabaseAuth } = mockBiometricSignInModules({
-      protectedSession: storedSession,
+      protectedSession: storedBiometricSession(futureExpiry()),
     });
 
     await expect(module.signInWithBiometrics()).resolves.toEqual({ success: true });
@@ -131,6 +139,82 @@ describe("biometric sign-in", () => {
     });
 
     expect(supabaseAuth.setSession).not.toHaveBeenCalled();
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(
+      SESSION_KEY,
+      expect.objectContaining({ requireAuthentication: true })
+    );
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(ENABLED_KEY);
+  });
+
+  it("clears biometric sign-in when the stored session is expired", async () => {
+    const { module, secureStore, supabaseAuth } = mockBiometricSignInModules({
+      protectedSession: storedBiometricSession(futureExpiry(-1)),
+    });
+
+    await expect(module.signInWithBiometrics()).resolves.toMatchObject({
+      success: false,
+      expired: true,
+    });
+
+    expect(supabaseAuth.setSession).not.toHaveBeenCalled();
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(
+      SESSION_KEY,
+      expect.objectContaining({ requireAuthentication: true })
+    );
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(ENABLED_KEY);
+  });
+
+  it("clears biometric sign-in when the stored session has no expiry metadata", async () => {
+    const { module, secureStore, supabaseAuth } = mockBiometricSignInModules({
+      protectedSession: storedBiometricSession(),
+    });
+
+    await expect(module.signInWithBiometrics()).resolves.toMatchObject({
+      success: false,
+      expired: true,
+    });
+
+    expect(supabaseAuth.setSession).not.toHaveBeenCalled();
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(
+      SESSION_KEY,
+      expect.objectContaining({ requireAuthentication: true })
+    );
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(ENABLED_KEY);
+  });
+
+  it("clears biometric sign-in when the stored session expires inside the refresh skew window", async () => {
+    const { module, secureStore, supabaseAuth } = mockBiometricSignInModules({
+      protectedSession: storedBiometricSession(futureExpiry(10)),
+    });
+
+    await expect(module.signInWithBiometrics()).resolves.toMatchObject({
+      success: false,
+      expired: true,
+    });
+
+    expect(supabaseAuth.setSession).not.toHaveBeenCalled();
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(
+      SESSION_KEY,
+      expect.objectContaining({ requireAuthentication: true })
+    );
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(ENABLED_KEY);
+  });
+
+  it("clears biometric sign-in when Supabase rejects a future-dated stored session", async () => {
+    const { module, secureStore, supabaseAuth } = mockBiometricSignInModules({
+      protectedSession: storedBiometricSession(futureExpiry()),
+      setSessionError: { message: "Invalid Refresh Token" },
+    });
+
+    await expect(module.signInWithBiometrics()).resolves.toMatchObject({
+      success: false,
+      expired: true,
+    });
+
+    expect(supabaseAuth.setSession).toHaveBeenCalledWith({
+      access_token: "stored-access",
+      refresh_token: "stored-refresh",
+    });
     expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(
       SESSION_KEY,
       expect.objectContaining({ requireAuthentication: true })
