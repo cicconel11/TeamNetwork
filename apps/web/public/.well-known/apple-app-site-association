@@ -1,0 +1,23 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["5GWLTFG43T.com.myteamnetwork.teammeet"],
+        "components": [
+          {
+            "/": "/auth/callback"
+          },
+          {
+            "/": "/auth/callback/*"
+          },
+          {
+            "/": "/auth/claim"
+          },
+          {
+            "/": "/auth/claim/*"
+          }
+        ]
+      }
+    ]
+  }
+}

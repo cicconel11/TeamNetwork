@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.myteamnetwork.teammeet",
+      "sha256_cert_fingerprints": [
+        "6B:7B:4C:59:38:07:8A:4B:D5:C6:F9:53:8E:AC:E5:0D:75:C9:CC:95:6B:9A:58:EC:D3:56:A3:F9:76:20:0C:FF"
+      ]
+    }
+  }
+]
