@@ -27,11 +27,13 @@
     "test": "turbo run test --filter=@teammeet/web",
     "test:e2e": "bun run --cwd apps/web test:e2e",
     "validate:okf": "node scripts/validate-okf-frontmatter.mjs docs/agent",
-    "gen:db-okf": "node scripts/generate-db-okf.mjs"
+    "gen:db-okf": "node scripts/generate-db-okf.mjs",
+    "gen:types": "supabase gen types --lang=typescript --project-id rytsziwekhtjdqzzpdso > packages/types/src/database.ts"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0",
     "prettier": "^3.8.1",
+    "supabase": "2.109.0",
     "turbo": "^2",
     "typescript": "^5"
   },

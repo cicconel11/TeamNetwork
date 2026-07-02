@@ -13,8 +13,11 @@ bun run build        # Build production application
 bun run start        # Start production server
 bun run lint         # Run ESLint
 bun run typecheck    # tsc --noEmit
-bun run gen:types    # Regenerate Supabase TypeScript types (writes to src/types/database.ts)
 ```
+
+Supabase types are generated at the repo root: `bun run gen:types` writes
+`packages/types/src/database.ts` (the single source, consumed here via the
+`@/types/database` shim re-exporting `@teammeet/types`).
 
 From the repo root: `bun dev` (web), `bun run build:web`, `bun run lint`, `bun run typecheck`.
 
@@ -73,7 +76,7 @@ src/
 │   ├── schedule-security/  # Domain allowlist, SSRF protection
 │   └── schemas/            # Zod validation schemas by domain (see index.ts for full list)
 ├── types/
-│   └── database.ts         # Generated Supabase types
+│   └── database.ts         # Shim re-exporting @teammeet/types (generated types)
 └── middleware.ts           # Global auth/routing middleware
 
 supabase/                   # Symlink → repo-root supabase/ (migrations, config, seeds)

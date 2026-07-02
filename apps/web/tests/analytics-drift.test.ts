@@ -63,7 +63,8 @@ function extractSchemaEventNames(): string[] {
 }
 
 function extractDatabaseEventNames(): string[] {
-  const source = readSource("src/types/database.ts");
+  // The generated dump lives in @teammeet/types; src/types/database.ts is a shim.
+  const source = readSource("../../packages/types/src/database.ts");
   const match = source.match(
     /analytics_event_name:\s*\[([\s\S]*?)\]\s*,/,
   );
