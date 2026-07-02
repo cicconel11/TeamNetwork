@@ -1,6 +1,16 @@
+import { z } from "zod";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 import { isStageTimeoutError } from "@/lib/ai/timeout";
 import type { ScheduleImageMimeType } from "@/lib/ai/schedule-extraction";
+
+/**
+ * Accept either a single string or an array of strings, normalizing to an
+ * array. Tolerates glm-5.2 emitting a bare string where the schema expects a
+ * list, without weakening the per-element validation.
+ */
+export const stringOrStringArray = z
+  .union([z.string().trim().min(1), z.array(z.string().trim().min(1))])
+  .transform((value) => (Array.isArray(value) ? value : [value]));
 
 export type ToolQueryResult =
   | { kind: "ok"; data: unknown }

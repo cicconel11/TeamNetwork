@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isStageTimeoutError } from "@/lib/ai/timeout";
 import { aiLog } from "@/lib/ai/logger";
-import { getSafeErrorMessage } from "@/lib/ai/tools/shared";
+import { getSafeErrorMessage, stringOrStringArray } from "@/lib/ai/tools/shared";
 import { toolError } from "@/lib/ai/tools/result";
 import type { ToolModule } from "./types";
 
@@ -12,9 +12,9 @@ const suggestMenteesSchema = z
   .object({
     mentor_id: z.string().uuid().optional(),
     mentor_query: z.string().trim().min(1).optional(),
-    topics: z.array(z.string().trim().min(1)).optional(),
-    industries: z.array(z.string().trim().min(1)).optional(),
-    role_families: z.array(z.string().trim().min(1)).optional(),
+    topics: stringOrStringArray.optional(),
+    industries: stringOrStringArray.optional(),
+    role_families: stringOrStringArray.optional(),
     goals: z.string().trim().min(1).optional(),
     limit: z.number().int().min(1).max(25).optional(),
   })

@@ -1,18 +1,9 @@
 import { z } from "zod";
 import { isStageTimeoutError } from "@/lib/ai/timeout";
 import { aiLog } from "@/lib/ai/logger";
-import { getSafeErrorMessage } from "@/lib/ai/tools/shared";
+import { getSafeErrorMessage, stringOrStringArray } from "@/lib/ai/tools/shared";
 import { toolError } from "@/lib/ai/tools/result";
 import type { ToolModule } from "./types";
-
-/**
- * Accept either a single string or an array of strings, normalizing to an
- * array. Tolerates glm-5.2 emitting a bare string where the schema expects a
- * list, without weakening the per-element validation.
- */
-const stringOrStringArray = z
-  .union([z.string().trim().min(1), z.array(z.string().trim().min(1))])
-  .transform((value) => (Array.isArray(value) ? value : [value]));
 
 // NOTE: no `.strict()` — unknown keys emitted by the model are stripped rather
 // than rejected. The `.refine()` below still enforces the real "at least one

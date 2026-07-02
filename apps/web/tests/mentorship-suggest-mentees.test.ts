@@ -63,6 +63,24 @@ describe("suggest_mentees tool schema", () => {
       "unknown key should be stripped, not retained"
     );
   });
+
+  it("coerces single strings for topics/industries/role_families (glm tolerance)", () => {
+    const parsed = suggestMenteesModule.argsSchema.parse({
+      topics: "leadership",
+      industries: "sports",
+      role_families: "operations",
+    });
+    assert.deepEqual(parsed.topics, ["leadership"]);
+    assert.deepEqual(parsed.industries, ["sports"]);
+    assert.deepEqual(parsed.role_families, ["operations"]);
+  });
+
+  it("leaves criteria arrays unchanged", () => {
+    const parsed = suggestMenteesModule.argsSchema.parse({
+      topics: ["marketing", "fundraising"],
+    });
+    assert.deepEqual(parsed.topics, ["marketing", "fundraising"]);
+  });
 });
 
 describe("formatSuggestMenteesResponse", () => {
