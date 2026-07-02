@@ -390,9 +390,11 @@ const styles = StyleSheet.create({
     minHeight: 220,
   },
   gradientInner: {
-    flex: 1,
+    // No flex: 1 — see login.tsx: flexed child kept the gradient at its fixed
+    // minHeight, letting the sheet overlap cover the header on tall-inset
+    // devices. Content-driven height + padding clears the sheet overlap.
     paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.lg,
+    paddingBottom: SPACING.lg + SPACING.lg,
   },
   gradientTopRow: {
     flexDirection: "row",

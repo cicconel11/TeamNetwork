@@ -730,9 +730,13 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   gradientInner: {
-    flex: 1,
+    // No flex: 1 — a flexed child contributes nothing to the gradient's
+    // auto-height, so on tall-inset devices the safe area + logo + subhead
+    // overflowed the fixed minHeight and the sheet (marginTop: -lg) covered
+    // the subhead and the top of the form. Content-driven height + enough
+    // bottom padding to clear the sheet overlap keeps everything visible.
     paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.lg,
+    paddingBottom: SPACING.lg + SPACING.lg,
   },
   gradientTopRow: {
     flexDirection: "row",
