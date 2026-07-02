@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, ArrowUp, Lock } from "lucide-react-native";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import { supabase, createPostgresChangesChannel} from "@/lib/supabase";
+import { supabase, createPostgresChangesChannel } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useBlockedUsers } from "@/contexts/BlockedUsersContext";
@@ -50,6 +50,14 @@ type ReplyWithAuthor = DiscussionReply & {
   author?: { id: string; name: string | null; avatar_url: string | null } | null;
   isFirstInRun?: boolean;
 };
+
+function isKnownAuthorId(authorId: string | null): authorId is string {
+  return typeof authorId === "string" && authorId.length > 0;
+}
+
+function isBlockedAuthor(authorId: string | null, blockedUserIds: Set<string>): boolean {
+  return isKnownAuthorId(authorId) && blockedUserIds.has(authorId);
+}
 
 export default function ThreadDetailScreen() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
@@ -109,7 +117,7 @@ export default function ThreadDetailScreen() {
       if (isMountedRef.current) {
         const threadData = threadRes.data as ThreadWithAuthor;
         const blocked = blockedRef.current;
-        if (threadData && blocked.has(threadData.author_id)) {
+        if (threadData && isBlockedAuthor(threadData.author_id, blocked)) {
           setThread(null);
           setReplies([]);
           setError("Thread not found.");
@@ -118,8 +126,8 @@ export default function ThreadDetailScreen() {
         setThread(threadData);
         setReplies(
           ((repliesRes.data || []) as ReplyWithAuthor[]).filter(
-            (r) => !blocked.has(r.author_id),
-          ),
+            (r) => !isBlockedAuthor(r.author_id, blocked)
+          )
         );
         setError(null);
       }
@@ -202,7 +210,7 @@ export default function ThreadDetailScreen() {
         },
         async (payload: RealtimePostgresChangesPayload<DiscussionReply>) => {
           const newReply = payload.new as DiscussionReply;
-          if (blockedRef.current.has(newReply.author_id)) return;
+          if (isBlockedAuthor(newReply.author_id, blockedRef.current)) return;
           const { data: replyWithAuthor } = await supabase
             .from("discussion_replies")
             .select("*, author:users!discussion_replies_author_id_fkey(id, name, avatar_url)")
@@ -246,10 +254,8 @@ export default function ThreadDetailScreen() {
   }, [resolvedThreadId, scrollToBottom]);
 
   useEffect(() => {
-    setReplies((prev) => prev.filter((r) => !blockedUserIds.has(r.author_id)));
-    setThread((prev) =>
-      prev && blockedUserIds.has(prev.author_id) ? null : prev,
-    );
+    setReplies((prev) => prev.filter((r) => !isBlockedAuthor(r.author_id, blockedUserIds)));
+    setThread((prev) => (prev && isBlockedAuthor(prev.author_id, blockedUserIds) ? null : prev));
   }, [blockedUserIds]);
 
   const groupedReplies = useMemo(() => {
@@ -257,8 +263,7 @@ export default function ThreadDetailScreen() {
       const prev = replies[index - 1];
       const sameAuthor = prev?.author_id === reply.author_id;
       const within5Min = prev
-        ? new Date(reply.created_at).getTime() - new Date(prev.created_at).getTime() <
-          5 * 60 * 1000
+        ? new Date(reply.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000
         : false;
       return {
         ...reply,
@@ -287,9 +292,7 @@ export default function ThreadDetailScreen() {
       updated_at: new Date().toISOString(),
       deleted_at: null,
       mentioned_user_ids: [],
-      author: user
-        ? { id: user.id, name: user.email || "Unknown", avatar_url: null }
-        : undefined,
+      author: user ? { id: user.id, name: user.email || "Unknown", avatar_url: null } : undefined,
     };
 
     setReplies((prev) => [...prev, optimisticReply]);
@@ -311,34 +314,40 @@ export default function ThreadDetailScreen() {
       setReplyBody(body);
       await loadThreadDetails();
     } else if (data) {
-      setReplies((prev) =>
-        prev.map((r) => (r.id === tempId ? (data as ReplyWithAuthor) : r))
-      );
+      setReplies((prev) => prev.map((r) => (r.id === tempId ? (data as ReplyWithAuthor) : r)));
     }
 
     setSending(false);
-  }, [
-    replyBody,
-    sending,
-    thread,
-    orgId,
-    currentUserId,
-    user,
-    scrollToBottom,
-    loadThreadDetails,
-  ]);
+  }, [replyBody, sending, thread, orgId, currentUserId, user, scrollToBottom, loadThreadDetails]);
 
   const renderReply = useCallback(
     ({ item }: { item: ReplyWithAuthor }) => {
-      const isOwn = item.author_id === currentUserId;
+      const authorId = item.author_id;
+      const isOwn = authorId === currentUserId;
+      const canReport = !isOwn && isKnownAuthorId(authorId);
       const authorName = item.author?.name || "Unknown";
       const isFirstInRun = item.isFirstInRun ?? false;
 
       const bubbleRadius = isFirstInRun
         ? isOwn
-          ? { borderTopLeftRadius: 14, borderTopRightRadius: 4, borderBottomLeftRadius: 14, borderBottomRightRadius: 14 }
-          : { borderTopLeftRadius: 4, borderTopRightRadius: 14, borderBottomLeftRadius: 14, borderBottomRightRadius: 14 }
-        : { borderTopLeftRadius: 14, borderTopRightRadius: 14, borderBottomLeftRadius: 14, borderBottomRightRadius: 14 };
+          ? {
+              borderTopLeftRadius: 14,
+              borderTopRightRadius: 4,
+              borderBottomLeftRadius: 14,
+              borderBottomRightRadius: 14,
+            }
+          : {
+              borderTopLeftRadius: 4,
+              borderTopRightRadius: 14,
+              borderBottomLeftRadius: 14,
+              borderBottomRightRadius: 14,
+            }
+        : {
+            borderTopLeftRadius: 14,
+            borderTopRightRadius: 14,
+            borderBottomLeftRadius: 14,
+            borderBottomRightRadius: 14,
+          };
 
       return (
         <View style={[styles.messageRow, isOwn && styles.messageRowOwn]}>
@@ -367,14 +376,14 @@ export default function ThreadDetailScreen() {
 
             <Pressable
               onLongPress={
-                isOwn
-                  ? undefined
-                  : () =>
+                canReport
+                  ? () =>
                       setReportTarget({
                         kind: "reply",
                         id: item.id,
-                        authorId: item.author_id,
+                        authorId,
                       })
+                  : undefined
               }
               delayLongPress={350}
               style={({ pressed }) => [
@@ -386,14 +395,7 @@ export default function ThreadDetailScreen() {
               accessibilityRole={isOwn ? undefined : "button"}
               accessibilityHint={isOwn ? undefined : "Long-press to report or block"}
             >
-              <Text
-                style={[
-                  styles.messageText,
-                  isOwn && styles.messageTextOwn,
-                ]}
-              >
-                {item.body}
-              </Text>
+              <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>{item.body}</Text>
             </Pressable>
           </View>
         </View>
@@ -406,25 +408,24 @@ export default function ThreadDetailScreen() {
     if (!thread) return null;
 
     const authorName = thread.author?.name || "Unknown";
-    const isOwn = thread.author_id === currentUserId;
+    const authorId = thread.author_id;
+    const isOwn = authorId === currentUserId;
+    const canReport = !isOwn && isKnownAuthorId(authorId);
 
     return (
       <Pressable
         onLongPress={
-          isOwn
-            ? undefined
-            : () =>
+          canReport
+            ? () =>
                 setReportTarget({
                   kind: "thread",
                   id: thread.id,
-                  authorId: thread.author_id,
+                  authorId,
                 })
+            : undefined
         }
         delayLongPress={350}
-        style={({ pressed }) => [
-          styles.opCard,
-          pressed && !isOwn && { opacity: 0.85 },
-        ]}
+        style={({ pressed }) => [styles.opCard, pressed && !isOwn && { opacity: 0.85 }]}
         accessibilityRole={isOwn ? undefined : "button"}
         accessibilityHint={isOwn ? undefined : "Long-press to report or block"}
       >
