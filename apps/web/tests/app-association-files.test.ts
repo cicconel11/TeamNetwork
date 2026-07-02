@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 const wellKnownRoot = path.join(repoRoot, "apps/web/public/.well-known");
+const nextConfigSource = readFileSync(path.join(repoRoot, "apps/web/next.config.mjs"), "utf8");
 
 const IOS_APP_ID = "5GWLTFG43T.com.myteamnetwork.teammeet";
 const ANDROID_PACKAGE_NAME = "com.myteamnetwork.teammeet";
@@ -27,6 +28,14 @@ function readWellKnownJson(fileName: string): unknown {
 }
 
 describe("app association files", () => {
+  it("sets the extensionless AASA response content type to JSON", () => {
+    assert.match(
+      nextConfigSource,
+      /source:\s*"\/\.well-known\/apple-app-site-association"[\s\S]*key:\s*"Content-Type"[\s\S]*value:\s*"application\/json"/,
+      "AASA is extensionless, so Next/Vercel must override the default octet-stream content type"
+    );
+  });
+
   it("serves an AASA file scoped to HTTPS routes the mobile parser handles", () => {
     const aasa = readWellKnownJson("apple-app-site-association") as {
       applinks?: {

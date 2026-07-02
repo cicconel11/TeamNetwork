@@ -8,10 +8,7 @@ const withBundleAnalyzer = bundleAnalyzer({
 });
 
 // Only require Supabase in development, Stripe is optional for local dev
-const supabaseEnv = [
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-];
+const supabaseEnv = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"];
 
 const stripeEnv = [
   "STRIPE_SECRET_KEY",
@@ -107,18 +104,22 @@ function logOptionalEnvInfo(message, shouldEmit) {
 
 function validateBuildEnv() {
   const isDev = process.env.NODE_ENV !== "production";
-  const skipStripe = process.env.SKIP_STRIPE_VALIDATION === "true" || (isDev && !process.env.STRIPE_SECRET_KEY);
+  const skipStripe =
+    process.env.SKIP_STRIPE_VALIDATION === "true" || (isDev && !process.env.STRIPE_SECRET_KEY);
   const shouldEmitOptionalEnvLogs = claimOptionalEnvLogEmission();
-  
+
   // Always require Supabase
   supabaseEnv.forEach((key) => assertEnv(key, true));
-  
+
   if (skipStripe) {
-    logOptionalEnvWarning("⚠️  Skipping Stripe validation (dev mode without Stripe keys)", shouldEmitOptionalEnvLogs);
+    logOptionalEnvWarning(
+      "⚠️  Skipping Stripe validation (dev mode without Stripe keys)",
+      shouldEmitOptionalEnvLogs
+    );
   } else {
     // Require Stripe in production
     stripeEnv.forEach((key) => assertEnv(key, true));
-    
+
     priceEnvKeys.forEach((key) => {
       const value = assertEnv(key, true);
       if (!value.startsWith("price_") || value.startsWith("cs_") || value.startsWith("prod_")) {
@@ -138,7 +139,9 @@ function validateBuildEnv() {
     // id surfaces only at first checkout click otherwise.
     const dynamicProductId = assertEnv("STRIPE_PRODUCT_ID_DYNAMIC", true);
     if (!dynamicProductId.startsWith("prod_")) {
-      throw new Error(`Invalid Stripe product id for STRIPE_PRODUCT_ID_DYNAMIC: ${dynamicProductId}`);
+      throw new Error(
+        `Invalid Stripe product id for STRIPE_PRODUCT_ID_DYNAMIC: ${dynamicProductId}`
+      );
     }
   }
 
@@ -148,43 +151,77 @@ function validateBuildEnv() {
   // Require Connect webhook secret on Vercel production (donations fail silently without it)
   if (!process.env.STRIPE_WEBHOOK_SECRET_CONNECT && !skipStripe) {
     if (isVercelProduction) {
-      throw new Error("Missing required environment variable: STRIPE_WEBHOOK_SECRET_CONNECT (required for donation webhooks)");
+      throw new Error(
+        "Missing required environment variable: STRIPE_WEBHOOK_SECRET_CONNECT (required for donation webhooks)"
+      );
     }
-    logOptionalEnvWarning("⚠️  STRIPE_WEBHOOK_SECRET_CONNECT not set — Connect donation webhooks will return 503", shouldEmitOptionalEnvLogs);
+    logOptionalEnvWarning(
+      "⚠️  STRIPE_WEBHOOK_SECRET_CONNECT not set — Connect donation webhooks will return 503",
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // Optional: warn if Google Calendar env vars are missing (feature will be disabled)
-  const missingGoogleVars = googleCalendarEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  const missingGoogleVars = googleCalendarEnv.filter(
+    (key) => !process.env[key] || process.env[key].trim() === ""
+  );
   if (missingGoogleVars.length > 0 && missingGoogleVars.length < googleCalendarEnv.length) {
-    logOptionalEnvWarning(`⚠️  Partial Google Calendar config: missing ${missingGoogleVars.join(", ")}. Google Calendar integration will not work.`, shouldEmitOptionalEnvLogs);
+    logOptionalEnvWarning(
+      `⚠️  Partial Google Calendar config: missing ${missingGoogleVars.join(", ")}. Google Calendar integration will not work.`,
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // Optional: warn if LinkedIn env vars are partially configured
-  const missingLinkedInVars = linkedInEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  const missingLinkedInVars = linkedInEnv.filter(
+    (key) => !process.env[key] || process.env[key].trim() === ""
+  );
   if (missingLinkedInVars.length > 0 && missingLinkedInVars.length < linkedInEnv.length) {
-    logOptionalEnvWarning(`⚠️  Partial LinkedIn config: missing ${missingLinkedInVars.join(", ")}. LinkedIn integration will not work.`, shouldEmitOptionalEnvLogs);
+    logOptionalEnvWarning(
+      `⚠️  Partial LinkedIn config: missing ${missingLinkedInVars.join(", ")}. LinkedIn integration will not work.`,
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // Optional: warn if Blackbaud env vars are partially configured
-  const missingBlackbaudVars = blackbaudEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  const missingBlackbaudVars = blackbaudEnv.filter(
+    (key) => !process.env[key] || process.env[key].trim() === ""
+  );
   if (missingBlackbaudVars.length > 0 && missingBlackbaudVars.length < blackbaudEnv.length) {
-    logOptionalEnvWarning(`⚠️  Partial Blackbaud config: missing ${missingBlackbaudVars.join(", ")}. Blackbaud integration will not work.`, shouldEmitOptionalEnvLogs);
+    logOptionalEnvWarning(
+      `⚠️  Partial Blackbaud config: missing ${missingBlackbaudVars.join(", ")}. Blackbaud integration will not work.`,
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // Optional: warn if Microsoft Calendar env vars are partially configured
-  const missingMicrosoftVars = microsoftCalendarEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
-  if (missingMicrosoftVars.length > 0 && missingMicrosoftVars.length < microsoftCalendarEnv.length) {
-    logOptionalEnvWarning(`⚠️  Partial Microsoft Calendar config: missing ${missingMicrosoftVars.join(", ")}. Outlook Calendar integration will not work.`, shouldEmitOptionalEnvLogs);
+  const missingMicrosoftVars = microsoftCalendarEnv.filter(
+    (key) => !process.env[key] || process.env[key].trim() === ""
+  );
+  if (
+    missingMicrosoftVars.length > 0 &&
+    missingMicrosoftVars.length < microsoftCalendarEnv.length
+  ) {
+    logOptionalEnvWarning(
+      `⚠️  Partial Microsoft Calendar config: missing ${missingMicrosoftVars.join(", ")}. Outlook Calendar integration will not work.`,
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // Optional: Apify enrichment (enriches member profiles from LinkedIn)
   if (!process.env.APIFY_API_TOKEN) {
-    logOptionalEnvInfo("ℹ️  APIFY_API_TOKEN not set — LinkedIn profile enrichment disabled", shouldEmitOptionalEnvLogs);
+    logOptionalEnvInfo(
+      "ℹ️  APIFY_API_TOKEN not set — LinkedIn profile enrichment disabled",
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // Optional: warn if z.ai (AI assistant) API key is missing
   if (!process.env.ZAI_API_KEY) {
-    logOptionalEnvInfo("ℹ️  ZAI_API_KEY not set — AI assistant features disabled", shouldEmitOptionalEnvLogs);
+    logOptionalEnvInfo(
+      "ℹ️  ZAI_API_KEY not set — AI assistant features disabled",
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
@@ -203,19 +240,29 @@ function validateBuildEnv() {
   }
   if (
     isVercelProduction &&
-    (!parsedSiteUrl || parsedSiteUrl.host !== "www.myteamnetwork.com" || parsedSiteUrl.protocol !== "https:")
+    (!parsedSiteUrl ||
+      parsedSiteUrl.host !== "www.myteamnetwork.com" ||
+      parsedSiteUrl.protocol !== "https:")
   ) {
-    logOptionalEnvWarning(`⚠️  NEXT_PUBLIC_SITE_URL should use https://www.myteamnetwork.com in production, got: ${siteUrl || "(unset)"}. OAuth redirects may break.`, shouldEmitOptionalEnvLogs);
+    logOptionalEnvWarning(
+      `⚠️  NEXT_PUBLIC_SITE_URL should use https://www.myteamnetwork.com in production, got: ${siteUrl || "(unset)"}. OAuth redirects may break.`,
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // Require CRON_SECRET on Vercel production deploys, warn otherwise
   // (Local `next build` runs with NODE_ENV=production, so we key off Vercel env vars instead.)
   const cronSecret = process.env.CRON_SECRET;
   if (isVercelProduction && (!cronSecret || cronSecret.trim() === "")) {
-    throw new Error("Missing required environment variable: CRON_SECRET (required on Vercel production)");
+    throw new Error(
+      "Missing required environment variable: CRON_SECRET (required on Vercel production)"
+    );
   }
   if (!isDev && !cronSecret) {
-    logOptionalEnvWarning("⚠️  CRON_SECRET not set — cron job authentication will not work", shouldEmitOptionalEnvLogs);
+    logOptionalEnvWarning(
+      "⚠️  CRON_SECRET not set — cron job authentication will not work",
+      shouldEmitOptionalEnvLogs
+    );
   }
 
   // AUTH_HANDOFF_ENCRYPTION_KEY encrypts the mobile sign-in handoff payload and
@@ -226,11 +273,16 @@ function validateBuildEnv() {
   // (src/lib/crypto/token-encryption.ts).
   const authHandoffKey = process.env.AUTH_HANDOFF_ENCRYPTION_KEY;
   if (isVercelProduction && (!authHandoffKey || authHandoffKey.trim() === "")) {
-    throw new Error("Missing required environment variable: AUTH_HANDOFF_ENCRYPTION_KEY (required on Vercel production)");
+    throw new Error(
+      "Missing required environment variable: AUTH_HANDOFF_ENCRYPTION_KEY (required on Vercel production)"
+    );
   }
   if (!authHandoffKey || authHandoffKey.trim() === "") {
     if (!isDev) {
-      logOptionalEnvWarning("⚠️  AUTH_HANDOFF_ENCRYPTION_KEY not set — mobile sign-in handoff will fail", shouldEmitOptionalEnvLogs);
+      logOptionalEnvWarning(
+        "⚠️  AUTH_HANDOFF_ENCRYPTION_KEY not set — mobile sign-in handoff will fail",
+        shouldEmitOptionalEnvLogs
+      );
     }
   } else if (authHandoffKey.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(authHandoffKey)) {
     throw new Error("AUTH_HANDOFF_ENCRYPTION_KEY must be 64 hex characters (32 bytes)");
@@ -240,14 +292,21 @@ function validateBuildEnv() {
   // Keep this in sync with src/lib/env.ts validateCaptchaEnv().
   if (isVercelProduction) {
     if (!process.env.TURNSTILE_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY.trim() === "") {
-      throw new Error("Missing required environment variable: TURNSTILE_SECRET_KEY (required on Vercel production)");
+      throw new Error(
+        "Missing required environment variable: TURNSTILE_SECRET_KEY (required on Vercel production)"
+      );
     }
-    if (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY.trim() === "") {
-      throw new Error("Missing required environment variable: NEXT_PUBLIC_TURNSTILE_SITE_KEY (required on Vercel production)");
+    if (
+      !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY.trim() === ""
+    ) {
+      throw new Error(
+        "Missing required environment variable: NEXT_PUBLIC_TURNSTILE_SITE_KEY (required on Vercel production)"
+      );
     }
     if (process.env.NEXT_PUBLIC_E2E_CAPTCHA_BYPASS === "true") {
       throw new Error(
-        "SECURITY ERROR: NEXT_PUBLIC_E2E_CAPTCHA_BYPASS=true is set on Vercel production. This bypasses captcha verification and must never be enabled in prod.",
+        "SECURITY ERROR: NEXT_PUBLIC_E2E_CAPTCHA_BYPASS=true is set on Vercel production. This bypasses captcha verification and must never be enabled in prod."
       );
     }
   }
@@ -346,6 +405,15 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: "/.well-known/apple-app-site-association",
+        headers: [
+          {
+            key: "Content-Type",
+            value: "application/json",
+          },
+        ],
+      },
+      {
         source: "/:path*",
         headers: [
           {
@@ -365,10 +433,12 @@ const nextConfig = {
             value: "on",
           },
           ...(process.env.NODE_ENV === "production"
-            ? [{
-                key: "Strict-Transport-Security",
-                value: "max-age=31536000; includeSubDomains",
-              }]
+            ? [
+                {
+                  key: "Strict-Transport-Security",
+                  value: "max-age=31536000; includeSubDomains",
+                },
+              ]
             : []),
           {
             key: "Permissions-Policy",
