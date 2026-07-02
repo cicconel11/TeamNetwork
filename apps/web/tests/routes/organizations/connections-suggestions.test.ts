@@ -124,6 +124,8 @@ function seedAlumniPeers(stub: ReturnType<typeof createSupabaseStub>, count: num
     graduation_year: 2018,
     position_title: "Engineer",
     job_title: null,
+    // Candidates surface only when opted in (post-backfill default).
+    open_to_networking: true,
     created_at: "2026-03-02T00:00:00.000Z",
   }));
   stub.seed("alumni", rows);

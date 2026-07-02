@@ -419,20 +419,22 @@ export interface CandidatePoolEntry {
 }
 
 /**
- * Relationship-aware consent gate. Only the NEW edges introduced by the
- * open_to_networking flag are gated — the already-shipped members↔alumni edges
- * are unaffected (no consent required):
- *   - alumni → alumni: surfaces only when the SOURCE alumnus opted in.
- *   - parent (as candidate OR source): surfaces only when the parent opted in.
- * Parent candidates are already filtered to open_to_networking=true at the query
- * level; this is the same rule expressed in-engine as defense in depth.
+ * Consent gate. A person surfaces as a candidate only when they opted in via
+ * open_to_networking, whatever their person type — this is the promise the
+ * consent toggle makes ("turn this off to stay out of others' suggestions").
+ * Members and alumni are backfilled to opted-in (opt-out model, migration
+ * 20261230000000); parents stay opt-in and are additionally filtered to
+ * open_to_networking=true at the query level as defense in depth.
+ * Source-side rules:
+ *   - a parent source must have opted in;
+ *   - alumni → alumni surfaces only when the SOURCE alumnus also opted in
+ *     (reciprocity rule shipped with #313).
  */
 export function isConnectionEdgeAllowed(
   source: ProjectedPerson,
   candidate: ProjectedPerson
 ): boolean {
-  // A parent on either end must have opted in.
-  if (candidate.personType === "parent" && !candidate.openToNetworking) {
+  if (!candidate.openToNetworking) {
     return false;
   }
   if (source.personType === "parent" && !source.openToNetworking) {

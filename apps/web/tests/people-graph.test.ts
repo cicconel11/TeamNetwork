@@ -58,6 +58,7 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
       graduation_year: 2018,
       position_title: "VP Product",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
     },
     {
@@ -74,6 +75,7 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
       graduation_year: null,
       position_title: "Founder",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
     },
     {
@@ -90,6 +92,7 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
       graduation_year: 2018,
       position_title: "Investor",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
     },
     {
@@ -106,6 +109,7 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
       graduation_year: null,
       position_title: null,
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
     },
   ]);
@@ -547,6 +551,7 @@ test("suggestConnections resolves Matt-family aliases and shorthand before ranki
       role: "Captain",
       current_company: "Acme",
       graduation_year: 2024,
+      open_to_networking: true,
       created_at: "2026-03-01T00:00:00.000Z",
     },
     {
@@ -561,6 +566,7 @@ test("suggestConnections resolves Matt-family aliases and shorthand before ranki
       role: "Coach",
       current_company: "Acme",
       graduation_year: 2024,
+      open_to_networking: true,
       created_at: "2026-03-02T00:00:00.000Z",
     },
   ]);
@@ -609,6 +615,7 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       role: "Captain",
       current_company: "TeamNetwork",
       graduation_year: 2024,
+      open_to_networking: true,
       created_at: "2026-03-01T00:00:00.000Z",
     },
     {
@@ -623,6 +630,7 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       role: "Admin",
       current_company: "TeamNetwork",
       graduation_year: 2024,
+      open_to_networking: true,
       created_at: "2026-03-02T00:00:00.000Z",
     },
     {
@@ -637,6 +645,7 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       role: "Admin",
       current_company: "TeamNetwork",
       graduation_year: 2027,
+      open_to_networking: true,
       created_at: "2026-03-03T00:00:00.000Z",
     },
   ]);
@@ -656,7 +665,9 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       graduation_year: 2024,
       position_title: "Founder",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
+      open_to_networking: true,
       created_at: "2026-03-04T00:00:00.000Z",
     },
     {
@@ -673,7 +684,9 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       graduation_year: 2024,
       position_title: "Coach",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
+      open_to_networking: true,
       created_at: "2026-03-05T00:00:00.000Z",
     },
     {
@@ -690,7 +703,9 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       graduation_year: 2027,
       position_title: "Analyst",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
+      open_to_networking: true,
       created_at: "2026-03-06T00:00:00.000Z",
     },
     {
@@ -707,7 +722,9 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       graduation_year: 2025,
       position_title: "Advisor",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
+      open_to_networking: true,
       created_at: "2026-03-07T00:00:00.000Z",
     },
     {
@@ -724,7 +741,9 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       graduation_year: 2022,
       position_title: "Mentor",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
+      open_to_networking: true,
       created_at: "2026-03-08T00:00:00.000Z",
     },
     {
@@ -741,7 +760,9 @@ test("suggestConnections suppresses generic company matches and keeps sources di
       graduation_year: 2028,
       position_title: "Mentor",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
+      open_to_networking: true,
       created_at: "2026-03-09T00:00:00.000Z",
     },
   ]);
@@ -804,6 +825,7 @@ test("suggestConnections returns weak fallback matches for sparse member profile
       role: "Captain",
       current_company: null,
       graduation_year: 2024,
+      open_to_networking: true,
       created_at: "2026-03-01T00:00:00.000Z",
     },
     {
@@ -818,6 +840,7 @@ test("suggestConnections returns weak fallback matches for sparse member profile
       role: "Coach",
       current_company: null,
       graduation_year: 2026,
+      open_to_networking: true,
       created_at: "2026-03-02T00:00:00.000Z",
     },
   ]);
@@ -837,7 +860,9 @@ test("suggestConnections returns weak fallback matches for sparse member profile
       graduation_year: 2024,
       position_title: null,
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
+      open_to_networking: true,
       created_at: "2026-03-03T00:00:00.000Z",
     },
     {
@@ -854,7 +879,9 @@ test("suggestConnections returns weak fallback matches for sparse member profile
       graduation_year: 2026,
       position_title: "Advisor",
       job_title: null,
+      open_to_networking: true,
       deleted_at: null,
+      open_to_networking: true,
       created_at: "2026-03-04T00:00:00.000Z",
     },
   ]);

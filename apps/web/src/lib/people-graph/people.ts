@@ -193,10 +193,23 @@ export function isActiveMentorshipPairRow(row: MentorshipPairSyncRow): boolean {
   return row.deleted_at === null && row.status === "active";
 }
 
-function anyOptedIn(
-  ...rowSets: Array<Array<{ open_to_networking: boolean | null }>>
+/**
+ * Consent follows the identity that will be surfaced. A linked user who is both
+ * a member and a parent projects as a member (personhood precedence), so only
+ * their member rows decide openToNetworking — opting in as a parent must not
+ * expose the member identity, and vice versa.
+ */
+function primaryRowsOptedIn(
+  personType: ProjectedPerson["personType"],
+  group: {
+    members: Array<{ open_to_networking: boolean | null }>;
+    alumni: Array<{ open_to_networking: boolean | null }>;
+    parents: Array<{ open_to_networking: boolean | null }>;
+  }
 ): boolean {
-  return rowSets.some((rows) => rows.some((row) => row.open_to_networking === true));
+  const rows =
+    personType === "member" ? group.members : personType === "alumni" ? group.alumni : group.parents;
+  return rows.some((row) => row.open_to_networking === true);
 }
 
 export function buildProjectedPeople(input: {
@@ -360,7 +373,7 @@ export function buildProjectedPeople(input: {
         ...group.alumni.map((alumni) => alumni.current_city),
         ...group.parents.map((parent) => parent.current_city),
       ]),
-      openToNetworking: anyOptedIn(group.members, group.alumni, group.parents),
+      openToNetworking: primaryRowsOptedIn(personType, group),
     });
   }
 

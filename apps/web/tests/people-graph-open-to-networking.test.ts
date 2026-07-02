@@ -91,23 +91,33 @@ function person(p: Partial<ProjectedPerson> & Pick<ProjectedPerson, "personType"
   };
 }
 
-test("members ↔ alumni edges are NOT consent-gated (unchanged from Phase 1)", () => {
+test("every candidate must be open to networking, whatever their type", () => {
   const member = person({ personType: "member", openToNetworking: false });
+  const openMember = person({ personType: "member", openToNetworking: true });
   const alumnus = person({ personType: "alumni", openToNetworking: false });
-  assert.equal(isConnectionEdgeAllowed(member, alumnus), true);
-  assert.equal(isConnectionEdgeAllowed(alumnus, member), true);
+  const openAlumnus = person({ personType: "alumni", openToNetworking: true });
+  assert.equal(isConnectionEdgeAllowed(member, alumnus), false);
+  assert.equal(isConnectionEdgeAllowed(member, openAlumnus), true);
+  assert.equal(isConnectionEdgeAllowed(alumnus, member), false);
+  assert.equal(isConnectionEdgeAllowed(alumnus, openMember), true);
 });
 
-test("alumni → alumni requires the SOURCE alumnus to be open to networking", () => {
+test("a non-consenting source can still VIEW suggestions (member source)", () => {
+  const closedMember = person({ personType: "member", openToNetworking: false });
+  const openAlumnus = person({ personType: "alumni", openToNetworking: true });
+  assert.equal(isConnectionEdgeAllowed(closedMember, openAlumnus), true);
+});
+
+test("alumni → alumni additionally requires the SOURCE alumnus to be open to networking", () => {
   const closedSource = person({ personType: "alumni", openToNetworking: false });
   const openSource = person({ personType: "alumni", openToNetworking: true });
-  const candidate = person({ personType: "alumni", openToNetworking: false });
+  const candidate = person({ personType: "alumni", openToNetworking: true });
   assert.equal(isConnectionEdgeAllowed(closedSource, candidate), false);
   assert.equal(isConnectionEdgeAllowed(openSource, candidate), true);
 });
 
 test("a parent on either end must be open to networking", () => {
-  const openMember = person({ personType: "member" });
+  const openMember = person({ personType: "member", openToNetworking: true });
   const closedParent = person({ personType: "parent", openToNetworking: false });
   const openParent = person({ personType: "parent", openToNetworking: true });
   assert.equal(isConnectionEdgeAllowed(openMember, closedParent), false);
@@ -123,21 +133,21 @@ test("non-open alumnus source does NOT see alumni candidates", async () => {
   const sourceId = "a0000000-0000-0000-0000-000000000001";
   stub.seed("alumni", [
     alum({ id: sourceId, user_id: "u-src", open_to_networking: false }),
-    alum({ id: "a0000000-0000-0000-0000-000000000002", user_id: "u-peer1" }),
-    alum({ id: "a0000000-0000-0000-0000-000000000003", user_id: "u-peer2" }),
+    alum({ id: "a0000000-0000-0000-0000-000000000002", user_id: "u-peer1", open_to_networking: true }),
+    alum({ id: "a0000000-0000-0000-0000-000000000003", user_id: "u-peer2", open_to_networking: true }),
   ]);
 
   const result = await suggestFor(stub, "alumni", sourceId);
   assert.equal(result.suggestions.length, 0);
 });
 
-test("open alumnus source DOES see alumni candidates", async () => {
+test("open alumnus source DOES see opted-in alumni candidates", async () => {
   const stub = createSupabaseStub();
   const sourceId = "a0000000-0000-0000-0000-000000000001";
   stub.seed("alumni", [
     alum({ id: sourceId, user_id: "u-src", open_to_networking: true }),
-    alum({ id: "a0000000-0000-0000-0000-000000000002", user_id: "u-peer1" }),
-    alum({ id: "a0000000-0000-0000-0000-000000000003", user_id: "u-peer2" }),
+    alum({ id: "a0000000-0000-0000-0000-000000000002", user_id: "u-peer1", open_to_networking: true }),
+    alum({ id: "a0000000-0000-0000-0000-000000000003", user_id: "u-peer2", open_to_networking: true }),
   ]);
 
   const result = await suggestFor(stub, "alumni", sourceId);
@@ -145,7 +155,7 @@ test("open alumnus source DOES see alumni candidates", async () => {
   assert.ok(result.suggestions.every((s) => s.person_type === "alumni"));
 });
 
-test("member source still sees alumni candidates regardless of consent (members↔alumni live)", async () => {
+test("a non-consenting alumnus is hidden from a member viewer", async () => {
   const stub = createSupabaseStub();
   const memberId = "b0000000-0000-0000-0000-000000000001";
   stub.seed("members", [
@@ -166,10 +176,53 @@ test("member source still sees alumni candidates regardless of consent (members�
   ]);
   stub.seed("alumni", [
     alum({ id: "a0000000-0000-0000-0000-000000000009", user_id: "u-peer", open_to_networking: false }),
+    alum({ id: "a0000000-0000-0000-0000-000000000010", user_id: "u-open", open_to_networking: true, first_name: "Opal" }),
   ]);
 
   const result = await suggestFor(stub, "member", memberId);
-  assert.ok(result.suggestions.length >= 1, "member should still see alumni peers");
+  assert.ok(result.suggestions.length >= 1, "opted-in alumni still surface");
+  assert.ok(
+    result.suggestions.every((s) => s.name !== "Al Umni"),
+    "the non-consenting alumnus must not surface"
+  );
+});
+
+test("a non-consenting member is hidden from a member viewer", async () => {
+  const stub = createSupabaseStub();
+  const viewerId = "b0000000-0000-0000-0000-000000000001";
+  const memberRow = (overrides: Record<string, unknown>) => ({
+    organization_id: ORG_ID,
+    status: "active",
+    deleted_at: null,
+    email: null,
+    role: "Captain",
+    current_company: "Acme",
+    graduation_year: 2018,
+    open_to_networking: false,
+    ...overrides,
+  });
+  stub.seed("members", [
+    memberRow({ id: viewerId, user_id: "u-viewer", first_name: "Mia", last_name: "Member" }),
+    memberRow({
+      id: "b0000000-0000-0000-0000-000000000002",
+      user_id: "u-closed",
+      first_name: "Cal",
+      last_name: "Closed",
+    }),
+    memberRow({
+      id: "b0000000-0000-0000-0000-000000000003",
+      user_id: "u-open",
+      first_name: "Opal",
+      last_name: "Open",
+      open_to_networking: true,
+    }),
+  ]);
+
+  const result = await suggestFor(stub, "member", viewerId);
+  assert.ok(
+    result.suggestions.every((s) => s.name !== "Cal Closed"),
+    "the non-consenting member must not surface"
+  );
 });
 
 test("only opted-in parents are surfaced to a member viewer", async () => {
@@ -204,7 +257,7 @@ test("only opted-in parents are surfaced to a member viewer", async () => {
   assert.equal(parentSuggestions[0].name, "Olivia Rent");
 });
 
-test("buildProjectedPeople: openToNetworking true if any contributing row opted in", () => {
+test("buildProjectedPeople: consent follows the surfaced identity, not any row", () => {
   const projected = buildProjectedPeople({
     members: [],
     alumni: [
@@ -214,10 +267,26 @@ test("buildProjectedPeople: openToNetworking true if any contributing row opted 
       parent({ id: "x2", user_id: "shared", open_to_networking: true }) as any,
     ],
   });
-  // Linked alumni+parent collapse to one node; opted-in on either => true.
+  // Linked alumni+parent collapse to one node projecting as alumni (precedence).
+  // Opting in as a parent must NOT expose the alumni identity.
   const node = [...projected.values()].find((p) => p.userId === "shared");
   assert.ok(node);
-  assert.equal(node!.openToNetworking, true);
-  // The linked person projects as alumni (alumni outranks parent in precedence).
   assert.equal(node!.personType, "alumni");
+  assert.equal(node!.openToNetworking, false);
+});
+
+test("buildProjectedPeople: opting in on the surfaced identity's row counts", () => {
+  const projected = buildProjectedPeople({
+    members: [],
+    alumni: [
+      alum({ id: "x1", user_id: "shared", open_to_networking: true }) as any,
+    ],
+    parents: [
+      parent({ id: "x2", user_id: "shared", open_to_networking: false }) as any,
+    ],
+  });
+  const node = [...projected.values()].find((p) => p.userId === "shared");
+  assert.ok(node);
+  assert.equal(node!.personType, "alumni");
+  assert.equal(node!.openToNetworking, true);
 });
