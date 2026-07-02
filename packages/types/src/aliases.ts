@@ -70,3 +70,15 @@ export interface FormField {
   placeholder?: string;
   options?: (string | FormFieldOption)[];
 }
+
+// Philanthropy embed row shape consumed by web's EmbedManager/EmbedViewer.
+export interface PhilanthropyEmbed {
+  id: string;
+  organization_id: string;
+  title: string;
+  url: string;
+  embed_type: EmbedType;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}

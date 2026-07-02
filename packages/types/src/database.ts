@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       academic_schedules: {
@@ -726,6 +751,7 @@ export type Database = {
           email: string | null
           enriched_at: string | null
           enrichment_error: string | null
+          enrichment_filled_fields: string[] | null
           enrichment_retry_count: number | null
           enrichment_snapshot_id: string | null
           enrichment_status: string | null
@@ -734,12 +760,15 @@ export type Database = {
           headline: string | null
           id: string
           industry: string | null
+          invite_count: number
           job_title: string | null
           languages: Json | null
+          last_invite_sent_at: string | null
           last_name: string
           linkedin_url: string | null
           major: string | null
           notes: string | null
+          open_to_networking: boolean
           organization_id: string
           phone_number: string | null
           photo_url: string | null
@@ -764,6 +793,7 @@ export type Database = {
           email?: string | null
           enriched_at?: string | null
           enrichment_error?: string | null
+          enrichment_filled_fields?: string[] | null
           enrichment_retry_count?: number | null
           enrichment_snapshot_id?: string | null
           enrichment_status?: string | null
@@ -772,12 +802,15 @@ export type Database = {
           headline?: string | null
           id?: string
           industry?: string | null
+          invite_count?: number
           job_title?: string | null
           languages?: Json | null
+          last_invite_sent_at?: string | null
           last_name: string
           linkedin_url?: string | null
           major?: string | null
           notes?: string | null
+          open_to_networking?: boolean
           organization_id: string
           phone_number?: string | null
           photo_url?: string | null
@@ -802,6 +835,7 @@ export type Database = {
           email?: string | null
           enriched_at?: string | null
           enrichment_error?: string | null
+          enrichment_filled_fields?: string[] | null
           enrichment_retry_count?: number | null
           enrichment_snapshot_id?: string | null
           enrichment_status?: string | null
@@ -810,12 +844,15 @@ export type Database = {
           headline?: string | null
           id?: string
           industry?: string | null
+          invite_count?: number
           job_title?: string | null
           languages?: Json | null
+          last_invite_sent_at?: string | null
           last_name?: string
           linkedin_url?: string | null
           major?: string | null
           notes?: string | null
+          open_to_networking?: boolean
           organization_id?: string
           phone_number?: string | null
           photo_url?: string | null
@@ -2008,7 +2045,7 @@ export type Database = {
       }
       discussion_replies: {
         Row: {
-          author_id: string
+          author_id: string | null
           body: string
           created_at: string
           deleted_at: string | null
@@ -2019,7 +2056,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          author_id: string
+          author_id?: string | null
           body: string
           created_at?: string
           deleted_at?: string | null
@@ -2030,7 +2067,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          author_id?: string
+          author_id?: string | null
           body?: string
           created_at?: string
           deleted_at?: string | null
@@ -2066,7 +2103,7 @@ export type Database = {
       }
       discussion_threads: {
         Row: {
-          author_id: string
+          author_id: string | null
           body: string
           created_at: string
           deleted_at: string | null
@@ -2080,7 +2117,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          author_id: string
+          author_id?: string | null
           body: string
           created_at?: string
           deleted_at?: string | null
@@ -2094,7 +2131,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          author_id?: string
+          author_id?: string | null
           body?: string
           created_at?: string
           deleted_at?: string | null
@@ -2284,7 +2321,7 @@ export type Database = {
           id: string
           organization_id: string
           requested_at: string
-          requested_by: string
+          requested_by: string | null
           responded_at: string | null
           responded_by: string | null
           status: string
@@ -2295,7 +2332,7 @@ export type Database = {
           id?: string
           organization_id: string
           requested_at?: string
-          requested_by: string
+          requested_by?: string | null
           responded_at?: string | null
           responded_by?: string | null
           status?: string
@@ -2306,7 +2343,7 @@ export type Database = {
           id?: string
           organization_id?: string
           requested_at?: string
-          requested_by?: string
+          requested_by?: string | null
           responded_at?: string | null
           responded_by?: string | null
           status?: string
@@ -2386,11 +2423,59 @@ export type Database = {
         }
         Relationships: []
       }
+      enterprise_deletion_requests: {
+        Row: {
+          cancelled_at: string | null
+          completed_at: string | null
+          enterprise_id: string
+          id: string
+          requested_at: string
+          requested_by: string | null
+          scheduled_deletion_at: string
+          status: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          completed_at?: string | null
+          enterprise_id: string
+          id?: string
+          requested_at?: string
+          requested_by?: string | null
+          scheduled_deletion_at: string
+          status?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          completed_at?: string | null
+          enterprise_id?: string
+          id?: string
+          requested_at?: string
+          requested_by?: string | null
+          scheduled_deletion_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enterprise_deletion_requests_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: true
+            referencedRelation: "enterprise_alumni_counts"
+            referencedColumns: ["enterprise_id"]
+          },
+          {
+            foreignKeyName: "enterprise_deletion_requests_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: true
+            referencedRelation: "enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enterprise_invites: {
         Row: {
           code: string
           created_at: string
-          created_by_user_id: string
+          created_by_user_id: string | null
           enterprise_id: string
           expires_at: string | null
           id: string
@@ -2403,7 +2488,7 @@ export type Database = {
         Insert: {
           code: string
           created_at?: string
-          created_by_user_id: string
+          created_by_user_id?: string | null
           enterprise_id: string
           expires_at?: string | null
           id?: string
@@ -2416,7 +2501,7 @@ export type Database = {
         Update: {
           code?: string
           created_at?: string
-          created_by_user_id?: string
+          created_by_user_id?: string | null
           enterprise_id?: string
           expires_at?: string | null
           id?: string
@@ -2461,6 +2546,8 @@ export type Database = {
           id: string
           price_per_sub_org_cents: number | null
           pricing_model: string | null
+          pricing_model_version: string
+          pricing_v2_snapshot: Json | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -2477,6 +2564,8 @@ export type Database = {
           id?: string
           price_per_sub_org_cents?: number | null
           pricing_model?: string | null
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2493,6 +2582,8 @@ export type Database = {
           id?: string
           price_per_sub_org_cents?: number | null
           pricing_model?: string | null
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -3479,7 +3570,7 @@ export type Database = {
           location: string | null
           location_type: string | null
           organization_id: string
-          posted_by: string
+          posted_by: string | null
           title: string
           updated_at: string
         }
@@ -3498,7 +3589,7 @@ export type Database = {
           location?: string | null
           location_type?: string | null
           organization_id: string
-          posted_by: string
+          posted_by?: string | null
           title: string
           updated_at?: string
         }
@@ -3517,7 +3608,7 @@ export type Database = {
           location?: string | null
           location_type?: string | null
           organization_id?: string
-          posted_by?: string
+          posted_by?: string | null
           title?: string
           updated_at?: string
         }
@@ -3534,6 +3625,65 @@ export type Database = {
             columns: ["posted_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_documents: {
+        Row: {
+          audience: string
+          body: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          organization_id: string
+          resource: string | null
+          source_timestamp: string | null
+          tags: string[] | null
+          title: string
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          body: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          organization_id: string
+          resource?: string | null
+          source_timestamp?: string | null
+          tags?: string[] | null
+          title: string
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          organization_id?: string
+          resource?: string | null
+          source_timestamp?: string | null
+          tags?: string[] | null
+          title?: string
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -4147,6 +4297,7 @@ export type Database = {
           last_name: string
           linkedin_url: string | null
           major: string | null
+          open_to_networking: boolean
           organization_id: string
           photo_url: string | null
           role: string | null
@@ -4179,6 +4330,7 @@ export type Database = {
           last_name: string
           linkedin_url?: string | null
           major?: string | null
+          open_to_networking?: boolean
           organization_id: string
           photo_url?: string | null
           role?: string | null
@@ -4211,6 +4363,7 @@ export type Database = {
           last_name?: string
           linkedin_url?: string | null
           major?: string | null
+          open_to_networking?: boolean
           organization_id?: string
           photo_url?: string | null
           role?: string | null
@@ -4236,6 +4389,8 @@ export type Database = {
         Row: {
           communication_prefs: string[]
           created_at: string
+          derived_signals: Json | null
+          derived_signals_input_hash: string | null
           geographic_pref: string | null
           goals: string | null
           id: string
@@ -4255,6 +4410,8 @@ export type Database = {
         Insert: {
           communication_prefs?: string[]
           created_at?: string
+          derived_signals?: Json | null
+          derived_signals_input_hash?: string | null
           geographic_pref?: string | null
           goals?: string | null
           id?: string
@@ -4274,6 +4431,8 @@ export type Database = {
         Update: {
           communication_prefs?: string[]
           created_at?: string
+          derived_signals?: Json | null
+          derived_signals_input_hash?: string | null
           geographic_pref?: string | null
           goals?: string | null
           id?: string
@@ -4628,6 +4787,8 @@ export type Database = {
           id: string
           match_score: number | null
           match_signals: Json | null
+          match_why: string | null
+          match_why_model: string | null
           mentee_user_id: string
           mentor_user_id: string
           organization_id: string
@@ -4645,6 +4806,8 @@ export type Database = {
           id?: string
           match_score?: number | null
           match_signals?: Json | null
+          match_why?: string | null
+          match_why_model?: string | null
           mentee_user_id: string
           mentor_user_id: string
           organization_id: string
@@ -4662,6 +4825,8 @@ export type Database = {
           id?: string
           match_score?: number | null
           match_signals?: Json | null
+          match_why?: string | null
+          match_why_model?: string | null
           mentee_user_id?: string
           mentor_user_id?: string
           organization_id?: string
@@ -5499,6 +5664,62 @@ export type Database = {
           },
         ]
       }
+      organization_email_domains: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dns_records: Json
+          domain: string
+          id: string
+          last_checked_at: string | null
+          organization_id: string
+          resend_domain_id: string | null
+          sender_display_name: string | null
+          sender_local_part: string
+          status: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dns_records?: Json
+          domain: string
+          id?: string
+          last_checked_at?: string | null
+          organization_id: string
+          resend_domain_id?: string | null
+          sender_display_name?: string | null
+          sender_local_part?: string
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dns_records?: Json
+          domain?: string
+          id?: string
+          last_checked_at?: string | null
+          organization_id?: string
+          resend_domain_id?: string | null
+          sender_display_name?: string | null
+          sender_local_part?: string
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_email_domains_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_invites: {
         Row: {
           code: string
@@ -5563,6 +5784,8 @@ export type Database = {
           media_storage_quota_bytes: number | null
           organization_id: string
           parents_bucket: string
+          pricing_model_version: string
+          pricing_v2_snapshot: Json | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -5581,6 +5804,8 @@ export type Database = {
           media_storage_quota_bytes?: number | null
           organization_id: string
           parents_bucket?: string
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -5599,6 +5824,8 @@ export type Database = {
           media_storage_quota_bytes?: number | null
           organization_id?: string
           parents_bucket?: string
+          pricing_model_version?: string
+          pricing_v2_snapshot?: Json | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -5745,7 +5972,7 @@ export type Database = {
           email: string | null
           expires_at: string
           id: string
-          invited_by: string
+          invited_by: string | null
           organization_id: string
           status: string
         }
@@ -5756,7 +5983,7 @@ export type Database = {
           email?: string | null
           expires_at?: string
           id?: string
-          invited_by: string
+          invited_by?: string | null
           organization_id: string
           status?: string
         }
@@ -5767,7 +5994,7 @@ export type Database = {
           email?: string | null
           expires_at?: string
           id?: string
-          invited_by?: string
+          invited_by?: string | null
           organization_id?: string
           status?: string
         }
@@ -5800,6 +6027,7 @@ export type Database = {
           linkedin_url: string | null
           major: string | null
           notes: string | null
+          open_to_networking: boolean
           organization_id: string
           phone_number: string | null
           photo_url: string | null
@@ -5831,6 +6059,7 @@ export type Database = {
           linkedin_url?: string | null
           major?: string | null
           notes?: string | null
+          open_to_networking?: boolean
           organization_id: string
           phone_number?: string | null
           photo_url?: string | null
@@ -5862,6 +6091,7 @@ export type Database = {
           linkedin_url?: string | null
           major?: string | null
           notes?: string | null
+          open_to_networking?: boolean
           organization_id?: string
           phone_number?: string | null
           photo_url?: string | null
@@ -6906,6 +7136,7 @@ export type Database = {
       user_organization_roles: {
         Row: {
           created_at: string | null
+          feed_last_seen_at: string | null
           id: string
           organization_id: string
           role: Database["public"]["Enums"]["user_role"]
@@ -6914,6 +7145,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          feed_last_seen_at?: string | null
           id?: string
           organization_id: string
           role?: Database["public"]["Enums"]["user_role"]
@@ -6922,6 +7154,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          feed_last_seen_at?: string | null
           id?: string
           organization_id?: string
           role?: Database["public"]["Enums"]["user_role"]
@@ -7239,6 +7472,7 @@ export type Database = {
         Returns: Json
       }
       alumni_bucket_limit: { Args: { p_bucket: string }; Returns: number }
+      applied_migration_versions: { Args: never; Returns: string[] }
       assert_alumni_quota: { Args: { p_org_id: string }; Returns: undefined }
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
       backfill_ai_embedding_queue: { Args: { p_org_id: string }; Returns: Json }
@@ -7390,7 +7624,7 @@ export type Database = {
         Returns: {
           code: string
           created_at: string
-          created_by_user_id: string
+          created_by_user_id: string | null
           enterprise_id: string
           expires_at: string | null
           id: string
@@ -7744,6 +7978,7 @@ export type Database = {
           p_intent_type?: string
           p_message: string
           p_org_id: string
+          p_skip_user_message?: boolean
           p_surface: string
           p_thread_id?: string
           p_title: string
@@ -7898,6 +8133,7 @@ export type Database = {
       }
       search_ai_documents: {
         Args: {
+          p_audience_filter?: string[]
           p_match_count?: number
           p_org_id: string
           p_query_embedding: string
@@ -8002,6 +8238,15 @@ export type Database = {
         }
         Returns: string
       }
+      upsert_mentee_derived_signals: {
+        Args: {
+          p_input_hash: string
+          p_organization_id: string
+          p_signals: Json
+          p_user_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       agreement_type: "terms_of_service" | "privacy_policy"
@@ -8020,15 +8265,15 @@ export type Database = {
         | "donation_flow_start"
         | "donation_checkout_start"
         | "donation_checkout_result"
-        | "support_flow_start"
-        | "support_checkout_start"
-        | "support_checkout_result"
         | "chat_thread_open"
         | "chat_message_send"
         | "chat_participants_change"
         | "search_used"
         | "search_result_click"
         | "search_action_click"
+        | "support_flow_start"
+        | "support_checkout_start"
+        | "support_checkout_result"
       chat_group_role: "admin" | "moderator" | "member"
       chat_message_status: "pending" | "approved" | "rejected"
       event_check_in_mode: "qr" | "rsvp"
@@ -8185,6 +8430,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       agreement_type: ["terms_of_service", "privacy_policy"],
@@ -8203,15 +8451,15 @@ export const Constants = {
         "donation_flow_start",
         "donation_checkout_start",
         "donation_checkout_result",
-        "support_flow_start",
-        "support_checkout_start",
-        "support_checkout_result",
         "chat_thread_open",
         "chat_message_send",
         "chat_participants_change",
         "search_used",
         "search_result_click",
         "search_action_click",
+        "support_flow_start",
+        "support_checkout_start",
+        "support_checkout_result",
       ],
       chat_group_role: ["admin", "moderator", "member"],
       chat_message_status: ["pending", "approved", "rejected"],
