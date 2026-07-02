@@ -652,7 +652,7 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       const payload = record.payload as CreateMentorshipPairingPendingPayload;
       return {
         title: "Confirm mentorship pairing",
-        description: `Pair ${payload.mentee_name} with ${payload.mentor_name} — confidence ${payload.confidence}/100.`,
+        description: `Pair ${payload.mentee_name} with ${payload.mentor_name} — match score ${payload.confidence}/100.`,
       };
     }
     case "create_enterprise_invite":
