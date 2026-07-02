@@ -132,6 +132,48 @@ jobs:
         run: bun install --frozen-lockfile
       - run: bun run --cwd apps/web check:migration-drift
 
+  types-drift:
+    name: Types drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Management-API personal access token (sbp_...) — NOT the service-role
+      # key. When unset (e.g. fork PRs without secrets) the job soft-skips with
+      # a notice rather than failing, matching migration-drift's convention.
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-install-${{ runner.os }}-
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Check generated types match the live schema
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::notice::SUPABASE_ACCESS_TOKEN secret unset — skipping types drift check."
+            exit 0
+          fi
+          # Pinned CLI from root devDependencies — an unpinned CLI bump would
+          # fake drift with zero signal pointing at the version change.
+          bunx supabase gen types --lang=typescript --project-id rytsziwekhtjdqzzpdso > /tmp/fresh-database.ts
+          if ! diff -u packages/types/src/database.ts /tmp/fresh-database.ts; then
+            echo "::error::packages/types/src/database.ts is out of sync with the live schema. Run 'bun run gen:types' and commit the result (after applying any pending migrations)."
+            exit 1
+          fi
+
   validate-okf:
     name: Validate OKF
     runs-on: ubuntu-latest
@@ -220,7 +262,7 @@ jobs:
   all-checks:
     name: All Checks
     runs-on: ubuntu-latest
-    needs: [test-unit, test-ai, test-mobile, migration-drift, validate-okf, build]
+    needs: [test-unit, test-ai, test-mobile, migration-drift, types-drift, validate-okf, build]
     if: always()
     steps:
       - name: Verify all required jobs succeeded
